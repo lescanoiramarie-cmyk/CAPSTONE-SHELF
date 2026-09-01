@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+@theme {
+  --color-shelf-primary: #002046;
+  --color-shelf-accent: #2563eb;
+  --color-shelf-bg: #f8fafc;
+  --color-shelf-surface: #ffffff;
+  --color-shelf-text: #0f172a;
+  --color-shelf-muted: #64748b;
+  --color-shelf-border: #e2e8f0;
+}
