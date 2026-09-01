@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
+import { Html5Qrcode } from 'html5-qrcode';
 import { useAuth } from '../../context/AuthContext';
 import libraryBg from '../../assets/library.jpg';
 
 // view = 'login' | 'register' | 'otp' | 'success'
 export default function VisitorLogin() {
+  const [showScanner, setShowScanner] = useState(false);
+  const scannerRef = useRef(null);
   const [view, setView] = useState('login');
   const [error, setError] = useState('');
   const [formData, setFormData] = useState({ fullName: '', contactNumber: '', email: '', address: '', password: '' });
@@ -18,22 +21,133 @@ export default function VisitorLogin() {
   const { registerVisitor, verifyVisitorOtp, resendVisitorOtp, loginVisitor, loginAsVisitorSession } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const startScanner = () => {
+  setError('');
+  setShowScanner(true);
+};
+
+const stopScanner = async () => {
+  try {
+    if (scannerRef.current) {
+      await scannerRef.current.stop();
+      await scannerRef.current.clear();
+      scannerRef.current = null;
+    }
+  } catch (error) {
+    console.error('Scanner cleanup error:', error);
+  }
+
+  setShowScanner(false);
+};
+
+useEffect(() => {
+  if (!showScanner) return;
+
+  let scanner;
+
+  const startCamera = async () => {
+    try {
+      scanner = new Html5Qrcode('visitor-qr-reader');
+      scannerRef.current = scanner;
+
+      await scanner.start(
+        { facingMode: 'environment' },
+        {
+          fps: 10,
+          qrbox: {
+            width: 250,
+            height: 250,
+          },
+        },
+        async (decodedText) => {
+          const qrValue = decodedText.trim();
+
+          console.log('QR Code detected:', qrValue);
+
+          try {
+            await scanner.stop();
+          } catch (error) {
+            console.error(error);
+          }
+
+          try {
+            await scanner.clear();
+          } catch (error) {
+            console.error(error);
+          }
+
+          scannerRef.current = null;
+          setShowScanner(false);
+
+          setLoginData({
+            identifier: qrValue,
+            password: '',
+          });
+
+          try {
+            await loginVisitor({
+              identifier: qrValue,
+              password: '',
+            });
+
+            navigate('/visitor');
+          } catch (error) {
+            setError(
+              error.message ||
+                'QR code was scanned, but login failed.'
+            );
+          }
+        },
+        () => {
+          // Ignore unsuccessful scan attempts.
+        }
+      );
+    } catch (error) {
+      console.error('Camera error:', error);
+
+      setShowScanner(false);
+
+      setError(
+        'Unable to access the camera. Please allow camera permission and try again.'
+      );
+    }
+  };
+
+  startCamera();
+
+  return () => {
+    const cleanup = async () => {
+      try {
+        if (scannerRef.current) {
+          await scannerRef.current.stop();
+          await scannerRef.current.clear();
+          scannerRef.current = null;
+        }
+      } catch (error) {
+        console.error('Scanner cleanup error:', error);
+      }
+    };
+
+    cleanup();
+  };
+}, [showScanner, loginVisitor, navigate]);
+
+  const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
     try {
-      loginVisitor(loginData);
+      await loginVisitor(loginData);
       navigate('/visitor');
     } catch (err) {
       setError(err.message);
     }
   };
 
-  const handleRegister = (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
     setError('');
     try {
-      const { visitorId, otp } = registerVisitor(formData);
+      const { visitorId, otp } = await registerVisitor(formData);
       setPendingVisitorId(visitorId);
       setDemoOtp(otp);
       setView('otp');
@@ -42,11 +156,11 @@ export default function VisitorLogin() {
     }
   };
 
-  const handleVerifyOtp = (e) => {
+  const handleVerifyOtp = async (e) => {
     e.preventDefault();
     setError('');
     try {
-      const visitor = verifyVisitorOtp(pendingVisitorId, otpInput);
+      const visitor = await verifyVisitorOtp(pendingVisitorId, otpInput);
       setRegisteredVisitor(visitor);
       setView('success');
     } catch (err) {
@@ -54,10 +168,14 @@ export default function VisitorLogin() {
     }
   };
 
-  const handleResendOtp = () => {
-    const otp = resendVisitorOtp(pendingVisitorId);
-    setDemoOtp(otp);
-    setError('A new OTP code has been generated.');
+  const handleResendOtp = async () => {
+    try {
+      const otp = await resendVisitorOtp(pendingVisitorId);
+      setDemoOtp(otp);
+      setError('A new OTP code has been generated.');
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   const resetToLogin = () => {
@@ -240,40 +358,107 @@ export default function VisitorLogin() {
           )}
 
           {view === 'login' && (
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
-                  Visitor Email / QR Pass ID
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. visitor@library.edu or SHELF-QR-XXXXXX"
-                  value={loginData.identifier}
-                  onChange={(e) => setLoginData({ ...loginData, identifier: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
-                  Password <span className="normal-case font-normal text-slate-400">(skip if using QR Pass ID)</span>
-                </label>
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  value={loginData.password}
-                  onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
-                />
-              </div>
-              <button
-                type="submit"
-                className="w-full bg-[#002046] text-white py-3 rounded-lg font-bold text-sm hover:opacity-95 transition shadow-sm"
-              >
-                Log In
-              </button>
-            </form>
-          )}
+  <form onSubmit={handleLogin} className="space-y-4">
+
+    {showScanner ? (
+      <div className="space-y-4">
+
+        <div className="bg-[#002046] text-white rounded-xl p-4 text-center">
+          <h3 className="font-bold text-sm">
+            Scan Your QR Pass
+          </h3>
+
+          <p className="text-xs text-slate-300 mt-1">
+            Position your QR code inside the camera frame.
+          </p>
+        </div>
+
+        <div className="rounded-xl overflow-hidden border-2 border-[#002046] bg-black">
+          <div
+            id="visitor-qr-reader"
+            className="w-full"
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={stopScanner}
+          className="w-full border border-slate-300 text-slate-700 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-50 transition"
+        >
+          Cancel Camera
+        </button>
+
+      </div>
+    ) : (
+      <>
+        <div>
+          <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
+            Visitor Email / QR Pass ID
+          </label>
+
+          <input
+            type="text"
+            required
+            placeholder="visitor@email.com or SHELF-QR-XXXXXX"
+            value={loginData.identifier}
+            onChange={(e) =>
+              setLoginData({
+                ...loginData,
+                identifier: e.target.value,
+              })
+            }
+            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
+            Password
+          </label>
+
+          <input
+            type="password"
+            placeholder="••••••••"
+            value={loginData.password}
+            onChange={(e) =>
+              setLoginData({
+                ...loginData,
+                password: e.target.value,
+              })
+            }
+            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+          />
+        </div>
+
+        <button
+          type="submit"
+          className="w-full bg-[#002046] text-white py-3 rounded-lg font-bold text-sm hover:opacity-95 transition shadow-sm"
+        >
+          Log In
+        </button>
+
+        <div className="relative flex items-center">
+          <div className="flex-grow border-t border-slate-200" />
+
+          <span className="px-3 text-xs text-slate-400">
+            OR
+          </span>
+
+          <div className="flex-grow border-t border-slate-200" />
+        </div>
+
+        <button
+          type="button"
+          onClick={startScanner}
+          className="w-full bg-white border-2 border-[#002046] text-[#002046] py-3 rounded-lg font-bold text-sm hover:bg-slate-50 transition"
+        >
+          📷 Scan QR Code with Camera
+        </button>
+      </>
+    )}
+
+  </form>
+)}
 
           {(view === 'login' || view === 'register') && (
             <div className="pt-4 border-t border-slate-200 space-y-2 text-center">
