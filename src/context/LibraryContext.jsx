@@ -72,6 +72,8 @@ export function LibraryProvider({ children }) {
     data,
     loading,
     connectionError,
+    // libraries
+    addLibrary: withRefresh(store.addLibrary),
     // books
     addBook: withRefresh(store.addBook),
     updateBook: withRefresh(store.updateBook),
