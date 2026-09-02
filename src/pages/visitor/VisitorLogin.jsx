@@ -21,6 +21,7 @@ export default function VisitorLogin() {
     email: '',
     address: '',
     password: '',
+    confirmPassword: '',
   });
 
   const [loginData, setLoginData] = useState({
@@ -43,6 +44,29 @@ export default function VisitorLogin() {
   } = useAuth();
 
   const navigate = useNavigate();
+
+  // =========================================================
+  // PASSWORD VALIDATION
+  // =========================================================
+
+  const passwordRequirements = {
+    minLength: formData.password.length >= 8,
+    uppercase: /[A-Z]/.test(formData.password),
+    lowercase: /[a-z]/.test(formData.password),
+    number: /[0-9]/.test(formData.password),
+    special: /[^A-Za-z0-9]/.test(formData.password),
+  };
+
+  const isPasswordValid =
+    passwordRequirements.minLength &&
+    passwordRequirements.uppercase &&
+    passwordRequirements.lowercase &&
+    passwordRequirements.number &&
+    passwordRequirements.special;
+
+  const passwordsMatch =
+    formData.password.length > 0 &&
+    formData.password === formData.confirmPassword;
 
   // =========================================================
   // QR SCANNER
@@ -113,7 +137,7 @@ export default function VisitorLogin() {
             });
 
             try {
-              // QR Pass is for visitors
+              // QR Pass is for visitors only
               await loginVisitor({
                 identifier: qrValue,
                 password: '',
@@ -170,22 +194,31 @@ export default function VisitorLogin() {
 
     setError('');
 
+    const identifier = loginData.identifier.trim();
+
+    if (!identifier) {
+      setError('Please enter your email, account ID, or QR pass ID.');
+      return;
+    }
+
+    if (!loginData.password) {
+      setError('Please enter your password.');
+      return;
+    }
+
     try {
       const result = await login(loginData);
 
-      // Visitor
       if (result.role === 'visitor') {
         navigate('/visitor');
         return;
       }
 
-      // Sub-Admin / Circulation Desk
       if (result.role === 'subadmin') {
         navigate('/subadmin');
         return;
       }
 
-      // Super Admin
       if (result.role === 'superadmin') {
         navigate('/superadmin');
         return;
@@ -209,6 +242,20 @@ export default function VisitorLogin() {
 
     setError('');
 
+    // Check password
+    if (!isPasswordValid) {
+      setError(
+        'Password does not meet all requirements. Please complete all password requirements.'
+      );
+      return;
+    }
+
+    // Check confirm password
+    if (!passwordsMatch) {
+      setError('Passwords do not match.');
+      return;
+    }
+
     try {
       const { visitorId, otp } =
         await registerVisitor(formData);
@@ -217,7 +264,10 @@ export default function VisitorLogin() {
       setDemoOtp(otp);
       setView('otp');
     } catch (err) {
-      setError(err.message);
+      setError(
+        err.message ||
+          'Registration failed. Please try again.'
+      );
     }
   };
 
@@ -230,6 +280,11 @@ export default function VisitorLogin() {
 
     setError('');
 
+    if (otpInput.length !== 6) {
+      setError('Please enter the complete 6-digit OTP code.');
+      return;
+    }
+
     try {
       const visitor = await verifyVisitorOtp(
         pendingVisitorId,
@@ -239,7 +294,10 @@ export default function VisitorLogin() {
       setRegisteredVisitor(visitor);
       setView('success');
     } catch (err) {
-      setError(err.message);
+      setError(
+        err.message ||
+          'Invalid OTP code.'
+      );
     }
   };
 
@@ -248,17 +306,23 @@ export default function VisitorLogin() {
   // =========================================================
 
   const handleResendOtp = async () => {
+    setError('');
+
     try {
       const otp = await resendVisitorOtp(
         pendingVisitorId
       );
 
       setDemoOtp(otp);
+
       setError(
         'A new OTP code has been generated.'
       );
     } catch (err) {
-      setError(err.message);
+      setError(
+        err.message ||
+          'Unable to resend OTP code.'
+      );
     }
   };
 
@@ -276,6 +340,7 @@ export default function VisitorLogin() {
       email: '',
       address: '',
       password: '',
+      confirmPassword: '',
     });
 
     setLoginData({
@@ -288,6 +353,32 @@ export default function VisitorLogin() {
     setRegisteredVisitor(null);
     setDemoOtp('');
   };
+
+  // =========================================================
+  // PASSWORD REQUIREMENT COMPONENT
+  // =========================================================
+
+  const PasswordRequirement = ({ valid, children }) => (
+    <li
+      className={`flex items-center gap-2 ${
+        valid
+          ? 'text-green-600'
+          : 'text-slate-500'
+      }`}
+    >
+      <span
+        className={`flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold ${
+          valid
+            ? 'bg-green-100'
+            : 'bg-slate-100'
+        }`}
+      >
+        {valid ? '✓' : '•'}
+      </span>
+
+      <span>{children}</span>
+    </li>
+  );
 
   // =========================================================
   // UI
@@ -351,7 +442,9 @@ export default function VisitorLogin() {
 
         <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl border border-slate-200 space-y-6">
 
-          {/* HEADER */}
+          {/* =================================================
+              HEADER
+             ================================================= */}
 
           <div className="text-center lg:text-left space-y-1">
 
@@ -389,10 +482,18 @@ export default function VisitorLogin() {
 
           </div>
 
-          {/* ERROR MESSAGE */}
+          {/* =================================================
+              ERROR MESSAGE
+             ================================================= */}
 
           {error && (
-            <div className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <div
+              className={`text-xs font-semibold rounded-lg px-3 py-2 ${
+                error.includes('generated')
+                  ? 'text-blue-700 bg-blue-50 border border-blue-200'
+                  : 'text-red-600 bg-red-50 border border-red-200'
+              }`}
+            >
               {error}
             </div>
           )}
@@ -435,6 +536,7 @@ export default function VisitorLogin() {
                 </p>
 
                 <button
+                  type="button"
                   onClick={() => {
                     loginAsVisitorSession(
                       registeredVisitor
@@ -481,6 +583,7 @@ export default function VisitorLogin() {
 
                 <input
                   type="text"
+                  inputMode="numeric"
                   required
                   maxLength={6}
                   value={otpInput}
@@ -527,6 +630,8 @@ export default function VisitorLogin() {
               className="space-y-3"
             >
 
+              {/* FULL NAME */}
+
               <div>
 
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -548,6 +653,8 @@ export default function VisitorLogin() {
                 />
 
               </div>
+
+              {/* CONTACT NUMBER */}
 
               <div>
 
@@ -571,6 +678,8 @@ export default function VisitorLogin() {
 
               </div>
 
+              {/* EMAIL */}
+
               <div>
 
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -592,6 +701,8 @@ export default function VisitorLogin() {
                 />
 
               </div>
+
+              {/* ADDRESS */}
 
               <div>
 
@@ -615,6 +726,8 @@ export default function VisitorLogin() {
 
               </div>
 
+              {/* PASSWORD */}
+
               <div>
 
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -624,8 +737,9 @@ export default function VisitorLogin() {
                 <input
                   type="password"
                   required
-                  minLength={6}
-                  placeholder="••••••••"
+                  minLength={8}
+                  autoComplete="new-password"
+                  placeholder="Example: Juan@2026"
                   value={formData.password}
                   onChange={(e) =>
                     setFormData({
@@ -636,11 +750,112 @@ export default function VisitorLogin() {
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
                 />
 
+                {/* PASSWORD REQUIREMENTS */}
+
+                <div className="mt-2 bg-slate-50 border border-slate-200 rounded-lg p-3">
+
+                  <p className="text-[11px] font-semibold text-slate-700 mb-2">
+                    Password requirements:
+                  </p>
+
+                  <ul className="text-[11px] space-y-1">
+
+                    <PasswordRequirement
+                      valid={passwordRequirements.minLength}
+                    >
+                      At least 8 characters
+                    </PasswordRequirement>
+
+                    <PasswordRequirement
+                      valid={passwordRequirements.uppercase}
+                    >
+                      At least 1 uppercase letter
+                    </PasswordRequirement>
+
+                    <PasswordRequirement
+                      valid={passwordRequirements.lowercase}
+                    >
+                      At least 1 lowercase letter
+                    </PasswordRequirement>
+
+                    <PasswordRequirement
+                      valid={passwordRequirements.number}
+                    >
+                      At least 1 number
+                    </PasswordRequirement>
+
+                    <PasswordRequirement
+                      valid={passwordRequirements.special}
+                    >
+                      At least 1 special character
+                    </PasswordRequirement>
+
+                  </ul>
+
+                </div>
+
               </div>
+
+              {/* CONFIRM PASSWORD */}
+
+              <div>
+
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Confirm Password
+                </label>
+
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                  placeholder="Re-enter your password"
+                  value={formData.confirmPassword}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      confirmPassword: e.target.value,
+                    })
+                  }
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20 ${
+                    formData.confirmPassword.length > 0
+                      ? passwordsMatch
+                        ? 'border-green-400'
+                        : 'border-red-300'
+                      : 'border-slate-300'
+                  }`}
+                />
+
+                {formData.confirmPassword.length > 0 && (
+                  <p
+                    className={`mt-1 text-[11px] font-semibold ${
+                      passwordsMatch
+                        ? 'text-green-600'
+                        : 'text-red-600'
+                    }`}
+                  >
+                    {passwordsMatch
+                      ? '✓ Passwords match.'
+                      : '✕ Passwords do not match.'}
+                  </p>
+                )}
+
+              </div>
+
+              {/* REGISTER BUTTON */}
 
               <button
                 type="submit"
-                className="w-full bg-[#002046] text-white py-2.5 rounded-lg font-bold text-sm hover:opacity-95 transition shadow-sm"
+                disabled={
+                  !isPasswordValid ||
+                  !passwordsMatch
+                }
+                className={`w-full py-2.5 rounded-lg font-bold text-sm transition shadow-sm ${
+                  isPasswordValid &&
+                  passwordsMatch
+                    ? 'bg-[#002046] text-white hover:opacity-95'
+                    : 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                }`}
               >
                 Send OTP & Continue
               </button>
@@ -661,9 +876,9 @@ export default function VisitorLogin() {
 
               {showScanner ? (
 
-                /* ===============================
+                /* =================================================
                    QR CAMERA
-                   =============================== */
+                   ================================================= */
 
                 <div className="space-y-4">
 
@@ -701,9 +916,9 @@ export default function VisitorLogin() {
 
               ) : (
 
-                /* ===============================
+                /* =================================================
                    NORMAL LOGIN
-                   =============================== */
+                   ================================================= */
 
                 <>
 
@@ -716,6 +931,7 @@ export default function VisitorLogin() {
                     <input
                       type="text"
                       required
+                      autoComplete="username"
                       placeholder="email@example.com or SHELF-QR-XXXXXX"
                       value={loginData.identifier}
                       onChange={(e) =>
@@ -738,7 +954,8 @@ export default function VisitorLogin() {
                     <input
                       type="password"
                       required
-                      placeholder="••••••••"
+                      autoComplete="current-password"
+                      placeholder="Enter your password"
                       value={loginData.password}
                       onChange={(e) =>
                         setLoginData({
