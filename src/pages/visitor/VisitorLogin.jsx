@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { Html5Qrcode } from 'html5-qrcode';
+import { Eye, EyeOff, Camera } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
 import libraryBg from '../../assets/library.jpg';
@@ -14,6 +15,11 @@ export default function VisitorLogin() {
 
   const [view, setView] = useState('login');
   const [error, setError] = useState('');
+
+  // Password visibility
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -197,7 +203,9 @@ export default function VisitorLogin() {
     const identifier = loginData.identifier.trim();
 
     if (!identifier) {
-      setError('Please enter your email, account ID, or QR pass ID.');
+      setError(
+        'Please enter your email, account ID, or QR pass ID.'
+      );
       return;
     }
 
@@ -207,7 +215,10 @@ export default function VisitorLogin() {
     }
 
     try {
-      const result = await login(loginData);
+      const result = await login({
+        identifier,
+        password: loginData.password,
+      });
 
       if (result.role === 'visitor') {
         navigate('/visitor');
@@ -242,7 +253,6 @@ export default function VisitorLogin() {
 
     setError('');
 
-    // Check password
     if (!isPasswordValid) {
       setError(
         'Password does not meet all requirements. Please complete all password requirements.'
@@ -250,7 +260,6 @@ export default function VisitorLogin() {
       return;
     }
 
-    // Check confirm password
     if (!passwordsMatch) {
       setError('Passwords do not match.');
       return;
@@ -281,7 +290,9 @@ export default function VisitorLogin() {
     setError('');
 
     if (otpInput.length !== 6) {
-      setError('Please enter the complete 6-digit OTP code.');
+      setError(
+        'Please enter the complete 6-digit OTP code.'
+      );
       return;
     }
 
@@ -352,6 +363,10 @@ export default function VisitorLogin() {
     setPendingVisitorId(null);
     setRegisteredVisitor(null);
     setDemoOtp('');
+
+    setShowLoginPassword(false);
+    setShowRegisterPassword(false);
+    setShowConfirmPassword(false);
   };
 
   // =========================================================
@@ -403,7 +418,6 @@ export default function VisitorLogin() {
           `,
         }}
       >
-
         <div className="relative z-10 flex items-center gap-3">
           <span className="text-xl font-bold tracking-wider">
             SHELF ILMS
@@ -412,7 +426,7 @@ export default function VisitorLogin() {
 
         <div className="relative z-10 space-y-4 max-w-lg">
 
-          <span className="px-3 py-1 bg-white/10 backdrop-blur-md text-xs font-semibold rounded-full border border-white/20">
+          <span className="inline-block px-3 py-1 bg-white/10 backdrop-blur-md text-xs font-semibold rounded-full border border-white/20">
             Digital Library Management System
           </span>
 
@@ -431,7 +445,6 @@ export default function VisitorLogin() {
         <div className="relative z-10 text-xs text-slate-400">
           © SHELF System. All rights reserved.
         </div>
-
       </div>
 
       {/* =====================================================
@@ -442,9 +455,7 @@ export default function VisitorLogin() {
 
         <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl border border-slate-200 space-y-6">
 
-          {/* =================================================
-              HEADER
-             ================================================= */}
+          {/* HEADER */}
 
           <div className="text-center lg:text-left space-y-1">
 
@@ -482,9 +493,7 @@ export default function VisitorLogin() {
 
           </div>
 
-          {/* =================================================
-              ERROR MESSAGE
-             ================================================= */}
+          {/* ERROR MESSAGE */}
 
           {error && (
             <div
@@ -726,7 +735,9 @@ export default function VisitorLogin() {
 
               </div>
 
-              {/* PASSWORD */}
+              {/* =================================================
+                  CREATE PASSWORD
+                 ================================================= */}
 
               <div>
 
@@ -734,21 +745,56 @@ export default function VisitorLogin() {
                   Create Password
                 </label>
 
-                <input
-                  type="password"
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                  placeholder="Example: Juan@2026"
-                  value={formData.password}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      password: e.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
-                />
+                <div className="relative">
+
+                  <input
+                    type={
+                      showRegisterPassword
+                        ? 'text'
+                        : 'password'
+                    }
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                    placeholder="Example: Juan@2026"
+                    value={formData.password}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        password: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 pr-12 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowRegisterPassword(
+                        !showRegisterPassword
+                      )
+                    }
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-[#002046] transition"
+                    aria-label={
+                      showRegisterPassword
+                        ? 'Hide password'
+                        : 'Show password'
+                    }
+                  >
+                    {showRegisterPassword ? (
+                      <EyeOff
+                        size={18}
+                        strokeWidth={2}
+                      />
+                    ) : (
+                      <Eye
+                        size={18}
+                        strokeWidth={2}
+                      />
+                    )}
+                  </button>
+
+                </div>
 
                 {/* PASSWORD REQUIREMENTS */}
 
@@ -796,7 +842,9 @@ export default function VisitorLogin() {
 
               </div>
 
-              {/* CONFIRM PASSWORD */}
+              {/* =================================================
+                  CONFIRM PASSWORD
+                 ================================================= */}
 
               <div>
 
@@ -804,27 +852,62 @@ export default function VisitorLogin() {
                   Confirm Password
                 </label>
 
-                <input
-                  type="password"
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                  placeholder="Re-enter your password"
-                  value={formData.confirmPassword}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      confirmPassword: e.target.value,
-                    })
-                  }
-                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20 ${
-                    formData.confirmPassword.length > 0
-                      ? passwordsMatch
-                        ? 'border-green-400'
-                        : 'border-red-300'
-                      : 'border-slate-300'
-                  }`}
-                />
+                <div className="relative">
+
+                  <input
+                    type={
+                      showConfirmPassword
+                        ? 'text'
+                        : 'password'
+                    }
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                    placeholder="Re-enter your password"
+                    value={formData.confirmPassword}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        confirmPassword: e.target.value,
+                      })
+                    }
+                    className={`w-full px-3 py-2 pr-12 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20 ${
+                      formData.confirmPassword.length > 0
+                        ? passwordsMatch
+                          ? 'border-green-400'
+                          : 'border-red-300'
+                        : 'border-slate-300'
+                    }`}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowConfirmPassword(
+                        !showConfirmPassword
+                      )
+                    }
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-[#002046] transition"
+                    aria-label={
+                      showConfirmPassword
+                        ? 'Hide password'
+                        : 'Show password'
+                    }
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff
+                        size={18}
+                        strokeWidth={2}
+                      />
+                    ) : (
+                      <Eye
+                        size={18}
+                        strokeWidth={2}
+                      />
+                    )}
+                  </button>
+
+                </div>
 
                 {formData.confirmPassword.length > 0 && (
                   <p
@@ -945,26 +1028,63 @@ export default function VisitorLogin() {
 
                   </div>
 
+                  {/* LOGIN PASSWORD */}
+
                   <div>
 
                     <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
                       Password
                     </label>
 
-                    <input
-                      type="password"
-                      required
-                      autoComplete="current-password"
-                      placeholder="Enter your password"
-                      value={loginData.password}
-                      onChange={(e) =>
-                        setLoginData({
-                          ...loginData,
-                          password: e.target.value,
-                        })
-                      }
-                      className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
-                    />
+                    <div className="relative">
+
+                      <input
+                        type={
+                          showLoginPassword
+                            ? 'text'
+                            : 'password'
+                        }
+                        required
+                        autoComplete="current-password"
+                        placeholder="Enter your password"
+                        value={loginData.password}
+                        onChange={(e) =>
+                          setLoginData({
+                            ...loginData,
+                            password: e.target.value,
+                          })
+                        }
+                        className="w-full px-4 py-2.5 pr-12 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowLoginPassword(
+                            !showLoginPassword
+                          )
+                        }
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-[#002046] transition"
+                        aria-label={
+                          showLoginPassword
+                            ? 'Hide password'
+                            : 'Show password'
+                        }
+                      >
+                        {showLoginPassword ? (
+                          <EyeOff
+                            size={18}
+                            strokeWidth={2}
+                          />
+                        ) : (
+                          <Eye
+                            size={18}
+                            strokeWidth={2}
+                          />
+                        )}
+                      </button>
+
+                    </div>
 
                   </div>
 
@@ -994,9 +1114,16 @@ export default function VisitorLogin() {
                   <button
                     type="button"
                     onClick={startScanner}
-                    className="w-full bg-white border-2 border-[#002046] text-[#002046] py-3 rounded-lg font-bold text-sm hover:bg-slate-50 transition"
+                    className="w-full bg-white border-2 border-[#002046] text-[#002046] py-3 rounded-lg font-bold text-sm hover:bg-slate-50 transition flex items-center justify-center gap-2"
                   >
-                    📷 Scan QR Code with Camera
+                    <Camera
+                      size={18}
+                      strokeWidth={2}
+                    />
+
+                    <span>
+                      Scan QR Code with Camera
+                    </span>
                   </button>
 
                 </>
