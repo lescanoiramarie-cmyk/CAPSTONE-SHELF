@@ -1,14 +1,20 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+
 import { AuthProvider } from './context/AuthContext';
 import { LibraryProvider } from './context/LibraryContext';
+
 import ProtectedRoute from './routes/ProtectedRoute';
 
-// Login Pages
-import VisitorLogin from './pages/visitor/VisitorLogin';
-import AdminLogin from './pages/AdminLogin'; // <-- Sub-Admin Login Page
-import SuperAdminLogin from './pages/superadmin/SuperAdminLogin';
+// =========================================================
+// ONE LOGIN PAGE
+// =========================================================
 
-// Dashboard Pages
+import VisitorLogin from './pages/visitor/VisitorLogin';
+
+// =========================================================
+// DASHBOARDS
+// =========================================================
+
 import VisitorDashboard from './pages/visitor/VisitorDashboard';
 import SubAdminDashboard from './pages/subadmin/SubAdminDashboard';
 import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard';
@@ -18,13 +24,22 @@ export default function App() {
     <AuthProvider>
       <LibraryProvider>
         <BrowserRouter>
-          <Routes>
-            {/* Public Login Portals */}
-            <Route path="/" element={<VisitorLogin />} />
-            <Route path="/admin-login" element={<AdminLogin />} /> {/* Sub-Admin Route */}
-            <Route path="/superadmin-login" element={<SuperAdminLogin />} />
 
-            {/* Protected Role Dashboards */}
+          <Routes>
+
+            {/* =================================================
+                ONE LOGIN PAGE FOR ALL USERS
+               ================================================= */}
+
+            <Route
+              path="/"
+              element={<VisitorLogin />}
+            />
+
+            {/* =================================================
+                VISITOR DASHBOARD
+               ================================================= */}
+
             <Route
               path="/visitor"
               element={
@@ -33,14 +48,24 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* =================================================
+                SUB-ADMIN / CIRCULATION DESK DASHBOARD
+               ================================================= */}
+
             <Route
               path="/subadmin"
               element={
-                <ProtectedRoute allowedRoles={['subadmin', 'superadmin']}>
+                <ProtectedRoute allowedRoles={['subadmin']}>
                   <SubAdminDashboard />
                 </ProtectedRoute>
               }
             />
+
+            {/* =================================================
+                SUPER ADMIN DASHBOARD
+               ================================================= */}
+
             <Route
               path="/superadmin"
               element={
@@ -50,9 +75,17 @@ export default function App() {
               }
             />
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
+            {/* =================================================
+                FALLBACK
+               ================================================= */}
+
+            <Route
+              path="*"
+              element={<Navigate to="/" replace />}
+            />
+
           </Routes>
+
         </BrowserRouter>
       </LibraryProvider>
     </AuthProvider>
