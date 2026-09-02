@@ -37,7 +37,11 @@ export default function VisitorLogin() {
 
   const [otpInput, setOtpInput] = useState('');
   const [pendingVisitorId, setPendingVisitorId] = useState(null);
-  const [demoOtp, setDemoOtp] = useState('');
+
+  // Stores the email address used for the pending verification.
+  // The OTP itself is NEVER stored in React state.
+  const [pendingEmail, setPendingEmail] = useState('');
+
   const [registeredVisitor, setRegisteredVisitor] = useState(null);
 
   const {
@@ -266,12 +270,19 @@ export default function VisitorLogin() {
     }
 
     try {
-      const { visitorId, otp } =
+      // IMPORTANT:
+      // registerVisitor no longer returns the OTP.
+      // It returns only the visitor ID after the server-side
+      // email process has been requested.
+      const { visitorId } =
         await registerVisitor(formData);
 
       setPendingVisitorId(visitorId);
-      setDemoOtp(otp);
+      setPendingEmail(formData.email.trim());
+      setOtpInput('');
       setView('otp');
+
+      setError('');
     } catch (err) {
       setError(
         err.message ||
@@ -289,9 +300,11 @@ export default function VisitorLogin() {
 
     setError('');
 
-    if (otpInput.length !== 6) {
+    const cleanOtp = otpInput.trim();
+
+    if (cleanOtp.length !== 6) {
       setError(
-        'Please enter the complete 6-digit OTP code.'
+        'Please enter the complete 6-digit verification code.'
       );
       return;
     }
@@ -299,7 +312,7 @@ export default function VisitorLogin() {
     try {
       const visitor = await verifyVisitorOtp(
         pendingVisitorId,
-        otpInput
+        cleanOtp
       );
 
       setRegisteredVisitor(visitor);
@@ -307,7 +320,7 @@ export default function VisitorLogin() {
     } catch (err) {
       setError(
         err.message ||
-          'Invalid OTP code.'
+          'Invalid or expired verification code.'
       );
     }
   };
@@ -319,20 +332,29 @@ export default function VisitorLogin() {
   const handleResendOtp = async () => {
     setError('');
 
-    try {
-      const otp = await resendVisitorOtp(
-        pendingVisitorId
+    if (!pendingVisitorId) {
+      setError(
+        'Registration session not found. Please register again.'
       );
+      return;
+    }
 
-      setDemoOtp(otp);
+    try {
+      // IMPORTANT:
+      // resendVisitorOtp does NOT return the OTP.
+      // The new OTP is sent to the visitor's email
+      // through the server-side email process.
+      await resendVisitorOtp(pendingVisitorId);
+
+      setOtpInput('');
 
       setError(
-        'A new OTP code has been generated.'
+        'A new verification code has been sent to your email.'
       );
     } catch (err) {
       setError(
         err.message ||
-          'Unable to resend OTP code.'
+          'Unable to resend the verification code.'
       );
     }
   };
@@ -361,8 +383,8 @@ export default function VisitorLogin() {
 
     setOtpInput('');
     setPendingVisitorId(null);
+    setPendingEmail('');
     setRegisteredVisitor(null);
-    setDemoOtp('');
 
     setShowLoginPassword(false);
     setShowRegisterPassword(false);
@@ -401,6 +423,19 @@ export default function VisitorLogin() {
 
   return (
     <div className="min-h-screen flex w-full bg-[#f8fafc]">
+
+      {/* =====================================================
+          HIDE BROWSER NATIVE PASSWORD REVEAL ICON
+         ===================================================== */}
+
+      <style>
+        {`
+          input[type="password"]::-ms-reveal,
+          input[type="password"]::-ms-clear {
+            display: none;
+          }
+        `}
+      </style>
 
       {/* =====================================================
           LEFT BRANDING PANEL
@@ -481,7 +516,7 @@ export default function VisitorLogin() {
                 'Fill in your personal details to receive your digital library pass.'}
 
               {view === 'otp' &&
-                'Enter the one-time code we sent to your email to activate your account.'}
+                'Enter the one-time verification code sent to your email to activate your account.'}
 
               {view === 'success' &&
                 "Save your QR pass — you'll scan it at the library entrance and at the circulation desk."}
@@ -493,12 +528,12 @@ export default function VisitorLogin() {
 
           </div>
 
-          {/* ERROR MESSAGE */}
+          {/* ERROR / STATUS MESSAGE */}
 
           {error && (
             <div
               className={`text-xs font-semibold rounded-lg px-3 py-2 ${
-                error.includes('generated')
+                error.includes('sent to your email')
                   ? 'text-blue-700 bg-blue-50 border border-blue-200'
                   : 'text-red-600 bg-red-50 border border-red-200'
               }`}
@@ -572,27 +607,42 @@ export default function VisitorLogin() {
               className="space-y-4"
             >
 
-              <div className="bg-blue-50 border border-blue-200 text-blue-800 text-xs px-3 py-2 rounded-lg">
+              {/* EMAIL DELIVERY MESSAGE */}
 
-                Simulated email delivery
-                (no email/SMS provider is connected yet):
-                your OTP code is{' '}
+              <div className="bg-blue-50 border border-blue-200 text-blue-800 text-xs px-4 py-3 rounded-lg">
 
-                <span className="font-mono font-bold">
-                  {demoOtp}
-                </span>
+                <p className="font-semibold">
+                  Verification code sent
+                </p>
+
+                <p className="mt-1">
+                  We sent a 6-digit verification code to:
+                </p>
+
+                <p className="font-bold mt-1 break-all">
+                  {pendingEmail}
+                </p>
+
+                <p className="mt-2 text-blue-700">
+                  Please check your inbox and enter the
+                  code below. The code will expire after
+                  10 minutes.
+                </p>
 
               </div>
+
+              {/* OTP INPUT */}
 
               <div>
 
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  6-Digit OTP Code
+                  6-Digit Verification Code
                 </label>
 
                 <input
                   type="text"
                   inputMode="numeric"
+                  autoComplete="one-time-code"
                   required
                   maxLength={6}
                   value={otpInput}
@@ -604,15 +654,20 @@ export default function VisitorLogin() {
                       )
                     )
                   }
-                  placeholder="••••••"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm tracking-[0.5em] text-center font-mono focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                  placeholder="Enter 6-digit code"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm tracking-[0.35em] text-center font-mono focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
                 />
 
               </div>
 
               <button
                 type="submit"
-                className="w-full bg-[#002046] text-white py-2.5 rounded-lg font-bold text-sm hover:opacity-95 transition shadow-sm"
+                disabled={otpInput.length !== 6}
+                className={`w-full py-2.5 rounded-lg font-bold text-sm transition shadow-sm ${
+                  otpInput.length === 6
+                    ? 'bg-[#002046] text-white hover:opacity-95'
+                    : 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                }`}
               >
                 Verify & Activate Account
               </button>
@@ -622,7 +677,7 @@ export default function VisitorLogin() {
                 onClick={handleResendOtp}
                 className="w-full text-xs font-semibold text-[#002046] hover:underline"
               >
-                Resend OTP Code
+                Resend Verification Code
               </button>
 
             </form>
@@ -940,7 +995,7 @@ export default function VisitorLogin() {
                     : 'bg-slate-300 text-slate-500 cursor-not-allowed'
                 }`}
               >
-                Send OTP & Continue
+                Send Verification Code
               </button>
 
             </form>
