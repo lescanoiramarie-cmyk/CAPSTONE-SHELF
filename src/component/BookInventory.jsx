@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useLibraryData, useLibrary } from '../context/LibraryContext';
+import { useAuth } from '../context/AuthContext';
 
 const emptyForm = {
   title: '',
@@ -16,12 +17,26 @@ const emptyForm = {
 export default function BookInventory() {
   const { books, libraries } = useLibraryData();
   const { addBook, updateBook, deleteBook, loadSampleCatalog } = useLibrary();
-  const [form, setForm] = useState({ ...emptyForm, libraryId: libraries[0]?.id || '' });
+  const { user } = useAuth();
+
+  // Determine if user is a restricted sub-admin
+  const isSubAdmin = user?.role === 'subadmin';
+  const subAdminLibraryId = user?.libraryId || libraries[0]?.id || '';
+
+  const [form, setForm] = useState({ 
+    ...emptyForm, 
+    libraryId: isSubAdmin ? subAdminLibraryId : (libraries[0]?.id || '') 
+  });
   const [editingId, setEditingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState('');
 
-  const filtered = books.filter(
+  // If sub-admin, restrict book list strictly to their libraryId
+  const scopedBooks = isSubAdmin 
+    ? books.filter((b) => b.libraryId === subAdminLibraryId) 
+    : books;
+
+  const filtered = scopedBooks.filter(
     (b) =>
       b.title.toLowerCase().includes(search.toLowerCase()) ||
       b.author.toLowerCase().includes(search.toLowerCase()) ||
@@ -30,7 +45,10 @@ export default function BookInventory() {
 
   const startAdd = () => {
     setEditingId(null);
-    setForm({ ...emptyForm, libraryId: libraries[0]?.id || '' });
+    setForm({ 
+      ...emptyForm, 
+      libraryId: isSubAdmin ? subAdminLibraryId : (libraries[0]?.id || '') 
+    });
     setShowForm(true);
   };
 
@@ -52,16 +70,23 @@ export default function BookInventory() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    // Force sub-admin to always save under their own assigned library
+    const finalLibraryId = isSubAdmin ? subAdminLibraryId : form.libraryId;
+
     if (editingId) {
       const book = books.find((b) => b.id === editingId);
       const copiesDiff = Number(form.totalCopies) - book.totalCopies;
       updateBook(editingId, {
         ...form,
+        libraryId: finalLibraryId,
         totalCopies: Number(form.totalCopies),
         availableCopies: Math.max(0, book.availableCopies + copiesDiff),
       });
     } else {
-      addBook(form);
+      addBook({
+        ...form,
+        libraryId: finalLibraryId,
+      });
     }
     setShowForm(false);
     setEditingId(null);
@@ -73,8 +98,16 @@ export default function BookInventory() {
     }
   };
 
+  const currentLibraryName = libraries.find((l) => l.id === subAdminLibraryId)?.name || 'Your Branch';
+
   return (
     <div className="space-y-4">
+      {isSubAdmin && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 text-xs px-4 py-2.5 rounded-lg flex items-center justify-between">
+          <span>📍 Managing inventory exclusively for: <b>{currentLibraryName}</b></span>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row gap-3 justify-between">
         <input
           type="text"
@@ -84,12 +117,12 @@ export default function BookInventory() {
           className="flex-1 max-w-sm px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
         />
         <div className="flex gap-2">
-          {books.length === 0 && (
+          {!isSubAdmin && (
             <button
               onClick={loadSampleCatalog}
               className="text-xs font-bold px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition"
             >
-              Load Sample Catalog (Demo)
+              Load 100+ API Books (Demo)
             </button>
           )}
           <button
@@ -102,10 +135,11 @@ export default function BookInventory() {
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
-        {books.length === 0 ? (
+        {filtered.length === 0 ? (
           <div className="p-10 text-center text-sm text-slate-500">
-            The catalog is empty — this is a new deployment with no inventory yet. Use <b>Add Book</b> to enter real
-            titles, or <b>Load Sample Catalog</b> to populate dummy data for a demo.
+            {isSubAdmin 
+              ? `Your branch (${currentLibraryName}) has no books in inventory yet. Click **+ Add Book** to start adding items.`
+              : `The catalog is empty. Use **Add Book** or **Load 100+ API Books (Demo)** to populate data.`}
           </div>
         ) : (
           <table className="w-full text-left text-sm">
@@ -114,7 +148,7 @@ export default function BookInventory() {
                 <th className="p-3">Title</th>
                 <th className="p-3">Author</th>
                 <th className="p-3">Category</th>
-                <th className="p-3">Library</th>
+                {!isSubAdmin && <th className="p-3">Library</th>}
                 <th className="p-3">Copies</th>
                 <th className="p-3 text-right">Actions</th>
               </tr>
@@ -125,7 +159,11 @@ export default function BookInventory() {
                   <td className="p-3 font-bold text-slate-800">{b.title}</td>
                   <td className="p-3 text-xs text-slate-500">{b.author}</td>
                   <td className="p-3 text-xs text-slate-500">{b.category}</td>
-                  <td className="p-3 text-xs text-slate-500">{libraries.find((l) => l.id === b.libraryId)?.name || b.libraryId}</td>
+                  {!isSubAdmin && (
+                    <td className="p-3 text-xs text-slate-500">
+                      {libraries.find((l) => l.id === b.libraryId)?.name || b.libraryId}
+                    </td>
+                  )}
                   <td className="p-3 text-xs font-mono">{b.availableCopies}/{b.totalCopies}</td>
                   <td className="p-3 text-right space-x-2">
                     <button onClick={() => startEdit(b)} className="text-xs font-bold text-[#002046] hover:underline">
@@ -177,11 +215,26 @@ export default function BookInventory() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Library Branch</label>
-                <select required value={form.libraryId} onChange={(e) => setForm({ ...form, libraryId: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
-                  {libraries.map((l) => (
-                    <option key={l.id} value={l.id}>{l.name}</option>
-                  ))}
-                </select>
+                {isSubAdmin ? (
+                  // Locked display for sub-admins so they can't change branch
+                  <input 
+                    disabled 
+                    value={currentLibraryName} 
+                    className="w-full px-3 py-2 border border-slate-200 bg-slate-100 rounded-lg text-sm text-slate-600 cursor-not-allowed" 
+                  />
+                ) : (
+                  // Super admin can choose any branch
+                  <select 
+                    required 
+                    value={form.libraryId} 
+                    onChange={(e) => setForm({ ...form, libraryId: e.target.value })} 
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                  >
+                    {libraries.map((l) => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </select>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Total Copies</label>

@@ -28,6 +28,84 @@ export const SUPER_ADMIN_CREDENTIALS = [
 
 export const SUB_ADMIN_CREDENTIALS = [
   {
+    email: 'malvar.admin@shelf.edu',
+    password: 'Password@2026',
+    name: 'Malvar Campus Sub-Admin',
+    libraryId: '277829af-1475-47ae-9e26-4b64c68f54f4', // BatStateU JPLPC-Malvar Library
+  },
+  {
+    email: 'lipa.admin@shelf.edu',
+    password: 'Password@2026',
+    name: 'Lipa Campus Sub-Admin',
+    libraryId: '3ccf575d-4573-4ed9-acdb-c8d9cf8a949e', // BatStateU Lipa Library
+  },
+  {
+    email: 'lemery.admin@shelf.edu',
+    password: 'Password@2026',
+    name: 'Lemery Campus Sub-Admin',
+    libraryId: '41dec6e1-28cd-4057-a046-982269698cdc', // BatStateU Lemery Library
+  },
+  {
+    email: 'sanjuan.admin@shelf.edu',
+    password: 'Password@2026',
+    name: 'San Juan Campus Sub-Admin',
+    libraryId: '4226ff5c-21f1-48bd-9cf8-a5a272c81e3d', // BatStateU San Juan Library
+  },
+  {
+    email: 'mabini.admin@shelf.edu',
+    password: 'Password@2026',
+    name: 'Mabini Campus Sub-Admin',
+    libraryId: '66ea1120-0789-410f-bb87-ae22d115ce1e', // BatStateU Mabini Library
+  },
+  {
+    email: 'nasugbu.admin@shelf.edu',
+    password: 'Password@2026',
+    name: 'Nasugbu Campus Sub-Admin',
+    libraryId: '67487fb6-6988-433c-aeef-9b770f59f010', // BatStateU ARASOF-Nasugbu Library
+  },
+  {
+    email: 'batangascity.admin@shelf.edu',
+    password: 'Password@2026',
+    name: 'Batangas City Library Staff',
+    libraryId: '78c0a005-06cd-48f5-92d2-daa06fe36e12', // Batangas City Public Library and Information Center
+  },
+  {
+    email: 'lobo.admin@shelf.edu',
+    password: 'Password@2026',
+    name: 'Lobo Campus Sub-Admin',
+    libraryId: '7c23ab9b-b42d-4420-b5b7-fdc71c49792a', // BatStateU Lobo Library
+  },
+  {
+    email: 'alangilan.admin@shelf.edu',
+    password: 'Password@2026',
+    name: 'Alangilan Campus Sub-Admin',
+    libraryId: '84819f90-5923-4bd8-8aa0-1805e7613e81', // BatStateU Alangilan Library
+  },
+  {
+    email: 'balayan.admin@shelf.edu',
+    password: 'Password@2026',
+    name: 'Balayan Campus Sub-Admin',
+    libraryId: '971893c8-5670-46b5-833c-398b2968ad1c', // BatStateU Balayan Library
+  },
+  {
+    email: 'provincial.admin@shelf.edu',
+    password: 'Password@2026',
+    name: 'Provincial Library Staff',
+    libraryId: '9c82c34b-6059-47e1-983a-d03755cb830b', // Batangas Provincial Library
+  },
+  {
+    email: 'pabloborbon.admin@shelf.edu',
+    password: 'Password@2026',
+    name: 'Pablo Borbon Campus Sub-Admin',
+    libraryId: 'bde57b8b-d3b8-4676-823e-7573f80d3a36', // BatStateU Pablo Borbon Library
+  },
+  {
+    email: 'rosario.admin@shelf.edu',
+    password: 'Password@2026',
+    name: 'Rosario Campus Sub-Admin',
+    libraryId: 'c5613110-237e-4e93-b27b-95b41da95f3a', // BatStateU Rosario Library
+  },
+  {
     email: 'librarian@shelf.edu',
     password: 'Librarian@2026',
     name: 'Maria Santos',
@@ -61,12 +139,10 @@ export const SAMPLE_BOOKS = [
     category: 'Computer Science',
     isbn: '978-0672324536',
     shelfLocation: 'Shelf A-3 (Technology)',
-    libraryId: '78c0a005-06cd-48f5-92d2-daa06fe36e12',
+    libraryId: '277829af-1475-47ae-9e26-4b64c68f54f4', // BatStateU JPLPC-Malvar Library
     totalCopies: 5,
-    summary:
-      'A comprehensive guide to foundational algorithms, binary trees, sorting mechanisms, and memory allocation in Java.',
-    coverUrl:
-      'https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&q=80&w=400',
+    summary: 'This comprehensive guide serves as an essential roadmap for students and software engineers aiming to master the foundational mechanics of computer science. Designed with clarity and practical implementation in mind, the text thoroughly explores complex topics such as binary search trees, stacks, queues, sorting algorithms, and advanced memory allocation techniques specifically within the Java programming environment. Readers are provided with clear architectural breakdowns and step-by-step code examples that demystify how underlying data structures affect application performance and scalability. Furthermore, the book emphasizes object-oriented design principles, ensuring that developers not only learn how to implement data structures efficiently but also how to write maintainable, modular, and robust codebases. Whether you are preparing for technical interviews, building enterprise-grade applications, or laying down the core academic groundwork required for advanced software engineering, this textbook bridges the crucial gap between abstract theoretical computer science concepts and real-world programming execution, making it an indispensable resource for any modern technical library collection.',
+    coverUrl: 'https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&q=80&w=400',
   },
   {
     title: 'Clean Code: A Handbook of Agile Software Craftsmanship',
@@ -74,12 +150,10 @@ export const SAMPLE_BOOKS = [
     category: 'Software Engineering',
     isbn: '978-0132350884',
     shelfLocation: 'Shelf B-1 (Software)',
-    libraryId: '78c0a005-06cd-48f5-92d2-daa06fe36e12',
+    libraryId: '3ccf575d-4573-4ed9-acdb-c8d9cf8a949e', // BatStateU Lipa Library
     totalCopies: 3,
-    summary:
-      'Even bad code can function, but unclean code slows a team down. Learn how to write code that is clean and readable.',
-    coverUrl:
-      'https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&q=80&w=400',
+    summary: 'Even bad code can function properly, but failing to keep code clean can drastically slow down a development team, stall product lifecycles, and accumulate massive technical debt over time. This seminal handbook introduces programmers to the core values, disciplines, and best practices of agile software craftsmanship. The author breaks down the art of writing readable, reusable, and refactorable code by examining meaningful naming conventions, proper function sizing, object-oriented design boundaries, effective error handling protocols, and comprehensive unit testing strategies. Through extensive comparative code examples, readers learn to distinguish between messy, convoluted implementations and elegant, self-documenting architectures. The text challenges developers to take professional pride in their codebases, arguing that writing clean code is not merely an aesthetic preference but a fundamental ethical and economic necessity for long-term project viability. Packed with invaluable insights, heuristics, and practical refactoring exercises, this book transforms casual programmers into disciplined software artisans capable of collaborating seamlessly in high-performance team environments.',
+    coverUrl: 'https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&q=80&w=400',
   },
   {
     title: 'Principles of Physics',
@@ -87,12 +161,10 @@ export const SAMPLE_BOOKS = [
     category: 'Science',
     isbn: '978-1118230749',
     shelfLocation: 'Shelf C-2 (Science)',
-    libraryId: '9c82c34b-6059-47e1-983a-d03755cb830b',
-    totalCopies: 2,
-    summary:
-      'An essential textbook offering a solid foundation in mechanics, thermodynamics, electromagnetism, and modern physics.',
-    coverUrl:
-      'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&q=80&w=400',
+    libraryId: '84819f90-5923-4bd8-8aa0-1805e7613e81', // BatStateU Alangilan Library
+    totalCopies: 4,
+    summary: 'Widely recognized as a cornerstone text for engineering and physical science students, this authoritative volume offers a rigorous and deeply analytical foundation in classical mechanics, thermodynamics, electromagnetism, and modern physics. The curriculum is meticulously structured to cultivate critical analytical thinking and problem-solving skills, taking complex physical phenomena and breaking them down through mathematical rigor, vector calculus applications, and real-world engineering scenarios. Each chapter features conceptual questions, detailed problem sets, and illustrative visual diagrams that connect abstract theoretical equations to tangible physical reality. Students explore the conservation of energy, rotational dynamics, wave motion, electromagnetic induction, and quantum principles with exceptional clarity. Designed to support rigorous academic programs, the book encourages learners to look beyond rote formula memorization and truly grasp the universal laws governing the physical universe. It serves as an enduring reference tool that students will carry from their foundational undergraduate coursework well into their professional technical careers.',
+    coverUrl: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&q=80&w=400',
   },
 ];
 
@@ -557,26 +629,59 @@ export async function deleteBook(bookId) {
 }
 
 export async function loadSampleCatalog() {
-  const rows = SAMPLE_BOOKS.map((b) => ({
-    title: b.title,
-    author: b.author,
-    category: b.category,
-    isbn: b.isbn,
-    shelf_location: b.shelfLocation,
-    library_id: b.libraryId,
-    total_copies: b.totalCopies,
-    available_copies: b.totalCopies,
-    summary: b.summary,
-    cover_url: b.coverUrl,
-  }));
+  const categories = ['computer+science', 'engineering', 'mathematics', 'physics', 'history'];
+  let allBooks = [];
 
-  const { error } = await supabase
-    .from('books')
-    .insert(rows);
+  // Your exact BatStateU and partner library UUIDs from Supabase
+  const libraryIds = [
+    '277829af-1475-47ae-9e26-4b64c68f54f4', // BatStateU JPLPC-Malvar Library
+    '3ccf575d-4573-4ed9-acdb-c8d9cf8a949e', // BatStateU Lipa Library
+    '41dec6e1-28cd-4057-a046-982269698cdc', // BatStateU Lemery Library
+    '4226ff5c-21f1-48bd-9cf8-a5a272c81e3d', // BatStateU San Juan Library
+    '66ea1120-0789-410f-bb87-ae22d115ce1e', // BatStateU Mabini Library
+    '67487fb6-6988-433c-aeef-9b770f59f010', // BatStateU ARASOF-Nasugbu Library
+    '78c0a005-06cd-48f5-92d2-daa06fe36e12', // Batangas City Public Library and Information Center
+    '7c23ab9b-b42d-4420-b5b7-fdc71c49792a', // BatStateU Lobo Library
+    '84819f90-5923-4bd8-8aa0-1805e7613e81', // BatStateU Alangilan Library
+    '971893c8-5670-46b5-833c-398b2968ad1c', // BatStateU Balayan Library
+    '9c82c34b-6059-47e1-983a-d03755cb830b', // Batangas Provincial Library
+    'bde57b8b-d3b8-4676-823e-7573f80d3a36', // BatStateU Pablo Borbon Library
+    'c5613110-237e-4e93-b27b-95b41da95f3a', // BatStateU Rosario Library
+  ];
 
-  if (error) throw cleanErr(error);
+  for (const cat of categories) {
+    try {
+      const response = await fetch(`https://openlibrary.org/search.json?q=${cat}&limit=25`);
+      const data = await response.json();
+      
+      const mapped = data.docs.map((doc, index) => {
+        const randomLibId = libraryIds[(index + cat.length) % libraryIds.length];
+        const copies = Math.floor(Math.random() * 5) + 3; // 3 to 7 copies
+
+        return {
+          title: doc.title,
+          author: doc.author_name?.[0] || 'Unknown Author',
+          category: cat.replace('+', ' ').toUpperCase(),
+          isbn: doc.isbn?.[0] || `ISBN-${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+          shelf_location: `Shelf ${String.fromCharCode(65 + (index % 5))}-${(index % 10) + 1}`,
+          library_id: randomLibId,
+          total_copies: copies,
+          available_copies: copies,
+          summary: doc.first_sentence?.[0] || `An authoritative academic resource focusing on ${cat.replace('+', ' ')}, providing comprehensive theoretical frameworks, practical methodologies, and foundational insights for higher education students and researchers within the university network.`,
+          cover_url: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : DEFAULT_COVER_URL,
+        };
+      });
+      allBooks.push(...mapped);
+    } catch (err) {
+      console.error('Error fetching sample catalog from API:', err);
+    }
+  }
+
+  if (allBooks.length > 0) {
+    const { error } = await supabase.from('books').insert(allBooks);
+    if (error) throw cleanErr(error);
+  }
 }
-
 // ---------------------------------------------------------------------------
 // Borrow requests, pickup window, and reservation queue — atomic logic lives
 // in Postgres (see supabase/schema.sql); these just call the RPC functions.

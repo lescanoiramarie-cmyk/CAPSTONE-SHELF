@@ -37,13 +37,15 @@ export function LibraryProvider({ children }) {
     refreshAll();
 
     const channel = supabase
-      .channel('shelf-ilms-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'books' }, refreshAll)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'borrow_requests' }, refreshAll)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, refreshAll)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'visitors' }, refreshAll)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'libraries' }, refreshAll)
-      .subscribe();
+      ? supabase
+          .channel('shelf-ilms-realtime')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'books' }, refreshAll)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'borrow_requests' }, refreshAll)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, refreshAll)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'visitors' }, refreshAll)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'libraries' }, refreshAll)
+          .subscribe()
+      : null;
 
     // Belt-and-suspenders: also sweep for expired pickups every 30s in case
     // no one is actively watching the affected rows.
@@ -53,7 +55,7 @@ export function LibraryProvider({ children }) {
     store.autoExpireOverduePickups().catch(() => {});
 
     return () => {
-      supabase.removeChannel(channel);
+      if (supabase && channel) supabase.removeChannel(channel);
       clearInterval(interval);
     };
   }, [refreshAll]);

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLibrary, useLibraryData } from '../context/LibraryContext';
+import LibraryMap from './LibraryMap';
 
 function formatDateTime(iso) {
   if (!iso) return '—';
@@ -39,6 +40,7 @@ export default function OPACCatalog({ libraryFilter = null }) {
   const [selectedBook, setSelectedBook] = useState(null);
   const [activeTab, setActiveTab] = useState('catalog');
   const [notice, setNotice] = useState('');
+  const [mapLibrary, setMapLibrary] = useState(null);
 
   const categories = ['All', ...new Set(books.map((b) => b.category))];
 
@@ -58,15 +60,15 @@ export default function OPACCatalog({ libraryFilter = null }) {
 
   const libraryName = (id) => libraries.find((l) => l.id === id)?.name || id;
 
-  const handleBorrowOrReserve = (book) => {
+  const handleBorrowOrReserve = (bookEntry) => {
     try {
-      const req = requestBorrow(user.id, book.id);
+      const req = requestBorrow(user.id, bookEntry.id);
       if (req.status === 'ready_for_pickup') {
         setNotice(
-          `"${book.title}" is on hold for you! Visit ${libraryName(book.libraryId)} within ${PICKUP_WINDOW_HOURS} hours to scan your QR pass and pick it up, or the hold will be cancelled automatically.`
+          `"${bookEntry.title}" is on hold for you at ${libraryName(bookEntry.libraryId)}! Visit within ${PICKUP_WINDOW_HOURS} hours to scan your QR pass.`
         );
       } else {
-        setNotice(`"${book.title}" is currently unavailable — you are #${req.queuePosition} in the reservation queue. We'll notify you once it's ready.`);
+        setNotice(`"${bookEntry.title}" is currently unavailable at this branch — you are #${req.queuePosition} in the reservation queue.`);
       }
     } catch (err) {
       setNotice(err.message);
@@ -82,6 +84,22 @@ export default function OPACCatalog({ libraryFilter = null }) {
     } catch (err) {
       setNotice(err.message);
     }
+  };
+
+  const handleViewMap = (libraryId) => {
+    const lib = libraries.find((l) => l.id === libraryId);
+    if (lib && lib.lat && lib.lng) {
+      setMapLibrary(lib);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      setNotice('GPS coordinates are not available for this library yet.');
+    }
+  };
+
+  // Find all library entries for the selected book (partner libraries sharing the same title/ISBN)
+  const getPartnerLibraryEntries = (book) => {
+    if (!book) return [];
+    return books.filter((b) => b.title === book.title || (book.isbn && b.isbn === book.isbn));
   };
 
   return (
@@ -120,6 +138,26 @@ export default function OPACCatalog({ libraryFilter = null }) {
 
       {activeTab === 'catalog' ? (
         <div className="space-y-6">
+          
+          {/* MAP DISPLAY SECTION */}
+          {mapLibrary && (
+            <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm relative">
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800">{mapLibrary.name}</h2>
+                  <p className="text-xs text-slate-500">{mapLibrary.address || 'Location Map'}</p>
+                </div>
+                <button 
+                  onClick={() => setMapLibrary(null)}
+                  className="px-3 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-xs font-bold"
+                >
+                  Close Map
+                </button>
+              </div>
+              <LibraryMap lat={mapLibrary.lat} lng={mapLibrary.lng} name={mapLibrary.name} />
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row gap-3">
             <input
               type="text"
@@ -153,7 +191,7 @@ export default function OPACCatalog({ libraryFilter = null }) {
                   className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition flex flex-col justify-between"
                 >
                   <div className="p-4 flex gap-4">
-                    <img src={book.coverUrl} alt={book.title} className="w-24 h-32 object-cover rounded-md border border-slate-200" />
+                    <img src={book.coverUrl} alt={book.title} className="w-24 h-32 object-cover rounded-md border border-slate-200 bg-slate-50" />
                     <div className="space-y-1">
                       <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
                         {book.category}
@@ -161,24 +199,23 @@ export default function OPACCatalog({ libraryFilter = null }) {
                       <h3 className="font-bold text-slate-800 text-sm line-clamp-2">{book.title}</h3>
                       <p className="text-xs text-slate-500">{book.author}</p>
                       <p className="text-xs text-slate-400 font-mono">ISBN: {book.isbn}</p>
-                      <p className="text-[11px] text-slate-500">{libraryName(book.libraryId)}</p>
                       <div className="pt-2">
                         <span
                           className={`text-xs px-2 py-0.5 rounded-full font-bold ${
                             book.availableCopies > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                           }`}
                         >
-                          {book.availableCopies > 0 ? `${book.availableCopies} Copies Available` : 'Join Reservation Queue'}
+                          {book.availableCopies > 0 ? `${book.availableCopies} Copies Available` : 'Unavailable'}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
-                    <span className="text-xs text-slate-500 font-medium">{book.shelfLocation}</span>
+                  {/* Clean footer without map link, showing only View Info & Request */}
+                  <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
                     <button
                       onClick={() => setSelectedBook(book)}
-                      className="bg-[#002046] text-white text-xs px-3 py-1.5 rounded-lg font-bold hover:opacity-90 transition"
+                      className="bg-[#002046] text-white text-xs px-4 py-2 rounded-lg font-bold hover:opacity-90 transition"
                     >
                       View Info & Request
                     </button>
@@ -239,9 +276,10 @@ export default function OPACCatalog({ libraryFilter = null }) {
         </div>
       )}
 
+      {/* VIEW INFO & REQUEST MODAL WITH MULTI-LIBRARY SELECTION */}
       {selectedBook && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 border border-slate-200 shadow-2xl relative">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 space-y-4 border border-slate-200 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setSelectedBook(null)}
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 font-bold"
@@ -250,7 +288,7 @@ export default function OPACCatalog({ libraryFilter = null }) {
             </button>
 
             <div className="flex gap-4">
-              <img src={selectedBook.coverUrl} alt={selectedBook.title} className="w-28 h-36 object-cover rounded-lg border border-slate-200" />
+              <img src={selectedBook.coverUrl} alt={selectedBook.title} className="w-24 h-32 object-cover rounded-lg border border-slate-200 bg-slate-50" />
               <div className="space-y-1">
                 <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
                   {selectedBook.category}
@@ -258,7 +296,6 @@ export default function OPACCatalog({ libraryFilter = null }) {
                 <h3 className="text-lg font-bold text-slate-800">{selectedBook.title}</h3>
                 <p className="text-xs text-slate-500">By {selectedBook.author}</p>
                 <p className="text-xs text-slate-400 font-mono">ISBN: {selectedBook.isbn}</p>
-                <p className="text-xs font-semibold text-[#002046] pt-1">{libraryName(selectedBook.libraryId)} — {selectedBook.shelfLocation}</p>
               </div>
             </div>
 
@@ -267,25 +304,42 @@ export default function OPACCatalog({ libraryFilter = null }) {
               <p className="text-xs text-slate-600 leading-relaxed">{selectedBook.summary || 'No summary provided yet.'}</p>
             </div>
 
-            <p className="text-[11px] text-slate-400">
+            {/* Partner Library Locations & Borrow Options */}
+            <div className="space-y-3 pt-2">
+              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Available Library Locations:</h4>
+              
+              <div className="space-y-2">
+                {getPartnerLibraryEntries(selectedBook).map((entry) => (
+                  <div key={entry.id} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs">
+                    <div>
+                      <p className="font-bold text-slate-800 text-sm">{libraryName(entry.libraryId)}</p>
+                      <p className="text-slate-500">
+                        {entry.availableCopies > 0 ? `${entry.availableCopies} available` : 'Out of stock (Queue available)'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleViewMap(entry.libraryId)}
+                        className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-300 transition"
+                      >
+                        📍 View Map
+                      </button>
+                      <button
+                        onClick={() => handleBorrowOrReserve(entry)}
+                        className="px-3 py-1.5 bg-[#002046] text-white rounded-lg font-bold hover:opacity-90 transition"
+                      >
+                        {entry.availableCopies > 0 ? 'Borrow' : 'Reserve'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-400 pt-2 border-t border-slate-100">
               Borrowed items are due {BORROW_PERIOD_DAYS} days after pickup. Holds must be picked up within {PICKUP_WINDOW_HOURS} hours or they're released automatically.
             </p>
-
-            <div className="flex items-center justify-between pt-2">
-              <div className="text-xs">
-                <span className="text-slate-500">Available: </span>
-                <span className="font-bold text-slate-800">
-                  {selectedBook.availableCopies} / {selectedBook.totalCopies}
-                </span>
-              </div>
-
-              <button
-                onClick={() => handleBorrowOrReserve(selectedBook)}
-                className="bg-[#002046] text-white px-5 py-2 rounded-lg text-xs font-bold hover:opacity-95 transition shadow-sm"
-              >
-                {selectedBook.availableCopies > 0 ? 'Confirm Borrow Request' : 'Reserve Book (Join Queue)'}
-              </button>
-            </div>
           </div>
         </div>
       )}
