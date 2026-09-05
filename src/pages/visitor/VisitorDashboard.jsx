@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { useAuth } from '../../context/AuthContext';
-import { useLibraryData } from '../../context/LibraryContext';
-import OPACCatalog from '../../component/OPACCatalog';
-import LibraryMap from '../../component/LibraryMap';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { useLibraryData } from '../../context/LibraryContext.jsx';
+import OPACCatalog from '../../component/OPACCatalog.jsx';
+import LibraryMap from '../../component/LibraryMap.jsx';
 
 function formatDateTime(iso) {
   return new Date(iso).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
@@ -32,7 +32,7 @@ export default function VisitorDashboard() {
           <span className="text-xs text-slate-300">
             Welcome, <b>{user?.name || 'Visitor'}</b>
           </span>
-          <button
+          <button type="button"
             onClick={logout}
             className="bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg border border-white/20 transition"
           >
@@ -55,7 +55,7 @@ export default function VisitorDashboard() {
             { id: 'pass', label: '🪪 My QR Pass & Attendance' },
             { id: 'map', label: '🗺️ Library Map & Location' },
           ].map((t) => (
-            <button
+            <button type="button"
               key={t.id}
               onClick={() => setTab(t.id)}
               className={`pb-3 text-sm font-bold transition ${
@@ -72,7 +72,7 @@ export default function VisitorDashboard() {
             {libraryFilter && (
               <div className="flex items-center gap-2 text-xs text-slate-500">
                 Filtered to <b>{libraryName(libraryFilter)}</b>
-                <button onClick={() => setLibraryFilter(null)} className="text-[#002046] font-bold hover:underline">
+                <button type="button" onClick={() => setLibraryFilter(null)} className="text-[#002046] font-bold hover:underline">
                   Clear filter
                 </button>
               </div>
