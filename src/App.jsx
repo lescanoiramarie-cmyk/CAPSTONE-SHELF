@@ -1,25 +1,25 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
-import { AuthProvider } from './context/AuthContext';
-import { LibraryProvider } from './context/LibraryContext';
+import { AuthProvider } from './context/AuthContext.jsx';
+import { LibraryProvider } from './context/LibraryContext.jsx';
 
-import ProtectedRoute from './routes/ProtectedRoute';
-import { autoCancelExpiredRequests } from './lib/supabaseClient';
+import ProtectedRoute from './routes/ProtectedRoute.jsx';
+import { autoCancelExpiredRequests } from './lib/supabaseClient.js';
 
 // =========================================================
 // ONE LOGIN PAGE
 // =========================================================
 
-import VisitorLogin from './pages/visitor/VisitorLogin';
+import VisitorLogin from './pages/visitor/VisitorLogin.jsx';
 
 // =========================================================
 // DASHBOARDS
 // =========================================================
 
-import VisitorDashboard from './pages/visitor/VisitorDashboard';
-import SubAdminDashboard from './pages/subadmin/SubAdminDashboard';
-import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard';
+import VisitorDashboard from './pages/visitor/VisitorDashboard.jsx';
+import SubAdminDashboard from './pages/subadmin/SubAdminDashboard.jsx';
+import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard.jsx';
 
 export default function App() {
   useEffect(() => {
