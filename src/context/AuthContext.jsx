@@ -24,7 +24,15 @@ export const AuthProvider = ({ children }) => {
     }
   }, [user]);
 
-  const logout = () => setUser(null);
+  // =========================================================
+  // LOGOUT (Lilinawin ang lahat ng local at session storage)
+  // =========================================================
+  const logout = () => {
+    setUser(null);
+    window.localStorage.removeItem(SESSION_KEY);
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+  };
 
   // =========================================================
   // VISITOR

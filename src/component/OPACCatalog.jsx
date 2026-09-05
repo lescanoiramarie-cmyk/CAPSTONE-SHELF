@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLibrary, useLibraryData } from '../context/LibraryContext';
 import LibraryMap from './LibraryMap';
+import { supabase } from '../lib/supabaseClient';
 
 function formatDateTime(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
 }
+
 function formatDate(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-PH', { dateStyle: 'medium' });
@@ -35,30 +37,109 @@ export default function OPACCatalog({ libraryFilter = null }) {
   const { books, borrowRequests, libraries } = useLibraryData();
   const { requestBorrow, cancelBorrowRequest, PICKUP_WINDOW_HOURS, BORROW_PERIOD_DAYS } = useLibrary();
 
+  // Filter States
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedLibrary, setSelectedLibrary] = useState('All');
+  const [selectedAvailability, setSelectedAvailability] = useState('All');
+
+  // Other UI States
   const [selectedBook, setSelectedBook] = useState(null);
   const [activeTab, setActiveTab] = useState('catalog');
   const [notice, setNotice] = useState('');
   const [mapLibrary, setMapLibrary] = useState(null);
 
-  const categories = ['All', ...new Set(books.map((b) => b.category))];
+  // Reviews & Ratings States (Supabase)
+  const [reviews, setReviews] = useState([]);
+  const [userRating, setUserRating] = useState(5);
+  const [userComment, setUserComment] = useState('');
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Dynamic lists for filters
+  const categories = ['All', ...new Set(books.map((b) => b.category))];
+  const libraryOptions = ['All', ...new Set(books.map((b) => b.libraryId))];
+
+  const libraryName = (id) => libraries.find((l) => l.id === id)?.name || id;
+
+  // Kumuha ng reviews mula sa Supabase kapag nagbukas ang Modal ng napiling libro
+  useEffect(() => {
+    if (selectedBook) {
+      const fetchReviews = async () => {
+        setLoadingReviews(true);
+        const { data, error } = await supabase
+          .from('book_reviews')
+          .select('*')
+          .eq('book_id', String(selectedBook.id))
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Error fetching reviews:', error.message);
+        } else {
+          setReviews(data || []);
+        }
+        setLoadingReviews(false);
+      };
+
+      fetchReviews();
+    }
+  }, [selectedBook]);
+
+  // Handle pag-submit ng bagong review sa Supabase
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+    if (!userComment.trim()) return;
+
+    setIsSubmitting(true);
+    const newReview = {
+      book_id: String(selectedBook.id),
+      visitor_id: user?.id ? String(user.id) : null,
+      visitor_name: user?.full_name || user?.name || user?.email || 'Anonymous Visitor',
+      rating: Number(userRating),
+      comment: userComment.trim(),
+    };
+
+    const { data, error } = await supabase
+      .from('book_reviews')
+      .insert([newReview])
+      .select();
+
+    setIsSubmitting(false);
+
+    if (error) {
+      setNotice('Bigo sa pag-save ng review: ' + error.message);
+    } else if (data && data.length > 0) {
+      setReviews([data[0], ...reviews]);
+      setUserComment('');
+      setUserRating(5);
+      setNotice('Salamat sa iyong rating at review!');
+    }
+  };
+
+  // Search and 3-Way Filter Logic
   const filteredBooks = books.filter((book) => {
     const matchesSearch =
       book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       book.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
       book.isbn.includes(searchTerm);
+
     const matchesCategory = selectedCategory === 'All' || book.category === selectedCategory;
-    const matchesLibrary = !libraryFilter || book.libraryId === libraryFilter;
-    return matchesSearch && matchesCategory && matchesLibrary;
+
+    const matchesLibrary =
+      libraryFilter ? book.libraryId === libraryFilter : (selectedLibrary === 'All' || book.libraryId === selectedLibrary);
+
+    const isAvailable = book.availableCopies > 0;
+    const matchesAvailability =
+      selectedAvailability === 'All' ||
+      (selectedAvailability === 'Available' && isAvailable) ||
+      (selectedAvailability === 'Unavailable' && !isAvailable);
+
+    return matchesSearch && matchesCategory && matchesLibrary && matchesAvailability;
   });
 
   const myRequests = borrowRequests
     .filter((r) => r.visitorId === user?.id)
     .sort((a, b) => new Date(b.requestDate) - new Date(a.requestDate));
-
-  const libraryName = (id) => libraries.find((l) => l.id === id)?.name || id;
 
   const handleBorrowOrReserve = (bookEntry) => {
     try {
@@ -96,7 +177,6 @@ export default function OPACCatalog({ libraryFilter = null }) {
     }
   };
 
-  // Find all library entries for the selected book (partner libraries sharing the same title/ISBN)
   const getPartnerLibraryEntries = (book) => {
     if (!book) return [];
     return books.filter((b) => b.title === book.title || (book.isbn && b.isbn === book.isbn));
@@ -138,7 +218,6 @@ export default function OPACCatalog({ libraryFilter = null }) {
 
       {activeTab === 'catalog' ? (
         <div className="space-y-6">
-          
           {/* MAP DISPLAY SECTION */}
           {mapLibrary && (
             <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm relative">
@@ -158,30 +237,62 @@ export default function OPACCatalog({ libraryFilter = null }) {
             </div>
           )}
 
-          <div className="flex flex-col sm:flex-row gap-3">
+          {/* SEARCH BAR & FILTER DROPDOWNS SECTION */}
+          <div className="flex flex-col md:flex-row gap-3 flex-wrap">
             <input
               type="text"
               placeholder="Search by Title, Author, or ISBN…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+              className="flex-1 min-w-[200px] px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
             />
+
+            {!libraryFilter && (
+              <select
+                value={selectedLibrary}
+                onChange={(e) => setSelectedLibrary(e.target.value)}
+                className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none"
+              >
+                <option value="All">All Libraries</option>
+                {libraryOptions.filter((lib) => lib !== 'All').map((libId) => (
+                  <option key={libId} value={libId}>
+                    {libraryName(libId)}
+                  </option>
+                ))}
+              </select>
+            )}
+
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
               className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none"
             >
-              {categories.map((c) => (
+              <option value="All">All Categories</option>
+              {categories.filter((c) => c !== 'All').map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>
               ))}
+            </select>
+
+            <select
+              value={selectedAvailability}
+              onChange={(e) => setSelectedAvailability(e.target.value)}
+              className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none"
+            >
+              <option value="All">All Statuses</option>
+              <option value="Available">Available Only</option>
+              <option value="Unavailable">Unavailable Only</option>
             </select>
           </div>
 
           {books.length === 0 ? (
             <div className="bg-white border border-dashed border-slate-300 rounded-xl p-10 text-center text-sm text-slate-500">
               No books in the catalog yet. Please check back soon — the library team is still populating the collection.
+            </div>
+          ) : filteredBooks.length === 0 ? (
+            <div className="bg-white border border-dashed border-slate-300 rounded-xl p-10 text-center text-sm text-slate-500">
+              No books matched your search or filter criteria.
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -211,7 +322,6 @@ export default function OPACCatalog({ libraryFilter = null }) {
                     </div>
                   </div>
 
-                  {/* Clean footer without map link, showing only View Info & Request */}
                   <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
                     <button
                       onClick={() => setSelectedBook(book)}
@@ -276,10 +386,10 @@ export default function OPACCatalog({ libraryFilter = null }) {
         </div>
       )}
 
-      {/* VIEW INFO & REQUEST MODAL WITH MULTI-LIBRARY SELECTION */}
+      {/* VIEW INFO & REQUEST MODAL WITH REVIEWS SECTION */}
       {selectedBook && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 space-y-4 border border-slate-200 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 space-y-5 border border-slate-200 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setSelectedBook(null)}
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 font-bold"
@@ -304,7 +414,6 @@ export default function OPACCatalog({ libraryFilter = null }) {
               <p className="text-xs text-slate-600 leading-relaxed">{selectedBook.summary || 'No summary provided yet.'}</p>
             </div>
 
-            {/* Partner Library Locations & Borrow Options */}
             <div className="space-y-3 pt-2">
               <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Available Library Locations:</h4>
               
@@ -334,6 +443,74 @@ export default function OPACCatalog({ libraryFilter = null }) {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* REVIEWS & RATINGS SECTION (SUPABASE) */}
+            <div className="pt-4 border-t border-slate-200 space-y-4">
+              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+                <span>⭐ Ratings & Reviews</span>
+                <span className="text-slate-400 normal-case font-normal">({reviews.length} {reviews.length === 1 ? 'review' : 'reviews'})</span>
+              </h4>
+
+              {/* Form para sa pagsusulat ng review */}
+              <form onSubmit={handleSubmitReview} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700">Leave a Review:</label>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-slate-500 mr-1">Rating:</span>
+                    <select
+                      value={userRating}
+                      onChange={(e) => setUserRating(Number(e.target.value))}
+                      className="text-xs bg-white border border-slate-300 rounded px-2 py-1 font-bold text-amber-600 focus:outline-none"
+                    >
+                      <option value="5">⭐⭐⭐⭐⭐ (5/5)</option>
+                      <option value="4">⭐⭐⭐⭐ (4/5)</option>
+                      <option value="3">⭐⭐⭐ (3/5)</option>
+                      <option value="2">⭐⭐ (2/5)</option>
+                      <option value="1">⭐ (1/5)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <textarea
+                  value={userComment}
+                  onChange={(e) => setUserComment(e.target.value)}
+                  placeholder="Write your review or thoughts about this book..."
+                  rows={2}
+                  className="w-full text-xs p-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#002046]/20 bg-white"
+                  required
+                />
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="bg-[#002046] text-white text-xs px-4 py-2 rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50"
+                  >
+                    {isSubmitting ? 'Submitting...' : 'Submit Review'}
+                  </button>
+                </div>
+              </form>
+
+              {/* Listahan ng mga nakaraang reviews */}
+              <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
+                {loadingReviews ? (
+                  <p className="text-xs text-slate-400 italic">Kinukuha ang mga review...</p>
+                ) : reviews.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">No reviews yet for this book. Be the first to leave a review!</p>
+                ) : (
+                  reviews.map((rev) => (
+                    <div key={rev.id} className="p-3 bg-white rounded-lg border border-slate-100 shadow-sm text-xs space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-slate-800">{rev.visitor_name}</span>
+                        <span className="text-amber-500 font-bold">{'⭐'.repeat(rev.rating)}</span>
+                      </div>
+                      <p className="text-slate-600">{rev.comment}</p>
+                      <p className="text-[10px] text-slate-400">{formatDate(rev.created_at)}</p>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 

@@ -1,9 +1,11 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 import { AuthProvider } from './context/AuthContext';
 import { LibraryProvider } from './context/LibraryContext';
 
 import ProtectedRoute from './routes/ProtectedRoute';
+import { autoCancelExpiredRequests } from './lib/supabaseClient';
 
 // =========================================================
 // ONE LOGIN PAGE
@@ -20,6 +22,18 @@ import SubAdminDashboard from './pages/subadmin/SubAdminDashboard';
 import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard';
 
 export default function App() {
+  useEffect(() => {
+    // 1. I-run agad ang cancellation check pagka-load ng app
+    autoCancelExpiredRequests();
+
+    // 2. Mag-check ulit bawat 5 minuto (300,000 milliseconds)
+    const interval = setInterval(() => {
+      autoCancelExpiredRequests();
+    }, 300000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <AuthProvider>
       <LibraryProvider>
