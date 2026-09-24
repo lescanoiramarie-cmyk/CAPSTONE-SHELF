@@ -1,8 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
-import { useLibrary, useLibraryData } from '../context/LibraryContext.jsx';
+import {
+  useLibrary,
+  useLibraryData,
+} from '../context/LibraryContext.jsx';
 import LibraryMap from './LibraryMap.jsx';
 import { supabase } from '../lib/supabaseClient.js';
+
+// =========================================================
+// DATE HELPERS
+// =========================================================
 
 function formatDateTime(iso) {
   if (!iso) return '—';
@@ -22,49 +29,41 @@ function formatDate(iso) {
 }
 
 // =========================================================
-// CURRENT FINE CALCULATION
-// =========================================================
-// Fine rate: ₱10 per overdue day.
-//
-// For returned books:
-// - Use the final fine saved in the database.
-//
-// For borrowed books:
-// - Calculate the current fine live based on the due date.
-// - This allows the visitor to see the fine even before
-//   the book is returned.
+// FINE CALCULATION
 // =========================================================
 
 function calculateCurrentFine(request) {
   if (!request) return 0;
 
-  // Returned books already have their final fine saved.
   if (request.status === 'returned') {
     return Number(request.fineAmount || 0);
   }
 
-  // Only borrowed books can become overdue.
-  if (request.status !== 'borrowed' || !request.dueDate) {
+  if (
+    request.status !== 'borrowed' ||
+    !request.dueDate
+  ) {
     return 0;
   }
 
   const dueTime = new Date(request.dueDate).getTime();
   const nowTime = Date.now();
 
-  // Not overdue yet.
   if (nowTime <= dueTime) {
     return 0;
   }
 
-  // Calculate number of overdue days.
   const overdueDays = Math.ceil(
     (nowTime - dueTime) /
       (1000 * 60 * 60 * 24)
   );
 
-  // ₱10 per overdue day.
   return overdueDays * 10;
 }
+
+// =========================================================
+// STATUS STYLES
+// =========================================================
 
 const STATUS_STYLES = {
   queued: 'bg-slate-100 text-slate-600',
@@ -84,15 +83,19 @@ const STATUS_LABELS = {
   expired: 'Expired (Not Picked Up)',
 };
 
+// =========================================================
+// OPAC CATALOG
+// =========================================================
+
 export default function OPACCatalog({
   libraryFilter = null,
 }) {
   const { user } = useAuth();
 
   const {
-    books,
-    borrowRequests,
-    libraries,
+    books = [],
+    borrowRequests = [],
+    libraries = [],
   } = useLibraryData();
 
   const {
@@ -103,12 +106,18 @@ export default function OPACCatalog({
   } = useLibrary();
 
   // =========================================================
-  // FILTER STATES
+  // SEARCH / FILTER STATES
   // =========================================================
 
+  const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [selectedLibrary, setSelectedLibrary] = useState('All');
+
+  const [selectedCategory, setSelectedCategory] =
+    useState('All');
+
+  const [selectedLibrary, setSelectedLibrary] =
+    useState('All');
+
   const [selectedAvailability, setSelectedAvailability] =
     useState('All');
 
@@ -116,56 +125,70 @@ export default function OPACCatalog({
   // UI STATES
   // =========================================================
 
-  const [selectedBook, setSelectedBook] = useState(null);
-  const [activeTab, setActiveTab] = useState('catalog');
-  const [notice, setNotice] = useState('');
+  const [selectedBook, setSelectedBook] =
+    useState(null);
 
-  // Current map library
-  const [mapLibrary, setMapLibrary] = useState(null);
+  const [activeTab, setActiveTab] =
+    useState('catalog');
 
-  // Stores the last book opened before going to the map.
-  // This allows Close Map to return to the same book modal.
+  const [notice, setNotice] =
+    useState('');
+
+  // =========================================================
+  // MAP STATES
+  // =========================================================
+
+  const [mapLibrary, setMapLibrary] =
+    useState(null);
+
   const [mapReturnBook, setMapReturnBook] =
     useState(null);
 
   // =========================================================
-  // REVIEWS & RATINGS
+  // REVIEW STATES
   // =========================================================
 
-  const [reviews, setReviews] = useState([]);
-  const [userRating, setUserRating] = useState(5);
-  const [userComment, setUserComment] = useState('');
+  const [reviews, setReviews] =
+    useState([]);
+
+  const [userRating, setUserRating] =
+    useState(5);
+
+  const [userComment, setUserComment] =
+    useState('');
+
   const [loadingReviews, setLoadingReviews] =
     useState(false);
+
   const [isSubmitting, setIsSubmitting] =
     useState(false);
 
   // =========================================================
   // LIVE FINE REFRESH
   // =========================================================
-  // This causes the component to refresh periodically so the
-  // displayed overdue fine stays current while the page is open.
-  // =========================================================
 
-  const [, setFineRefresh] = useState(0);
+  const [, setFineRefresh] =
+    useState(0);
 
   useEffect(() => {
     const interval = setInterval(() => {
       setFineRefresh((value) => value + 1);
     }, 60 * 1000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+    };
   }, []);
 
   // =========================================================
-  // DYNAMIC FILTER LISTS
+  // DYNAMIC FILTER OPTIONS
   // =========================================================
 
   const categories = [
     'All',
     ...new Set(
       books
-        .map((b) => b.category)
+        .map((book) => book.category)
         .filter(Boolean)
     ),
   ];
@@ -174,20 +197,62 @@ export default function OPACCatalog({
     'All',
     ...new Set(
       books
-        .map((b) => b.libraryId)
+        .map((book) => book.libraryId)
         .filter(Boolean)
     ),
   ];
 
   const libraryName = (id) =>
-    libraries.find((l) => l.id === id)?.name || id;
+    libraries.find(
+      (library) => library.id === id
+    )?.name || id;
+
+  // =========================================================
+  // SEARCH HANDLER
+  // =========================================================
+
+  const handleSearch = (event) => {
+    if (event) {
+      event.preventDefault();
+    }
+
+    setSearchTerm(searchInput.trim());
+  };
+
+  // =========================================================
+  // SEARCH INPUT CHANGE
+  // IMPORTANT:
+  // When the search box becomes empty, immediately clear
+  // searchTerm so the complete catalog comes back.
+  // =========================================================
+
+  const handleSearchInputChange = (event) => {
+    const value = event.target.value;
+
+    setSearchInput(value);
+
+    if (value.trim() === '') {
+      setSearchTerm('');
+    }
+  };
+
+  // =========================================================
+  // CLEAR SEARCH
+  // =========================================================
+
+  const handleClearSearch = () => {
+    setSearchInput('');
+    setSearchTerm('');
+  };
 
   // =========================================================
   // FETCH REVIEWS WHEN BOOK MODAL OPENS
   // =========================================================
 
   useEffect(() => {
-    if (!selectedBook) return;
+    if (!selectedBook) {
+      return;
+    }
 
     const fetchReviews = async () => {
       setLoadingReviews(true);
@@ -208,6 +273,7 @@ export default function OPACCatalog({
           'Error fetching reviews:',
           error.message
         );
+        setReviews([]);
       } else {
         setReviews(data || []);
       }
@@ -222,8 +288,8 @@ export default function OPACCatalog({
   // SUBMIT REVIEW
   // =========================================================
 
-  const handleSubmitReview = async (e) => {
-    e.preventDefault();
+  const handleSubmitReview = async (event) => {
+    event.preventDefault();
 
     if (
       !userComment.trim() ||
@@ -257,80 +323,80 @@ export default function OPACCatalog({
 
     if (error) {
       setNotice(
-        'Bigo sa pag-save ng review: ' +
+        'Failed to save review: ' +
           error.message
       );
-    } else if (
-      data &&
-      data.length > 0
-    ) {
-      setReviews([
+      return;
+    }
+
+    if (data && data.length > 0) {
+      setReviews((currentReviews) => [
         data[0],
-        ...reviews,
+        ...currentReviews,
       ]);
 
       setUserComment('');
       setUserRating(5);
 
       setNotice(
-        'Salamat sa iyong rating at review!'
+        'Thank you for your rating and review!'
       );
     }
   };
 
   // =========================================================
-  // SEARCH & FILTER
+  // FILTER BOOKS
   // =========================================================
+
+  const normalizedSearch =
+    searchTerm.trim().toLowerCase();
 
   const filteredBooks = books.filter(
     (book) => {
       const title =
-        book.title?.toLowerCase() || '';
+        String(book.title || '')
+          .toLowerCase();
 
       const author =
-        book.author?.toLowerCase() || '';
+        String(book.author || '')
+          .toLowerCase();
 
       const isbn =
-        book.isbn?.toString() || '';
+        String(book.isbn || '')
+          .toLowerCase();
 
-      const search =
-        searchTerm.toLowerCase();
+      const category =
+        String(book.category || '')
+          .toLowerCase();
 
       const matchesSearch =
-        title.includes(search) ||
-        author.includes(search) ||
-        isbn.includes(search);
+        normalizedSearch === '' ||
+        title.includes(normalizedSearch) ||
+        author.includes(normalizedSearch) ||
+        isbn.includes(normalizedSearch) ||
+        category.includes(normalizedSearch);
 
       const matchesCategory =
         selectedCategory === 'All' ||
-        book.category ===
-          selectedCategory;
+        book.category === selectedCategory;
 
       const matchesLibrary =
         libraryFilter
-          ? book.libraryId ===
-            libraryFilter
-          : selectedLibrary ===
-              'All' ||
-            book.libraryId ===
-              selectedLibrary;
+          ? book.libraryId === libraryFilter
+          : selectedLibrary === 'All' ||
+            book.libraryId === selectedLibrary;
 
       const isAvailable =
-        Number(
-          book.availableCopies
-        ) > 0;
+        Number(book.availableCopies || 0) > 0;
 
       const matchesAvailability =
-        selectedAvailability ===
-          'All' ||
+        selectedAvailability === 'All' ||
         (
-          selectedAvailability ===
-            'Available' &&
+          selectedAvailability === 'Available' &&
           isAvailable
         ) ||
         (
-          selectedAvailability ===
-            'Unavailable' &&
+          selectedAvailability === 'Unavailable' &&
           !isAvailable
         );
 
@@ -349,8 +415,8 @@ export default function OPACCatalog({
 
   const myRequests = borrowRequests
     .filter(
-      (r) =>
-        r.visitorId === user?.id
+      (request) =>
+        request.visitorId === user?.id
     )
     .sort(
       (a, b) =>
@@ -366,13 +432,20 @@ export default function OPACCatalog({
     bookEntry
   ) => {
     try {
-      const req = requestBorrow(
+      if (!user?.id) {
+        setNotice(
+          'Please log in before requesting a book.'
+        );
+        return;
+      }
+
+      const request = requestBorrow(
         user.id,
         bookEntry.id
       );
 
       if (
-        req.status ===
+        request.status ===
         'ready_for_pickup'
       ) {
         setNotice(
@@ -382,11 +455,14 @@ export default function OPACCatalog({
         );
       } else {
         setNotice(
-          `"${bookEntry.title}" is currently unavailable at this branch — you are #${req.queuePosition} in the reservation queue.`
+          `"${bookEntry.title}" is currently unavailable at this branch — you are #${request.queuePosition} in the reservation queue.`
         );
       }
-    } catch (err) {
-      setNotice(err.message);
+    } catch (error) {
+      setNotice(
+        error?.message ||
+          'Unable to process the request.'
+      );
     }
 
     setSelectedBook(null);
@@ -397,9 +473,7 @@ export default function OPACCatalog({
   // CANCEL REQUEST
   // =========================================================
 
-  const handleCancel = (
-    requestId
-  ) => {
+  const handleCancel = (requestId) => {
     try {
       cancelBorrowRequest(
         requestId,
@@ -409,23 +483,24 @@ export default function OPACCatalog({
       setNotice(
         'Request cancelled.'
       );
-    } catch (err) {
-      setNotice(err.message);
+    } catch (error) {
+      setNotice(
+        error?.message ||
+          'Unable to cancel request.'
+      );
     }
   };
 
   // =========================================================
-  // VIEW MAP
+  // VIEW LIBRARY MAP
   // =========================================================
 
-  const handleViewMap = (
-    libraryId
-  ) => {
-    const lib = libraries.find(
-      (l) => l.id === libraryId
+  const handleViewMap = (libraryId) => {
+    const library = libraries.find(
+      (item) => item.id === libraryId
     );
 
-    if (!lib) {
+    if (!library) {
       setNotice(
         'Library location could not be found.'
       );
@@ -433,10 +508,10 @@ export default function OPACCatalog({
     }
 
     if (
-      lib.lat === null ||
-      lib.lat === undefined ||
-      lib.lng === null ||
-      lib.lng === undefined
+      library.lat === null ||
+      library.lat === undefined ||
+      library.lng === null ||
+      library.lng === undefined
     ) {
       setNotice(
         'GPS coordinates are not available for this library yet.'
@@ -444,20 +519,13 @@ export default function OPACCatalog({
       return;
     }
 
-    // Save the currently viewed book.
     if (selectedBook) {
-      setMapReturnBook(
-        selectedBook
-      );
+      setMapReturnBook(selectedBook);
     }
 
-    // Show map.
-    setMapLibrary(lib);
-
-    // Close the Book Info modal.
+    setMapLibrary(library);
     setSelectedBook(null);
 
-    // Go to the top so the map is immediately visible.
     globalThis.scrollTo({
       top: 0,
       behavior: 'smooth',
@@ -472,29 +540,29 @@ export default function OPACCatalog({
     setMapLibrary(null);
 
     if (mapReturnBook) {
-      setSelectedBook(
-        mapReturnBook
-      );
+      setSelectedBook(mapReturnBook);
     }
 
     setMapReturnBook(null);
   };
 
   // =========================================================
-  // PARTNER LIBRARY ENTRIES
+  // FIND PARTNER LIBRARY ENTRIES
   // =========================================================
 
   const getPartnerLibraryEntries = (
     book
   ) => {
-    if (!book) return [];
+    if (!book) {
+      return [];
+    }
 
     return books.filter(
-      (b) =>
-        b.title === book.title ||
+      (entry) =>
+        entry.title === book.title ||
         (
           book.isbn &&
-          b.isbn === book.isbn
+          entry.isbn === book.isbn
         )
     );
   };
@@ -508,7 +576,7 @@ export default function OPACCatalog({
 
       {/* =====================================================
           NOTICE
-         ===================================================== */}
+      ====================================================== */}
 
       {notice && (
         <div className="bg-blue-50 border border-blue-200 text-blue-800 text-xs px-4 py-3 rounded-lg flex justify-between items-start gap-3">
@@ -516,10 +584,9 @@ export default function OPACCatalog({
 
           <button
             type="button"
-            onClick={() =>
-              setNotice('')
-            }
+            onClick={() => setNotice('')}
             className="font-bold text-blue-400 hover:text-blue-700"
+            aria-label="Close notification"
           >
             ✕
           </button>
@@ -528,7 +595,7 @@ export default function OPACCatalog({
 
       {/* =====================================================
           NAVIGATION TABS
-         ===================================================== */}
+      ====================================================== */}
 
       <div className="flex border-b border-slate-200 gap-4">
 
@@ -552,8 +619,7 @@ export default function OPACCatalog({
             setActiveTab('myBorrows')
           }
           className={`pb-3 text-sm font-bold transition flex items-center gap-2 ${
-            activeTab ===
-            'myBorrows'
+            activeTab === 'myBorrows'
               ? 'text-[#002046] border-b-2 border-[#002046]'
               : 'text-slate-500 hover:text-slate-800'
           }`}
@@ -561,25 +627,25 @@ export default function OPACCatalog({
           🔖 My Requests & Borrows
 
           {myRequests.filter(
-            (r) =>
+            (request) =>
               [
                 'queued',
                 'ready_for_pickup',
                 'borrowed',
               ].includes(
-                r.status
+                request.status
               )
           ).length > 0 && (
             <span className="bg-[#002046] text-white text-xs px-2 py-0.5 rounded-full">
               {
                 myRequests.filter(
-                  (r) =>
+                  (request) =>
                     [
                       'queued',
                       'ready_for_pickup',
                       'borrowed',
                     ].includes(
-                      r.status
+                      request.status
                     )
                 ).length
               }
@@ -591,14 +657,14 @@ export default function OPACCatalog({
 
       {/* =====================================================
           CATALOG
-         ===================================================== */}
+      ====================================================== */}
 
       {activeTab === 'catalog' ? (
         <div className="space-y-6">
 
           {/* =================================================
               MAP DISPLAY
-             ================================================= */}
+          ================================================= */}
 
           {mapLibrary && (
             <div
@@ -620,9 +686,7 @@ export default function OPACCatalog({
 
                 <button
                   type="button"
-                  onClick={
-                    handleCloseMap
-                  }
+                  onClick={handleCloseMap}
                   className="px-3 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-xs font-bold"
                 >
                   Close Map
@@ -640,28 +704,47 @@ export default function OPACCatalog({
 
           {/* =================================================
               SEARCH & FILTERS
-             ================================================= */}
+          ================================================== */}
 
           <div className="flex flex-col md:flex-row gap-3 flex-wrap">
 
-            <input
-              type="text"
-              placeholder="Search by Title, Author, or ISBN…"
-              value={searchTerm}
-              onChange={(e) =>
-                setSearchTerm(
-                  e.target.value
-                )
-              }
-              className="flex-1 min-w-[200px] px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
-            />
+            <form
+              onSubmit={handleSearch}
+              className="flex flex-1 min-w-[280px] gap-2"
+            >
+              <input
+                type="text"
+                placeholder="Search by Title, Author, ISBN, or Category..."
+                value={searchInput}
+                onChange={handleSearchInputChange}
+                className="flex-1 min-w-0 px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                aria-label="Search catalog"
+              />
+
+              <button
+                type="submit"
+                className="px-5 py-2.5 bg-[#002046] text-white rounded-lg text-sm font-bold hover:opacity-90 transition"
+              >
+                Search
+              </button>
+            </form>
+
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={handleClearSearch}
+                className="px-4 py-2.5 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-200 transition"
+              >
+                Clear
+              </button>
+            )}
 
             {!libraryFilter && (
               <select
                 value={selectedLibrary}
-                onChange={(e) =>
+                onChange={(event) =>
                   setSelectedLibrary(
-                    e.target.value
+                    event.target.value
                   )
                 }
                 className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none"
@@ -672,31 +755,27 @@ export default function OPACCatalog({
 
                 {libraryOptions
                   .filter(
-                    (lib) =>
-                      lib !== 'All'
+                    (libraryId) =>
+                      libraryId !== 'All'
                   )
-                  .map(
-                    (libId) => (
-                      <option
-                        key={libId}
-                        value={libId}
-                      >
-                        {libraryName(
-                          libId
-                        )}
-                      </option>
-                    )
-                  )}
+                  .map((libraryId) => (
+                    <option
+                      key={libraryId}
+                      value={libraryId}
+                    >
+                      {libraryName(
+                        libraryId
+                      )}
+                    </option>
+                  ))}
               </select>
             )}
 
             <select
-              value={
-                selectedCategory
-              }
-              onChange={(e) =>
+              value={selectedCategory}
+              onChange={(event) =>
                 setSelectedCategory(
-                  e.target.value
+                  event.target.value
                 )
               }
               className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none"
@@ -707,25 +786,24 @@ export default function OPACCatalog({
 
               {categories
                 .filter(
-                  (c) => c !== 'All'
+                  (category) =>
+                    category !== 'All'
                 )
-                .map((c) => (
+                .map((category) => (
                   <option
-                    key={c}
-                    value={c}
+                    key={category}
+                    value={category}
                   >
-                    {c}
+                    {category}
                   </option>
                 ))}
             </select>
 
             <select
-              value={
-                selectedAvailability
-              }
-              onChange={(e) =>
+              value={selectedAvailability}
+              onChange={(event) =>
                 setSelectedAvailability(
-                  e.target.value
+                  event.target.value
                 )
               }
               className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none"
@@ -746,8 +824,30 @@ export default function OPACCatalog({
           </div>
 
           {/* =================================================
+              SEARCH RESULT INFORMATION
+          ================================================== */}
+
+          {searchTerm && (
+            <div className="flex items-center justify-between text-xs text-slate-500">
+              <span>
+                Search results for:{' '}
+                <strong className="text-slate-800">
+                  "{searchTerm}"
+                </strong>
+              </span>
+
+              <span>
+                {filteredBooks.length}{' '}
+                {filteredBooks.length === 1
+                  ? 'book'
+                  : 'books'} found
+              </span>
+            </div>
+          )}
+
+          {/* =================================================
               BOOK RESULTS
-             ================================================= */}
+          ================================================== */}
 
           {books.length === 0 ? (
             <div className="bg-white border border-dashed border-slate-300 rounded-xl p-10 text-center text-sm text-slate-500">
@@ -756,11 +856,34 @@ export default function OPACCatalog({
               library team is still populating
               the collection.
             </div>
-          ) : filteredBooks.length ===
-            0 ? (
+          ) : filteredBooks.length === 0 ? (
             <div className="bg-white border border-dashed border-slate-300 rounded-xl p-10 text-center text-sm text-slate-500">
-              No books matched your search or
-              filter criteria.
+              <p className="font-bold text-slate-700 mb-1">
+                No books found
+              </p>
+
+              <p>
+                No books matched your search
+                or filter criteria.
+              </p>
+
+              {(searchTerm ||
+                selectedCategory !== 'All' ||
+                selectedLibrary !== 'All' ||
+                selectedAvailability !== 'All') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleClearSearch();
+                    setSelectedCategory('All');
+                    setSelectedLibrary('All');
+                    setSelectedAvailability('All');
+                  }}
+                  className="mt-4 px-4 py-2 bg-[#002046] text-white rounded-lg text-xs font-bold hover:opacity-90 transition"
+                >
+                  Clear All Filters
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -776,45 +899,57 @@ export default function OPACCatalog({
 
                       <img
                         src={
-                          book.coverUrl
+                          book.coverUrl ||
+                          'https://placehold.co/96x128?text=No+Cover'
                         }
                         alt={
-                          book.title
+                          book.title ||
+                          'Book cover'
                         }
                         className="w-24 h-32 object-cover rounded-md border border-slate-200 bg-slate-50"
+                        onError={(event) => {
+                          event.currentTarget.src =
+                            'https://placehold.co/96x128?text=No+Cover';
+                        }}
                       />
 
-                      <div className="space-y-1">
+                      <div className="space-y-1 min-w-0">
 
                         <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
-                          {book.category}
+                          {book.category ||
+                            'Uncategorized'}
                         </span>
 
                         <h3 className="font-bold text-slate-800 text-sm line-clamp-2">
-                          {book.title}
+                          {book.title ||
+                            'Untitled Book'}
                         </h3>
 
                         <p className="text-xs text-slate-500">
-                          {book.author}
+                          {book.author ||
+                            'Unknown Author'}
                         </p>
 
                         <p className="text-xs text-slate-400 font-mono">
                           ISBN:{' '}
-                          {book.isbn}
+                          {book.isbn ||
+                            'N/A'}
                         </p>
 
                         <div className="pt-2">
 
                           <span
                             className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                              book.availableCopies >
-                              0
+                              Number(
+                                book.availableCopies || 0
+                              ) > 0
                                 ? 'bg-emerald-100 text-emerald-700'
                                 : 'bg-amber-100 text-amber-700'
                             }`}
                           >
-                            {book.availableCopies >
-                            0
+                            {Number(
+                              book.availableCopies || 0
+                            ) > 0
                               ? `${book.availableCopies} Copies Available`
                               : 'Unavailable'}
                           </span>
@@ -830,9 +965,7 @@ export default function OPACCatalog({
                       <button
                         type="button"
                         onClick={() =>
-                          setSelectedBook(
-                            book
-                          )
+                          setSelectedBook(book)
                         }
                         className="bg-[#002046] text-white text-xs px-4 py-2 rounded-lg font-bold hover:opacity-90 transition"
                       >
@@ -853,12 +986,11 @@ export default function OPACCatalog({
 
         /* =====================================================
            MY REQUESTS
-           ===================================================== */
+        ====================================================== */
 
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
 
-          {myRequests.length ===
-          0 ? (
+          {myRequests.length === 0 ? (
             <p className="p-6 text-sm text-slate-500">
               You have no borrow requests yet.
               Browse the catalog to get started.
@@ -896,25 +1028,44 @@ export default function OPACCatalog({
               <tbody className="divide-y divide-slate-100 text-slate-700">
 
                 {myRequests.map(
-                  (r) => {
+                  (request) => {
                     const currentFine =
                       calculateCurrentFine(
-                        r
+                        request
                       );
 
                     const isOverdue =
-                      r.status ===
+                      request.status ===
                         'borrowed' &&
                       currentFine > 0;
 
+                    const overdueDays =
+                      request.dueDate &&
+                      isOverdue
+                        ? Math.ceil(
+                            (
+                              Date.now() -
+                              new Date(
+                                request.dueDate
+                              ).getTime()
+                            ) /
+                              (
+                                1000 *
+                                60 *
+                                60 *
+                                24
+                              )
+                          )
+                        : 0;
+
                     return (
                       <tr
-                        key={r.id}
+                        key={request.id}
                         className="hover:bg-slate-50"
                       >
 
                         <td className="p-4 font-bold text-slate-800">
-                          {r.bookTitle}
+                          {request.bookTitle}
                         </td>
 
                         <td className="p-4">
@@ -926,16 +1077,17 @@ export default function OPACCatalog({
                                 isOverdue
                                   ? 'bg-red-100 text-red-700'
                                   : STATUS_STYLES[
-                                      r.status
-                                    ] || ''
+                                      request.status
+                                    ] ||
+                                    'bg-slate-100 text-slate-600'
                               }`}
                             >
                               {isOverdue
                                 ? 'Overdue'
                                 : STATUS_LABELS[
-                                    r.status
+                                    request.status
                                   ] ||
-                                  r.status}
+                                  request.status}
                             </span>
 
                           </div>
@@ -944,69 +1096,42 @@ export default function OPACCatalog({
 
                         <td className="p-4 text-xs text-slate-500 space-y-0.5">
 
-                          {r.status ===
+                          {request.status ===
                             'queued' && (
                             <p>
                               Queue position: #
                               {
-                                r.queuePosition
+                                request.queuePosition
                               }
                             </p>
                           )}
 
-                          {r.status ===
+                          {request.status ===
                             'ready_for_pickup' && (
                             <p>
                               Pick up by:{' '}
                               {formatDateTime(
-                                r.pickupDeadline
+                                request.pickupDeadline
                               )}
                             </p>
                           )}
 
-                          {r.status ===
+                          {request.status ===
                             'borrowed' && (
                             <>
                               <p>
                                 Due:{' '}
                                 {formatDate(
-                                  r.dueDate
+                                  request.dueDate
                                 )}
                               </p>
 
                               {isOverdue && (
                                 <p className="font-bold text-red-600">
                                   Overdue by{' '}
-                                  {Math.ceil(
-                                    (
-                                      Date.now() -
-                                      new Date(
-                                        r.dueDate
-                                      ).getTime()
-                                    ) /
-                                      (
-                                        1000 *
-                                        60 *
-                                        60 *
-                                        24
-                                      )
-                                  )}{' '}
+                                  {overdueDays}{' '}
                                   day
-                                  {Math.ceil(
-                                    (
-                                      Date.now() -
-                                      new Date(
-                                        r.dueDate
-                                      ).getTime()
-                                    ) /
-                                      (
-                                        1000 *
-                                        60 *
-                                        60 *
-                                        24
-                                      )
-                                  ) !==
-                                  1
+                                  {overdueDays !== 1
                                     ? 's'
                                     : ''}
                                 </p>
@@ -1014,12 +1139,12 @@ export default function OPACCatalog({
                             </>
                           )}
 
-                          {r.status ===
+                          {request.status ===
                             'returned' && (
                             <p>
                               Returned:{' '}
                               {formatDate(
-                                r.returnDate
+                                request.returnDate
                               )}
                             </p>
                           )}
@@ -1033,9 +1158,7 @@ export default function OPACCatalog({
                               : 'text-slate-500'
                           }`}
                         >
-                          {`₱${currentFine.toFixed(
-                            2
-                          )}`}
+                          ₱{currentFine.toFixed(2)}
                         </td>
 
                         <td className="p-4 text-right">
@@ -1044,13 +1167,13 @@ export default function OPACCatalog({
                             'queued',
                             'ready_for_pickup',
                           ].includes(
-                            r.status
+                            request.status
                           ) && (
                             <button
                               type="button"
                               onClick={() =>
                                 handleCancel(
-                                  r.id
+                                  request.id
                                 )
                               }
                               className="bg-red-50 text-red-600 text-xs px-3 py-1.5 rounded-lg font-bold hover:bg-red-100 transition"
@@ -1077,7 +1200,7 @@ export default function OPACCatalog({
 
       {/* =====================================================
           VIEW INFO & REQUEST MODAL
-         ===================================================== */}
+      ====================================================== */}
 
       {selectedBook && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -1089,55 +1212,56 @@ export default function OPACCatalog({
             <button
               type="button"
               onClick={() =>
-                setSelectedBook(
-                  null
-                )
+                setSelectedBook(null)
               }
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 font-bold"
+              aria-label="Close book information"
             >
               ✕
             </button>
 
             {/* BOOK HEADER */}
 
-            <div className="flex gap-4">
+            <div className="flex gap-4 pr-8">
 
               <img
                 src={
-                  selectedBook.coverUrl
+                  selectedBook.coverUrl ||
+                  'https://placehold.co/96x128?text=No+Cover'
                 }
                 alt={
-                  selectedBook.title
+                  selectedBook.title ||
+                  'Book cover'
                 }
                 className="w-24 h-32 object-cover rounded-lg border border-slate-200 bg-slate-50"
+                onError={(event) => {
+                  event.currentTarget.src =
+                    'https://placehold.co/96x128?text=No+Cover';
+                }}
               />
 
               <div className="space-y-1">
 
                 <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
-                  {
-                    selectedBook.category
-                  }
+                  {selectedBook.category ||
+                    'Uncategorized'}
                 </span>
 
                 <h3 className="text-lg font-bold text-slate-800">
-                  {
-                    selectedBook.title
-                  }
+                  {selectedBook.title ||
+                    'Untitled Book'}
                 </h3>
 
                 <p className="text-xs text-slate-500">
                   By{' '}
-                  {
-                    selectedBook.author
-                  }
+                  {selectedBook.author ||
+                    'Unknown Author'}
                 </p>
 
                 <p className="text-xs text-slate-400 font-mono">
                   ISBN:{' '}
-                  {
-                    selectedBook.isbn
-                  }
+                  {selectedBook.isbn ||
+                    'N/A'}
                 </p>
 
               </div>
@@ -1153,10 +1277,8 @@ export default function OPACCatalog({
               </h4>
 
               <p className="text-xs text-slate-600 leading-relaxed">
-                {
-                  selectedBook.summary ||
-                  'No summary provided yet.'
-                }
+                {selectedBook.summary ||
+                  'No summary provided yet.'}
               </p>
 
             </div>
@@ -1173,74 +1295,72 @@ export default function OPACCatalog({
 
                 {getPartnerLibraryEntries(
                   selectedBook
-                ).map(
-                  (entry) => (
+                ).map((entry) => (
 
-                    <div
-                      key={entry.id}
-                      className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs"
-                    >
+                  <div
+                    key={entry.id}
+                    className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs gap-3"
+                  >
 
-                      <div>
+                    <div>
 
-                        <p className="font-bold text-slate-800 text-sm">
-                          {libraryName(
-                            entry.libraryId
-                          )}
-                        </p>
+                      <p className="font-bold text-slate-800 text-sm">
+                        {libraryName(
+                          entry.libraryId
+                        )}
+                      </p>
 
-                        <p className="text-slate-500">
-                          {entry.availableCopies >
-                          0
-                            ? `${entry.availableCopies} available`
-                            : 'Out of stock (Queue available)'}
-                        </p>
-
-                      </div>
-
-                      <div className="flex items-center gap-2">
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleViewMap(
-                              entry.libraryId
-                            )
-                          }
-                          className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-300 transition"
-                        >
-                          View Map
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleBorrowOrReserve(
-                              entry
-                            )
-                          }
-                          className="px-3 py-1.5 bg-[#002046] text-white rounded-lg font-bold hover:opacity-90 transition"
-                        >
-                          {entry.availableCopies >
-                          0
-                            ? 'Borrow'
-                            : 'Reserve'}
-                        </button>
-
-                      </div>
+                      <p className="text-slate-500">
+                        {Number(
+                          entry.availableCopies || 0
+                        ) > 0
+                          ? `${entry.availableCopies} available`
+                          : 'Out of stock (Queue available)'}
+                      </p>
 
                     </div>
 
-                  )
-                )}
+                    <div className="flex items-center gap-2 shrink-0">
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleViewMap(
+                            entry.libraryId
+                          )
+                        }
+                        className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-300 transition"
+                      >
+                        View Map
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleBorrowOrReserve(
+                            entry
+                          )
+                        }
+                        className="px-3 py-1.5 bg-[#002046] text-white rounded-lg font-bold hover:opacity-90 transition"
+                      >
+                        {Number(
+                          entry.availableCopies || 0
+                        ) > 0
+                          ? 'Borrow'
+                          : 'Reserve'}
+                      </button>
+
+                    </div>
+
+                  </div>
+
+                ))}
 
               </div>
 
             </div>
 
-            {/* =================================================
-                REVIEWS & RATINGS
-               ================================================= */}
+            {/* REVIEWS & RATINGS */}
 
             <div className="pt-4 border-t border-slate-200 space-y-4">
 
@@ -1252,8 +1372,7 @@ export default function OPACCatalog({
 
                 <span className="text-slate-400 normal-case font-normal">
                   ({reviews.length}{' '}
-                  {reviews.length ===
-                  1
+                  {reviews.length === 1
                     ? 'review'
                     : 'reviews'}
                   )
@@ -1270,7 +1389,7 @@ export default function OPACCatalog({
                 className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3"
               >
 
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3">
 
                   <label className="text-xs font-bold text-slate-700">
                     Leave a Review:
@@ -1283,14 +1402,11 @@ export default function OPACCatalog({
                     </span>
 
                     <select
-                      value={
-                        userRating
-                      }
-                      onChange={(e) =>
+                      value={userRating}
+                      onChange={(event) =>
                         setUserRating(
                           Number(
-                            e.target
-                              .value
+                            event.target.value
                           )
                         )
                       }
@@ -1322,12 +1438,10 @@ export default function OPACCatalog({
                 </div>
 
                 <textarea
-                  value={
-                    userComment
-                  }
-                  onChange={(e) =>
+                  value={userComment}
+                  onChange={(event) =>
                     setUserComment(
-                      e.target.value
+                      event.target.value
                     )
                   }
                   placeholder="Write your review or thoughts about this book..."
@@ -1340,9 +1454,7 @@ export default function OPACCatalog({
 
                   <button
                     type="submit"
-                    disabled={
-                      isSubmitting
-                    }
+                    disabled={isSubmitting}
                     className="bg-[#002046] text-white text-xs px-4 py-2 rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50"
                   >
                     {isSubmitting
@@ -1361,11 +1473,10 @@ export default function OPACCatalog({
                 {loadingReviews ? (
 
                   <p className="text-xs text-slate-400 italic">
-                    Kinukuha ang mga review...
+                    Loading reviews...
                   </p>
 
-                ) : reviews.length ===
-                  0 ? (
+                ) : reviews.length === 0 ? (
 
                   <p className="text-xs text-slate-400 italic">
                     No reviews yet for this book.
@@ -1375,48 +1486,48 @@ export default function OPACCatalog({
 
                 ) : (
 
-                  reviews.map(
-                    (rev) => (
+                  reviews.map((review) => (
 
-                      <div
-                        key={rev.id}
-                        className="p-3 bg-white rounded-lg border border-slate-100 shadow-sm text-xs space-y-1"
-                      >
+                    <div
+                      key={review.id}
+                      className="p-3 bg-white rounded-lg border border-slate-100 shadow-sm text-xs space-y-1"
+                    >
 
-                        <div className="flex justify-between items-center">
+                      <div className="flex justify-between items-center gap-3">
 
-                          <span className="font-bold text-slate-800">
-                            {
-                              rev.visitor_name
-                            }
-                          </span>
+                        <span className="font-bold text-slate-800">
+                          {review.visitor_name}
+                        </span>
 
-                          <span className="text-amber-500 font-bold">
-                            {'⭐'.repeat(
-                              Number(
-                                rev.rating
+                        <span className="text-amber-500 font-bold">
+                          {'⭐'.repeat(
+                            Math.max(
+                              0,
+                              Math.min(
+                                5,
+                                Number(
+                                  review.rating
+                                ) || 0
                               )
-                            )}
-                          </span>
-
-                        </div>
-
-                        <p className="text-slate-600">
-                          {
-                            rev.comment
-                          }
-                        </p>
-
-                        <p className="text-[10px] text-slate-400">
-                          {formatDate(
-                            rev.created_at
+                            )
                           )}
-                        </p>
+                        </span>
 
                       </div>
 
-                    )
-                  )
+                      <p className="text-slate-600">
+                        {review.comment}
+                      </p>
+
+                      <p className="text-[10px] text-slate-400">
+                        {formatDate(
+                          review.created_at
+                        )}
+                      </p>
+
+                    </div>
+
+                  ))
 
                 )}
 
