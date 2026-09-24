@@ -12,12 +12,12 @@ import {
   Legend,
 } from 'chart.js';
 
-import { useAuth } from '../../context/AuthContext';
-import { useLibraryData, useLibrary } from '../../context/LibraryContext';
-import { SUB_ADMIN_CREDENTIALS } from '../../data/store';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { useLibraryData, useLibrary } from '../../context/LibraryContext.jsx';
+import { SUB_ADMIN_CREDENTIALS } from '../../data/store.js';
 
-import BookInventory from '../../component/BookInventory';
-import LibraryMap from '../../component/LibraryMap';
+import BookInventory from '../../component/BookInventory.jsx';
+import LibraryMap from '../../component/LibraryMap.jsx';
 
 ChartJS.register(
   CategoryScale,
@@ -287,7 +287,7 @@ export default function SuperAdminDashboard() {
         <nav className="flex-1 p-3 space-y-1">
 
           {NAV.map((item) => (
-            <button
+            <button type="button"
               key={item.id}
               onClick={() => {
                 setSection(item.id);
@@ -319,7 +319,7 @@ export default function SuperAdminDashboard() {
             {user?.name}
           </p>
 
-          <button
+          <button type="button"
             onClick={logout}
             className="w-full bg-white/10 hover:bg-white/20 text-xs px-3 py-2 rounded-lg border border-white/20 transition"
           >
