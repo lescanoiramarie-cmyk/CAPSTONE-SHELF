@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 
-import * as store from '../data/store';
+import * as store from '../data/store.js';
 
 const AuthContext = createContext();
 
@@ -9,7 +9,7 @@ const SESSION_KEY = 'shelf_ilms_session_v1';
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
     try {
-      const raw = window.localStorage.getItem(SESSION_KEY);
+      const raw = globalThis.localStorage.getItem(SESSION_KEY);
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
@@ -18,9 +18,9 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (user) {
-      window.localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+      globalThis.localStorage.setItem(SESSION_KEY, JSON.stringify(user));
     } else {
-      window.localStorage.removeItem(SESSION_KEY);
+      globalThis.localStorage.removeItem(SESSION_KEY);
     }
   }, [user]);
 
@@ -29,9 +29,9 @@ export const AuthProvider = ({ children }) => {
   // =========================================================
   const logout = () => {
     setUser(null);
-    window.localStorage.removeItem(SESSION_KEY);
-    window.localStorage.clear();
-    window.sessionStorage.clear();
+    globalThis.localStorage.removeItem(SESSION_KEY);
+    globalThis.localStorage.clear();
+    globalThis.sessionStorage.clear();
   };
 
   // =========================================================
