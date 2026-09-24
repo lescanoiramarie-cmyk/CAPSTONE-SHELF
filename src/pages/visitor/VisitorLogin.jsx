@@ -1,10 +1,20 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { Eye, EyeOff, Camera, Upload } from 'lucide-react';
+import {
+  Eye,
+  EyeOff,
+  Camera,
+  Upload,
+} from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext.jsx';
+import {
+  SUPER_ADMIN_CREDENTIALS,
+  SUB_ADMIN_CREDENTIALS,
+} from '../../data/store.js';
+
 import libraryBg from '../../assets/library.jpg';
 
 export default function VisitorLogin() {
@@ -16,6 +26,8 @@ export default function VisitorLogin() {
     resendVisitorOtp,
     login,
     loginVisitor,
+    loginSuperAdmin,
+    loginSubAdmin,
     loginAsVisitorSession,
   } = useAuth();
 
@@ -26,20 +38,16 @@ export default function VisitorLogin() {
   const [view, setView] = useState('login');
   const [error, setError] = useState('');
 
-  // Camera QR scanner
   const [showScanner, setShowScanner] = useState(false);
   const scannerRef = useRef(null);
 
-  // QR image upload
   const fileInputRef = useRef(null);
   const [isUploadingQr, setIsUploadingQr] = useState(false);
 
-  // Password visibility
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Registration form
   const [formData, setFormData] = useState({
     fullName: '',
     contactNumber: '',
@@ -49,18 +57,15 @@ export default function VisitorLogin() {
     confirmPassword: '',
   });
 
-  // Login form
   const [loginData, setLoginData] = useState({
     identifier: '',
     password: '',
   });
 
-  // OTP
   const [otpInput, setOtpInput] = useState('');
   const [pendingVisitorId, setPendingVisitorId] = useState(null);
   const [pendingEmail, setPendingEmail] = useState('');
 
-  // Registered visitor
   const [registeredVisitor, setRegisteredVisitor] = useState(null);
 
   // =========================================================
@@ -87,6 +92,341 @@ export default function VisitorLogin() {
     formData.password === formData.confirmPassword;
 
   // =========================================================
+  // CENTRALIZED QR LOGIN
+  // =========================================================
+
+  const handleQrLogin = useCallback(
+    async (decodedText) => {
+      const qrValue =
+        typeof decodedText === 'string'
+          ? decodedText.trim()
+          : '';
+
+      if (!qrValue) {
+        throw new Error(
+          'The QR code does not contain valid data.'
+        );
+      }
+
+      console.log(
+        'Centralized QR login - decoded value:',
+        qrValue
+      );
+
+      // =====================================================
+      // PARSE JSON QR
+      // =====================================================
+
+      let qrPayload = null;
+
+      try {
+        const parsed = JSON.parse(qrValue);
+
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          !Array.isArray(parsed)
+        ) {
+          qrPayload = parsed;
+        }
+      } catch {
+        qrPayload = null;
+      }
+
+      // =====================================================
+      // NORMALIZE ROLE
+      // =====================================================
+
+      const normalizedRole = String(
+        qrPayload?.role || ''
+      )
+        .trim()
+        .toLowerCase()
+        .replace(/[\s_-]/g, '');
+
+      console.log(
+        'QR normalized role:',
+        normalizedRole
+      );
+
+      // =====================================================
+      // SUPER ADMIN QR
+      //
+      // {
+      //   "role": "Super Admin",
+      //   "email": "superadmin@shelf.edu",
+      //   "password": "SuperAdmin@2026"
+      // }
+      // =====================================================
+
+      if (normalizedRole === 'superadmin') {
+        const email = String(
+          qrPayload?.email || ''
+        )
+          .trim()
+          .toLowerCase();
+
+        if (!email) {
+          throw new Error(
+            'The Super Admin QR code does not contain an email address.'
+          );
+        }
+
+        const account =
+          SUPER_ADMIN_CREDENTIALS.find(
+            (item) =>
+              String(item.email)
+                .trim()
+                .toLowerCase() === email
+          );
+
+        if (!account) {
+          throw new Error(
+            'The Super Admin QR code contains an unrecognized account.'
+          );
+        }
+
+        const password =
+          String(qrPayload?.password || '') ||
+          account.password;
+
+        await loginSuperAdmin(
+          account.email,
+          password
+        );
+
+        setLoginData({
+          identifier: account.email,
+          password: '',
+        });
+
+        navigate('/superadmin');
+
+        return {
+          role: 'superadmin',
+          email: account.email,
+        };
+      }
+
+      // =====================================================
+      // SUB-ADMIN / STAFF / CIRCULATION DESK QR
+      //
+      // Supported:
+      // "Sub Admin"
+      // "Sub-Admin"
+      // "SubAdmin"
+      // "Admin"
+      // "Circulation Desk"
+      // "Circulation-Desk"
+      // "CirculationDesk"
+      // =====================================================
+
+      if (
+        normalizedRole === 'subadmin' ||
+        normalizedRole === 'admin' ||
+        normalizedRole === 'circulationdesk' ||
+        normalizedRole === 'circulation' ||
+        normalizedRole === 'circulationdeskstaff'
+      ) {
+        const email = String(
+          qrPayload?.email || ''
+        )
+          .trim()
+          .toLowerCase();
+
+        if (!email) {
+          throw new Error(
+            'The staff QR code does not contain an email address.'
+          );
+        }
+
+        const account =
+          SUB_ADMIN_CREDENTIALS.find(
+            (item) =>
+              String(item.email)
+                .trim()
+                .toLowerCase() === email
+          );
+
+        if (!account) {
+          throw new Error(
+            'The staff QR code contains an unrecognized account.'
+          );
+        }
+
+        /*
+         * For the existing hardcoded authentication,
+         * use the password from the QR when available.
+         *
+         * If no password is included in the QR,
+         * use the password configured in store.js.
+         */
+        const password =
+          String(qrPayload?.password || '') ||
+          account.password;
+
+        await loginSubAdmin(
+          account.email,
+          password
+        );
+
+        setLoginData({
+          identifier: account.email,
+          password: '',
+        });
+
+        navigate('/subadmin');
+
+        return {
+          role: 'subadmin',
+          email: account.email,
+        };
+      }
+
+      // =====================================================
+      // VISITOR JSON QR
+      //
+      // {
+      //   "role": "Visitor",
+      //   "qrCode": "SHELF-QR-XXXXXX"
+      // }
+      //
+      // Also supports:
+      // qr_code
+      // passId
+      // pass_id
+      // identifier
+      // =====================================================
+
+      if (normalizedRole === 'visitor') {
+        const visitorQr = String(
+          qrPayload?.qrCode ||
+            qrPayload?.qr_code ||
+            qrPayload?.passId ||
+            qrPayload?.pass_id ||
+            qrPayload?.identifier ||
+            ''
+        ).trim();
+
+        if (!visitorQr) {
+          throw new Error(
+            'The Visitor QR code does not contain a valid QR pass ID.'
+          );
+        }
+
+        await loginVisitor({
+          identifier: visitorQr,
+          password: '',
+        });
+
+        setLoginData({
+          identifier: visitorQr,
+          password: '',
+        });
+
+        navigate('/visitor');
+
+        return {
+          role: 'visitor',
+          identifier: visitorQr,
+        };
+      }
+
+      // =====================================================
+      // PLAIN SUPER ADMIN EMAIL
+      // =====================================================
+
+      const superAdminAccount =
+        SUPER_ADMIN_CREDENTIALS.find(
+          (item) =>
+            String(item.email)
+              .trim()
+              .toLowerCase() === qrValue.toLowerCase()
+        );
+
+      if (superAdminAccount) {
+        await loginSuperAdmin(
+          superAdminAccount.email,
+          superAdminAccount.password
+        );
+
+        setLoginData({
+          identifier: superAdminAccount.email,
+          password: '',
+        });
+
+        navigate('/superadmin');
+
+        return {
+          role: 'superadmin',
+          email: superAdminAccount.email,
+        };
+      }
+
+      // =====================================================
+      // PLAIN SUB-ADMIN / STAFF EMAIL
+      // =====================================================
+
+      const subAdminAccount =
+        SUB_ADMIN_CREDENTIALS.find(
+          (item) =>
+            String(item.email)
+              .trim()
+              .toLowerCase() === qrValue.toLowerCase()
+        );
+
+      if (subAdminAccount) {
+        await loginSubAdmin(
+          subAdminAccount.email,
+          subAdminAccount.password
+        );
+
+        setLoginData({
+          identifier: subAdminAccount.email,
+          password: '',
+        });
+
+        navigate('/subadmin');
+
+        return {
+          role: 'subadmin',
+          email: subAdminAccount.email,
+        };
+      }
+
+      // =====================================================
+      // NORMAL VISITOR QR
+      //
+      // Example:
+      // SHELF-QR-ABC123
+      // =====================================================
+
+      await loginVisitor({
+        identifier: qrValue,
+        password: '',
+      });
+
+      setLoginData({
+        identifier: qrValue,
+        password: '',
+      });
+
+      navigate('/visitor');
+
+      return {
+        role: 'visitor',
+        identifier: qrValue,
+      };
+    },
+    [
+      loginSuperAdmin,
+      loginSubAdmin,
+      loginVisitor,
+      navigate,
+    ]
+  );
+
+  // =========================================================
   // CAMERA QR SCANNER
   // =========================================================
 
@@ -104,13 +444,19 @@ export default function VisitorLogin() {
       try {
         await scanner.stop();
       } catch (err) {
-        console.warn('Scanner stop warning:', err);
+        console.warn(
+          'Scanner stop warning:',
+          err
+        );
       }
 
       try {
         await scanner.clear();
       } catch (err) {
-        console.warn('Scanner clear warning:', err);
+        console.warn(
+          'Scanner clear warning:',
+          err
+        );
       }
     }
 
@@ -119,7 +465,7 @@ export default function VisitorLogin() {
 
   useEffect(() => {
     if (!showScanner) {
-      return;
+      return undefined;
     }
 
     let cancelled = false;
@@ -127,7 +473,9 @@ export default function VisitorLogin() {
 
     const startCameraScanner = async () => {
       try {
-        scanner = new Html5Qrcode('visitor-qr-reader');
+        scanner = new Html5Qrcode(
+          'visitor-qr-reader'
+        );
 
         if (cancelled) {
           return;
@@ -162,34 +510,35 @@ export default function VisitorLogin() {
             try {
               await scanner.stop();
             } catch (err) {
-              console.warn('Camera scanner stop:', err);
+              console.warn(
+                'Camera scanner stop:',
+                err
+              );
             }
 
             try {
               await scanner.clear();
             } catch (err) {
-              console.warn('Camera scanner clear:', err);
+              console.warn(
+                'Camera scanner clear:',
+                err
+              );
             }
 
             scannerRef.current = null;
             setShowScanner(false);
 
-            setLoginData({
-              identifier: qrValue,
-              password: '',
-            });
-
             try {
-              await loginVisitor({
-                identifier: qrValue,
-                password: '',
-              });
-
-              navigate('/visitor');
+              await handleQrLogin(qrValue);
             } catch (loginError) {
+              console.error(
+                'Centralized QR login error:',
+                loginError
+              );
+
               setError(
                 loginError?.message ||
-                  'QR code was scanned, but login failed.'
+                  'QR code was detected, but login failed.'
               );
             }
           },
@@ -198,7 +547,10 @@ export default function VisitorLogin() {
           }
         );
       } catch (err) {
-        console.error('Camera scanner error:', err);
+        console.error(
+          'Camera scanner error:',
+          err
+        );
 
         scannerRef.current = null;
 
@@ -225,7 +577,8 @@ export default function VisitorLogin() {
     return () => {
       cancelled = true;
 
-      const activeScanner = scannerRef.current;
+      const activeScanner =
+        scannerRef.current;
 
       scannerRef.current = null;
 
@@ -234,11 +587,16 @@ export default function VisitorLogin() {
           .stop()
           .catch(() => {})
           .finally(() => {
-            activeScanner.clear().catch(() => {});
+            activeScanner
+              .clear()
+              .catch(() => {});
           });
       }
     };
-  }, [showScanner, loginVisitor, navigate]);
+  }, [
+    showScanner,
+    handleQrLogin,
+  ]);
 
   // =========================================================
   // CREATE ENHANCED QR IMAGE
@@ -247,13 +605,16 @@ export default function VisitorLogin() {
   const createEnhancedQrImage = (file) => {
     return new Promise((resolve, reject) => {
       const image = new Image();
-      const objectUrl = URL.createObjectURL(file);
+
+      const objectUrl =
+        URL.createObjectURL(file);
 
       image.onload = () => {
         try {
           const scale = 3;
 
-          const canvas = document.createElement('canvas');
+          const canvas =
+            document.createElement('canvas');
 
           canvas.width = Math.max(
             image.width * scale,
@@ -265,7 +626,8 @@ export default function VisitorLogin() {
             600
           );
 
-          const context = canvas.getContext('2d');
+          const context =
+            canvas.getContext('2d');
 
           if (!context) {
             URL.revokeObjectURL(objectUrl);
@@ -279,7 +641,6 @@ export default function VisitorLogin() {
             return;
           }
 
-          // White background
           context.fillStyle = '#ffffff';
 
           context.fillRect(
@@ -289,7 +650,6 @@ export default function VisitorLogin() {
             canvas.height
           );
 
-          // Disable smoothing so QR modules stay sharp
           context.imageSmoothingEnabled = false;
 
           context.drawImage(
@@ -314,13 +674,14 @@ export default function VisitorLogin() {
                 return;
               }
 
-              const enhancedFile = new File(
-                [blob],
-                'enhanced-qr.png',
-                {
-                  type: 'image/png',
-                }
-              );
+              const enhancedFile =
+                new File(
+                  [blob],
+                  'enhanced-qr.png',
+                  {
+                    type: 'image/png',
+                  }
+                );
 
               resolve(enhancedFile);
             },
@@ -351,9 +712,9 @@ export default function VisitorLogin() {
   // =========================================================
 
   const handleQrImageUpload = async (event) => {
-    const file = event.target.files?.[0];
+    const file =
+      event.target.files?.[0];
 
-    // Allow selecting the same file again
     event.target.value = '';
 
     if (!file) {
@@ -366,27 +727,32 @@ export default function VisitorLogin() {
     let qrScanner = null;
 
     try {
-      if (!file.type || !file.type.startsWith('image/')) {
+      if (
+        !file.type ||
+        !file.type.startsWith('image/')
+      ) {
         throw new Error(
           'Please upload a valid image containing your QR code.'
         );
       }
 
-      qrScanner = new Html5Qrcode(
-        'visitor-qr-file-reader'
-      );
+      qrScanner =
+        new Html5Qrcode(
+          'visitor-qr-file-reader'
+        );
 
       let decodedText = '';
 
-      // -----------------------------------------------------
+      // ===================================================
       // ATTEMPT 1: ORIGINAL IMAGE
-      // -----------------------------------------------------
+      // ===================================================
 
       try {
-        decodedText = await qrScanner.scanFile(
-          file,
-          false
-        );
+        decodedText =
+          await qrScanner.scanFile(
+            file,
+            false
+          );
 
         console.log(
           'QR detected from original image:',
@@ -398,19 +764,20 @@ export default function VisitorLogin() {
         );
       }
 
-      // -----------------------------------------------------
+      // ===================================================
       // ATTEMPT 2: ENHANCED IMAGE
-      // -----------------------------------------------------
+      // ===================================================
 
       if (!decodedText) {
         try {
           const enhancedFile =
             await createEnhancedQrImage(file);
 
-          decodedText = await qrScanner.scanFile(
-            enhancedFile,
-            false
-          );
+          decodedText =
+            await qrScanner.scanFile(
+              enhancedFile,
+              false
+            );
 
           console.log(
             'QR detected from enhanced image:',
@@ -424,9 +791,9 @@ export default function VisitorLogin() {
         }
       }
 
-      // -----------------------------------------------------
+      // ===================================================
       // NO QR FOUND
-      // -----------------------------------------------------
+      // ===================================================
 
       if (!decodedText) {
         throw new Error(
@@ -434,7 +801,8 @@ export default function VisitorLogin() {
         );
       }
 
-      const qrValue = decodedText.trim();
+      const qrValue =
+        decodedText.trim();
 
       if (!qrValue) {
         throw new Error(
@@ -447,32 +815,21 @@ export default function VisitorLogin() {
         qrValue
       );
 
-      // Put QR value into login field
-      setLoginData({
-        identifier: qrValue,
-        password: '',
-      });
-
-      // -----------------------------------------------------
-      // LOGIN USING QR VALUE
-      // -----------------------------------------------------
+      // ===================================================
+      // CENTRALIZED QR LOGIN
+      // ===================================================
 
       try {
-        await loginVisitor({
-          identifier: qrValue,
-          password: '',
-        });
-
-        navigate('/visitor');
+        await handleQrLogin(qrValue);
       } catch (loginError) {
         console.error(
-          'QR login error:',
+          'Centralized QR login error:',
           loginError
         );
 
         setError(
           loginError?.message ||
-            'QR code was detected, but the visitor account could not be logged in.'
+            'QR code was detected, but login failed.'
         );
       }
     } catch (err) {
@@ -537,12 +894,18 @@ export default function VisitorLogin() {
 
       if (result?.role === 'visitor') {
         navigate('/visitor');
-      } else if (result?.role === 'subadmin') {
+      } else if (
+        result?.role === 'subadmin'
+      ) {
         navigate('/subadmin');
-      } else if (result?.role === 'superadmin') {
+      } else if (
+        result?.role === 'superadmin'
+      ) {
         navigate('/superadmin');
       } else {
-        setError('Unknown account role.');
+        setError(
+          'Unknown account role.'
+        );
       }
     } catch (err) {
       setError(
@@ -570,7 +933,9 @@ export default function VisitorLogin() {
     }
 
     if (!passwordsMatch) {
-      setError('Passwords do not match.');
+      setError(
+        'Passwords do not match.'
+      );
 
       return;
     }
@@ -632,10 +997,7 @@ export default function VisitorLogin() {
           cleanOtp
         );
 
-      setRegisteredVisitor(
-        visitor
-      );
-
+      setRegisteredVisitor(visitor);
       setView('success');
     } catch (err) {
       setError(
@@ -708,35 +1070,33 @@ export default function VisitorLogin() {
   };
 
   // =========================================================
-  // PASSWORD REQUIREMENT
+  // PASSWORD REQUIREMENT COMPONENT
   // =========================================================
 
   const PasswordRequirement = ({
     valid,
     children,
-  }) => {
-    return (
-      <li
-        className={`flex items-center gap-2 ${
+  }) => (
+    <li
+      className={`flex items-center gap-2 ${
+        valid
+          ? 'text-green-600'
+          : 'text-slate-500'
+      }`}
+    >
+      <span
+        className={`flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold ${
           valid
-            ? 'text-green-600'
-            : 'text-slate-500'
+            ? 'bg-green-100'
+            : 'bg-slate-100'
         }`}
       >
-        <span
-          className={`flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold ${
-            valid
-              ? 'bg-green-100'
-              : 'bg-slate-100'
-          }`}
-        >
-          {valid ? '✓' : '•'}
-        </span>
+        {valid ? '✓' : '•'}
+      </span>
 
-        <span>{children}</span>
-      </li>
-    );
-  };
+      <span>{children}</span>
+    </li>
+  );
 
   // =========================================================
   // UI
@@ -744,7 +1104,6 @@ export default function VisitorLogin() {
 
   return (
     <div className="min-h-screen flex w-full bg-[#f8fafc]">
-
       <style>{`
         input[type="password"]::-ms-reveal,
         input[type="password"]::-ms-clear {
@@ -752,9 +1111,7 @@ export default function VisitorLogin() {
         }
       `}</style>
 
-      {/* =====================================================
-          LEFT PANEL
-      ====================================================== */}
+      {/* LEFT PANEL */}
 
       <div
         className="hidden lg:flex lg:w-1/2 bg-[#002046] text-white p-12 flex-col justify-between relative overflow-hidden bg-cover bg-center"
@@ -772,7 +1129,6 @@ export default function VisitorLogin() {
         </div>
 
         <div className="relative z-10 space-y-4 max-w-lg">
-
           <span className="inline-block px-3 py-1 bg-white/10 backdrop-blur-md text-xs font-semibold rounded-full border border-white/20">
             Digital Library Management System
           </span>
@@ -782,12 +1138,11 @@ export default function VisitorLogin() {
           </h1>
 
           <p className="text-sm text-slate-300">
-            Access your library account, explore
-            available resources, manage your
-            borrowing activity, and use your
-            digital library pass.
+            Access your library account,
+            explore available resources,
+            manage your borrowing activity,
+            and use your digital library pass.
           </p>
-
         </div>
 
         <div className="relative z-10 text-xs text-slate-400">
@@ -795,20 +1150,15 @@ export default function VisitorLogin() {
         </div>
       </div>
 
-      {/* =====================================================
-          RIGHT PANEL
-      ====================================================== */}
+      {/* RIGHT PANEL */}
 
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12">
-
         <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl border border-slate-200 space-y-6">
 
           {/* HEADER */}
 
           <div className="text-center lg:text-left space-y-1">
-
             <h2 className="text-2xl font-bold text-[#0f172a]">
-
               {view === 'login' &&
                 'SHELF ILMS Login'}
 
@@ -820,11 +1170,9 @@ export default function VisitorLogin() {
 
               {view === 'success' &&
                 'Registration Successful'}
-
             </h2>
 
             <p className="text-xs text-slate-500">
-
               {view === 'login' &&
                 'Sign in using your email, account ID, or QR pass ID.'}
 
@@ -836,9 +1184,7 @@ export default function VisitorLogin() {
 
               {view === 'success' &&
                 'Save your QR pass and use it for quick library access.'}
-
             </p>
-
           </div>
 
           {/* ERROR */}
@@ -864,16 +1210,13 @@ export default function VisitorLogin() {
           {view === 'success' &&
             registeredVisitor && (
               <div className="space-y-4 bg-slate-50 p-6 rounded-xl border border-slate-200 text-center">
-
                 <h3 className="text-sm font-bold text-[#0f172a]">
                   Welcome,{' '}
                   {registeredVisitor.fullName}!
                 </h3>
 
                 <div className="flex justify-center">
-
                   <div className="p-4 bg-white rounded-lg shadow-sm inline-block border border-slate-200">
-
                     <QRCodeSVG
                       value={
                         registeredVisitor.qrCode
@@ -882,9 +1225,7 @@ export default function VisitorLogin() {
                       level="H"
                       includeMargin
                     />
-
                   </div>
-
                 </div>
 
                 <p className="text-xs font-mono font-bold text-[#002046]">
@@ -910,7 +1251,6 @@ export default function VisitorLogin() {
                 >
                   Enter Library Portal
                 </button>
-
               </div>
             )}
 
@@ -924,9 +1264,7 @@ export default function VisitorLogin() {
               className="space-y-4"
               autoComplete="off"
             >
-
               <div className="bg-blue-50 border border-blue-200 text-blue-800 text-xs px-4 py-3 rounded-lg">
-
                 <p className="font-semibold">
                   Verification code sent
                 </p>
@@ -937,11 +1275,9 @@ export default function VisitorLogin() {
                     {pendingEmail}
                   </span>
                 </p>
-
               </div>
 
               <div>
-
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   6-Digit Code
                 </label>
@@ -966,12 +1302,13 @@ export default function VisitorLogin() {
                   placeholder="000000"
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm tracking-[0.35em] text-center font-mono focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
                 />
-
               </div>
 
               <button
                 type="submit"
-                disabled={otpInput.length !== 6}
+                disabled={
+                  otpInput.length !== 6
+                }
                 className={`w-full py-2.5 rounded-lg font-bold text-sm transition shadow-sm ${
                   otpInput.length === 6
                     ? 'bg-[#002046] text-white hover:opacity-95'
@@ -988,7 +1325,6 @@ export default function VisitorLogin() {
               >
                 Resend Verification Code
               </button>
-
             </form>
           )}
 
@@ -1002,11 +1338,9 @@ export default function VisitorLogin() {
               className="space-y-3"
               autoComplete="off"
             >
-
               {/* FULL NAME */}
 
               <div>
-
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Full Name
                 </label>
@@ -1027,13 +1361,11 @@ export default function VisitorLogin() {
                   }
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
                 />
-
               </div>
 
               {/* CONTACT NUMBER */}
 
               <div>
-
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Contact Number
                 </label>
@@ -1056,13 +1388,11 @@ export default function VisitorLogin() {
                   }
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
                 />
-
               </div>
 
               {/* EMAIL */}
 
               <div>
-
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Email Address
                 </label>
@@ -1083,13 +1413,11 @@ export default function VisitorLogin() {
                   }
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
                 />
-
               </div>
 
               {/* ADDRESS */}
 
               <div>
-
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Address
                 </label>
@@ -1110,19 +1438,16 @@ export default function VisitorLogin() {
                   }
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
                 />
-
               </div>
 
               {/* PASSWORD */}
 
               <div>
-
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Create Password
                 </label>
 
                 <div className="relative">
-
                   <input
                     type={
                       showRegisterPassword
@@ -1160,17 +1485,14 @@ export default function VisitorLogin() {
                       <Eye size={18} />
                     )}
                   </button>
-
                 </div>
 
                 <div className="mt-2 bg-slate-50 border border-slate-200 rounded-lg p-3">
-
                   <p className="text-[11px] font-semibold text-slate-700 mb-1">
                     Password requirements:
                   </p>
 
                   <ul className="text-[11px] space-y-1">
-
                     <PasswordRequirement
                       valid={
                         passwordRequirements.minLength
@@ -1210,23 +1532,18 @@ export default function VisitorLogin() {
                     >
                       At least 1 special character
                     </PasswordRequirement>
-
                   </ul>
-
                 </div>
-
               </div>
 
               {/* CONFIRM PASSWORD */}
 
               <div>
-
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Confirm Password
                 </label>
 
                 <div className="relative">
-
                   <input
                     type={
                       showConfirmPassword
@@ -1273,9 +1590,7 @@ export default function VisitorLogin() {
                       <Eye size={18} />
                     )}
                   </button>
-
                 </div>
-
               </div>
 
               {/* REGISTER BUTTON */}
@@ -1297,7 +1612,6 @@ export default function VisitorLogin() {
               </button>
 
               <div className="text-center pt-2">
-
                 <button
                   type="button"
                   onClick={resetToLogin}
@@ -1305,9 +1619,7 @@ export default function VisitorLogin() {
                 >
                   Already have an account? Sign In
                 </button>
-
               </div>
-
             </form>
           )}
 
@@ -1321,32 +1633,26 @@ export default function VisitorLogin() {
               className="space-y-4"
               autoComplete="off"
             >
-
               {/* CAMERA SCANNER */}
 
               {showScanner ? (
                 <div className="space-y-4">
-
                   <div className="bg-[#002046] text-white rounded-xl p-4 text-center">
-
                     <h3 className="font-bold text-sm">
-                      Scan Your QR Pass
+                      Scan QR Code
                     </h3>
 
                     <p className="text-[11px] text-slate-300 mt-1">
                       Position the QR code inside
                       the scanning area.
                     </p>
-
                   </div>
 
                   <div className="rounded-xl overflow-hidden border-2 border-[#002046] bg-black">
-
                     <div
                       id="visitor-qr-reader"
                       className="w-full"
                     />
-
                   </div>
 
                   <button
@@ -1356,14 +1662,12 @@ export default function VisitorLogin() {
                   >
                     Cancel Camera
                   </button>
-
                 </div>
               ) : (
                 <>
                   {/* LOGIN IDENTIFIER */}
 
                   <div>
-
                     <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
                       Email / Account ID / QR Pass ID
                     </label>
@@ -1386,19 +1690,16 @@ export default function VisitorLogin() {
                       }
                       className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
                     />
-
                   </div>
 
                   {/* PASSWORD */}
 
                   <div>
-
                     <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
                       Password
                     </label>
 
                     <div className="relative">
-
                       <input
                         type={
                           showLoginPassword
@@ -1437,9 +1738,7 @@ export default function VisitorLogin() {
                           <Eye size={18} />
                         )}
                       </button>
-
                     </div>
-
                   </div>
 
                   {/* SIGN IN */}
@@ -1454,13 +1753,11 @@ export default function VisitorLogin() {
                   {/* DIVIDER */}
 
                   <div className="relative flex items-center justify-center my-4">
-
                     <div className="border-t border-slate-200 w-full" />
 
                     <span className="bg-white px-3 text-[11px] uppercase tracking-wider font-semibold text-slate-400 absolute">
                       Or
                     </span>
-
                   </div>
 
                   {/* CAMERA QR */}
@@ -1481,7 +1778,9 @@ export default function VisitorLogin() {
                     type="file"
                     accept="image/png,image/jpeg,image/jpg,image/webp"
                     className="hidden"
-                    onChange={handleQrImageUpload}
+                    onChange={
+                      handleQrImageUpload
+                    }
                   />
 
                   {/* UPLOAD QR */}
@@ -1512,9 +1811,7 @@ export default function VisitorLogin() {
                   {/* REGISTER */}
 
                   <div className="text-center pt-2">
-
                     <p className="text-xs text-slate-600">
-
                       Don't have an account?{' '}
 
                       <button
@@ -1527,17 +1824,12 @@ export default function VisitorLogin() {
                       >
                         Register as Visitor
                       </button>
-
                     </p>
-
                   </div>
-
                 </>
               )}
-
             </form>
           )}
-
         </div>
       </div>
     </div>
