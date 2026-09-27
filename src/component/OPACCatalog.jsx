@@ -96,6 +96,9 @@ const STATUS_LABELS = {
 
 export default function OPACCatalog({
   libraryFilter = null,
+  activeView = 'catalog',
+  onViewChange = () => {},
+  catalogResetKey = 0,
 }) {
   const { user } = useAuth();
 
@@ -119,8 +122,16 @@ export default function OPACCatalog({
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const [selectedCategory, setSelectedCategory] =
-    useState('All');
+  const [categorySelection, setCategorySelection] = useState({
+    resetKey: catalogResetKey,
+    value: 'All',
+  });
+  const selectedCategory = categorySelection.resetKey === catalogResetKey
+    ? categorySelection.value
+    : 'All';
+  const setSelectedCategory = (value) => {
+    setCategorySelection({ resetKey: catalogResetKey, value });
+  };
 
   const [selectedLibrary, setSelectedLibrary] =
     useState('All');
@@ -134,9 +145,6 @@ export default function OPACCatalog({
 
   const [selectedBook, setSelectedBook] =
     useState(null);
-
-  const [activeTab, setActiveTab] =
-    useState('catalog');
 
   const [notice, setNotice] =
     useState('');
@@ -191,14 +199,44 @@ export default function OPACCatalog({
   // DYNAMIC FILTER OPTIONS
   // =========================================================
 
-  const categories = [
-    'All',
-    ...new Set(
-      books
-        .map((book) => book.category)
-        .filter(Boolean)
-    ),
-  ];
+  const uniqueBooksByCategory = new Map();
+
+  books.forEach((book) => {
+    const category = book.category?.trim() || 'Uncategorized';
+    const categoryKey = category.toLocaleLowerCase();
+    const normalizedIsbn = String(book.isbn || '')
+      .replace(/[^a-z0-9]/gi, '')
+      .toLocaleLowerCase();
+    const normalizedTitle = String(book.title || '')
+      .trim()
+      .replace(/\s+/g, ' ')
+      .toLocaleLowerCase();
+    const normalizedAuthor = String(book.author || '')
+      .trim()
+      .replace(/\s+/g, ' ')
+      .toLocaleLowerCase();
+    const bookKey = normalizedIsbn
+      ? `isbn:${normalizedIsbn}`
+      : normalizedTitle || normalizedAuthor
+        ? `title-author:${normalizedTitle}|${normalizedAuthor}`
+        : `id:${book.id}`;
+
+    if (!uniqueBooksByCategory.has(categoryKey)) {
+      uniqueBooksByCategory.set(categoryKey, {
+        label: category,
+        books: new Set(),
+      });
+    }
+
+    uniqueBooksByCategory.get(categoryKey).books.add(bookKey);
+  });
+
+  const categorySummaries = [...uniqueBooksByCategory.values()]
+    .map(({ label, books: uniqueBooks }) => ({
+      label,
+      count: uniqueBooks.size,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   const libraryOptions = [
     'All',
@@ -385,7 +423,9 @@ export default function OPACCatalog({
 
       const matchesCategory =
         selectedCategory === 'All' ||
-        book.category === selectedCategory;
+        String(book.category || 'Uncategorized')
+          .trim()
+          .toLocaleLowerCase() === selectedCategory.toLocaleLowerCase();
 
       const matchesLibrary =
         libraryFilter
@@ -473,7 +513,7 @@ export default function OPACCatalog({
     }
 
     setSelectedBook(null);
-    setActiveTab('myBorrows');
+    onViewChange('myBorrows');
   };
 
   // =========================================================
@@ -601,72 +641,10 @@ export default function OPACCatalog({
       )}
 
       {/* =====================================================
-          NAVIGATION TABS
-      ====================================================== */}
-
-      <div className="flex border-b border-slate-200 gap-4">
-
-        <button
-          type="button"
-          onClick={() =>
-            setActiveTab('catalog')
-          }
-          className={`pb-3 text-sm font-bold transition ${
-            activeTab === 'catalog'
-              ? 'text-[#002046] border-b-2 border-[#002046]'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          📚 Search Catalog (OPAC)
-        </button>
-
-        <button
-          type="button"
-          onClick={() =>
-            setActiveTab('myBorrows')
-          }
-          className={`pb-3 text-sm font-bold transition flex items-center gap-2 ${
-            activeTab === 'myBorrows'
-              ? 'text-[#002046] border-b-2 border-[#002046]'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          🔖 My Requests & Borrows
-
-          {myRequests.filter(
-            (request) =>
-              [
-                'queued',
-                'ready_for_pickup',
-                'borrowed',
-              ].includes(
-                request.status
-              )
-          ).length > 0 && (
-            <span className="bg-[#002046] text-white text-xs px-2 py-0.5 rounded-full">
-              {
-                myRequests.filter(
-                  (request) =>
-                    [
-                      'queued',
-                      'ready_for_pickup',
-                      'borrowed',
-                    ].includes(
-                      request.status
-                    )
-                ).length
-              }
-            </span>
-          )}
-        </button>
-
-      </div>
-
-      {/* =====================================================
           CATALOG
       ====================================================== */}
 
-      {activeTab === 'catalog' ? (
+      {activeView === 'catalog' ? (
         <div className="space-y-6">
 
           {/* =================================================
@@ -779,34 +757,6 @@ export default function OPACCatalog({
             )}
 
             <select
-              value={selectedCategory}
-              onChange={(event) =>
-                setSelectedCategory(
-                  event.target.value
-                )
-              }
-              className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none"
-            >
-              <option value="All">
-                All Categories
-              </option>
-
-              {categories
-                .filter(
-                  (category) =>
-                    category !== 'All'
-                )
-                .map((category) => (
-                  <option
-                    key={category}
-                    value={category}
-                  >
-                    {category}
-                  </option>
-                ))}
-            </select>
-
-            <select
               value={selectedAvailability}
               onChange={(event) =>
                 setSelectedAvailability(
@@ -849,6 +799,26 @@ export default function OPACCatalog({
                   ? 'book'
                   : 'books'} found
               </span>
+            </div>
+          )}
+
+          {selectedCategory !== 'All' && (
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
+              <div>
+                <h2 className="text-base font-bold text-slate-800">
+                  Books in {selectedCategory}
+                </h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  {filteredBooks.length} catalog {filteredBooks.length === 1 ? 'entry' : 'entries'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedCategory('All')}
+                className="text-xs font-semibold text-[#002046] hover:underline"
+              >
+                Clear category
+              </button>
             </div>
           )}
 
@@ -989,6 +959,46 @@ export default function OPACCatalog({
           )}
 
         </div>
+      ) : activeView === 'categories' ? (
+        <section aria-labelledby="opac-category-heading" className="space-y-5">
+          <div>
+            <h2 id="opac-category-heading" className="text-lg font-bold text-slate-800">
+              Book Categories
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Unique titles across participating libraries
+            </p>
+          </div>
+
+          {categorySummaries.length ? (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {categorySummaries.map(({ label, count }) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory(label);
+                    setSearchInput('');
+                    setSearchTerm('');
+                    setSelectedLibrary('All');
+                    setSelectedAvailability('All');
+                    onViewChange('catalog');
+                  }}
+                  className="flex min-h-16 items-center justify-between gap-3 border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-[#002046] hover:bg-blue-50"
+                >
+                  <span className="min-w-0 text-sm font-semibold text-slate-700">{label}</span>
+                  <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
+                    {count} {count === 1 ? 'book' : 'books'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="border border-dashed border-slate-300 px-4 py-5 text-center text-sm text-slate-500">
+              No book categories are available yet.
+            </p>
+          )}
+        </section>
       ) : (
 
         /* =====================================================

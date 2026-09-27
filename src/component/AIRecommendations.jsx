@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { useAuth } from '../context/AuthContext.jsx';
-import { useLibraryData } from '../context/LibraryContext.jsx';
+import { useAuth } from '../context/useAuth.js';
+import { useLibraryData } from '../context/useLibrary.js';
 import { getAIRecommendations } from '../lib/recommendationEngine.js';
 
 export default function AIRecommendations({ onRequestBorrow }) {

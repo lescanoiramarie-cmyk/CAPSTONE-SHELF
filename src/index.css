@@ -9,3 +9,42 @@
   --color-shelf-muted: #64748b;
   --color-shelf-border: #e2e8f0;
 }
+
+.visitor-dashboard.theme-dark {
+  background-color: #0b1220;
+  color: #e2e8f0;
+}
+
+.visitor-dashboard.theme-dark .bg-white {
+  background-color: #111c2e;
+}
+
+.visitor-dashboard.theme-dark .bg-slate-50 {
+  background-color: #0f172a;
+}
+
+.visitor-dashboard.theme-dark .bg-slate-100 {
+  background-color: #1e293b;
+}
+
+.visitor-dashboard.theme-dark .text-slate-900,
+.visitor-dashboard.theme-dark .text-slate-800,
+.visitor-dashboard.theme-dark .text-slate-700 {
+  color: #e2e8f0;
+}
+
+.visitor-dashboard.theme-dark .text-slate-600,
+.visitor-dashboard.theme-dark .text-slate-500,
+.visitor-dashboard.theme-dark .text-slate-400 {
+  color: #a8b5c7;
+}
+
+.visitor-dashboard.theme-dark .border-slate-100,
+.visitor-dashboard.theme-dark .border-slate-200,
+.visitor-dashboard.theme-dark .border-slate-300 {
+  border-color: #334155;
+}
+
+.visitor-dashboard.theme-dark .divide-slate-100 > :not(:last-child) {
+  border-color: #334155;
+}
