@@ -44,10 +44,6 @@ export default function VisitorDashboard() {
         );
       }
 
-      // -----------------------------------------------------
-      // Get the SVG QR code
-      // -----------------------------------------------------
-
       const serializer =
         new XMLSerializer();
 
@@ -56,7 +52,6 @@ export default function VisitorDashboard() {
           svgElement
         );
 
-      // Make sure SVG has the proper namespace
       if (
         !svgData.includes(
           'xmlns="http://www.w3.org/2000/svg"'
@@ -67,10 +62,6 @@ export default function VisitorDashboard() {
           '<svg xmlns="http://www.w3.org/2000/svg"'
         );
       }
-
-      // -----------------------------------------------------
-      // Create a clean high-resolution canvas
-      // -----------------------------------------------------
 
       const canvas =
         document.createElement('canvas');
@@ -90,7 +81,6 @@ export default function VisitorDashboard() {
         );
       }
 
-      // White background
       context.fillStyle = '#ffffff';
 
       context.fillRect(
@@ -99,10 +89,6 @@ export default function VisitorDashboard() {
         canvasWidth,
         canvasHeight
       );
-
-      // -----------------------------------------------------
-      // SHELF title
-      // -----------------------------------------------------
 
       context.fillStyle = '#002046';
 
@@ -117,10 +103,6 @@ export default function VisitorDashboard() {
         65
       );
 
-      // -----------------------------------------------------
-      // QR pass title
-      // -----------------------------------------------------
-
       context.fillStyle = '#334155';
 
       context.font =
@@ -131,10 +113,6 @@ export default function VisitorDashboard() {
         canvasWidth / 2,
         105
       );
-
-      // -----------------------------------------------------
-      // Convert SVG to image
-      // -----------------------------------------------------
 
       const svgBlob = new Blob(
         [svgData],
@@ -165,10 +143,6 @@ export default function VisitorDashboard() {
         }
       );
 
-      // -----------------------------------------------------
-      // Draw QR code
-      // -----------------------------------------------------
-
       const qrSize = 700;
 
       const qrX =
@@ -176,7 +150,6 @@ export default function VisitorDashboard() {
 
       const qrY = 145;
 
-      // White QR background / margin
       context.fillStyle = '#ffffff';
 
       context.fillRect(
@@ -196,10 +169,6 @@ export default function VisitorDashboard() {
 
       URL.revokeObjectURL(svgUrl);
 
-      // -----------------------------------------------------
-      // QR identifier
-      // -----------------------------------------------------
-
       context.fillStyle = '#002046';
 
       context.font =
@@ -213,10 +182,6 @@ export default function VisitorDashboard() {
         900
       );
 
-      // -----------------------------------------------------
-      // Visitor name
-      // -----------------------------------------------------
-
       context.fillStyle = '#475569';
 
       context.font =
@@ -227,10 +192,6 @@ export default function VisitorDashboard() {
         canvasWidth / 2,
         945
       );
-
-      // -----------------------------------------------------
-      // Footer
-      // -----------------------------------------------------
 
       context.fillStyle = '#64748b';
 
@@ -243,18 +204,10 @@ export default function VisitorDashboard() {
         995
       );
 
-      // -----------------------------------------------------
-      // Convert canvas to PNG
-      // -----------------------------------------------------
-
       const imageUrl =
         canvas.toDataURL(
           'image/png'
         );
-
-      // -----------------------------------------------------
-      // Download PNG
-      // -----------------------------------------------------
 
       const link =
         document.createElement('a');
@@ -309,20 +262,15 @@ export default function VisitorDashboard() {
     )?.name || id;
 
   // =========================================================
-  // UI
+  // UI - Responsive Optimization applied to Header, Tabs, and Layout grids
   // =========================================================
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-800">
 
-      {/* =====================================================
-          HEADER
-      ====================================================== */}
-
-      <header className="bg-[#002046] text-white px-6 py-4 flex justify-between items-center shadow-md">
-
+      {/* HEADER */}
+      <header className="bg-[#002046] text-white px-4 sm:px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-md">
         <div className="flex items-center gap-3">
-
           <span className="font-extrabold text-lg tracking-wider">
             SHELF ILMS
           </span>
@@ -330,11 +278,9 @@ export default function VisitorDashboard() {
           <span className="bg-white/10 text-xs px-2.5 py-1 rounded-full border border-white/20">
             Visitor Portal
           </span>
-
         </div>
 
-        <div className="flex items-center gap-4">
-
+        <div className="flex items-center justify-between w-full sm:w-auto gap-4">
           <span className="text-xs text-slate-300">
             Welcome,{' '}
             <b>{user?.name || 'Visitor'}</b>
@@ -347,42 +293,28 @@ export default function VisitorDashboard() {
           >
             Sign Out
           </button>
-
         </div>
-
       </header>
 
-      {/* =====================================================
-          MAIN CONTENT
-      ====================================================== */}
-
-      <main className="max-w-7xl mx-auto p-6 space-y-6">
+      {/* MAIN CONTENT */}
+      <main className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
 
         {/* PAGE HEADER */}
-
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-
           <div>
-
-            <h1 className="text-2xl font-bold text-[#0f172a]">
+            <h1 className="text-xl sm:text-2xl font-bold text-[#0f172a]">
               Online Library Catalog & Management
             </h1>
 
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-500 mt-1">
               Search books, check real-time availability,
               borrow or reserve items, and track fines.
             </p>
-
           </div>
-
         </div>
 
-        {/* ===================================================
-            TABS
-        ==================================================== */}
-
-        <div className="flex border-b border-slate-200 gap-6">
-
+        {/* TABS - Added horizontal scroll wrapper for mobile */}
+        <div className="flex border-b border-slate-200 gap-6 overflow-x-auto whitespace-nowrap pb-1">
           {[
             {
               id: 'catalog',
@@ -403,7 +335,7 @@ export default function VisitorDashboard() {
               onClick={() =>
                 setTab(tabItem.id)
               }
-              className={`pb-3 text-sm font-bold transition ${
+              className={`pb-3 text-sm font-bold transition flex-shrink-0 ${
                 tab === tabItem.id
                   ? 'text-[#002046] border-b-2 border-[#002046]'
                   : 'text-slate-500 hover:text-slate-800'
@@ -412,19 +344,13 @@ export default function VisitorDashboard() {
               {tabItem.label}
             </button>
           ))}
-
         </div>
 
-        {/* ===================================================
-            CATALOG
-        ==================================================== */}
-
+        {/* CATALOG */}
         {tab === 'catalog' && (
           <div className="space-y-3">
-
             {libraryFilter && (
               <div className="flex items-center gap-2 text-xs text-slate-500">
-
                 <span>
                   Filtered to{' '}
                   <b>
@@ -443,7 +369,6 @@ export default function VisitorDashboard() {
                 >
                   Clear filter
                 </button>
-
               </div>
             )}
 
@@ -452,54 +377,39 @@ export default function VisitorDashboard() {
                 libraryFilter
               }
             />
-
           </div>
         )}
 
-        {/* ===================================================
-            QR PASS + ATTENDANCE
-        ==================================================== */}
-
+        {/* QR PASS + ATTENDANCE */}
         {tab === 'pass' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-            {/* ===============================================
-                QR PASS
-            ================================================ */}
-
+            {/* QR PASS */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 text-center space-y-4">
-
               <h3 className="text-sm font-bold text-[#0f172a]">
                 Your Digital Library Pass
               </h3>
 
               {user?.qrCode ? (
                 <>
-                  {/* QR CODE */}
-
                   <div
                     ref={qrCodeRef}
                     className="flex justify-center"
                   >
-                    <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm">
-
+                    <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-sm max-w-full overflow-hidden">
                       <QRCodeSVG
                         value={user.qrCode}
                         size={220}
                         level="H"
                         includeMargin
+                        className="w-full h-auto max-w-[200px]"
                       />
-
                     </div>
                   </div>
 
-                  {/* QR ID */}
-
-                  <p className="text-sm font-mono font-bold text-[#002046]">
+                  <p className="text-sm font-mono font-bold text-[#002046] break-all">
                     {user.qrCode}
                   </p>
-
-                  {/* SAVE BUTTON */}
 
                   <button
                     type="button"
@@ -509,7 +419,6 @@ export default function VisitorDashboard() {
                     disabled={isSavingQr}
                     className="w-full bg-[#002046] text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-
                     {isSavingQr ? (
                       <>
                         <span className="inline-block w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
@@ -523,10 +432,7 @@ export default function VisitorDashboard() {
                         Save QR as Image
                       </>
                     )}
-
                   </button>
-
-                  {/* DESCRIPTION */}
 
                   <p className="text-xs text-slate-500 leading-relaxed">
                     Save your QR pass as a PNG image
@@ -535,22 +441,16 @@ export default function VisitorDashboard() {
                     library entrance or upload it as a
                     QR login image.
                   </p>
-
                 </>
               ) : (
                 <p className="text-xs text-slate-500">
                   No QR pass on file for this session.
                 </p>
               )}
-
             </div>
 
-            {/* ===============================================
-                RECENT VISITS
-            ================================================ */}
-
+            {/* RECENT VISITS */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-3">
-
               <h3 className="text-sm font-bold text-[#0f172a]">
                 Recent Library Visits
               </h3>
@@ -563,42 +463,34 @@ export default function VisitorDashboard() {
                 </p>
               ) : (
                 <ul className="divide-y divide-slate-100 text-sm">
-
                   {myVisits
                     .slice(0, 10)
                     .map((visit) => (
                       <li
                         key={visit.id}
-                        className="py-2 flex justify-between text-xs gap-4"
+                        className="py-2.5 flex justify-between items-center text-xs gap-4"
                       >
-
                         <span className="font-semibold text-slate-700">
                           {libraryName(
                             visit.libraryId
                           )}
                         </span>
 
-                        <span className="text-slate-400 text-right">
+                        <span className="text-slate-400 text-right flex-shrink-0">
                           {formatDateTime(
                             visit.timeIn
                           )}
                         </span>
-
                       </li>
                     ))}
-
                 </ul>
               )}
-
             </div>
 
           </div>
         )}
 
-        {/* ===================================================
-            LIBRARY MAP
-        ==================================================== */}
-
+        {/* LIBRARY MAP */}
         {tab === 'map' && (
           <LibraryMap
             onBrowseLibrary={(libraryId) => {

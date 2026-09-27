@@ -151,12 +151,6 @@ export default function VisitorLogin() {
 
       // =====================================================
       // SUPER ADMIN QR
-      //
-      // {
-      //   "role": "Super Admin",
-      //   "email": "superadmin@shelf.edu",
-      //   "password": "SuperAdmin@2026"
-      // }
       // =====================================================
 
       if (normalizedRole === 'superadmin') {
@@ -210,15 +204,6 @@ export default function VisitorLogin() {
 
       // =====================================================
       // SUB-ADMIN / STAFF / CIRCULATION DESK QR
-      //
-      // Supported:
-      // "Sub Admin"
-      // "Sub-Admin"
-      // "SubAdmin"
-      // "Admin"
-      // "Circulation Desk"
-      // "Circulation-Desk"
-      // "CirculationDesk"
       // =====================================================
 
       if (
@@ -254,13 +239,6 @@ export default function VisitorLogin() {
           );
         }
 
-        /*
-         * For the existing hardcoded authentication,
-         * use the password from the QR when available.
-         *
-         * If no password is included in the QR,
-         * use the password configured in store.js.
-         */
         const password =
           String(qrPayload?.password || '') ||
           account.password;
@@ -285,17 +263,6 @@ export default function VisitorLogin() {
 
       // =====================================================
       // VISITOR JSON QR
-      //
-      // {
-      //   "role": "Visitor",
-      //   "qrCode": "SHELF-QR-XXXXXX"
-      // }
-      //
-      // Also supports:
-      // qr_code
-      // passId
-      // pass_id
-      // identifier
       // =====================================================
 
       if (normalizedRole === 'visitor') {
@@ -396,9 +363,6 @@ export default function VisitorLogin() {
 
       // =====================================================
       // NORMAL VISITOR QR
-      //
-      // Example:
-      // SHELF-QR-ABC123
       // =====================================================
 
       await loginVisitor({
@@ -543,7 +507,7 @@ export default function VisitorLogin() {
             }
           },
           () => {
-            // Continuous scan errors are intentionally ignored.
+            // Continuous scan errors ignored.
           }
         );
       } catch (err) {
@@ -743,30 +707,15 @@ export default function VisitorLogin() {
 
       let decodedText = '';
 
-      // ===================================================
-      // ATTEMPT 1: ORIGINAL IMAGE
-      // ===================================================
-
       try {
         decodedText =
           await qrScanner.scanFile(
             file,
             false
           );
-
-        console.log(
-          'QR detected from original image:',
-          decodedText
-        );
       } catch {
-        console.log(
-          'Original image scan failed. Trying enhanced image.'
-        );
+        // Fallback to enhanced image scan
       }
-
-      // ===================================================
-      // ATTEMPT 2: ENHANCED IMAGE
-      // ===================================================
 
       if (!decodedText) {
         try {
@@ -778,11 +727,6 @@ export default function VisitorLogin() {
               enhancedFile,
               false
             );
-
-          console.log(
-            'QR detected from enhanced image:',
-            decodedText
-          );
         } catch (enhancedError) {
           console.log(
             'Enhanced image scan failed:',
@@ -790,10 +734,6 @@ export default function VisitorLogin() {
           );
         }
       }
-
-      // ===================================================
-      // NO QR FOUND
-      // ===================================================
 
       if (!decodedText) {
         throw new Error(
@@ -810,34 +750,15 @@ export default function VisitorLogin() {
         );
       }
 
-      console.log(
-        'Final QR value:',
-        qrValue
-      );
-
-      // ===================================================
-      // CENTRALIZED QR LOGIN
-      // ===================================================
-
       try {
         await handleQrLogin(qrValue);
       } catch (loginError) {
-        console.error(
-          'Centralized QR login error:',
-          loginError
-        );
-
         setError(
           loginError?.message ||
             'QR code was detected, but login failed.'
         );
       }
     } catch (err) {
-      console.error(
-        'QR image upload error:',
-        err
-      );
-
       setError(
         err?.message ||
           'Unable to read the QR code from the uploaded image.'
@@ -1099,7 +1020,7 @@ export default function VisitorLogin() {
   );
 
   // =========================================================
-  // UI
+  // UI - Responsive Optimization applied to wrappers and panels
   // =========================================================
 
   return (
@@ -1112,7 +1033,6 @@ export default function VisitorLogin() {
       `}</style>
 
       {/* LEFT PANEL */}
-
       <div
         className="hidden lg:flex lg:w-1/2 bg-[#002046] text-white p-12 flex-col justify-between relative overflow-hidden bg-cover bg-center"
         style={{
@@ -1150,13 +1070,11 @@ export default function VisitorLogin() {
         </div>
       </div>
 
-      {/* RIGHT PANEL */}
-
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12">
-        <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl border border-slate-200 space-y-6">
+      {/* RIGHT PANEL - Optimized mobile padding & max width */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-8 lg:p-12 overflow-y-auto">
+        <div className="w-full max-w-md bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-slate-200 space-y-6 my-auto">
 
           {/* HEADER */}
-
           <div className="text-center lg:text-left space-y-1">
             <h2 className="text-2xl font-bold text-[#0f172a]">
               {view === 'login' &&
@@ -1188,7 +1106,6 @@ export default function VisitorLogin() {
           </div>
 
           {/* ERROR */}
-
           {error && (
             <div
               className={`text-xs font-semibold rounded-lg px-3 py-2 ${
@@ -1203,10 +1120,7 @@ export default function VisitorLogin() {
             </div>
           )}
 
-          {/* =================================================
-              SUCCESS VIEW
-          ================================================== */}
-
+          {/* SUCCESS VIEW */}
           {view === 'success' &&
             registeredVisitor && (
               <div className="space-y-4 bg-slate-50 p-6 rounded-xl border border-slate-200 text-center">
@@ -1216,7 +1130,7 @@ export default function VisitorLogin() {
                 </h3>
 
                 <div className="flex justify-center">
-                  <div className="p-4 bg-white rounded-lg shadow-sm inline-block border border-slate-200">
+                  <div className="p-4 bg-white rounded-lg shadow-sm inline-block border border-slate-200 max-w-full overflow-hidden">
                     <QRCodeSVG
                       value={
                         registeredVisitor.qrCode
@@ -1224,11 +1138,12 @@ export default function VisitorLogin() {
                       size={220}
                       level="H"
                       includeMargin
+                      className="w-full h-auto max-w-[200px]"
                     />
                   </div>
                 </div>
 
-                <p className="text-xs font-mono font-bold text-[#002046]">
+                <p className="text-xs font-mono font-bold text-[#002046] break-all">
                   {registeredVisitor.qrCode}
                 </p>
 
@@ -1254,10 +1169,7 @@ export default function VisitorLogin() {
               </div>
             )}
 
-          {/* =================================================
-              OTP VIEW
-          ================================================== */}
-
+          {/* OTP VIEW */}
           {view === 'otp' && (
             <form
               onSubmit={handleVerifyOtp}
@@ -1271,7 +1183,7 @@ export default function VisitorLogin() {
 
                 <p className="mt-1">
                   We sent a 6-digit code to:{' '}
-                  <span className="font-bold">
+                  <span className="font-bold break-all">
                     {pendingEmail}
                   </span>
                 </p>
@@ -1328,18 +1240,13 @@ export default function VisitorLogin() {
             </form>
           )}
 
-          {/* =================================================
-              REGISTER VIEW
-          ================================================== */}
-
+          {/* REGISTER VIEW */}
           {view === 'register' && (
             <form
               onSubmit={handleRegister}
               className="space-y-3"
               autoComplete="off"
             >
-              {/* FULL NAME */}
-
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Full Name
@@ -1362,8 +1269,6 @@ export default function VisitorLogin() {
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
                 />
               </div>
-
-              {/* CONTACT NUMBER */}
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -1390,8 +1295,6 @@ export default function VisitorLogin() {
                 />
               </div>
 
-              {/* EMAIL */}
-
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Email Address
@@ -1415,8 +1318,6 @@ export default function VisitorLogin() {
                 />
               </div>
 
-              {/* ADDRESS */}
-
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Address
@@ -1439,8 +1340,6 @@ export default function VisitorLogin() {
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
                 />
               </div>
-
-              {/* PASSWORD */}
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -1536,8 +1435,6 @@ export default function VisitorLogin() {
                 </div>
               </div>
 
-              {/* CONFIRM PASSWORD */}
-
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Confirm Password
@@ -1593,8 +1490,6 @@ export default function VisitorLogin() {
                 </div>
               </div>
 
-              {/* REGISTER BUTTON */}
-
               <button
                 type="submit"
                 disabled={
@@ -1623,18 +1518,13 @@ export default function VisitorLogin() {
             </form>
           )}
 
-          {/* =================================================
-              LOGIN VIEW
-          ================================================== */}
-
+          {/* LOGIN VIEW */}
           {view === 'login' && (
             <form
               onSubmit={handleLogin}
               className="space-y-4"
               autoComplete="off"
             >
-              {/* CAMERA SCANNER */}
-
               {showScanner ? (
                 <div className="space-y-4">
                   <div className="bg-[#002046] text-white rounded-xl p-4 text-center">
@@ -1665,8 +1555,6 @@ export default function VisitorLogin() {
                 </div>
               ) : (
                 <>
-                  {/* LOGIN IDENTIFIER */}
-
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
                       Email / Account ID / QR Pass ID
@@ -1691,8 +1579,6 @@ export default function VisitorLogin() {
                       className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
                     />
                   </div>
-
-                  {/* PASSWORD */}
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
@@ -1741,16 +1627,12 @@ export default function VisitorLogin() {
                     </div>
                   </div>
 
-                  {/* SIGN IN */}
-
                   <button
                     type="submit"
                     className="w-full bg-[#002046] text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm"
                   >
                     Sign In
                   </button>
-
-                  {/* DIVIDER */}
 
                   <div className="relative flex items-center justify-center my-4">
                     <div className="border-t border-slate-200 w-full" />
@@ -1759,8 +1641,6 @@ export default function VisitorLogin() {
                       Or
                     </span>
                   </div>
-
-                  {/* CAMERA QR */}
 
                   <button
                     type="button"
@@ -1771,8 +1651,6 @@ export default function VisitorLogin() {
                     Scan QR Pass
                   </button>
 
-                  {/* HIDDEN FILE INPUT */}
-
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -1782,8 +1660,6 @@ export default function VisitorLogin() {
                       handleQrImageUpload
                     }
                   />
-
-                  {/* UPLOAD QR */}
 
                   <button
                     type="button"
@@ -1800,15 +1676,11 @@ export default function VisitorLogin() {
                       : 'Upload QR Code Image'}
                   </button>
 
-                  {/* HIDDEN QR DECODER */}
-
                   <div
                     id="visitor-qr-file-reader"
                     className="hidden"
                     aria-hidden="true"
                   />
-
-                  {/* REGISTER */}
 
                   <div className="text-center pt-2">
                     <p className="text-xs text-slate-600">

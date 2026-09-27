@@ -43,7 +43,7 @@ export default function LibraryMap({ onBrowseLibrary, lat, lng, name }) {
   }
 
   // ==========================================
-  // DIRECTORY MODE: Your existing full page UI
+  // DIRECTORY MODE: Responsive full page UI
   // ==========================================
   const campuses = [];
   libraries.forEach((library) => {
@@ -82,19 +82,20 @@ export default function LibraryMap({ onBrowseLibrary, lat, lng, name }) {
         Sample/demo branch coordinates for the Tanauan City integrated network.
       </div>
 
+      {/* SEARCH AND FILTER CONTROLS - Stacked on mobile, row on tablet/desktop */}
       <div className="flex flex-col sm:flex-row gap-3">
         <input
           type="text"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search libraries by name or address..."
-          className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm"
+          className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white"
         />
 
         <select
           value={campusFilter}
           onChange={(event) => setCampusFilter(event.target.value)}
-          className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white"
+          className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
         >
           <option value="All">All</option>
           {campuses.map((campus) => (
@@ -107,7 +108,7 @@ export default function LibraryMap({ onBrowseLibrary, lat, lng, name }) {
         <button
           type="button"
           onClick={() => setShowMap(!showMap)}
-          className="px-4 py-2.5 rounded-lg text-sm font-bold border border-slate-300"
+          className="px-4 py-2.5 rounded-lg text-sm font-bold border border-slate-300 bg-white hover:bg-slate-50 transition w-full sm:w-auto"
         >
           {showMap ? 'Hide Map View' : 'Show Map View'}
         </button>
@@ -115,7 +116,7 @@ export default function LibraryMap({ onBrowseLibrary, lat, lng, name }) {
 
       <div className={showMap ? 'grid grid-cols-1 lg:grid-cols-5 gap-4' : 'grid grid-cols-1 gap-4'}>
         {showMap && (
-          <div className="lg:col-span-2 rounded-xl overflow-hidden border border-slate-200 shadow-sm h-80 lg:h-[600px] z-0">
+          <div className="lg:col-span-2 rounded-xl overflow-hidden border border-slate-200 shadow-sm h-72 sm:h-96 lg:h-[600px] z-0">
             <MapContainer
               center={[14.085, 121.149]}
               zoom={13}

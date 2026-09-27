@@ -19,7 +19,7 @@ export default function VisitorLogin() {
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // In-update ang formData para isama ang school at student details
+  // Form data state
   const [formData, setFormData] = useState({
     fullName: '',
     contactNumber: '',
@@ -403,9 +403,9 @@ export default function VisitorLogin() {
         </div>
       </div>
 
-      {/* RIGHT FORM PANEL */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 overflow-y-auto">
-        <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl border border-slate-200 space-y-6 my-auto">
+      {/* RIGHT FORM PANEL - Optimized for mobile padding & sizing */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-8 lg:p-12 overflow-y-auto">
+        <div className="w-full max-w-md bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-slate-200 space-y-6 my-auto">
           {/* HEADER */}
           <div className="text-center lg:text-left space-y-1">
             <h2 className="text-2xl font-bold text-[#0f172a]">
@@ -725,12 +725,12 @@ export default function VisitorLogin() {
               </h3>
 
               <div className="flex justify-center">
-                <div className="p-3 bg-white rounded-lg shadow-sm inline-block border border-slate-200">
-                  <QRCodeSVG value={registeredVisitor.qrCode} size={150} />
+                <div className="p-3 bg-white rounded-lg shadow-sm inline-block border border-slate-200 max-w-full overflow-hidden">
+                  <QRCodeSVG value={registeredVisitor.qrCode} size={150} className="w-full h-auto max-w-[150px]" />
                 </div>
               </div>
 
-              <p className="text-xs font-mono font-bold text-[#002046]">
+              <p className="text-xs font-mono font-bold text-[#002046] break-all">
                 {registeredVisitor.qrCode}
               </p>
 

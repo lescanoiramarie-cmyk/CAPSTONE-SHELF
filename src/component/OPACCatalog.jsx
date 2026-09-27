@@ -221,9 +221,6 @@ export default function OPACCatalog({
 
   // =========================================================
   // SEARCH INPUT CHANGE
-  // IMPORTANT:
-  // When the search box becomes empty, immediately clear
-  // searchTerm so the complete catalog comes back.
   // =========================================================
 
   const handleSearchInputChange = (event) => {
@@ -568,16 +565,13 @@ export default function OPACCatalog({
   };
 
   // =========================================================
-  // RENDER
+  // UI - Responsive Optimization applied to Navigation, Filters, Grid, and Modals
   // =========================================================
 
   return (
     <div className="space-y-6">
 
-      {/* =====================================================
-          NOTICE
-      ====================================================== */}
-
+      {/* NOTICE */}
       {notice && (
         <div className="bg-blue-50 border border-blue-200 text-blue-800 text-xs px-4 py-3 rounded-lg flex justify-between items-start gap-3">
           <span>{notice}</span>
@@ -593,18 +587,14 @@ export default function OPACCatalog({
         </div>
       )}
 
-      {/* =====================================================
-          NAVIGATION TABS
-      ====================================================== */}
-
-      <div className="flex border-b border-slate-200 gap-4">
-
+      {/* NAVIGATION TABS - Scrollable on mobile */}
+      <div className="flex border-b border-slate-200 gap-6 overflow-x-auto whitespace-nowrap pb-1">
         <button
           type="button"
           onClick={() =>
             setActiveTab('catalog')
           }
-          className={`pb-3 text-sm font-bold transition ${
+          className={`pb-3 text-sm font-bold transition flex-shrink-0 ${
             activeTab === 'catalog'
               ? 'text-[#002046] border-b-2 border-[#002046]'
               : 'text-slate-500 hover:text-slate-800'
@@ -618,7 +608,7 @@ export default function OPACCatalog({
           onClick={() =>
             setActiveTab('myBorrows')
           }
-          className={`pb-3 text-sm font-bold transition flex items-center gap-2 ${
+          className={`pb-3 text-sm font-bold transition flex items-center gap-2 flex-shrink-0 ${
             activeTab === 'myBorrows'
               ? 'text-[#002046] border-b-2 border-[#002046]'
               : 'text-slate-500 hover:text-slate-800'
@@ -652,27 +642,19 @@ export default function OPACCatalog({
             </span>
           )}
         </button>
-
       </div>
 
-      {/* =====================================================
-          CATALOG
-      ====================================================== */}
-
+      {/* CATALOG */}
       {activeTab === 'catalog' ? (
         <div className="space-y-6">
 
-          {/* =================================================
-              MAP DISPLAY
-          ================================================= */}
-
+          {/* MAP DISPLAY */}
           {mapLibrary && (
             <div
               className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm relative"
               id="library-map-section"
             >
               <div className="flex justify-between items-center mb-4">
-
                 <div>
                   <h2 className="text-lg font-bold text-slate-800">
                     {mapLibrary.name}
@@ -687,11 +669,10 @@ export default function OPACCatalog({
                 <button
                   type="button"
                   onClick={handleCloseMap}
-                  className="px-3 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-xs font-bold"
+                  className="px-3 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-xs font-bold transition"
                 >
                   Close Map
                 </button>
-
               </div>
 
               <LibraryMap
@@ -702,133 +683,127 @@ export default function OPACCatalog({
             </div>
           )}
 
-          {/* =================================================
-              SEARCH & FILTERS
-          ================================================== */}
-
+          {/* SEARCH & FILTERS - Responsive wrapping */}
           <div className="flex flex-col md:flex-row gap-3 flex-wrap">
-
             <form
               onSubmit={handleSearch}
-              className="flex flex-1 min-w-[280px] gap-2"
+              className="flex flex-1 min-w-full sm:min-w-[280px] gap-2"
             >
               <input
                 type="text"
                 placeholder="Search by Title, Author, ISBN, or Category..."
                 value={searchInput}
                 onChange={handleSearchInputChange}
-                className="flex-1 min-w-0 px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                className="flex-1 min-w-0 px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
                 aria-label="Search catalog"
               />
 
               <button
                 type="submit"
-                className="px-5 py-2.5 bg-[#002046] text-white rounded-lg text-sm font-bold hover:opacity-90 transition"
+                className="px-5 py-2.5 bg-[#002046] text-white rounded-lg text-sm font-bold hover:opacity-90 transition flex-shrink-0"
               >
                 Search
               </button>
             </form>
 
-            {searchTerm && (
-              <button
-                type="button"
-                onClick={handleClearSearch}
-                className="px-4 py-2.5 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-200 transition"
-              >
-                Clear
-              </button>
-            )}
+            <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={handleClearSearch}
+                  className="px-4 py-2.5 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-200 transition"
+                >
+                  Clear
+                </button>
+              )}
 
-            {!libraryFilter && (
+              {!libraryFilter && (
+                <select
+                  value={selectedLibrary}
+                  onChange={(event) =>
+                    setSelectedLibrary(
+                      event.target.value
+                    )
+                  }
+                  className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none flex-1 sm:flex-none"
+                >
+                  <option value="All">
+                    All Libraries
+                  </option>
+
+                  {libraryOptions
+                    .filter(
+                      (libraryId) =>
+                        libraryId !== 'All'
+                    )
+                    .map((libraryId) => (
+                      <option
+                        key={libraryId}
+                        value={libraryId}
+                      >
+                        {libraryName(
+                          libraryId
+                        )}
+                      </option>
+                    ))}
+                </select>
+              )}
+
               <select
-                value={selectedLibrary}
+                value={selectedCategory}
                 onChange={(event) =>
-                  setSelectedLibrary(
+                  setSelectedCategory(
                     event.target.value
                   )
                 }
-                className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none"
+                className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none flex-1 sm:flex-none"
               >
                 <option value="All">
-                  All Libraries
+                  All Categories
                 </option>
 
-                {libraryOptions
+                {categories
                   .filter(
-                    (libraryId) =>
-                      libraryId !== 'All'
+                    (category) =>
+                      category !== 'All'
                   )
-                  .map((libraryId) => (
+                  .map((category) => (
                     <option
-                      key={libraryId}
-                      value={libraryId}
+                      key={category}
+                      value={category}
                     >
-                      {libraryName(
-                        libraryId
-                      )}
+                      {category}
                     </option>
                   ))}
               </select>
-            )}
 
-            <select
-              value={selectedCategory}
-              onChange={(event) =>
-                setSelectedCategory(
-                  event.target.value
-                )
-              }
-              className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none"
-            >
-              <option value="All">
-                All Categories
-              </option>
+              <select
+                value={selectedAvailability}
+                onChange={(event) =>
+                  setSelectedAvailability(
+                    event.target.value
+                  )
+                }
+                className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none flex-1 sm:flex-none"
+              >
+                <option value="All">
+                  All Statuses
+                </option>
 
-              {categories
-                .filter(
-                  (category) =>
-                    category !== 'All'
-                )
-                .map((category) => (
-                  <option
-                    key={category}
-                    value={category}
-                  >
-                    {category}
-                  </option>
-                ))}
-            </select>
+                <option value="Available">
+                  Available Only
+                </option>
 
-            <select
-              value={selectedAvailability}
-              onChange={(event) =>
-                setSelectedAvailability(
-                  event.target.value
-                )
-              }
-              className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none"
-            >
-              <option value="All">
-                All Statuses
-              </option>
-
-              <option value="Available">
-                Available Only
-              </option>
-
-              <option value="Unavailable">
-                Unavailable Only
-              </option>
-            </select>
-
+                <option value="Unavailable">
+                  Unavailable Only
+                </option>
+              </select>
+            </div>
           </div>
 
-          {/* =================================================
-              SEARCH RESULT INFORMATION
-          ================================================== */}
-
+          {/* SEARCH RESULT INFORMATION */}
           {searchTerm && (
-            <div className="flex items-center justify-between text-xs text-slate-500">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-xs text-slate-500 gap-1">
               <span>
                 Search results for:{' '}
                 <strong className="text-slate-800">
@@ -845,10 +820,7 @@ export default function OPACCatalog({
             </div>
           )}
 
-          {/* =================================================
-              BOOK RESULTS
-          ================================================== */}
-
+          {/* BOOK RESULTS */}
           {books.length === 0 ? (
             <div className="bg-white border border-dashed border-slate-300 rounded-xl p-10 text-center text-sm text-slate-500">
               No books in the catalog yet.
@@ -887,16 +859,13 @@ export default function OPACCatalog({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-
               {filteredBooks.map(
                 (book) => (
                   <div
                     key={book.id}
                     className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition flex flex-col justify-between"
                   >
-
                     <div className="p-4 flex gap-4">
-
                       <img
                         src={
                           book.coverUrl ||
@@ -906,16 +875,15 @@ export default function OPACCatalog({
                           book.title ||
                           'Book cover'
                         }
-                        className="w-24 h-32 object-cover rounded-md border border-slate-200 bg-slate-50"
+                        className="w-24 h-32 object-cover rounded-md border border-slate-200 bg-slate-50 flex-shrink-0"
                         onError={(event) => {
                           event.currentTarget.src =
                             'https://placehold.co/96x128?text=No+Cover';
                         }}
                       />
 
-                      <div className="space-y-1 min-w-0">
-
-                        <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded inline-block">
                           {book.category ||
                             'Uncategorized'}
                         </span>
@@ -925,21 +893,20 @@ export default function OPACCatalog({
                             'Untitled Book'}
                         </h3>
 
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-slate-500 truncate">
                           {book.author ||
                             'Unknown Author'}
                         </p>
 
-                        <p className="text-xs text-slate-400 font-mono">
+                        <p className="text-xs text-slate-400 font-mono truncate">
                           ISBN:{' '}
                           {book.isbn ||
                             'N/A'}
                         </p>
 
                         <div className="pt-2">
-
                           <span
-                            className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                            className={`text-xs px-2 py-0.5 rounded-full font-bold inline-block ${
                               Number(
                                 book.availableCopies || 0
                               ) > 0
@@ -953,15 +920,11 @@ export default function OPACCatalog({
                               ? `${book.availableCopies} Copies Available`
                               : 'Unavailable'}
                           </span>
-
                         </div>
-
                       </div>
-
                     </div>
 
                     <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
-
                       <button
                         type="button"
                         onClick={() =>
@@ -971,36 +934,26 @@ export default function OPACCatalog({
                       >
                         View Info & Request
                       </button>
-
                     </div>
-
                   </div>
                 )
               )}
-
             </div>
           )}
 
         </div>
       ) : (
 
-        /* =====================================================
-           MY REQUESTS
-        ====================================================== */
-
+        /* MY REQUESTS */
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
-
           {myRequests.length === 0 ? (
             <p className="p-6 text-sm text-slate-500">
               You have no borrow requests yet.
               Browse the catalog to get started.
             </p>
           ) : (
-
-            <table className="w-full text-left text-sm">
-
+            <table className="w-full text-left text-sm min-w-[650px]">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase tracking-wider">
-
                 <tr>
                   <th className="p-4">
                     Book Title
@@ -1022,11 +975,9 @@ export default function OPACCatalog({
                     Action
                   </th>
                 </tr>
-
               </thead>
 
               <tbody className="divide-y divide-slate-100 text-slate-700">
-
                 {myRequests.map(
                   (request) => {
                     const currentFine =
@@ -1063,15 +1014,12 @@ export default function OPACCatalog({
                         key={request.id}
                         className="hover:bg-slate-50"
                       >
-
                         <td className="p-4 font-bold text-slate-800">
                           {request.bookTitle}
                         </td>
 
                         <td className="p-4">
-
                           <div className="flex flex-col items-start gap-1">
-
                             <span
                               className={`text-xs px-2.5 py-1 rounded-full font-bold ${
                                 isOverdue
@@ -1089,13 +1037,10 @@ export default function OPACCatalog({
                                   ] ||
                                   request.status}
                             </span>
-
                           </div>
-
                         </td>
 
                         <td className="p-4 text-xs text-slate-500 space-y-0.5">
-
                           {request.status ===
                             'queued' && (
                             <p>
@@ -1148,7 +1093,6 @@ export default function OPACCatalog({
                               )}
                             </p>
                           )}
-
                         </td>
 
                         <td
@@ -1162,7 +1106,6 @@ export default function OPACCatalog({
                         </td>
 
                         <td className="p-4 text-right">
-
                           {[
                             'queued',
                             'ready_for_pickup',
@@ -1181,34 +1124,23 @@ export default function OPACCatalog({
                               Cancel
                             </button>
                           )}
-
                         </td>
-
                       </tr>
                     );
                   }
                 )}
-
               </tbody>
-
             </table>
-
           )}
-
         </div>
       )}
 
-      {/* =====================================================
-          VIEW INFO & REQUEST MODAL
-      ====================================================== */}
-
+      {/* VIEW INFO & REQUEST MODAL - Responsive layout */}
       {selectedBook && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 space-y-5 border border-slate-200 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-5 sm:p-6 space-y-5 border border-slate-200 shadow-2xl relative max-h-[90vh] overflow-y-auto my-auto">
 
             {/* CLOSE MODAL */}
-
             <button
               type="button"
               onClick={() =>
@@ -1221,9 +1153,7 @@ export default function OPACCatalog({
             </button>
 
             {/* BOOK HEADER */}
-
             <div className="flex gap-4 pr-8">
-
               <img
                 src={
                   selectedBook.coverUrl ||
@@ -1233,45 +1163,40 @@ export default function OPACCatalog({
                   selectedBook.title ||
                   'Book cover'
                 }
-                className="w-24 h-32 object-cover rounded-lg border border-slate-200 bg-slate-50"
+                className="w-24 h-32 object-cover rounded-lg border border-slate-200 bg-slate-50 flex-shrink-0"
                 onError={(event) => {
                   event.currentTarget.src =
                     'https://placehold.co/96x128?text=No+Cover';
                 }}
               />
 
-              <div className="space-y-1">
-
-                <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+              <div className="space-y-1 min-w-0 flex-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded inline-block">
                   {selectedBook.category ||
                     'Uncategorized'}
                 </span>
 
-                <h3 className="text-lg font-bold text-slate-800">
+                <h3 className="text-lg font-bold text-slate-800 line-clamp-2">
                   {selectedBook.title ||
                     'Untitled Book'}
                 </h3>
 
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 truncate">
                   By{' '}
                   {selectedBook.author ||
                     'Unknown Author'}
                 </p>
 
-                <p className="text-xs text-slate-400 font-mono">
+                <p className="text-xs text-slate-400 font-mono truncate">
                   ISBN:{' '}
                   {selectedBook.isbn ||
                     'N/A'}
                 </p>
-
               </div>
-
             </div>
 
             {/* BOOK SUMMARY */}
-
             <div className="space-y-1 bg-slate-50 p-3 rounded-lg border border-slate-100">
-
               <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                 Book Summary
               </h4>
@@ -1280,30 +1205,23 @@ export default function OPACCatalog({
                 {selectedBook.summary ||
                   'No summary provided yet.'}
               </p>
-
             </div>
 
             {/* LIBRARY LOCATIONS */}
-
             <div className="space-y-3 pt-2">
-
               <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                 Available Library Locations:
               </h4>
 
               <div className="space-y-2">
-
                 {getPartnerLibraryEntries(
                   selectedBook
                 ).map((entry) => (
-
                   <div
                     key={entry.id}
-                    className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs gap-3"
+                    className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs gap-3"
                   >
-
                     <div>
-
                       <p className="font-bold text-slate-800 text-sm">
                         {libraryName(
                           entry.libraryId
@@ -1317,11 +1235,9 @@ export default function OPACCatalog({
                           ? `${entry.availableCopies} available`
                           : 'Out of stock (Queue available)'}
                       </p>
-
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-
+                    <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
                       <button
                         type="button"
                         onClick={() =>
@@ -1349,23 +1265,15 @@ export default function OPACCatalog({
                           ? 'Borrow'
                           : 'Reserve'}
                       </button>
-
                     </div>
-
                   </div>
-
                 ))}
-
               </div>
-
             </div>
 
             {/* REVIEWS & RATINGS */}
-
             <div className="pt-4 border-t border-slate-200 space-y-4">
-
               <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
-
                 <span>
                   ⭐ Ratings & Reviews
                 </span>
@@ -1377,26 +1285,21 @@ export default function OPACCatalog({
                     : 'reviews'}
                   )
                 </span>
-
               </h4>
 
               {/* REVIEW FORM */}
-
               <form
                 onSubmit={
                   handleSubmitReview
                 }
                 className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3"
               >
-
                 <div className="flex items-center justify-between gap-3">
-
                   <label className="text-xs font-bold text-slate-700">
                     Leave a Review:
                   </label>
 
                   <div className="flex items-center gap-1">
-
                     <span className="text-xs text-slate-500 mr-1">
                       Rating:
                     </span>
@@ -1432,9 +1335,7 @@ export default function OPACCatalog({
                         ⭐ (1/5)
                       </option>
                     </select>
-
                   </div>
-
                 </div>
 
                 <textarea
@@ -1451,7 +1352,6 @@ export default function OPACCatalog({
                 />
 
                 <div className="flex justify-end">
-
                   <button
                     type="submit"
                     disabled={isSubmitting}
@@ -1461,40 +1361,28 @@ export default function OPACCatalog({
                       ? 'Submitting...'
                       : 'Submit Review'}
                   </button>
-
                 </div>
-
               </form>
 
               {/* EXISTING REVIEWS */}
-
               <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
-
                 {loadingReviews ? (
-
                   <p className="text-xs text-slate-400 italic">
                     Loading reviews...
                   </p>
-
                 ) : reviews.length === 0 ? (
-
                   <p className="text-xs text-slate-400 italic">
                     No reviews yet for this book.
                     Be the first to leave a
                     review!
                   </p>
-
                 ) : (
-
                   reviews.map((review) => (
-
                     <div
                       key={review.id}
                       className="p-3 bg-white rounded-lg border border-slate-100 shadow-sm text-xs space-y-1"
                     >
-
                       <div className="flex justify-between items-center gap-3">
-
                         <span className="font-bold text-slate-800">
                           {review.visitor_name}
                         </span>
@@ -1512,7 +1400,6 @@ export default function OPACCatalog({
                             )
                           )}
                         </span>
-
                       </div>
 
                       <p className="text-slate-600">
@@ -1524,19 +1411,13 @@ export default function OPACCatalog({
                           review.created_at
                         )}
                       </p>
-
                     </div>
-
                   ))
-
                 )}
-
               </div>
-
             </div>
 
             {/* FOOTER */}
-
             <p className="text-[11px] text-slate-400 pt-2 border-t border-slate-100">
               Borrowed items are due{' '}
               {BORROW_PERIOD_DAYS} days after
@@ -1548,7 +1429,6 @@ export default function OPACCatalog({
             </p>
 
           </div>
-
         </div>
       )}
 

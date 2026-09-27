@@ -171,13 +171,13 @@ export default function QrScanner({
             }
           }}
           placeholder={placeholder}
-          className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+          className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm font-mono bg-white focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
         />
 
         <button
           type="button"
           onClick={() => submit()}
-          className="bg-[#002046] text-white text-sm font-bold px-4 py-2.5 rounded-lg hover:opacity-90 transition"
+          className="bg-[#002046] text-white text-sm font-bold px-4 py-2.5 rounded-lg hover:opacity-90 transition flex-shrink-0"
         >
           Submit
         </button>
@@ -219,7 +219,7 @@ export default function QrScanner({
           <span>Quick-pick (demo):</span>
 
           <select
-            className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white"
+            className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white w-full sm:w-auto"
             defaultValue=""
             onChange={(e) => {
               if (e.target.value) {
