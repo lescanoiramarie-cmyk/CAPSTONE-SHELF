@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { useLibraryData } from '../context/LibraryContext.jsx';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLibraryData } from '../context/useLibrary.js';
 import { Html5Qrcode } from 'html5-qrcode';
 
 export default function QrScanner({
@@ -37,7 +37,7 @@ export default function QrScanner({
     setCameraOpen(false);
   };
 
-  const submit = async (code) => {
+  const submit = useCallback(async (code) => {
     const trimmed = (code ?? value).trim();
 
     if (!trimmed) return;
@@ -53,7 +53,13 @@ export default function QrScanner({
     } catch (err) {
       setError(err.message || 'Scan failed.');
     }
-  };
+  }, [autoClear, onScan, value]);
+
+  const submitRef = useRef(submit);
+
+  useEffect(() => {
+    submitRef.current = submit;
+  }, [submit]);
 
   /*
    * Open the camera UI first.
@@ -73,7 +79,7 @@ export default function QrScanner({
    * has been rendered by React.
    */
   useEffect(() => {
-    if (!cameraOpen || scanning) return;
+    if (!cameraOpen) return;
 
     let cancelled = false;
 
@@ -107,7 +113,7 @@ export default function QrScanner({
             if (cancelled) return;
 
             await stopCamera();
-            await submit(decodedText);
+            await submitRef.current(decodedText);
           },
           () => {
             // Normal frame where no QR code was detected.

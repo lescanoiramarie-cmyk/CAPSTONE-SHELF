@@ -12,8 +12,8 @@ import {
   Legend,
 } from 'chart.js';
 
-import { useAuth } from '../../context/AuthContext.jsx';
-import { useLibraryData, useLibrary } from '../../context/LibraryContext.jsx';
+import { useAuth } from '../../context/useAuth.js';
+import { useLibraryData, useLibrary } from '../../context/useLibrary.js';
 import { SUB_ADMIN_CREDENTIALS } from '../../data/store.js';
 
 import BookInventory from '../../component/BookInventory.jsx';

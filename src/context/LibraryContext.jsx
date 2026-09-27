@@ -1,8 +1,7 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import * as store from '../data/store';
-
-const LibraryContext = createContext(null);
+import { LibraryContext } from './libraryContext.js';
 
 const emptyData = { books: [], libraries: [], visitors: [], borrowRequests: [], attendanceLogs: [] };
 
@@ -34,7 +33,7 @@ export function LibraryProvider({ children }) {
   // updates appear instantly on the librarian's screen and the visitor's
   // screen at the same time, even on different devices.
   useEffect(() => {
-    refreshAll();
+    void Promise.resolve().then(refreshAll);
 
     const channel = supabase
       ? supabase
@@ -110,10 +109,3 @@ export function LibraryProvider({ children }) {
   );
 }
 
-export function useLibrary() {
-  const ctx = useContext(LibraryContext);
-  if (!ctx) throw new Error('useLibrary must be used within a LibraryProvider');
-  return ctx;
-}
-
-export const useLibraryData = () => useLibrary().data;

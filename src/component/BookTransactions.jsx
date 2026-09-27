@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useLibraryData, useLibrary } from '../context/LibraryContext';
+import { useAuth } from '../context/useAuth.js';
+import { useLibraryData, useLibrary } from '../context/useLibrary.js';
 import QrScanner from './QrScanner';
 
 function formatDateTime(iso) {

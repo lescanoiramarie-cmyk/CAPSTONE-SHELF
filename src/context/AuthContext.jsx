@@ -1,8 +1,7 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 import * as store from '../data/store.js';
-
-const AuthContext = createContext();
+import { AuthContext } from './authContext.js';
 
 const SESSION_KEY = 'shelf_ilms_session_v1';
 
@@ -222,4 +221,3 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-export const useAuth = () => useContext(AuthContext);

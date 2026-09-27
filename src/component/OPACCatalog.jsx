@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useAuth } from '../context/AuthContext.jsx';
+import { useAuth } from '../context/useAuth.js';
 import {
   useLibrary,
   useLibraryData,
-} from '../context/LibraryContext.jsx';
+} from '../context/useLibrary.js';
 import LibraryMap from './LibraryMap.jsx';
 import { supabase } from '../lib/supabaseClient.js';
 
@@ -59,6 +59,13 @@ function calculateCurrentFine(request) {
   );
 
   return overdueDays * 10;
+}
+
+function calculateOverdueDays(dueDate) {
+  return Math.ceil(
+    (Date.now() - new Date(dueDate).getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
 }
 
 // =========================================================
@@ -1042,19 +1049,8 @@ export default function OPACCatalog({
                     const overdueDays =
                       request.dueDate &&
                       isOverdue
-                        ? Math.ceil(
-                            (
-                              Date.now() -
-                              new Date(
-                                request.dueDate
-                              ).getTime()
-                            ) /
-                              (
-                                1000 *
-                                60 *
-                                60 *
-                                24
-                              )
+                        ? calculateOverdueDays(
+                            request.dueDate
                           )
                         : 0;
 

@@ -11,26 +11,19 @@ npm install
 npm run dev
 ```
 
-## How the "backend" works right now
+## Backend and local setup
 
-This project has no server/database yet. `src/data/store.js` simulates one
-using `localStorage`, with all registration, OTP, QR-attendance, borrowing,
-queueing, and fine logic centralized there so the UI stays presentational.
+Operational data is stored in Supabase. The browser connects using
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; copy `.env.example` to `.env`,
+set those values, and run `supabase/schema.sql` in the project's SQL editor.
+`src/data/store.js` contains most database operations and business actions,
+while `src/context/LibraryContext.jsx` loads data and subscribes to Supabase
+Realtime updates. Some dashboard operations also call Supabase directly.
 
-Two browser tabs of the **same browser** (e.g. a visitor tab and a librarian
-tab open side by side) will see each other's changes live — `localStorage`'s
-native `storage` event keeps them in sync. This is enough to demo the
-end-to-end "real-time" flow described in the requirements, but it is **not**
-a real multi-device backend: two different devices, or two different
-browsers, will each have their own local data.
-
-**Path to production:** every read/write in the app goes through the
-functions exported from `src/data/store.js`. To go live, swap the
-`persist()`/`load()` internals (and the `storage`-event listener) for real
-calls to a database with realtime updates — e.g. Firebase Firestore
-listeners, or your own REST + Socket.io/WebSocket API. The function
-signatures used by the React components (`requestBorrow`, `confirmPickup`,
-`confirmReturn`, `scanAttendance`, etc.) would not need to change.
+The signed-in user session is persisted in browser `localStorage` by
+`src/context/AuthContext.jsx`; library, visitor, attendance, and borrowing
+records are not stored there. A working Supabase project is required for those
+features to load and persist across devices.
 
 ## Demo / test accounts
 
@@ -76,10 +69,11 @@ These live in `src/data/store.js` (`SUPER_ADMIN_CREDENTIALS` /
 
 ## Known simplifications (flagged in-code)
 
-- QR **scanning** is a manual/typed input (no camera decoding library is
-  installed) — a real scanner types into the same field, or install
-  `html5-qrcode` and swap `src/component/QrScanner.jsx`'s input for a camera
-  decoder.
-- OTP delivery is simulated (shown on-screen) — wire up an email/SMS
-  provider (e.g. SendGrid, Semaphore) in `store.registerVisitor`/`resendOtp`.
+- QR scanning supports both camera decoding (`html5-qrcode`) and manual input.
+- OTP delivery is handled through the `send-visitor-otp` Supabase Edge
+   Function; configure its email provider and secrets for the target deployment.
+- Staff credentials are hardcoded in the frontend for the capstone demo, and
+   the SQL schema currently uses permissive public policies and plaintext
+   visitor passwords. Do not use this setup with real accounts or personal data
+   without replacing those demo security choices.
 - Map markers use approximate, clearly-flagged sample coordinates.

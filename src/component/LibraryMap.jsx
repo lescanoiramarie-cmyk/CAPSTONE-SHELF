@@ -6,7 +6,7 @@ import {
   Popup,
 } from 'react-leaflet';
 
-import { useLibraryData } from '../context/LibraryContext.jsx';
+import { useLibraryData } from '../context/useLibrary.js';
 
 import 'leaflet/dist/leaflet.css';
 

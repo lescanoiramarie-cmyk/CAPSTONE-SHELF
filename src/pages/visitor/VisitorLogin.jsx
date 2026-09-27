@@ -9,13 +9,37 @@ import {
   Upload,
 } from 'lucide-react';
 
-import { useAuth } from '../../context/AuthContext.jsx';
+import { useAuth } from '../../context/useAuth.js';
 import {
   SUPER_ADMIN_CREDENTIALS,
   SUB_ADMIN_CREDENTIALS,
 } from '../../data/store.js';
 
 import libraryBg from '../../assets/library.jpg';
+
+function PasswordRequirement({ valid, children }) {
+  return (
+    <li
+      className={`flex items-center gap-2 ${
+        valid
+          ? 'text-green-600'
+          : 'text-slate-500'
+      }`}
+    >
+      <span
+        className={`flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold ${
+          valid
+            ? 'bg-green-100'
+            : 'bg-slate-100'
+        }`}
+      >
+        {valid ? '✓' : '•'}
+      </span>
+
+      <span>{children}</span>
+    </li>
+  );
+}
 
 export default function VisitorLogin() {
   const navigate = useNavigate();
@@ -989,35 +1013,6 @@ export default function VisitorLogin() {
     setRegisteredVisitor(null);
     setShowScanner(false);
   };
-
-  // =========================================================
-  // PASSWORD REQUIREMENT COMPONENT
-  // =========================================================
-
-  const PasswordRequirement = ({
-    valid,
-    children,
-  }) => (
-    <li
-      className={`flex items-center gap-2 ${
-        valid
-          ? 'text-green-600'
-          : 'text-slate-500'
-      }`}
-    >
-      <span
-        className={`flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold ${
-          valid
-            ? 'bg-green-100'
-            : 'bg-slate-100'
-        }`}
-      >
-        {valid ? '✓' : '•'}
-      </span>
-
-      <span>{children}</span>
-    </li>
-  );
 
   // =========================================================
   // UI - Responsive Optimization applied to wrappers and panels

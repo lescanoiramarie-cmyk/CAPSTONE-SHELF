@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth.js';
 import { SUB_ADMIN_CREDENTIALS } from '../data/store';
 import libraryBg from '../assets/library.jpg';
 

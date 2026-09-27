@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 
-import { useAuth } from '../../context/AuthContext.jsx';
-import { useLibraryData } from '../../context/LibraryContext.jsx';
+import { useAuth } from '../../context/useAuth.js';
+import { useLibraryData } from '../../context/useLibrary.js';
 
 import AttendanceScanner from '../../component/AttendanceScanner.jsx';
 import BookTransactions from '../../component/BookTransactions.jsx';
@@ -56,7 +56,6 @@ function formatDateTime(value) {
 
 function QRBookBorrowing({
   user,
-  _borrowRequests,
   onBorrowConfirmed,
 }) {
   const scannerRef = useRef(null);
@@ -106,92 +105,7 @@ function QRBookBorrowing({
     setShowScanner(true);
   };
 
-  useEffect(() => {
-    if (!showScanner) return;
-
-    let cancelled = false;
-    let scanner;
-
-    const startCamera = async () => {
-      try {
-        setScanning(true);
-
-        scanner = new Html5Qrcode('book-borrowing-qr-reader');
-        scannerRef.current = scanner;
-
-        await scanner.start(
-          { facingMode: 'environment' },
-          {
-            fps: 10,
-            qrbox: {
-              width: 250,
-              height: 250,
-            },
-            aspectRatio: 1,
-          },
-          async (decodedText) => {
-            if (cancelled) return;
-
-            const qrValue = decodedText.trim();
-
-            if (!qrValue) return;
-
-            try {
-              await scanner.stop();
-            } catch {
-              // Ignore if already stopped.
-            }
-
-            try {
-              await scanner.clear();
-            } catch {
-              // Ignore if already cleared.
-            }
-
-            scannerRef.current = null;
-
-            setScanning(false);
-            setShowScanner(false);
-
-            await handleQrScan(qrValue);
-          },
-          () => {
-            // Ignore unsuccessful scan attempts.
-          }
-        );
-      } catch (err) {
-        console.error('Unable to start QR scanner:', err);
-
-        if (!cancelled) {
-          setScanning(false);
-          setError(
-            'Unable to open the camera. Please allow camera access and try again.'
-          );
-        }
-      }
-    };
-
-    startCamera();
-
-    return () => {
-      cancelled = true;
-
-      if (scannerRef.current) {
-        scannerRef.current
-          .stop()
-          .catch(() => {})
-          .finally(() => {
-            scannerRef.current
-              ?.clear()
-              .catch(() => {});
-
-            scannerRef.current = null;
-          });
-      }
-    };
-  }, [showScanner]);
-
-  const handleQrScan = async (qrValue) => {
+  async function handleQrScan(qrValue) {
     setLoading(true);
     setError('');
     setMessage('');
@@ -293,7 +207,92 @@ function QRBookBorrowing({
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+  useEffect(() => {
+    if (!showScanner) return;
+
+    let cancelled = false;
+    let scanner;
+
+    const startCamera = async () => {
+      try {
+        setScanning(true);
+
+        scanner = new Html5Qrcode('book-borrowing-qr-reader');
+        scannerRef.current = scanner;
+
+        await scanner.start(
+          { facingMode: 'environment' },
+          {
+            fps: 10,
+            qrbox: {
+              width: 250,
+              height: 250,
+            },
+            aspectRatio: 1,
+          },
+          async (decodedText) => {
+            if (cancelled) return;
+
+            const qrValue = decodedText.trim();
+
+            if (!qrValue) return;
+
+            try {
+              await scanner.stop();
+            } catch {
+              // Ignore if already stopped.
+            }
+
+            try {
+              await scanner.clear();
+            } catch {
+              // Ignore if already cleared.
+            }
+
+            scannerRef.current = null;
+
+            setScanning(false);
+            setShowScanner(false);
+
+            await handleQrScan(qrValue);
+          },
+          () => {
+            // Ignore unsuccessful scan attempts.
+          }
+        );
+      } catch (err) {
+        console.error('Unable to start QR scanner:', err);
+
+        if (!cancelled) {
+          setScanning(false);
+          setError(
+            'Unable to open the camera. Please allow camera access and try again.'
+          );
+        }
+      }
+    };
+
+    startCamera();
+
+    return () => {
+      cancelled = true;
+
+      if (scannerRef.current) {
+        scannerRef.current
+          .stop()
+          .catch(() => {})
+          .finally(() => {
+            scannerRef.current
+              ?.clear()
+              .catch(() => {});
+
+            scannerRef.current = null;
+          });
+      }
+    };
+  }, [showScanner]);
 
   const handleConfirmBorrow = async (request) => {
     if (!request?.id) return;
@@ -974,7 +973,6 @@ export default function SubAdminDashboard() {
         {section === 'transactions' && (
           <QRBookBorrowing
             user={user}
-            borrowRequests={borrowRequests}
             onBorrowConfirmed={
               handleBorrowConfirmed
             }

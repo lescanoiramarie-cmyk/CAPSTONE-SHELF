@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { useAuth } from '../../context/AuthContext.jsx';
-import { useLibraryData } from '../../context/LibraryContext.jsx';
+import { useAuth } from '../../context/useAuth.js';
+import { useLibraryData } from '../../context/useLibrary.js';
 import OPACCatalog from '../../component/OPACCatalog.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
 

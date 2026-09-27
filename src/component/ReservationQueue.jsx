@@ -1,4 +1,4 @@
-import { useLibraryData } from '../context/LibraryContext';
+import { useLibraryData } from '../context/useLibrary.js';
 
 function formatDateTime(iso) {
   if (!iso) return '—';

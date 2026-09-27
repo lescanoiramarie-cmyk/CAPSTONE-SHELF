@@ -4,8 +4,27 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Eye, EyeOff, Camera } from 'lucide-react';
 
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/useAuth.js';
 import libraryBg from '../../assets/library.jpg';
+
+function PasswordRequirement({ valid, children }) {
+  return (
+    <li
+      className={`flex items-center gap-2 ${
+        valid ? 'text-green-600' : 'text-slate-500'
+      }`}
+    >
+      <span
+        className={`flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold ${
+          valid ? 'bg-green-100' : 'bg-slate-100'
+        }`}
+      >
+        {valid ? '✓' : '•'}
+      </span>
+      <span>{children}</span>
+    </li>
+  );
+}
 
 export default function VisitorLogin() {
   const [showScanner, setShowScanner] = useState(false);
@@ -37,7 +56,6 @@ export default function VisitorLogin() {
   });
 
   const [otpInput, setOtpInput] = useState('');
-  const [pendingVisitorId, setPendingVisitorId] = useState(null);
   const [pendingEmail, setPendingEmail] = useState('');
   const [registeredVisitor, setRegisteredVisitor] = useState(null);
 
@@ -245,9 +263,8 @@ export default function VisitorLogin() {
     }
 
     try {
-      const { visitorId } = await registerVisitor(formData);
+      await registerVisitor(formData);
 
-      setPendingVisitorId(visitorId);
       setPendingEmail(formData.email.trim());
       setOtpInput('');
       setView('otp');
@@ -325,7 +342,6 @@ export default function VisitorLogin() {
     });
 
     setOtpInput('');
-    setPendingVisitorId(null);
     setPendingEmail('');
     setRegisteredVisitor(null);
 
@@ -333,27 +349,6 @@ export default function VisitorLogin() {
     setShowRegisterPassword(false);
     setShowConfirmPassword(false);
   };
-
-  // =========================================================
-  // HELPER COMPONENT
-  // =========================================================
-
-  const PasswordRequirement = ({ valid, children }) => (
-    <li
-      className={`flex items-center gap-2 ${
-        valid ? 'text-green-600' : 'text-slate-500'
-      }`}
-    >
-      <span
-        className={`flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold ${
-          valid ? 'bg-green-100' : 'bg-slate-100'
-        }`}
-      >
-        {valid ? '✓' : '•'}
-      </span>
-      <span>{children}</span>
-    </li>
-  );
 
   return (
     <div className="min-h-screen flex w-full bg-[#f8fafc]">

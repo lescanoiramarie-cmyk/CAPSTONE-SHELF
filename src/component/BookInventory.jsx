@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useLibraryData, useLibrary } from '../context/LibraryContext';
-import { useAuth } from '../context/AuthContext';
+import { useLibraryData, useLibrary } from '../context/useLibrary.js';
+import { useAuth } from '../context/useAuth.js';
 
 const emptyForm = {
   title: '',
