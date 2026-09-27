@@ -4,6 +4,8 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useLibraryData } from '../../context/LibraryContext.jsx';
 import OPACCatalog from '../../component/OPACCatalog.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
+import FAQ from '../../component/FAQ.jsx';
+import AIRecommendations from '../../component/AIRecommendations.jsx';
 
 function formatDateTime(iso) {
   return new Date(iso).toLocaleString('en-PH', {
@@ -262,7 +264,7 @@ export default function VisitorDashboard() {
     )?.name || id;
 
   // =========================================================
-  // UI - Responsive Optimization applied to Header, Tabs, and Layout grids
+  // UI - Visitor Dashboard Layout
   // =========================================================
 
   return (
@@ -313,7 +315,7 @@ export default function VisitorDashboard() {
           </div>
         </div>
 
-        {/* TABS - Added horizontal scroll wrapper for mobile */}
+        {/* TABS NAVIGATION */}
         <div className="flex border-b border-slate-200 gap-6 overflow-x-auto whitespace-nowrap pb-1">
           {[
             {
@@ -327,6 +329,10 @@ export default function VisitorDashboard() {
             {
               id: 'map',
               label: '🗺️ Library Map & Location',
+            },
+            {
+              id: 'faq',
+              label: '❓ FAQ',
             },
           ].map((tabItem) => (
             <button
@@ -346,9 +352,13 @@ export default function VisitorDashboard() {
           ))}
         </div>
 
-        {/* CATALOG */}
+        {/* CATALOG TAB */}
         {tab === 'catalog' && (
-          <div className="space-y-3">
+          <div className="space-y-6">
+            
+            {/* AI RECOMMENDATIONS SECTION */}
+            <AIRecommendations />
+
             {libraryFilter && (
               <div className="flex items-center gap-2 text-xs text-slate-500">
                 <span>
@@ -380,7 +390,7 @@ export default function VisitorDashboard() {
           </div>
         )}
 
-        {/* QR PASS + ATTENDANCE */}
+        {/* QR PASS + ATTENDANCE TAB */}
         {tab === 'pass' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
@@ -490,7 +500,7 @@ export default function VisitorDashboard() {
           </div>
         )}
 
-        {/* LIBRARY MAP */}
+        {/* LIBRARY MAP TAB */}
         {tab === 'map' && (
           <LibraryMap
             onBrowseLibrary={(libraryId) => {
@@ -501,6 +511,11 @@ export default function VisitorDashboard() {
               setTab('catalog');
             }}
           />
+        )}
+
+        {/* FAQ TAB */}
+        {tab === 'faq' && (
+          <FAQ />
         )}
 
       </main>
