@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -10,6 +10,7 @@ import BookInventory from '../../component/BookInventory.jsx';
 import ReservationQueue from '../../component/ReservationQueue.jsx';
 
 import { supabase } from '../../lib/supabaseClient.js';
+import { exportToExcel, exportToCSV, parseImportFile } from '../../lib/excelUtils.js';
 import {
   findVisitorByQr,
   confirmPickup,
@@ -135,7 +136,6 @@ function QRBookBorrowing({
 
             if (!qrValue) return;
 
-            // Stop scanner immediately after successful scan.
             try {
               await scanner.stop();
             } catch {
@@ -199,10 +199,6 @@ function QRBookBorrowing({
     setVisitorRequests([]);
 
     try {
-      /*
-       * Step 1:
-       * Find the visitor using the QR code.
-       */
       const foundVisitor = await findVisitorByQr(qrValue);
 
       if (!foundVisitor) {
@@ -213,13 +209,6 @@ function QRBookBorrowing({
 
       setVisitor(foundVisitor);
 
-      /*
-       * Step 2:
-       * Find this visitor's active borrow requests.
-       *
-       * We query the database directly because the staff needs the
-       * latest transaction status before approving the borrowing.
-       */
       const { data, error: requestError } = await supabase
         .from('borrow_requests')
         .select(
@@ -325,9 +314,6 @@ function QRBookBorrowing({
         staffName
       );
 
-      /*
-       * Update local display immediately.
-       */
       setVisitorRequests((current) =>
         current.map((item) =>
           item.id === request.id
@@ -689,23 +675,65 @@ export default function SubAdminDashboard() {
 
   const [section, setSection] = useState('overview');
 
-  /*
-   * These IDs are used only to update the dashboard counters
-   * immediately after a successful QR borrowing confirmation.
-   */
+  // ============================================================
+  // BRANCH SPECIFIC DATA & IMPORT / EXPORT LOGIC
+  // ============================================================
+  const currentLibraryId = user?.libraryId || user?.assignedBranch || '';
+
+  // 1. Filter Books para sa branch ng Sub-Admin lang
+  const branchBooks = useMemo(() => {
+    if (!currentLibraryId) return books;
+    return books.filter(
+      (b) => b.libraryId === currentLibraryId || b.library_id === currentLibraryId
+    );
+  }, [books, currentLibraryId]);
+
+  // 2. Filter Attendance Logs para sa branch ng Sub-Admin lang
+  const branchAttendance = useMemo(() => {
+    if (!currentLibraryId) return attendanceLogs;
+    return attendanceLogs.filter(
+      (a) => a.libraryId === currentLibraryId || a.library_id === currentLibraryId
+    );
+  }, [attendanceLogs, currentLibraryId]);
+
+  // 3. Import File Handler para sa Branch
+  const [importTarget, setImportTarget] = useState('books');
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    parseImportFile(file, async (importedJSON) => {
+      // Isasama ang current library ID sa bawat imported item
+      const dataWithLibrary = importedJSON.map((item) => ({
+        ...item,
+        library_id: currentLibraryId || item.library_id,
+      }));
+
+      const { error } = await supabase.from(importTarget).insert(dataWithLibrary);
+
+      if (error) {
+        alert('Failed to import data: ' + error.message);
+      } else {
+        alert(`Data successfully imported for your branch to ${importTarget}!`);
+        window.location.reload();
+      }
+    });
+  };
+
   const [locallyConfirmedPickups, setLocallyConfirmedPickups] =
     useState([]);
 
   const today = new Date().toDateString();
 
-  const todaysVisits = attendanceLogs.filter(
-    (a) =>
-      new Date(a.timeIn).toDateString() === today
+  const todaysVisits = branchAttendance.filter(
+    (a) => new Date(a.timeIn).toDateString() === today
   ).length;
 
   const pendingPickups =
     borrowRequests.filter(
       (r) =>
+        (r.libraryId === currentLibraryId || r.library_id === currentLibraryId) &&
         r.status === 'ready_for_pickup' &&
         !locallyConfirmedPickups.includes(r.id)
     ).length;
@@ -713,13 +741,14 @@ export default function SubAdminDashboard() {
   const activeBorrows =
     borrowRequests.filter(
       (r) =>
-        r.status === 'borrowed' ||
-        locallyConfirmedPickups.includes(r.id)
+        (r.libraryId === currentLibraryId || r.library_id === currentLibraryId) &&
+        (r.status === 'borrowed' || locallyConfirmedPickups.includes(r.id))
     ).length;
 
   const overdue =
     borrowRequests.filter(
       (r) =>
+        (r.libraryId === currentLibraryId || r.library_id === currentLibraryId) &&
         r.status === 'borrowed' &&
         new Date(r.dueDate) < new Date()
     ).length;
@@ -741,9 +770,7 @@ export default function SubAdminDashboard() {
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex">
 
-      {/* =====================================================
-          SIDEBAR
-         ===================================================== */}
+      {/* SIDEBAR */}
       <aside className="w-60 bg-[#002046] text-white flex flex-col shrink-0">
 
         <div className="p-5 border-b border-white/10">
@@ -798,9 +825,7 @@ export default function SubAdminDashboard() {
         </div>
       </aside>
 
-      {/* =====================================================
-          MAIN CONTENT
-         ===================================================== */}
+      {/* MAIN CONTENT */}
       <main className="flex-1 p-8 space-y-6 overflow-y-auto">
 
         <div>
@@ -812,57 +837,140 @@ export default function SubAdminDashboard() {
           </h1>
 
           <p className="text-xs text-slate-500 mt-1">
-            Manage book inventories, issue books, and process returns.
+            Manage book inventories, issue books, and process returns for your branch.
           </p>
         </div>
 
-        {/* ===================================================
-            OVERVIEW
-           =================================================== */}
+        {/* OVERVIEW */}
         {section === 'overview' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
 
-            <StatCard
-              label="Visits Today"
-              value={todaysVisits}
-              tone="blue"
-            />
+              <StatCard
+                label="Visits Today"
+                value={todaysVisits}
+                tone="blue"
+              />
 
-            <StatCard
-              label="Pending Pickups"
-              value={pendingPickups}
-              tone="amber"
-            />
+              <StatCard
+                label="Pending Pickups"
+                value={pendingPickups}
+                tone="amber"
+              />
 
-            <StatCard
-              label="Active Borrows"
-              value={activeBorrows}
-            />
+              <StatCard
+                label="Active Borrows"
+                value={activeBorrows}
+              />
 
-            <StatCard
-              label="Overdue Items"
-              value={overdue}
-              tone="red"
-            />
+              <StatCard
+                label="Overdue Items"
+                value={overdue}
+                tone="red"
+              />
 
-            <StatCard
-              label="Titles in Catalog"
-              value={books.length}
-            />
+              <StatCard
+                label="Branch Books"
+                value={branchBooks.length}
+              />
 
+            </div>
+
+            {/* BRANCH DATA MANAGEMENT CARD */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+              <div className="border-b border-slate-100 pb-3 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">
+                    Branch Data Management & Reports
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Export records or import data specifically for your assigned library branch.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <select
+                    value={importTarget}
+                    onChange={(e) => setImportTarget(e.target.value)}
+                    className="text-xs border border-slate-300 rounded-lg px-2.5 py-2 bg-slate-50 font-semibold text-slate-700"
+                  >
+                    <option value="books">Import Books to Branch</option>
+                    <option value="attendance_logs">Import Attendance Logs</option>
+                  </select>
+
+                  <label className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg cursor-pointer transition">
+                    📤 Import File
+                    <input
+                      type="file"
+                      accept=".csv, .xlsx, .xls"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                
+                {/* BRANCH BOOKS EXPORT */}
+                <div className="p-3.5 border border-slate-100 bg-slate-50/50 rounded-lg flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-700">📚 Branch Books Inventory</p>
+                    <p className="text-[11px] text-slate-500">Total Books: {branchBooks.length}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => exportToExcel(branchBooks, `Branch_Books_${currentLibraryId || 'data'}.xlsx`)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded transition"
+                    >
+                      Excel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => exportToCSV(branchBooks, `Branch_Books_${currentLibraryId || 'data'}.csv`)}
+                      className="bg-slate-700 hover:bg-slate-800 text-white text-[11px] font-bold px-3 py-1.5 rounded transition"
+                    >
+                      CSV
+                    </button>
+                  </div>
+                </div>
+
+                {/* BRANCH ATTENDANCE EXPORT */}
+                <div className="p-3.5 border border-slate-100 bg-slate-50/50 rounded-lg flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-700">📊 Branch Visitor Attendance</p>
+                    <p className="text-[11px] text-slate-500">Total Attendance Logs: {branchAttendance.length}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => exportToExcel(branchAttendance, `Branch_Attendance_${currentLibraryId || 'data'}.xlsx`)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded transition"
+                    >
+                      Excel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => exportToCSV(branchAttendance, `Branch_Attendance_${currentLibraryId || 'data'}.csv`)}
+                      className="bg-slate-700 hover:bg-slate-800 text-white text-[11px] font-bold px-3 py-1.5 rounded transition"
+                    >
+                      CSV
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
           </div>
         )}
 
-        {/* ===================================================
-            ATTENDANCE
-           =================================================== */}
+        {/* ATTENDANCE */}
         {section === 'attendance' && (
           <AttendanceScanner />
         )}
 
-        {/* ===================================================
-            BOOK TRANSACTIONS / QR BORROWING
-           =================================================== */}
+        {/* BOOK TRANSACTIONS / QR BORROWING */}
         {section === 'transactions' && (
           <QRBookBorrowing
             user={user}
@@ -873,16 +981,12 @@ export default function SubAdminDashboard() {
           />
         )}
 
-        {/* ===================================================
-            INVENTORY
-           =================================================== */}
+        {/* INVENTORY */}
         {section === 'inventory' && (
           <BookInventory />
         )}
 
-        {/* ===================================================
-            RESERVATION QUEUE
-           =================================================== */}
+        {/* RESERVATION QUEUE */}
         {section === 'queue' && (
           <ReservationQueue />
         )}

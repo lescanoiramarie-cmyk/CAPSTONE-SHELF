@@ -19,6 +19,10 @@ import { SUB_ADMIN_CREDENTIALS } from '../../data/store.js';
 import BookInventory from '../../component/BookInventory.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
 
+// --- IN-ADD ANG MGA IMPORT PARA SA EXCEL/CSV AT SUPABASE ---
+import { supabase } from '../../lib/supabaseClient';
+import { exportToExcel, exportToCSV, parseImportFile } from '../../lib/excelUtils';
+
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -81,6 +85,28 @@ export default function SuperAdminDashboard() {
   } = useLibraryData();
 
   const [section, setSection] = useState('overview');
+
+  // ============================================================
+  // IMPORT / EXPORT HANDLERS
+  // ============================================================
+
+  const [importTarget, setImportTarget] = useState('books'); // 'books' o 'attendance_logs'
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    parseImportFile(file, async (importedJSON) => {
+      const { error } = await supabase.from(importTarget).insert(importedJSON);
+
+      if (error) {
+        alert('Failed to import data: ' + error.message);
+      } else {
+        alert(`Data successfully imported to ${importTarget}!`);
+        window.location.reload();
+      }
+    });
+  };
 
   // ============================================================
   // ADD LIBRARY STATES
@@ -385,6 +411,97 @@ export default function SuperAdminDashboard() {
                 tone="amber"
               />
 
+            </div>
+
+            {/* ====================================================
+                DATA MANAGEMENT (BOOKS & ATTENDANCE)
+            ==================================================== */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+              <div className="border-b border-slate-100 pb-3 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">
+                    Data Management & Reports (Import / Export)
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Export overall system records or import new entries into the database.
+                  </p>
+                </div>
+
+                {/* IMPORT SECTION WITH DROPDOWN */}
+                <div className="flex items-center gap-2">
+                  <select
+                    value={importTarget}
+                    onChange={(e) => setImportTarget(e.target.value)}
+                    className="text-xs border border-slate-300 rounded-lg px-2.5 py-2 bg-slate-50 font-semibold text-slate-700"
+                  >
+                    <option value="books">Import to Books Table</option>
+                    <option value="attendance_logs">Import to Attendance Logs</option>
+                  </select>
+
+                  <label className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg cursor-pointer transition">
+                    📤 Import File
+                    <input
+                      type="file"
+                      accept=".csv, .xlsx, .xls"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* EXPORT OPTIONS GRID */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                
+                {/* 1. BOOKS CATALOG EXPORT */}
+                <div className="p-3.5 border border-slate-100 bg-slate-50/50 rounded-lg flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-700">📚 All Books Catalog</p>
+                    <p className="text-[11px] text-slate-500">Total Titles: {books.length}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => exportToExcel(books, 'All_Libraries_Books.xlsx')}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded transition"
+                    >
+                      Excel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => exportToCSV(books, 'All_Libraries_Books.csv')}
+                      className="bg-slate-700 hover:bg-slate-800 text-white text-[11px] font-bold px-3 py-1.5 rounded transition"
+                    >
+                      CSV
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. TOTAL ATTENDANCE LOGS EXPORT */}
+                <div className="p-3.5 border border-slate-100 bg-slate-50/50 rounded-lg flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-700">📊 Total Attendance (All Libraries)</p>
+                    <p className="text-[11px] text-slate-500">Total Visits: {attendanceLogs.length}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => exportToExcel(attendanceLogs, 'Total_Attendance_All_Libraries.xlsx')}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded transition"
+                    >
+                      Excel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => exportToCSV(attendanceLogs, 'Total_Attendance_All_Libraries.csv')}
+                      className="bg-slate-700 hover:bg-slate-800 text-white text-[11px] font-bold px-3 py-1.5 rounded transition"
+                    >
+                      CSV
+                    </button>
+                  </div>
+                </div>
+
+              </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
