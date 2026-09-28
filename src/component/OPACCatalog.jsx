@@ -604,14 +604,20 @@ export default function OPACCatalog({
       return [];
     }
 
-    return books.filter(
-      (entry) =>
-        entry.title === book.title ||
-        (
-          book.isbn &&
-          entry.isbn === book.isbn
-        )
-    );
+    const normalizedIsbn = String(book.isbn || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+    const normalizedTitle = String(book.title || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    const normalizedAuthor = String(book.author || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+    return books.filter((entry) => {
+      const hasInventory = Number(entry.totalCopies || 0) > 0 && entry.libraryId;
+      const entryIsbn = String(entry.isbn || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+      const sameBook = normalizedIsbn && entryIsbn
+        ? normalizedIsbn === entryIsbn
+        : normalizedTitle === String(entry.title || '').trim().replace(/\s+/g, ' ').toLowerCase() &&
+          normalizedAuthor === String(entry.author || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+      return hasInventory && sameBook;
+    });
   };
 
   // =========================================================
@@ -867,9 +873,12 @@ export default function OPACCatalog({
 
               {filteredBooks.map(
                 (book) => (
-                  <div
+                  <button
+                    type="button"
                     key={book.id}
-                    className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition flex flex-col justify-between"
+                    onClick={() => setSelectedBook(book)}
+                    aria-label={`View details for ${book.title || 'Untitled Book'}`}
+                    className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition flex flex-col justify-between text-left"
                   >
 
                     <div className="p-4 flex gap-4">
@@ -937,21 +946,7 @@ export default function OPACCatalog({
 
                     </div>
 
-                    <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSelectedBook(book)
-                        }
-                        className="bg-[#002046] text-white text-xs px-4 py-2 rounded-lg font-bold hover:opacity-90 transition"
-                      >
-                        View Info & Request
-                      </button>
-
-                    </div>
-
-                  </div>
+                  </button>
                 )
               )}
 
@@ -1299,9 +1294,11 @@ export default function OPACCatalog({
 
               <div className="space-y-2">
 
-                {getPartnerLibraryEntries(
-                  selectedBook
-                ).map((entry) => (
+                {getPartnerLibraryEntries(selectedBook).length === 0 ? (
+                  <p className="text-xs text-slate-500">
+                    No libraries currently have this book in inventory.
+                  </p>
+                ) : getPartnerLibraryEntries(selectedBook).map((entry) => (
 
                   <div
                     key={entry.id}

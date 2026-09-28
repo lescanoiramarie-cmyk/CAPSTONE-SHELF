@@ -21,7 +21,7 @@ export default function BookInventory() {
 
   // Determine if user is a restricted sub-admin
   const isSubAdmin = user?.role === 'subadmin';
-  const subAdminLibraryId = user?.libraryId || libraries[0]?.id || '';
+  const subAdminLibraryId = user?.libraryId || user?.assignedBranch || (isSubAdmin ? '' : libraries[0]?.id || '');
 
   const [form, setForm] = useState({ 
     ...emptyForm, 
@@ -30,6 +30,8 @@ export default function BookInventory() {
   const [editingId, setEditingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState('');
+  const [loadingApiBooks, setLoadingApiBooks] = useState(false);
+  const [apiBooksError, setApiBooksError] = useState('');
 
   // If sub-admin, restrict book list strictly to their libraryId
   const scopedBooks = isSubAdmin 
@@ -98,6 +100,19 @@ export default function BookInventory() {
     }
   };
 
+  const handleLoadApiBooks = async () => {
+    setLoadingApiBooks(true);
+    setApiBooksError('');
+
+    try {
+      await loadSampleCatalog(subAdminLibraryId);
+    } catch (error) {
+      setApiBooksError(error.message || 'Failed to load books from Open Library.');
+    } finally {
+      setLoadingApiBooks(false);
+    }
+  };
+
   const currentLibraryName = libraries.find((l) => l.id === subAdminLibraryId)?.name || 'Your Branch';
 
   return (
@@ -117,12 +132,14 @@ export default function BookInventory() {
           className="flex-1 max-w-sm px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
         />
         <div className="flex gap-2">
-          {!isSubAdmin && (
+          {isSubAdmin && (
             <button
-              onClick={loadSampleCatalog}
-              className="text-xs font-bold px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition"
+              type="button"
+              onClick={handleLoadApiBooks}
+              disabled={loadingApiBooks || !subAdminLibraryId}
+              className="text-xs font-bold px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition disabled:opacity-50"
             >
-              Load 100+ API Books (Demo)
+              {loadingApiBooks ? 'Loading API Books...' : 'Load 100+ API Books'}
             </button>
           )}
           <button
@@ -134,12 +151,18 @@ export default function BookInventory() {
         </div>
       </div>
 
+      {apiBooksError && (
+        <p role="alert" className="text-xs text-red-600">
+          {apiBooksError}
+        </p>
+      )}
+
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
         {filtered.length === 0 ? (
           <div className="p-10 text-center text-sm text-slate-500">
             {isSubAdmin 
-              ? `Your branch (${currentLibraryName}) has no books in inventory yet. Click **+ Add Book** to start adding items.`
-              : `The catalog is empty. Use **Add Book** or **Load 100+ API Books (Demo)** to populate data.`}
+              ? `Your branch (${currentLibraryName}) has no books in inventory yet. Add a book or load API books to start populating the branch.`
+              : 'The catalog is empty. Use Add Book to populate the catalog.'}
           </div>
         ) : (
           <table className="w-full text-left text-sm">

@@ -18,6 +18,7 @@ import { SUB_ADMIN_CREDENTIALS } from '../../data/store.js';
 
 import BookInventory from '../../component/BookInventory.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
+import AdminWorkspace from '../../component/AdminWorkspace.jsx';
 
 // --- IN-ADD ANG MGA IMPORT PARA SA EXCEL/CSV AT SUPABASE ---
 import { supabase } from '../../lib/supabaseClient';
@@ -39,6 +40,7 @@ const NAV = [
   { id: 'inventory', label: '📚 Inventory' },
   { id: 'map', label: '🗺️ Libraries & Map' },
   { id: 'accounts', label: '🔐 Staff Accounts' },
+  { id: 'workspace', label: '📈 Reports & Services' },
 ];
 
 function StatCard({ label, value, tone = 'default' }) {
@@ -925,6 +927,17 @@ export default function SuperAdminDashboard() {
             </table>
 
           </div>
+        )}
+
+        {section === 'workspace' && (
+          <AdminWorkspace
+            user={user}
+            libraries={libraries}
+            books={books}
+            visitors={visitors}
+            borrowRequests={borrowRequests}
+            attendanceLogs={attendanceLogs}
+          />
         )}
 
       </main>

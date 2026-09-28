@@ -16,6 +16,7 @@ import { useLibraryData } from '../../context/useLibrary.js';
 import OPACCatalog from '../../component/OPACCatalog.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
 import FAQ from '../../component/FAQ.jsx';
+import VisitorServices from '../../component/VisitorServices.jsx';
 import AIRecommendations from '../../component/AIRecommendations.jsx';
 
 function formatDateTime(iso) {
@@ -384,6 +385,10 @@ export default function VisitorDashboard() {
               id: 'map',
               label: 'Library Map',
             },
+            {
+              id: 'services',
+              label: 'Announcements & Feedback',
+            },
           ].map((tabItem) => (
             <button
               type="button"
@@ -457,6 +462,10 @@ export default function VisitorDashboard() {
               setTab('catalog');
             }}
           />
+        )}
+
+        {tab === 'services' && (
+          <VisitorServices user={user} libraries={libraries} />
         )}
 
       </main>

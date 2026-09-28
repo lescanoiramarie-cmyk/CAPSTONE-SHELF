@@ -23,21 +23,18 @@ export default function AttendanceScanner() {
 
   const today = new Date().toDateString();
 
-  // Shared attendance:
-  // Show ALL visitor attendance records for today,
-  // regardless of which library branch recorded the visit.
   const todaysLogs = attendanceLogs
     .filter(
-      (a) => new Date(a.timeIn).toDateString() === today
+      (a) => a.libraryId === libraryId && new Date(a.timeIn).toDateString() === today
     )
     .sort(
       (a, b) => new Date(b.timeIn) - new Date(a.timeIn)
     );
 
   const handleScan = async (code) => {
-    const { visitor } = await scanAttendance(code, libraryId);
+    const { visitor, log } = await scanAttendance(code, libraryId);
 
-    setMessage(`Attendance logged for ${visitor.fullName}.`);
+    setMessage(`${visitor.fullName} checked ${log.action === 'checked_out' ? 'out' : 'in'}.`);
   };
 
   return (
@@ -50,7 +47,7 @@ export default function AttendanceScanner() {
         </h3>
 
         <p className="text-xs text-slate-500">
-          Scan a visitor's QR pass as they enter the library to log their visit.
+          Scan at entry to check in, and scan the same pass again at exit to check out.
         </p>
 
         <QrScanner
@@ -71,11 +68,11 @@ export default function AttendanceScanner() {
         <div className="px-5 py-3 border-b border-slate-200 flex justify-between items-center">
           <div>
             <h3 className="text-sm font-bold text-slate-800">
-              Today's Visitor Attendance
+              Today's Branch Attendance
             </h3>
 
             <p className="text-xs text-slate-500 mt-0.5">
-              Shared attendance records from all library branches
+              Check-in and check-out activity for this branch
             </p>
           </div>
 
@@ -97,6 +94,7 @@ export default function AttendanceScanner() {
                   <th className="p-3">Visitor</th>
                   <th className="p-3">Library</th>
                   <th className="p-3">Time In</th>
+                  <th className="p-3">Time Out</th>
                 </tr>
               </thead>
 
@@ -120,6 +118,10 @@ export default function AttendanceScanner() {
 
                       <td className="p-3 text-xs text-slate-500">
                         {formatDateTime(log.timeIn)}
+                      </td>
+
+                      <td className="p-3 text-xs text-slate-500">
+                        {log.checkedOutAt ? formatDateTime(log.checkedOutAt) : 'Still checked in'}
                       </td>
 
                     </tr>

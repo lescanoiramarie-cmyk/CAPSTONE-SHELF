@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 
 import * as store from '../data/store.js';
 import { AuthContext } from './authContext.js';
+import { supabase } from '../lib/supabaseClient.js';
 
 const SESSION_KEY = 'shelf_ilms_session_v1';
 
@@ -27,6 +28,7 @@ export const AuthProvider = ({ children }) => {
   // LOGOUT (Lilinawin ang lahat ng local at session storage)
   // =========================================================
   const logout = () => {
+    supabase?.auth.signOut().catch(() => {});
     setUser(null);
     globalThis.localStorage.removeItem(SESSION_KEY);
     globalThis.localStorage.clear();
@@ -159,6 +161,25 @@ export const AuthProvider = ({ children }) => {
     } catch {
       // Not Sub-Admin.
       // Continue checking.
+    }
+
+    try {
+      const staff = await store.loginStaffAccount(email, password);
+      if (staff) {
+        setUser({
+          role: staff.role,
+          name: staff.name,
+          email: staff.email,
+          libraryId: staff.libraryId,
+        });
+        return {
+          success: true,
+          role: staff.role,
+          user: staff,
+        };
+      }
+    } catch {
+      // Continue to visitor login when credentials are not a valid staff account.
     }
 
     // ---------------------------------------------------------

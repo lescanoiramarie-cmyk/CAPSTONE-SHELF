@@ -1,11 +1,6 @@
 -- ============================================================================
 -- SHELF ILMS — Supabase schema
 -- ----------------------------------------------------------------------------
--- Run this once in your Supabase project's SQL Editor (Dashboard → SQL Editor
--- → New Query → paste this whole file → Run). It creates the tables, enables
--- Row Level Security, and defines the RPC functions that keep the borrow/
--- queue logic atomic (safe from race conditions between two visitors).
--- ============================================================================
 
 create extension if not exists pgcrypto;
 
@@ -75,17 +70,147 @@ create table if not exists attendance_logs (
   visitor_id text references visitors(id) on delete set null,
   visitor_name text,
   library_id text references libraries(id),
-  time_in timestamptz default now()
+  time_in timestamptz default now(),
+  checked_out_at timestamptz
 );
+
+alter table attendance_logs
+  add column if not exists checked_out_at timestamptz;
+
+create table if not exists announcements (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  message text not null,
+  published boolean not null default true,
+  created_by text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists visitor_feedback (
+  id uuid primary key default gen_random_uuid(),
+  visitor_id text,
+  library_id text,
+  visitor_name text not null,
+  visitor_email text,
+  category text not null default 'General',
+  subject text not null,
+  message text not null,
+  status text not null default 'new' check (status in ('new', 'in_review', 'answered')),
+  admin_reply text,
+  replied_by text,
+  replied_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table visitor_feedback
+  add column if not exists library_id text;
+
+do $$
+declare
+  visitor_id_type text;
+  library_id_type text;
+begin
+  select format_type(attribute.atttypid, attribute.atttypmod)
+    into visitor_id_type
+    from pg_attribute attribute
+   where attribute.attrelid = 'public.visitors'::regclass
+     and attribute.attname = 'id'
+     and not attribute.attisdropped;
+
+  if visitor_id_type is null then
+    raise exception 'Could not determine the type of visitors.id.';
+  end if;
+
+  select format_type(attribute.atttypid, attribute.atttypmod)
+    into library_id_type
+    from pg_attribute attribute
+   where attribute.attrelid = 'public.libraries'::regclass
+     and attribute.attname = 'id'
+     and not attribute.attisdropped;
+
+  if library_id_type is null then
+    raise exception 'Could not determine the type of libraries.id.';
+  end if;
+
+  alter table public.visitor_feedback
+    drop constraint if exists visitor_feedback_visitor_id_fkey;
+  alter table public.visitor_feedback
+    drop constraint if exists visitor_feedback_library_id_fkey;
+
+  execute format(
+    'alter table public.visitor_feedback alter column visitor_id type %1$s using visitor_id::text::%1$s',
+    visitor_id_type
+  );
+  execute format(
+    'alter table public.visitor_feedback alter column library_id type %1$s using library_id::text::%1$s',
+    library_id_type
+  );
+
+  execute format(
+    'alter table public.visitor_feedback add constraint visitor_feedback_visitor_id_fkey foreign key (visitor_id) references public.visitors(id) on delete set null'
+  );
+  execute format(
+    'alter table public.visitor_feedback add constraint visitor_feedback_library_id_fkey foreign key (library_id) references public.libraries(id) on delete set null'
+  );
+end;
+$$;
+
+create index if not exists attendance_logs_branch_time_idx
+  on attendance_logs (library_id, time_in desc);
+create index if not exists visitor_feedback_branch_created_idx
+  on visitor_feedback (library_id, created_at desc);
+create index if not exists announcements_published_created_idx
+  on announcements (published, created_at desc);
+
+create table if not exists staff_profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email text not null unique,
+  full_name text not null,
+  role text not null check (role in ('superadmin', 'subadmin')),
+  library_id text,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  check ((role = 'superadmin' and library_id is null) or role = 'subadmin')
+);
+
+do $$
+declare
+  library_id_type text;
+begin
+  select format_type(attribute.atttypid, attribute.atttypmod)
+    into library_id_type
+    from pg_attribute attribute
+   where attribute.attrelid = 'public.libraries'::regclass
+     and attribute.attname = 'id'
+     and not attribute.attisdropped;
+
+  if library_id_type is null then
+    raise exception 'Could not determine the type of libraries.id.';
+  end if;
+
+  alter table public.staff_profiles
+    drop constraint if exists staff_profiles_library_id_fkey;
+
+  execute format(
+    'alter table public.staff_profiles alter column library_id type %1$s using library_id::text::%1$s',
+    library_id_type
+  );
+  execute format(
+    'alter table public.staff_profiles add constraint staff_profiles_library_id_fkey foreign key (library_id) references public.libraries(id) on delete set null'
+  );
+end;
+$$;
 
 -- ---------------------------------------------------------------------------
 -- Seed the library network (Tanauan City integrated network — sample coords,
 -- swap in surveyed GPS coordinates for each real branch before go-live)
 -- ---------------------------------------------------------------------------
 insert into libraries (id, name, campus, address, lat, lng, hours, status, is_sample_location) values
-  ('LIB-01', 'BatStateU JPLPC – Malvar Campus Library', 'Malvar Campus', 'Batangas State University, JPLPC – Malvar Campus, Malvar, Batangas', 14.0672, 121.1597, '7:00 AM – 6:00 PM (Mon–Fri)', 'Open', true),
-  ('LIB-02', 'Tanauan City Public Library', 'Tanauan City Hall Complex', 'P. Gomez St, Poblacion, Tanauan City, Batangas', 14.0860, 121.1497, '8:00 AM – 5:00 PM (Mon–Sat)', 'Open', true),
-  ('LIB-03', 'BatStateU Batangas City Main Campus Library', 'Batangas City (Main Campus)', 'Rizal Avenue Extension, Batangas City, Batangas', 13.7565, 121.0583, '8:00 AM – 5:00 PM (Mon–Fri)', 'Closed', true)
+  ('277829af-1475-47ae-9e26-4b64c68f54f4', 'BatStateU JPLPC – Malvar Campus Library', 'Malvar Campus', 'Batangas State University, JPLPC – Malvar Campus, Malvar, Batangas', 14.0672, 121.1597, '7:00 AM – 6:00 PM (Mon–Fri)', 'Open', true),
+  ('00000000-0000-4000-8000-000000000002', 'Tanauan City Public Library', 'Tanauan City Hall Complex', 'P. Gomez St, Poblacion, Tanauan City, Batangas', 14.0860, 121.1497, '8:00 AM – 5:00 PM (Mon–Sat)', 'Open', true),
+  ('bde57b8b-d3b8-4676-823e-7573f80d3a36', 'BatStateU Batangas City Main Campus Library', 'Batangas City (Main Campus)', 'Rizal Avenue Extension, Batangas City, Batangas', 13.7565, 121.0583, '8:00 AM – 5:00 PM (Mon–Fri)', 'Closed', true)
 on conflict (id) do nothing;
 
 -- ---------------------------------------------------------------------------
@@ -104,6 +229,9 @@ alter table books enable row level security;
 alter table visitors enable row level security;
 alter table borrow_requests enable row level security;
 alter table attendance_logs enable row level security;
+alter table announcements enable row level security;
+alter table visitor_feedback enable row level security;
+alter table staff_profiles enable row level security;
 
 drop policy if exists "public read libraries" on libraries;
 create policy "public read libraries" on libraries for select using (true);
@@ -135,12 +263,138 @@ create policy "public read attendance_logs" on attendance_logs for select using 
 drop policy if exists "public write attendance_logs" on attendance_logs;
 create policy "public write attendance_logs" on attendance_logs for all using (true) with check (true);
 
+drop policy if exists "public read announcements" on announcements;
+create policy "public read announcements" on announcements for select using (published = true);
+drop policy if exists "admin manage announcements" on announcements;
+create policy "admin manage announcements" on announcements for all
+  using ((auth.jwt() -> 'app_metadata' ->> 'role') in ('superadmin', 'subadmin'))
+  with check ((auth.jwt() -> 'app_metadata' ->> 'role') in ('superadmin', 'subadmin'));
+
+drop policy if exists "public submit feedback" on visitor_feedback;
+create policy "public submit feedback" on visitor_feedback for insert with check (true);
+drop policy if exists "admin read feedback" on visitor_feedback;
+create policy "admin read feedback" on visitor_feedback for select
+  using (
+    auth.jwt() -> 'app_metadata' ->> 'role' = 'superadmin'
+    or exists (
+      select 1 from staff_profiles staff
+      where staff.id = auth.uid() and staff.role = 'subadmin'
+        and staff.is_active and staff.library_id = visitor_feedback.library_id
+    )
+  );
+drop policy if exists "admin manage feedback" on visitor_feedback;
+create policy "admin manage feedback" on visitor_feedback for update
+  using (
+    auth.jwt() -> 'app_metadata' ->> 'role' = 'superadmin'
+    or exists (
+      select 1 from staff_profiles staff
+      where staff.id = auth.uid() and staff.role = 'subadmin'
+        and staff.is_active and staff.library_id = visitor_feedback.library_id
+    )
+  )
+  with check (
+    auth.jwt() -> 'app_metadata' ->> 'role' = 'superadmin'
+    or exists (
+      select 1 from staff_profiles staff
+      where staff.id = auth.uid() and staff.role = 'subadmin'
+        and staff.is_active and staff.library_id = visitor_feedback.library_id
+    )
+  );
+
+drop policy if exists "staff read own profile" on staff_profiles;
+create policy "staff read own profile" on staff_profiles for select
+  using (auth.uid() = id or auth.jwt() -> 'app_metadata' ->> 'role' = 'superadmin');
+
+create or replace function toggle_attendance(p_qr text, p_library_id text)
+returns table(log_id text, visitor_id text, visitor_name text, action text)
+as $$
+declare
+  v_visitor visitors%rowtype;
+  v_log attendance_logs%rowtype;
+  v_action text;
+begin
+  select * into v_visitor from visitors where qr_code = trim(p_qr) for update;
+  if v_visitor.id is null then
+    raise exception 'QR code not recognized. Please check the pass and try again.';
+  end if;
+
+  select * into v_log from attendance_logs
+    where attendance_logs.visitor_id = v_visitor.id
+      and attendance_logs.library_id = p_library_id
+      and attendance_logs.time_in::date = current_date
+      and attendance_logs.checked_out_at is null
+    order by attendance_logs.time_in desc
+    limit 1 for update;
+
+  if v_log.id is null then
+    insert into attendance_logs (visitor_id, visitor_name, library_id)
+      values (v_visitor.id, v_visitor.full_name, p_library_id)
+      returning * into v_log;
+    v_action := 'checked_in';
+  else
+    update attendance_logs set checked_out_at = now()
+      where attendance_logs.id = v_log.id
+      returning * into v_log;
+    v_action := 'checked_out';
+  end if;
+
+  return query select v_log.id, v_visitor.id, v_visitor.full_name, v_action;
+end;
+$$ language plpgsql security definer;
+
+create or replace function get_visitor_feedback_replies(p_visitor_id text, p_email text)
+returns table(id uuid, subject text, admin_reply text, replied_at timestamptz)
+as $$
+begin
+  if not exists (
+    select 1 from visitors
+    where visitors.id::text = trim(p_visitor_id)
+      and lower(visitors.email) = lower(trim(p_email))
+  ) then
+    raise exception 'Visitor identity could not be verified.';
+  end if;
+
+  return query
+    select feedback.id, feedback.subject, feedback.admin_reply, feedback.replied_at
+    from visitor_feedback feedback
+    where feedback.visitor_id::text = trim(p_visitor_id)
+      and feedback.admin_reply is not null
+    order by feedback.replied_at desc;
+end;
+$$ language plpgsql security definer;
+
+revoke all on function get_visitor_feedback_replies(text, text) from public;
+grant execute on function get_visitor_feedback_replies(text, text) to anon, authenticated;
+
 -- ---------------------------------------------------------------------------
 -- Realtime — let the app's Postgres Changes subscription receive updates.
 -- If this errors saying the table is already a member, that's fine — it
 -- means Realtime is already on for it (check Database → Replication too).
 -- ---------------------------------------------------------------------------
-alter publication supabase_realtime add table books, libraries, visitors, borrow_requests, attendance_logs;
+do $$
+declare
+  table_name text;
+begin
+  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    raise exception 'Publication supabase_realtime does not exist.';
+  end if;
+
+  foreach table_name in array array[
+    'books', 'libraries', 'visitors', 'borrow_requests',
+    'attendance_logs', 'announcements', 'visitor_feedback'
+  ] loop
+    if not exists (
+      select 1
+        from pg_publication_tables publication_table
+       where publication_table.pubname = 'supabase_realtime'
+         and publication_table.schemaname = 'public'
+         and publication_table.tablename = table_name
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', table_name);
+    end if;
+  end loop;
+end;
+$$;
 
 -- ============================================================================
 -- RPC functions (SECURITY DEFINER) — these hold the atomic business logic
@@ -148,6 +402,12 @@ alter publication supabase_realtime add table books, libraries, visitors, borrow
 -- two concurrent requests, and so visitor passwords/OTPs are checked
 -- server-side rather than fetched to the browser.
 -- ============================================================================
+
+drop function if exists public.register_visitor(text, text, text, text, text);
+drop function if exists public.verify_visitor_otp(text, text);
+drop function if exists public.login_visitor(text, text);
+drop function if exists public.find_visitor_by_qr(text);
+drop function if exists public.scan_attendance(text, text);
 
 create or replace function register_visitor(
   p_full_name text, p_contact_number text, p_email text, p_address text, p_password text
@@ -166,6 +426,7 @@ begin
   return query select v_id, v_otp;
 end;
 $$ language plpgsql security definer;
+grant execute on function public.register_visitor(text, text, text, text, text) to anon, authenticated;
 
 create or replace function resend_otp(p_visitor_id text) returns text as $$
 declare v_otp text;
@@ -192,6 +453,7 @@ begin
     from visitors where visitors.id = p_visitor_id;
 end;
 $$ language plpgsql security definer;
+grant execute on function public.verify_visitor_otp(text, text) to anon, authenticated;
 
 create or replace function login_visitor(p_identifier text, p_password text)
 returns table(id text, full_name text, email text, qr_code text) as $$
@@ -212,6 +474,7 @@ begin
   return query select v.id, v.full_name, v.email, v.qr_code;
 end;
 $$ language plpgsql security definer;
+grant execute on function public.login_visitor(text, text) to anon, authenticated;
 
 create or replace function find_visitor_by_qr(p_qr text)
 returns table(id text, full_name text, email text, qr_code text) as $$
@@ -220,6 +483,7 @@ begin
     from visitors where visitors.qr_code = trim(p_qr);
 end;
 $$ language plpgsql security definer;
+grant execute on function public.find_visitor_by_qr(text) to anon, authenticated;
 
 create or replace function scan_attendance(p_qr text, p_library_id text)
 returns table(log_id text, visitor_id text, visitor_name text) as $$
@@ -236,6 +500,7 @@ begin
   return query select v_log_id, v.id, v.full_name;
 end;
 $$ language plpgsql security definer;
+grant execute on function public.scan_attendance(text, text) to anon, authenticated;
 
 -- Internal helper: give back a copy and promote the next queued visitor.
 create or replace function release_copy_and_promote(p_book_id text)
@@ -335,7 +600,9 @@ begin
 end;
 $$ language plpgsql security definer;
 
-create or replace function auto_expire_pickups()
+drop function if exists public.auto_expire_pickups();
+
+create function auto_expire_pickups()
 returns int as $$
 declare v_count int := 0;
 declare r record;
@@ -348,6 +615,7 @@ begin
   return v_count;
 end;
 $$ language plpgsql security definer;
+grant execute on function public.auto_expire_pickups() to anon, authenticated;
 
 create or replace function confirm_pickup(p_request_id text, p_staff_name text)
 returns void as $$

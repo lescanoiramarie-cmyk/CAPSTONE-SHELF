@@ -234,6 +234,7 @@ const mapAttendance = (r) => ({
   visitorName: r.visitor_name,
   libraryId: r.library_id,
   timeIn: r.time_in,
+  checkedOutAt: r.checked_out_at,
 });
 
 function cleanErr(
@@ -255,6 +256,25 @@ export async function fetchLibraries() {
   if (error) throw cleanErr(error);
 
   return data.map(mapLibrary);
+}
+
+export async function addLibrary(library) {
+  const id = library.id || globalThis.crypto?.randomUUID?.();
+  if (!id) throw new Error('This browser cannot generate a UUID for the new library.');
+
+  const { error } = await supabase.from('libraries').insert({
+    id,
+    name: String(library.name || '').trim(),
+    campus: String(library.campus || '').trim() || null,
+    address: String(library.address || '').trim() || null,
+    lat: Number(library.lat),
+    lng: Number(library.lng),
+    hours: String(library.hours || '').trim() || null,
+    status: library.status || 'Open',
+  });
+
+  if (error) throw cleanErr(error);
+  return id;
 }
 
 export async function fetchBooks() {
@@ -511,20 +531,47 @@ export function loginSubAdmin(email, password) {
   return found;
 }
 
+export async function loginStaffAccount(email, password) {
+  if (!supabase) return null;
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email.trim().toLowerCase(),
+    password,
+  });
+  if (error) {
+    await supabase.auth.signOut();
+    return null;
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('staff_profiles')
+    .select('id, email, full_name, role, library_id, is_active')
+    .eq('id', data.user.id)
+    .maybeSingle();
+
+  if (profileError || !profile || !profile.is_active) {
+    await supabase.auth.signOut();
+    if (profileError) throw cleanErr(profileError);
+    throw new Error('This staff account is not active or has not been provisioned.');
+  }
+
+  return {
+    id: profile.id,
+    email: profile.email,
+    name: profile.full_name,
+    role: profile.role,
+    libraryId: profile.library_id,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Attendance (QR scan at the entrance)
 // ---------------------------------------------------------------------------
 export async function scanAttendance(qrCode, libraryId) {
-  console.log('QR CODE:', qrCode);
-  console.log('LIBRARY ID:', libraryId);
-
-  const { data, error } = await supabase.rpc('scan_attendance', {
+  const { data, error } = await supabase.rpc('toggle_attendance', {
     p_qr: qrCode.trim(),
     p_library_id: libraryId,
   });
-
-  console.log('SUPABASE DATA:', data);
-  console.log('SUPABASE ERROR:', error);
 
   if (error) throw cleanErr(error);
 
@@ -541,6 +588,7 @@ export async function scanAttendance(qrCode, libraryId) {
     },
     log: {
       id: row.log_id,
+      action: row.action,
     },
   };
 }
@@ -628,26 +676,13 @@ export async function deleteBook(bookId) {
   if (error) throw cleanErr(error);
 }
 
-export async function loadSampleCatalog() {
+export async function loadSampleCatalog(libraryId) {
+  if (!libraryId) {
+    throw new Error('A library must be selected before loading books.');
+  }
+
   const categories = ['computer+science', 'engineering', 'mathematics', 'physics', 'history'];
   let allBooks = [];
-
-  // Your exact BatStateU and partner library UUIDs from Supabase
-  const libraryIds = [
-    '277829af-1475-47ae-9e26-4b64c68f54f4', // BatStateU JPLPC-Malvar Library
-    '3ccf575d-4573-4ed9-acdb-c8d9cf8a949e', // BatStateU Lipa Library
-    '41dec6e1-28cd-4057-a046-982269698cdc', // BatStateU Lemery Library
-    '4226ff5c-21f1-48bd-9cf8-a5a272c81e3d', // BatStateU San Juan Library
-    '66ea1120-0789-410f-bb87-ae22d115ce1e', // BatStateU Mabini Library
-    '67487fb6-6988-433c-aeef-9b770f59f010', // BatStateU ARASOF-Nasugbu Library
-    '78c0a005-06cd-48f5-92d2-daa06fe36e12', // Batangas City Public Library and Information Center
-    '7c23ab9b-b42d-4420-b5b7-fdc71c49792a', // BatStateU Lobo Library
-    '84819f90-5923-4bd8-8aa0-1805e7613e81', // BatStateU Alangilan Library
-    '971893c8-5670-46b5-833c-398b2968ad1c', // BatStateU Balayan Library
-    '9c82c34b-6059-47e1-983a-d03755cb830b', // Batangas Provincial Library
-    'bde57b8b-d3b8-4676-823e-7573f80d3a36', // BatStateU Pablo Borbon Library
-    'c5613110-237e-4e93-b27b-95b41da95f3a', // BatStateU Rosario Library
-  ];
 
   for (const cat of categories) {
     try {
@@ -655,7 +690,6 @@ export async function loadSampleCatalog() {
       const data = await response.json();
       
       const mapped = data.docs.map((doc, index) => {
-        const randomLibId = libraryIds[(index + cat.length) % libraryIds.length];
         const copies = Math.floor(Math.random() * 5) + 3; // 3 to 7 copies
 
         return {
@@ -664,7 +698,7 @@ export async function loadSampleCatalog() {
           category: cat.replace('+', ' ').toUpperCase(),
           isbn: doc.isbn?.[0] || `ISBN-${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
           shelf_location: `Shelf ${String.fromCharCode(65 + (index % 5))}-${(index % 10) + 1}`,
-          library_id: randomLibId,
+          library_id: libraryId,
           total_copies: copies,
           available_copies: copies,
           summary: doc.first_sentence?.[0] || `An authoritative academic resource focusing on ${cat.replace('+', ' ')}, providing comprehensive theoretical frameworks, practical methodologies, and foundational insights for higher education students and researchers within the university network.`,

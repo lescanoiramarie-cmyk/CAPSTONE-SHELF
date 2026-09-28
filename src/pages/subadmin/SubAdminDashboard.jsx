@@ -8,6 +8,7 @@ import AttendanceScanner from '../../component/AttendanceScanner.jsx';
 import BookTransactions from '../../component/BookTransactions.jsx';
 import BookInventory from '../../component/BookInventory.jsx';
 import ReservationQueue from '../../component/ReservationQueue.jsx';
+import AdminWorkspace from '../../component/AdminWorkspace.jsx';
 
 import { supabase } from '../../lib/supabaseClient.js';
 import { exportToExcel, exportToCSV, parseImportFile } from '../../lib/excelUtils.js';
@@ -22,6 +23,7 @@ const NAV = [
   { id: 'transactions', label: '🔁 Book Transactions' },
   { id: 'inventory', label: '📚 Inventory' },
   { id: 'queue', label: '⏳ Reservation Queue' },
+  { id: 'workspace', label: '📈 Reports & Services' },
 ];
 
 function StatCard({ label, value, tone = 'default' }) {
@@ -114,6 +116,7 @@ function QRBookBorrowing({
 
     try {
       const foundVisitor = await findVisitorByQr(qrValue);
+      const currentLibraryId = user?.libraryId || user?.assignedBranch;
 
       if (!foundVisitor) {
         throw new Error(
@@ -141,10 +144,12 @@ function QRBookBorrowing({
             return_date,
             fine_amount,
             confirmed_by,
-            return_confirmed_by
+            return_confirmed_by,
+            books!inner(library_id)
           `
         )
         .eq('visitor_id', foundVisitor.id)
+        .eq('books.library_id', currentLibraryId)
         .in('status', ['ready_for_pickup', 'borrowed'])
         .order('request_date', {
           ascending: false,
@@ -670,6 +675,7 @@ export default function SubAdminDashboard() {
     books,
     borrowRequests,
     attendanceLogs,
+    libraries,
   } = useLibraryData();
 
   const [section, setSection] = useState('overview');
@@ -987,6 +993,16 @@ export default function SubAdminDashboard() {
         {/* RESERVATION QUEUE */}
         {section === 'queue' && (
           <ReservationQueue />
+        )}
+
+        {section === 'workspace' && (
+          <AdminWorkspace
+            user={user}
+            libraries={libraries}
+            books={branchBooks}
+            borrowRequests={borrowRequests}
+            attendanceLogs={branchAttendance}
+          />
         )}
 
       </main>

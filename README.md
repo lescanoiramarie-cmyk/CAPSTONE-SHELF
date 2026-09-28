@@ -67,6 +67,71 @@ These live in `src/data/store.js` (`SUPER_ADMIN_CREDENTIALS` /
    notes on swapping the key-free OpenStreetMap embed for the Google Maps API
    once a billing-enabled key is available.
 
+## Admin workspace modules
+
+Both admin dashboards include **Reports & Services**. Sub-admins see only
+their assigned branch; super-admins can select a branch or view the whole
+network. Reports support daily, weekly, monthly, and annual periods, sorting,
+and Excel/CSV export. Analytics charts use attendance and borrowing records,
+with demand-based operational suggestions. Visitors can submit feedback and
+questions, receive FAQ answers for common topics, read announcements, and see
+replies from the library team.
+
+Attendance QR scans alternate between check-in and check-out for the active
+branch/day. New Supabase tables and functions for feedback, announcements,
+staff profiles, and checkout are defined in `supabase/schema.sql`; re-run that
+schema in the Supabase SQL editor when upgrading an existing deployment.
+
+### Auth-backed staff provisioning
+
+The old hardcoded demo staff accounts continue to work for legacy features,
+but they cannot authorize staff management or access protected feedback
+moderation. Move staff to Supabase Auth to use those features. Provisioning
+uses the `manage-staff` Supabase Edge Function and requires a real Auth
+super-admin session:
+
+1. Create a super-admin user in Supabase Authentication.
+2. In the SQL editor, mark that account as the initial super-admin and create
+   its profile (replace the email):
+
+   ```sql
+   update auth.users
+   set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role":"superadmin"}'::jsonb
+   where lower(email) = lower('admin@example.edu');
+
+   insert into public.staff_profiles (id, email, full_name, role)
+   select id, email, coalesce(raw_user_meta_data ->> 'full_name', email), 'superadmin'
+   from auth.users
+   where lower(email) = lower('admin@example.edu')
+   on conflict (id) do update set role = excluded.role;
+   ```
+
+3. Deploy the function with `supabase functions deploy manage-staff`. Configure
+   `APP_ORIGIN` for the deployed frontend. The function uses Supabase's server
+   environment and service-role key; never expose that key through a `VITE_`
+   variable.
+4. Sign in through the normal login page using the Auth-backed super-admin.
+   Use **Reports & Services → Staff accounts** to create or disable branch
+   sub-admins. New sub-admins sign in through the same login page.
+
+### Python forecast service
+
+The forecast endpoint consumes branch-scoped aggregate data from the dashboard
+and returns seven daily visitor estimates, ranked category demand, and
+operational recommendations. From PowerShell with Python 3.11 installed:
+
+```powershell
+cd analytics
+py -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+$env:ANALYTICS_ALLOWED_ORIGINS = "http://localhost:5173"
+uvicorn main:app --host 127.0.0.1 --port 8000
+```
+
+Set `VITE_ANALYTICS_API_URL=http://localhost:8000` in the frontend `.env` and
+restart Vite. The service exposes `GET /health` and `POST /forecast`.
+
 ## Known simplifications (flagged in-code)
 
 - QR scanning supports both camera decoding (`html5-qrcode`) and manual input.
