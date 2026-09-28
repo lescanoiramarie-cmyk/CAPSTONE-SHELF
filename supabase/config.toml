@@ -1,4 +1,3 @@
-
 [functions.send-visitor-otp]
 enabled = true
 verify_jwt = false
@@ -15,3 +14,9 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/manage-staff/deno.json"
 entrypoint = "./functions/manage-staff/index.ts"
+
+[functions.send-due-date-notifications]
+enabled = true
+verify_jwt = false
+import_map = "./functions/send-due-date-notifications/deno.json"
+entrypoint = "./functions/send-due-date-notifications/index.ts"
