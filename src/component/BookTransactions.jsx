@@ -10,7 +10,7 @@ function formatDateTime(iso) {
 
 export default function BookTransactions() {
   const { user } = useAuth();
-  const { borrowRequests } = useLibraryData();
+  const { borrowRequests, books } = useLibraryData();
   const { findVisitorByQr, confirmPickup, confirmReturn } = useLibrary();
 
   const [mode, setMode] = useState('borrowing'); // 'borrowing' | 'returning'
@@ -28,9 +28,14 @@ export default function BookTransactions() {
     setMessage('');
   };
 
+  const libraryId = user?.libraryId || user?.assignedBranch;
   const visitorRequests = scannedVisitor
     ? borrowRequests.filter(
-        (r) => r.visitorId === scannedVisitor.id && r.status === (mode === 'borrowing' ? 'ready_for_pickup' : 'borrowed')
+        (request) => request.visitorId === scannedVisitor.id &&
+          request.status === (mode === 'borrowing' ? 'ready_for_pickup' : 'borrowed') &&
+          (user?.role !== 'subadmin' || books.some((book) => (
+            book.id === request.bookId && book.libraryId === libraryId
+          )))
       )
     : [];
 
