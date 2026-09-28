@@ -17,6 +17,144 @@ import {
 
 import libraryBg from '../../assets/library.jpg';
 
+// =========================================================
+// LOCATION OPTIONS
+// =========================================================
+
+const LOCATION_OPTIONS = {
+  Batangas: [
+    'Agoncillo',
+    'Alitagtag',
+    'Balayan',
+    'Balete',
+    'Batangas City',
+    'Bauan',
+    'Calaca',
+    'Calatagan',
+    'Cuenca',
+    'Ibaan',
+    'Laurel',
+    'Lemery',
+    'Lian',
+    'Lipa City',
+    'Lobo',
+    'Mabini',
+    'Malvar',
+    'Mataasnakahoy',
+    'Nasugbu',
+    'Padre Garcia',
+    'Rosario',
+    'San Jose',
+    'San Juan',
+    'San Luis',
+    'San Nicolas',
+    'San Pascual',
+    'Santa Teresita',
+    'Santo Tomas',
+    'Taal',
+    'Talisay',
+    'Tanauan City',
+    'Taysan',
+    'Tingloy',
+    'Tuy',
+  ],
+
+  Laguna: [
+    'Alaminos',
+    'Bay',
+    'Biñan',
+    'Cabuyao',
+    'Calamba',
+    'Calauan',
+    'Famy',
+    'Los Baños',
+    'Luisiana',
+    'Lumban',
+    'Mabitac',
+    'Magdalena',
+    'Majayjay',
+    'Nagcarlan',
+    'Paete',
+    'Pagsanjan',
+    'Pakil',
+    'Pangil',
+    'Pila',
+    'Rizal',
+    'San Pablo City',
+    'Santa Cruz',
+    'Santa Rosa',
+    'Siniloan',
+    'Victoria',
+  ],
+
+  Cavite: [
+    'Bacoor',
+    'Carmona',
+    'Cavite City',
+    'Dasmariñas',
+    'General Trias',
+    'Imus',
+    'Kawit',
+    'Tagaytay',
+    'Trece Martires',
+    'Silang',
+    'Rosario',
+    'Naic',
+    'Tanza',
+  ],
+
+  Quezon: [
+    'Lucena City',
+    'Candelaria',
+    'Tiaong',
+    'Sariaya',
+    'Tayabas',
+    'Lucban',
+    'Pagbilao',
+    'Infanta',
+    'Mauban',
+  ],
+
+  Rizal: [
+    'Antipolo',
+    'Angono',
+    'Binangonan',
+    'Cainta',
+    'Cardona',
+    'Jalajala',
+    'Morong',
+    'Pililla',
+    'Rodriguez',
+    'San Mateo',
+    'Tanay',
+    'Taytay',
+  ],
+
+  'Metro Manila': [
+    'Manila',
+    'Quezon City',
+    'Makati',
+    'Pasig',
+    'Taguig',
+    'Mandaluyong',
+    'Marikina',
+    'Parañaque',
+    'Pasay',
+    'Caloocan',
+    'Las Piñas',
+    'Muntinlupa',
+    'Navotas',
+    'Malabon',
+    'Valenzuela',
+    'San Juan',
+    'Pateros',
+  ],
+};
+
+// =========================================================
+// PASSWORD REQUIREMENT COMPONENT
+// =========================================================
+
 function PasswordRequirement({ valid, children }) {
   return (
     <li
@@ -41,6 +179,10 @@ function PasswordRequirement({ valid, children }) {
   );
 }
 
+// =========================================================
+// VISITOR LOGIN
+// =========================================================
+
 export default function VisitorLogin() {
   const navigate = useNavigate();
 
@@ -62,15 +204,28 @@ export default function VisitorLogin() {
   const [view, setView] = useState('login');
   const [error, setError] = useState('');
 
-  const [showScanner, setShowScanner] = useState(false);
+  const [showScanner, setShowScanner] =
+    useState(false);
+
   const scannerRef = useRef(null);
 
   const fileInputRef = useRef(null);
-  const [isUploadingQr, setIsUploadingQr] = useState(false);
 
-  const [showLoginPassword, setShowLoginPassword] = useState(false);
-  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isUploadingQr, setIsUploadingQr] =
+    useState(false);
+
+  const [showLoginPassword, setShowLoginPassword] =
+    useState(false);
+
+  const [
+    showRegisterPassword,
+    setShowRegisterPassword,
+  ] = useState(false);
+
+  const [
+    showConfirmPassword,
+    setShowConfirmPassword,
+  ] = useState(false);
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -81,27 +236,58 @@ export default function VisitorLogin() {
     confirmPassword: '',
   });
 
+  // Structured registration location
+  const [selectedProvince, setSelectedProvince] =
+    useState('');
+
+  const [selectedCity, setSelectedCity] =
+    useState('');
+
+  const [barangay, setBarangay] =
+    useState('');
+
   const [loginData, setLoginData] = useState({
     identifier: '',
     password: '',
   });
 
-  const [otpInput, setOtpInput] = useState('');
-  const [pendingVisitorId, setPendingVisitorId] = useState(null);
-  const [pendingEmail, setPendingEmail] = useState('');
+  const [otpInput, setOtpInput] =
+    useState('');
 
-  const [registeredVisitor, setRegisteredVisitor] = useState(null);
+  const [
+    pendingVisitorId,
+    setPendingVisitorId,
+  ] = useState(null);
+
+  const [pendingEmail, setPendingEmail] =
+    useState('');
+
+  const [
+    registeredVisitor,
+    setRegisteredVisitor,
+  ] = useState(null);
 
   // =========================================================
   // PASSWORD VALIDATION
   // =========================================================
 
   const passwordRequirements = {
-    minLength: formData.password.length >= 8,
-    uppercase: /[A-Z]/.test(formData.password),
-    lowercase: /[a-z]/.test(formData.password),
-    number: /[0-9]/.test(formData.password),
-    special: /[^A-Za-z0-9]/.test(formData.password),
+    minLength:
+      formData.password.length >= 8,
+
+    uppercase:
+      /[A-Z]/.test(formData.password),
+
+    lowercase:
+      /[a-z]/.test(formData.password),
+
+    number:
+      /[0-9]/.test(formData.password),
+
+    special:
+      /[^A-Za-z0-9]/.test(
+        formData.password
+      ),
   };
 
   const isPasswordValid =
@@ -113,7 +299,8 @@ export default function VisitorLogin() {
 
   const passwordsMatch =
     formData.password.length > 0 &&
-    formData.password === formData.confirmPassword;
+    formData.password ===
+      formData.confirmPassword;
 
   // =========================================================
   // CENTRALIZED QR LOGIN
@@ -205,8 +392,9 @@ export default function VisitorLogin() {
         }
 
         const password =
-          String(qrPayload?.password || '') ||
-          account.password;
+          String(
+            qrPayload?.password || ''
+          ) || account.password;
 
         await loginSuperAdmin(
           account.email,
@@ -235,7 +423,8 @@ export default function VisitorLogin() {
         normalizedRole === 'admin' ||
         normalizedRole === 'circulationdesk' ||
         normalizedRole === 'circulation' ||
-        normalizedRole === 'circulationdeskstaff'
+        normalizedRole ===
+          'circulationdeskstaff'
       ) {
         const email = String(
           qrPayload?.email || ''
@@ -264,8 +453,9 @@ export default function VisitorLogin() {
         }
 
         const password =
-          String(qrPayload?.password || '') ||
-          account.password;
+          String(
+            qrPayload?.password || ''
+          ) || account.password;
 
         await loginSubAdmin(
           account.email,
@@ -332,7 +522,8 @@ export default function VisitorLogin() {
           (item) =>
             String(item.email)
               .trim()
-              .toLowerCase() === qrValue.toLowerCase()
+              .toLowerCase() ===
+            qrValue.toLowerCase()
         );
 
       if (superAdminAccount) {
@@ -342,7 +533,8 @@ export default function VisitorLogin() {
         );
 
         setLoginData({
-          identifier: superAdminAccount.email,
+          identifier:
+            superAdminAccount.email,
           password: '',
         });
 
@@ -363,7 +555,8 @@ export default function VisitorLogin() {
           (item) =>
             String(item.email)
               .trim()
-              .toLowerCase() === qrValue.toLowerCase()
+              .toLowerCase() ===
+            qrValue.toLowerCase()
         );
 
       if (subAdminAccount) {
@@ -373,7 +566,8 @@ export default function VisitorLogin() {
         );
 
         setLoginData({
-          identifier: subAdminAccount.email,
+          identifier:
+            subAdminAccount.email,
           password: '',
         });
 
@@ -459,106 +653,113 @@ export default function VisitorLogin() {
     let cancelled = false;
     let scanner = null;
 
-    const startCameraScanner = async () => {
-      try {
-        scanner = new Html5Qrcode(
-          'visitor-qr-reader'
-        );
+    const startCameraScanner =
+      async () => {
+        try {
+          scanner = new Html5Qrcode(
+            'visitor-qr-reader'
+          );
 
-        if (cancelled) {
-          return;
-        }
+          if (cancelled) {
+            return;
+          }
 
-        scannerRef.current = scanner;
+          scannerRef.current =
+            scanner;
 
-        await scanner.start(
-          {
-            facingMode: 'environment',
-          },
-          {
-            fps: 10,
-            qrbox: {
-              width: 250,
-              height: 250,
+          await scanner.start(
+            {
+              facingMode: 'environment',
             },
-          },
-          async (decodedText) => {
-            if (cancelled) {
-              return;
+            {
+              fps: 10,
+              qrbox: {
+                width: 250,
+                height: 250,
+              },
+            },
+            async (decodedText) => {
+              if (cancelled) {
+                return;
+              }
+
+              const qrValue =
+                decodedText.trim();
+
+              if (!qrValue) {
+                return;
+              }
+
+              cancelled = true;
+
+              try {
+                await scanner.stop();
+              } catch (err) {
+                console.warn(
+                  'Camera scanner stop:',
+                  err
+                );
+              }
+
+              try {
+                await scanner.clear();
+              } catch (err) {
+                console.warn(
+                  'Camera scanner clear:',
+                  err
+                );
+              }
+
+              scannerRef.current =
+                null;
+
+              setShowScanner(false);
+
+              try {
+                await handleQrLogin(
+                  qrValue
+                );
+              } catch (loginError) {
+                console.error(
+                  'Centralized QR login error:',
+                  loginError
+                );
+
+                setError(
+                  loginError?.message ||
+                    'QR code was detected, but login failed.'
+                );
+              }
+            },
+            () => {
+              // Continuous scan errors ignored.
             }
+          );
+        } catch (err) {
+          console.error(
+            'Camera scanner error:',
+            err
+          );
 
-            const qrValue = decodedText.trim();
+          scannerRef.current = null;
 
-            if (!qrValue) {
-              return;
-            }
-
-            cancelled = true;
-
-            try {
-              await scanner.stop();
-            } catch (err) {
-              console.warn(
-                'Camera scanner stop:',
-                err
-              );
-            }
-
-            try {
-              await scanner.clear();
-            } catch (err) {
-              console.warn(
-                'Camera scanner clear:',
-                err
-              );
-            }
-
-            scannerRef.current = null;
+          if (!cancelled) {
             setShowScanner(false);
 
+            setError(
+              'Unable to access the camera. Please allow camera permission or use Upload QR Code Image.'
+            );
+          }
+
+          if (scanner) {
             try {
-              await handleQrLogin(qrValue);
-            } catch (loginError) {
-              console.error(
-                'Centralized QR login error:',
-                loginError
-              );
-
-              setError(
-                loginError?.message ||
-                  'QR code was detected, but login failed.'
-              );
+              await scanner.clear();
+            } catch {
+              // Ignore cleanup errors.
             }
-          },
-          () => {
-            // Continuous scan errors ignored.
-          }
-        );
-      } catch (err) {
-        console.error(
-          'Camera scanner error:',
-          err
-        );
-
-        scannerRef.current = null;
-
-        if (!cancelled) {
-          setShowScanner(false);
-
-          setError(
-            'Unable to access the camera. Please allow camera permission or use Upload QR Code Image.'
-          );
-        }
-
-        if (scanner) {
-          try {
-            await scanner.clear();
-          } catch {
-            // Ignore cleanup errors.
           }
         }
-      }
-    };
+      };
 
     startCameraScanner();
 
@@ -590,224 +791,254 @@ export default function VisitorLogin() {
   // CREATE ENHANCED QR IMAGE
   // =========================================================
 
-  const createEnhancedQrImage = (file) => {
-    return new Promise((resolve, reject) => {
-      const image = new Image();
+  const createEnhancedQrImage = (
+    file
+  ) => {
+    return new Promise(
+      (resolve, reject) => {
+        const image = new Image();
 
-      const objectUrl =
-        URL.createObjectURL(file);
+        const objectUrl =
+          URL.createObjectURL(file);
 
-      image.onload = () => {
-        try {
-          const scale = 3;
+        image.onload = () => {
+          try {
+            const scale = 3;
 
-          const canvas =
-            document.createElement('canvas');
+            const canvas =
+              document.createElement(
+                'canvas'
+              );
 
-          canvas.width = Math.max(
-            image.width * scale,
-            600
-          );
-
-          canvas.height = Math.max(
-            image.height * scale,
-            600
-          );
-
-          const context =
-            canvas.getContext('2d');
-
-          if (!context) {
-            URL.revokeObjectURL(objectUrl);
-
-            reject(
-              new Error(
-                'Unable to process the uploaded image.'
-              )
+            canvas.width = Math.max(
+              image.width * scale,
+              600
             );
 
-            return;
+            canvas.height = Math.max(
+              image.height * scale,
+              600
+            );
+
+            const context =
+              canvas.getContext('2d');
+
+            if (!context) {
+              URL.revokeObjectURL(
+                objectUrl
+              );
+
+              reject(
+                new Error(
+                  'Unable to process the uploaded image.'
+                )
+              );
+
+              return;
+            }
+
+            context.fillStyle =
+              '#ffffff';
+
+            context.fillRect(
+              0,
+              0,
+              canvas.width,
+              canvas.height
+            );
+
+            context.imageSmoothingEnabled =
+              false;
+
+            context.drawImage(
+              image,
+              0,
+              0,
+              canvas.width,
+              canvas.height
+            );
+
+            canvas.toBlob(
+              (blob) => {
+                URL.revokeObjectURL(
+                  objectUrl
+                );
+
+                if (!blob) {
+                  reject(
+                    new Error(
+                      'Unable to create an enhanced QR image.'
+                    )
+                  );
+
+                  return;
+                }
+
+                const enhancedFile =
+                  new File(
+                    [blob],
+                    'enhanced-qr.png',
+                    {
+                      type: 'image/png',
+                    }
+                  );
+
+                resolve(
+                  enhancedFile
+                );
+              },
+              'image/png'
+            );
+          } catch (err) {
+            URL.revokeObjectURL(
+              objectUrl
+            );
+
+            reject(err);
           }
+        };
 
-          context.fillStyle = '#ffffff';
-
-          context.fillRect(
-            0,
-            0,
-            canvas.width,
-            canvas.height
+        image.onerror = () => {
+          URL.revokeObjectURL(
+            objectUrl
           );
 
-          context.imageSmoothingEnabled = false;
-
-          context.drawImage(
-            image,
-            0,
-            0,
-            canvas.width,
-            canvas.height
+          reject(
+            new Error(
+              'Unable to read the uploaded image.'
+            )
           );
+        };
 
-          canvas.toBlob(
-            (blob) => {
-              URL.revokeObjectURL(objectUrl);
-
-              if (!blob) {
-                reject(
-                  new Error(
-                    'Unable to create an enhanced QR image.'
-                  )
-                );
-
-                return;
-              }
-
-              const enhancedFile =
-                new File(
-                  [blob],
-                  'enhanced-qr.png',
-                  {
-                    type: 'image/png',
-                  }
-                );
-
-              resolve(enhancedFile);
-            },
-            'image/png'
-          );
-        } catch (err) {
-          URL.revokeObjectURL(objectUrl);
-          reject(err);
-        }
-      };
-
-      image.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-
-        reject(
-          new Error(
-            'Unable to read the uploaded image.'
-          )
-        );
-      };
-
-      image.src = objectUrl;
-    });
+        image.src = objectUrl;
+      }
+    );
   };
 
   // =========================================================
   // QR IMAGE UPLOAD
   // =========================================================
 
-  const handleQrImageUpload = async (event) => {
-    const file =
-      event.target.files?.[0];
+  const handleQrImageUpload =
+    async (event) => {
+      const file =
+        event.target.files?.[0];
 
-    event.target.value = '';
+      event.target.value = '';
 
-    if (!file) {
-      return;
-    }
-
-    setError('');
-    setIsUploadingQr(true);
-
-    let qrScanner = null;
-
-    try {
-      if (
-        !file.type ||
-        !file.type.startsWith('image/')
-      ) {
-        throw new Error(
-          'Please upload a valid image containing your QR code.'
-        );
+      if (!file) {
+        return;
       }
 
-      qrScanner =
-        new Html5Qrcode(
-          'visitor-qr-file-reader'
-        );
+      setError('');
+      setIsUploadingQr(true);
 
-      let decodedText = '';
+      let qrScanner = null;
 
       try {
-        decodedText =
-          await qrScanner.scanFile(
-            file,
-            false
+        if (
+          !file.type ||
+          !file.type.startsWith('image/')
+        ) {
+          throw new Error(
+            'Please upload a valid image containing your QR code.'
           );
-      } catch {
-        // Fallback to enhanced image scan
-      }
+        }
 
-      if (!decodedText) {
+        qrScanner =
+          new Html5Qrcode(
+            'visitor-qr-file-reader'
+          );
+
+        let decodedText = '';
+
         try {
-          const enhancedFile =
-            await createEnhancedQrImage(file);
-
           decodedText =
             await qrScanner.scanFile(
-              enhancedFile,
+              file,
               false
             );
-        } catch (enhancedError) {
-          console.log(
-            'Enhanced image scan failed:',
+        } catch {
+          // Fallback to enhanced image scan
+        }
+
+        if (!decodedText) {
+          try {
+            const enhancedFile =
+              await createEnhancedQrImage(
+                file
+              );
+
+            decodedText =
+              await qrScanner.scanFile(
+                enhancedFile,
+                false
+              );
+          } catch (
             enhancedError
+          ) {
+            console.log(
+              'Enhanced image scan failed:',
+              enhancedError
+            );
+          }
+        }
+
+        if (!decodedText) {
+          throw new Error(
+            'No QR code was detected in the uploaded image. Please upload a clear image where the entire QR code and its white border are visible.'
           );
         }
-      }
 
-      if (!decodedText) {
-        throw new Error(
-          'No QR code was detected in the uploaded image. Please upload a clear image where the entire QR code and its white border are visible.'
-        );
-      }
+        const qrValue =
+          decodedText.trim();
 
-      const qrValue =
-        decodedText.trim();
+        if (!qrValue) {
+          throw new Error(
+            'The QR code does not contain valid data.'
+          );
+        }
 
-      if (!qrValue) {
-        throw new Error(
-          'The QR code does not contain valid data.'
-        );
-      }
-
-      try {
-        await handleQrLogin(qrValue);
-      } catch (loginError) {
-        setError(
-          loginError?.message ||
-            'QR code was detected, but login failed.'
-        );
-      }
-    } catch (err) {
-      setError(
-        err?.message ||
-          'Unable to read the QR code from the uploaded image.'
-      );
-    } finally {
-      if (qrScanner) {
         try {
-          await qrScanner.clear();
-        } catch (cleanupError) {
-          console.warn(
-            'QR scanner cleanup warning:',
-            cleanupError
+          await handleQrLogin(
+            qrValue
+          );
+        } catch (loginError) {
+          setError(
+            loginError?.message ||
+              'QR code was detected, but login failed.'
           );
         }
-      }
+      } catch (err) {
+        setError(
+          err?.message ||
+            'Unable to read the QR code from the uploaded image.'
+        );
+      } finally {
+        if (qrScanner) {
+          try {
+            await qrScanner.clear();
+          } catch (
+            cleanupError
+          ) {
+            console.warn(
+              'QR scanner cleanup warning:',
+              cleanupError
+            );
+          }
+        }
 
-      setIsUploadingQr(false);
-    }
-  };
+        setIsUploadingQr(false);
+      }
+    };
 
   // =========================================================
   // NORMAL LOGIN
   // =========================================================
 
-  const handleLogin = async (event) => {
+  const handleLogin = async (
+    event
+  ) => {
     event.preventDefault();
 
     setError('');
@@ -834,10 +1065,13 @@ export default function VisitorLogin() {
     try {
       const result = await login({
         identifier,
-        password: loginData.password,
+        password:
+          loginData.password,
       });
 
-      if (result?.role === 'visitor') {
+      if (
+        result?.role === 'visitor'
+      ) {
         navigate('/visitor');
       } else if (
         result?.role === 'subadmin'
@@ -864,10 +1098,36 @@ export default function VisitorLogin() {
   // REGISTRATION
   // =========================================================
 
-  const handleRegister = async (event) => {
+  const handleRegister = async (
+    event
+  ) => {
     event.preventDefault();
 
     setError('');
+
+    if (!selectedProvince) {
+      setError(
+        'Please select your province.'
+      );
+
+      return;
+    }
+
+    if (!selectedCity) {
+      setError(
+        'Please select your city or municipality.'
+      );
+
+      return;
+    }
+
+    if (!barangay.trim()) {
+      setError(
+        'Please enter your barangay.'
+      );
+
+      return;
+    }
 
     if (!isPasswordValid) {
       setError(
@@ -885,9 +1145,15 @@ export default function VisitorLogin() {
       return;
     }
 
+    const completeAddress =
+      `${barangay.trim()}, ${selectedCity}, ${selectedProvince}`;
+
     try {
       const result =
-        await registerVisitor(formData);
+        await registerVisitor({
+          ...formData,
+          address: completeAddress,
+        });
 
       setPendingVisitorId(
         result.visitorId
@@ -911,7 +1177,9 @@ export default function VisitorLogin() {
   // VERIFY OTP
   // =========================================================
 
-  const handleVerifyOtp = async (event) => {
+  const handleVerifyOtp = async (
+    event
+  ) => {
     event.preventDefault();
 
     setError('');
@@ -942,7 +1210,10 @@ export default function VisitorLogin() {
           cleanOtp
         );
 
-      setRegisteredVisitor(visitor);
+      setRegisteredVisitor(
+        visitor
+      );
+
       setView('success');
     } catch (err) {
       setError(
@@ -956,34 +1227,35 @@ export default function VisitorLogin() {
   // RESEND OTP
   // =========================================================
 
-  const handleResendOtp = async () => {
-    setError('');
+  const handleResendOtp =
+    async () => {
+      setError('');
 
-    if (!pendingVisitorId) {
-      setError(
-        'Registration session not found.'
-      );
+      if (!pendingVisitorId) {
+        setError(
+          'Registration session not found.'
+        );
 
-      return;
-    }
+        return;
+      }
 
-    try {
-      await resendVisitorOtp(
-        pendingVisitorId
-      );
+      try {
+        await resendVisitorOtp(
+          pendingVisitorId
+        );
 
-      setOtpInput('');
+        setOtpInput('');
 
-      setError(
-        'A new verification code has been sent to your email.'
-      );
-    } catch (err) {
-      setError(
-        err?.message ||
-          'Unable to resend verification code.'
-      );
-    }
-  };
+        setError(
+          'A new verification code has been sent to your email.'
+        );
+      } catch (err) {
+        setError(
+          err?.message ||
+            'Unable to resend verification code.'
+        );
+      }
+    };
 
   // =========================================================
   // RESET TO LOGIN
@@ -1002,6 +1274,10 @@ export default function VisitorLogin() {
       confirmPassword: '',
     });
 
+    setSelectedProvince('');
+    setSelectedCity('');
+    setBarangay('');
+
     setLoginData({
       identifier: '',
       password: '',
@@ -1015,7 +1291,7 @@ export default function VisitorLogin() {
   };
 
   // =========================================================
-  // UI - Responsive Optimization applied to wrappers and panels
+  // UI
   // =========================================================
 
   return (
@@ -1027,7 +1303,10 @@ export default function VisitorLogin() {
         }
       `}</style>
 
-      {/* LEFT PANEL */}
+      {/* =====================================================
+          LEFT PANEL
+      ===================================================== */}
+
       <div
         className="hidden lg:flex lg:w-1/2 bg-[#002046] text-white p-12 flex-col justify-between relative overflow-hidden bg-cover bg-center"
         style={{
@@ -1049,7 +1328,8 @@ export default function VisitorLogin() {
           </span>
 
           <h1 className="text-4xl font-extrabold leading-tight">
-            Explore Learning Resources & Campus Libraries.
+            Explore Learning Resources
+            & Campus Libraries.
           </h1>
 
           <p className="text-sm text-slate-300">
@@ -1065,11 +1345,15 @@ export default function VisitorLogin() {
         </div>
       </div>
 
-      {/* RIGHT PANEL - Optimized mobile padding & max width */}
+      {/* =====================================================
+          RIGHT PANEL
+      ===================================================== */}
+
       <div className="w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-8 lg:p-12 overflow-y-auto">
         <div className="w-full max-w-md bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-slate-200 space-y-6 my-auto">
 
           {/* HEADER */}
+
           <div className="text-center lg:text-left space-y-1">
             <h2 className="text-2xl font-bold text-[#0f172a]">
               {view === 'login' &&
@@ -1101,6 +1385,7 @@ export default function VisitorLogin() {
           </div>
 
           {/* ERROR */}
+
           {error && (
             <div
               className={`text-xs font-semibold rounded-lg px-3 py-2 ${
@@ -1115,13 +1400,19 @@ export default function VisitorLogin() {
             </div>
           )}
 
-          {/* SUCCESS VIEW */}
+          {/* =================================================
+              SUCCESS VIEW
+          ================================================= */}
+
           {view === 'success' &&
             registeredVisitor && (
               <div className="space-y-4 bg-slate-50 p-6 rounded-xl border border-slate-200 text-center">
                 <h3 className="text-sm font-bold text-[#0f172a]">
                   Welcome,{' '}
-                  {registeredVisitor.fullName}!
+                  {
+                    registeredVisitor.fullName
+                  }
+                  !
                 </h3>
 
                 <div className="flex justify-center">
@@ -1139,7 +1430,9 @@ export default function VisitorLogin() {
                 </div>
 
                 <p className="text-xs font-mono font-bold text-[#002046] break-all">
-                  {registeredVisitor.qrCode}
+                  {
+                    registeredVisitor.qrCode
+                  }
                 </p>
 
                 <p className="text-xs text-slate-500">
@@ -1164,7 +1457,10 @@ export default function VisitorLogin() {
               </div>
             )}
 
-          {/* OTP VIEW */}
+          {/* =================================================
+              OTP VIEW
+          ================================================= */}
+
           {view === 'otp' && (
             <form
               onSubmit={handleVerifyOtp}
@@ -1227,7 +1523,9 @@ export default function VisitorLogin() {
 
               <button
                 type="button"
-                onClick={handleResendOtp}
+                onClick={
+                  handleResendOtp
+                }
                 className="w-full text-xs font-semibold text-[#002046] hover:underline"
               >
                 Resend Verification Code
@@ -1235,13 +1533,18 @@ export default function VisitorLogin() {
             </form>
           )}
 
-          {/* REGISTER VIEW */}
+          {/* =================================================
+              REGISTER VIEW
+          ================================================= */}
+
           {view === 'register' && (
             <form
               onSubmit={handleRegister}
               className="space-y-3"
               autoComplete="off"
             >
+              {/* FULL NAME */}
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Full Name
@@ -1264,6 +1567,8 @@ export default function VisitorLogin() {
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
                 />
               </div>
+
+              {/* CONTACT NUMBER */}
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -1290,6 +1595,8 @@ export default function VisitorLogin() {
                 />
               </div>
 
+              {/* EMAIL */}
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Email Address
@@ -1313,28 +1620,120 @@ export default function VisitorLogin() {
                 />
               </div>
 
-              <div>
+              {/* =================================================
+                  STRUCTURED LOCATION
+              ================================================= */}
+
+              <div className="space-y-3">
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Address
+                  Residential Location
                 </label>
 
-                <textarea
-                  name="user_address"
+                {/* PROVINCE */}
+
+                <select
+                  value={selectedProvince}
+                  onChange={(event) => {
+                    const province =
+                      event.target.value;
+
+                    setSelectedProvince(
+                      province
+                    );
+
+                    setSelectedCity(
+                      ''
+                    );
+
+                    setBarangay('');
+                  }}
+                  required
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                >
+                  <option value="">
+                    Select Province
+                  </option>
+
+                  {Object.keys(
+                    LOCATION_OPTIONS
+                  ).map(
+                    (province) => (
+                      <option
+                        key={province}
+                        value={province}
+                      >
+                        {province}
+                      </option>
+                    )
+                  )}
+                </select>
+
+                {/* CITY / MUNICIPALITY */}
+
+                <select
+                  value={selectedCity}
+                  onChange={(event) => {
+                    setSelectedCity(
+                      event.target.value
+                    );
+
+                    setBarangay('');
+                  }}
+                  required
+                  disabled={
+                    !selectedProvince
+                  }
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                >
+                  <option value="">
+                    {selectedProvince
+                      ? 'Select City / Municipality'
+                      : 'Select province first'}
+                  </option>
+
+                  {selectedProvince &&
+                    LOCATION_OPTIONS[
+                      selectedProvince
+                    ]?.map(
+                      (city) => (
+                        <option
+                          key={city}
+                          value={city}
+                        >
+                          {city}
+                        </option>
+                      )
+                    )}
+                </select>
+
+                {/* BARANGAY */}
+
+                <input
+                  type="text"
+                  name="user_barangay"
                   autoComplete="off"
                   required
-                  rows="2"
-                  placeholder="Street, City, Province"
-                  value={formData.address}
-                  onChange={(event) =>
-                    setFormData({
-                      ...formData,
-                      address:
-                        event.target.value,
-                    })
+                  disabled={
+                    !selectedCity
                   }
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                  placeholder="Enter Barangay"
+                  value={barangay}
+                  onChange={(event) =>
+                    setBarangay(
+                      event.target.value
+                    )
+                  }
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm disabled:bg-slate-100 disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
                 />
+
+                <p className="text-[10px] text-slate-500">
+                  Select your province and
+                  city/municipality, then enter
+                  your barangay.
+                </p>
               </div>
+
+              {/* PASSWORD */}
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -1353,7 +1752,9 @@ export default function VisitorLogin() {
                     minLength={8}
                     autoComplete="new-password"
                     placeholder="Example: Juan@2026"
-                    value={formData.password}
+                    value={
+                      formData.password
+                    }
                     onChange={(event) =>
                       setFormData({
                         ...formData,
@@ -1430,6 +1831,8 @@ export default function VisitorLogin() {
                 </div>
               </div>
 
+              {/* CONFIRM PASSWORD */}
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Confirm Password
@@ -1485,15 +1888,23 @@ export default function VisitorLogin() {
                 </div>
               </div>
 
+              {/* SUBMIT */}
+
               <button
                 type="submit"
                 disabled={
                   !isPasswordValid ||
-                  !passwordsMatch
+                  !passwordsMatch ||
+                  !selectedProvince ||
+                  !selectedCity ||
+                  !barangay.trim()
                 }
                 className={`w-full py-2.5 rounded-lg font-bold text-sm transition shadow-sm ${
                   isPasswordValid &&
-                  passwordsMatch
+                  passwordsMatch &&
+                  selectedProvince &&
+                  selectedCity &&
+                  barangay.trim()
                     ? 'bg-[#002046] text-white hover:opacity-95'
                     : 'bg-slate-300 text-slate-500 cursor-not-allowed'
                 }`}
@@ -1504,16 +1915,22 @@ export default function VisitorLogin() {
               <div className="text-center pt-2">
                 <button
                   type="button"
-                  onClick={resetToLogin}
+                  onClick={
+                    resetToLogin
+                  }
                   className="text-xs font-semibold text-slate-600 hover:text-[#002046]"
                 >
-                  Already have an account? Sign In
+                  Already have an account?
+                  Sign In
                 </button>
               </div>
             </form>
           )}
 
-          {/* LOGIN VIEW */}
+          {/* =================================================
+              LOGIN VIEW
+          ================================================= */}
+
           {view === 'login' && (
             <form
               onSubmit={handleLogin}
@@ -1542,7 +1959,9 @@ export default function VisitorLogin() {
 
                   <button
                     type="button"
-                    onClick={stopScanner}
+                    onClick={
+                      stopScanner
+                    }
                     className="w-full border border-slate-300 text-slate-700 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-50 transition"
                   >
                     Cancel Camera
@@ -1550,9 +1969,12 @@ export default function VisitorLogin() {
                 </div>
               ) : (
                 <>
+                  {/* LOGIN IDENTIFIER */}
+
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
-                      Email / Account ID / QR Pass ID
+                      Email / Account ID /
+                      QR Pass ID
                     </label>
 
                     <input
@@ -1574,6 +1996,8 @@ export default function VisitorLogin() {
                       className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
                     />
                   </div>
+
+                  {/* LOGIN PASSWORD */}
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
@@ -1614,13 +2038,19 @@ export default function VisitorLogin() {
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-[#002046]"
                       >
                         {showLoginPassword ? (
-                          <EyeOff size={18} />
+                          <EyeOff
+                            size={18}
+                          />
                         ) : (
-                          <Eye size={18} />
+                          <Eye
+                            size={18}
+                          />
                         )}
                       </button>
                     </div>
                   </div>
+
+                  {/* SIGN IN */}
 
                   <button
                     type="submit"
@@ -1637,14 +2067,20 @@ export default function VisitorLogin() {
                     </span>
                   </div>
 
+                  {/* CAMERA QR */}
+
                   <button
                     type="button"
-                    onClick={startScanner}
+                    onClick={
+                      startScanner
+                    }
                     className="w-full border border-slate-300 text-slate-700 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition"
                   >
                     <Camera size={18} />
                     Scan QR Pass
                   </button>
+
+                  {/* QR FILE INPUT */}
 
                   <input
                     ref={fileInputRef}
@@ -1656,12 +2092,16 @@ export default function VisitorLogin() {
                     }
                   />
 
+                  {/* QR UPLOAD */}
+
                   <button
                     type="button"
                     onClick={() => {
                       fileInputRef.current?.click();
                     }}
-                    disabled={isUploadingQr}
+                    disabled={
+                      isUploadingQr
+                    }
                     className="w-full border border-slate-300 text-slate-700 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Upload size={18} />
@@ -1677,6 +2117,8 @@ export default function VisitorLogin() {
                     aria-hidden="true"
                   />
 
+                  {/* REGISTER LINK */}
+
                   <div className="text-center pt-2">
                     <p className="text-xs text-slate-600">
                       Don't have an account?{' '}
@@ -1685,7 +2127,9 @@ export default function VisitorLogin() {
                         type="button"
                         onClick={() => {
                           setError('');
-                          setView('register');
+                          setView(
+                            'register'
+                          );
                         }}
                         className="font-bold text-[#002046] hover:underline"
                       >
