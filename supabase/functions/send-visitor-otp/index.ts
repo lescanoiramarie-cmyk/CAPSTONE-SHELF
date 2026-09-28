@@ -1,5 +1,5 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
-import QRCode from "npm:qrcode@1.5.4";
+import { createClient } from "@supabase/supabase-js";
+import QRCode from "qrcode";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
