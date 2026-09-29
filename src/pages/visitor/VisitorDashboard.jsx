@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
+  BookOpen,
   CalendarDays,
   CircleHelp,
   LogOut,
@@ -20,6 +21,7 @@ import LibraryMap from '../../component/LibraryMap.jsx';
 import FAQ from '../../component/FAQ.jsx';
 import VisitorServices from '../../component/VisitorServices.jsx';
 import AIRecommendations from '../../component/AIRecommendations.jsx';
+import PersonalBooks from '../../component/PersonalBooks.jsx';
 
 function formatDateTime(iso) {
   if (!iso) {
@@ -72,10 +74,10 @@ export default function VisitorDashboard() {
   const { user, logout } = useAuth();
 
   const {
-    attendanceLogs,
-    borrowRequests,
-    libraries,
-    visitors,
+    attendanceLogs = [],
+    borrowRequests = [],
+    libraries = [],
+    visitors = [],
   } = useLibraryData();
 
   const [tab, setTab] = useState('catalog');
@@ -88,9 +90,7 @@ export default function VisitorDashboard() {
   const [isDarkAppearance, setIsDarkAppearance] = useState(() => {
     try {
       return (
-        globalThis.localStorage.getItem(
-          'shelf_visitor_appearance'
-        ) === 'dark'
+        globalThis.localStorage.getItem('shelf_visitor_appearance') === 'dark'
       );
     } catch {
       return false;
@@ -160,12 +160,7 @@ export default function VisitorDashboard() {
       // Background
       context.fillStyle = '#ffffff';
 
-      context.fillRect(
-        0,
-        0,
-        canvasWidth,
-        canvasHeight
-      );
+      context.fillRect(0, 0, canvasWidth, canvasHeight);
 
       // SHELF ILMS title
       context.fillStyle = '#002046';
@@ -174,30 +169,19 @@ export default function VisitorDashboard() {
 
       context.textAlign = 'center';
 
-      context.fillText(
-        'SHELF ILMS',
-        canvasWidth / 2,
-        65
-      );
+      context.fillText('SHELF ILMS', canvasWidth / 2, 65);
 
       // Subtitle
       context.fillStyle = '#334155';
 
       context.font = 'bold 24px Arial, sans-serif';
 
-      context.fillText(
-        'Digital Library Pass',
-        canvasWidth / 2,
-        105
-      );
+      context.fillText('Digital Library Pass', canvasWidth / 2, 105);
 
       // Convert SVG to image
-      const svgBlob = new Blob(
-        [svgData],
-        {
-          type: 'image/svg+xml;charset=utf-8',
-        }
-      );
+      const svgBlob = new Blob([svgData], {
+        type: 'image/svg+xml;charset=utf-8',
+      });
 
       const svgUrl = URL.createObjectURL(svgBlob);
 
@@ -207,11 +191,7 @@ export default function VisitorDashboard() {
         qrImage.onload = resolve;
 
         qrImage.onerror = () => {
-          reject(
-            new Error(
-              'Unable to generate the QR image.'
-            )
-          );
+          reject(new Error('Unable to generate the QR image.'));
         };
 
         qrImage.src = svgUrl;
@@ -225,20 +205,9 @@ export default function VisitorDashboard() {
 
       context.fillStyle = '#ffffff';
 
-      context.fillRect(
-        qrX - 25,
-        qrY - 25,
-        qrSize + 50,
-        qrSize + 50
-      );
+      context.fillRect(qrX - 25, qrY - 25, qrSize + 50, qrSize + 50);
 
-      context.drawImage(
-        qrImage,
-        qrX,
-        qrY,
-        qrSize,
-        qrSize
-      );
+      context.drawImage(qrImage, qrX, qrY, qrSize, qrSize);
 
       URL.revokeObjectURL(svgUrl);
 
@@ -249,22 +218,14 @@ export default function VisitorDashboard() {
 
       context.textAlign = 'center';
 
-      context.fillText(
-        user.qrCode,
-        canvasWidth / 2,
-        900
-      );
+      context.fillText(user.qrCode, canvasWidth / 2, 900);
 
       // Visitor name
       context.fillStyle = '#475569';
 
       context.font = 'bold 22px Arial, sans-serif';
 
-      context.fillText(
-        user?.name || 'Visitor',
-        canvasWidth / 2,
-        945
-      );
+      context.fillText(user?.name || 'Visitor', canvasWidth / 2, 945);
 
       // Instruction
       context.fillStyle = '#64748b';
@@ -292,14 +253,9 @@ export default function VisitorDashboard() {
 
       document.body.removeChild(link);
     } catch (error) {
-      console.error(
-        'Save QR image error:',
-        error
-      );
+      console.error('Save QR image error:', error);
 
-      alert(
-        'Unable to save the QR code as an image. Please try again.'
-      );
+      alert('Unable to save the QR code as an image. Please try again.');
     } finally {
       setIsSavingQr(false);
     }
@@ -310,38 +266,23 @@ export default function VisitorDashboard() {
   // =========================================================
 
   const myVisits = attendanceLogs
-    .filter(
-      (attendance) =>
-        attendance.visitorId === user?.id
-    )
-    .sort(
-      (a, b) =>
-        new Date(b.timeIn) -
-        new Date(a.timeIn)
-    );
+    .filter((attendance) => attendance.visitorId === user?.id)
+    .sort((a, b) => new Date(b.timeIn) - new Date(a.timeIn));
 
   // =========================================================
   // VISITOR DETAILS
   // =========================================================
 
-  const visitorDetails = visitors.find(
-    (visitor) =>
-      visitor.id === user?.id
-  );
+  const visitorDetails = visitors.find((visitor) => visitor.id === user?.id);
 
   // =========================================================
   // VISITOR TRANSACTION HISTORY
   // =========================================================
 
   const myTransactions = borrowRequests
-    .filter(
-      (request) =>
-        request.visitorId === user?.id
-    )
+    .filter((request) => request.visitorId === user?.id)
     .sort(
-      (a, b) =>
-        new Date(b.requestDate || 0) -
-        new Date(a.requestDate || 0)
+      (a, b) => new Date(b.requestDate || 0) - new Date(a.requestDate || 0)
     );
 
   // =========================================================
@@ -349,10 +290,7 @@ export default function VisitorDashboard() {
   // =========================================================
 
   const libraryName = (id) =>
-    libraries.find(
-      (library) =>
-        library.id === id
-    )?.name || id;
+    libraries.find((library) => library.id === id)?.name || id;
 
   // =========================================================
   // UI
@@ -360,8 +298,8 @@ export default function VisitorDashboard() {
 
   return (
     <div
-      className={`visitor-dashboard min-h-screen bg-[#f8fafc] text-slate-800${
-        isDarkAppearance ? ' theme-dark' : ''
+      className={`visitor-dashboard min-h-screen bg-[#f8fafc] text-slate-800 ${
+        isDarkAppearance ? 'dark bg-slate-900 text-slate-100' : ''
       }`}
     >
       {/* =====================================================
@@ -381,10 +319,7 @@ export default function VisitorDashboard() {
 
         <div className="flex items-center justify-between w-full sm:w-auto gap-4">
           <span className="text-xs text-slate-300">
-            Welcome,{' '}
-            <b>
-              {user?.name || 'Visitor'}
-            </b>
+            Welcome, <b>{user?.name || 'Visitor'}</b>
           </span>
 
           <button
@@ -397,10 +332,7 @@ export default function VisitorDashboard() {
             aria-label="Open visitor menu"
             title="Open visitor menu"
           >
-            <Menu
-              size={18}
-              aria-hidden="true"
-            />
+            <Menu size={18} aria-hidden="true" />
           </button>
         </div>
       </header>
@@ -410,18 +342,17 @@ export default function VisitorDashboard() {
       ====================================================== */}
 
       <main className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
-
         {/* PAGE HEADER */}
 
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-[#0f172a]">
+            <h1 className="text-xl sm:text-2xl font-bold text-[#0f172a] dark:text-white">
               Online Library Catalog & Management
             </h1>
 
-            <p className="text-xs text-slate-500 mt-1">
-              Search books, check real-time availability,
-              borrow or reserve items, and track fines.
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Search books, check real-time availability, borrow or reserve
+              items, and track fines.
             </p>
           </div>
         </div>
@@ -432,29 +363,15 @@ export default function VisitorDashboard() {
 
         <nav
           aria-label="Visitor dashboard"
-          className="flex border-b border-slate-200 gap-6 overflow-x-auto whitespace-nowrap pb-1"
+          className="flex border-b border-slate-200 dark:border-slate-700 gap-6 overflow-x-auto whitespace-nowrap pb-1"
         >
           {[
-            {
-              id: 'catalog',
-              label: 'Catalog',
-            },
-            {
-              id: 'categories',
-              label: 'Book Categories',
-            },
-            {
-              id: 'myBorrows',
-              label: 'My Requests & Borrows',
-            },
-            {
-              id: 'map',
-              label: 'Library Map',
-            },
-            {
-              id: 'services',
-              label: 'Announcements & Feedback',
-            },
+            { id: 'catalog', label: 'Catalog' },
+            { id: 'categories', label: 'Book Categories' },
+            { id: 'myBorrows', label: 'My Requests & Borrows' },
+            { id: 'personalBooks', label: 'My Personal Books' },
+            { id: 'map', label: 'Library Map' },
+            { id: 'services', label: 'Announcements & Feedback' },
           ].map((tabItem) => (
             <button
               type="button"
@@ -463,15 +380,13 @@ export default function VisitorDashboard() {
                 setTab(tabItem.id);
 
                 if (tabItem.id === 'catalog') {
-                  setCatalogResetKey(
-                    (key) => key + 1
-                  );
+                  setCatalogResetKey((key) => key + 1);
                 }
               }}
               className={`pb-3 text-sm font-bold transition flex-shrink-0 ${
                 tab === tabItem.id
-                  ? 'text-[#002046] border-b-2 border-[#002046]'
-                  : 'text-slate-500 hover:text-slate-800'
+                  ? 'text-[#002046] dark:text-blue-400 border-b-2 border-[#002046] dark:border-blue-400'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
               {tabItem.label}
@@ -483,38 +398,24 @@ export default function VisitorDashboard() {
             CATALOG / CATEGORY / BORROW TAB
         ================================================== */}
 
-        {[
-          'catalog',
-          'categories',
-          'myBorrows',
-        ].includes(tab) && (
+        {['catalog', 'categories', 'myBorrows'].includes(tab) && (
           <div className="space-y-6">
-
             {/* AI RECOMMENDATIONS */}
 
-            {tab === 'catalog' && (
-              <AIRecommendations />
-            )}
+            {tab === 'catalog' && <AIRecommendations />}
 
             {/* LIBRARY FILTER */}
 
             {libraryFilter && (
-              <div className="flex items-center gap-2 text-xs text-slate-500">
+              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                 <span>
-                  Filtered to{' '}
-                  <b>
-                    {libraryName(
-                      libraryFilter
-                    )}
-                  </b>
+                  Filtered to <b>{libraryName(libraryFilter)}</b>
                 </span>
 
                 <button
                   type="button"
-                  onClick={() =>
-                    setLibraryFilter(null)
-                  }
-                  className="text-[#002046] font-bold hover:underline"
+                  onClick={() => setLibraryFilter(null)}
+                  className="text-[#002046] dark:text-blue-400 font-bold hover:underline"
                 >
                   Clear filter
                 </button>
@@ -524,17 +425,19 @@ export default function VisitorDashboard() {
             {/* OPAC */}
 
             <OPACCatalog
-              libraryFilter={
-                libraryFilter
-              }
+              libraryFilter={libraryFilter}
               activeView={tab}
               onViewChange={setTab}
-              catalogResetKey={
-                catalogResetKey
-              }
+              catalogResetKey={catalogResetKey}
             />
           </div>
         )}
+
+        {/* =================================================
+            PERSONAL BOOKS TAB
+        ================================================== */}
+
+        {tab === 'personalBooks' && <PersonalBooks user={user} />}
 
         {/* =================================================
             LIBRARY MAP
@@ -543,10 +446,7 @@ export default function VisitorDashboard() {
         {tab === 'map' && (
           <LibraryMap
             onBrowseLibrary={(libraryId) => {
-              setLibraryFilter(
-                libraryId
-              );
-
+              setLibraryFilter(libraryId);
               setTab('catalog');
             }}
           />
@@ -557,10 +457,7 @@ export default function VisitorDashboard() {
         ================================================== */}
 
         {tab === 'services' && (
-          <VisitorServices
-            user={user}
-            libraries={libraries}
-          />
+          <VisitorServices user={user} libraries={libraries} />
         )}
       </main>
 
@@ -580,155 +477,106 @@ export default function VisitorDashboard() {
           <button
             type="button"
             className="absolute inset-0 bg-slate-950/45"
-            onClick={() =>
-              setIsMenuOpen(false)
-            }
+            onClick={() => setIsMenuOpen(false)}
             aria-label="Close visitor menu"
           />
 
           {/* SIDE MENU */}
 
-          <aside className="relative flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
-
+          <aside className="relative flex h-full w-full max-w-md flex-col bg-white dark:bg-slate-800 shadow-2xl">
             {/* MENU HEADER */}
 
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-5 py-4">
               <div>
-                <p className="text-xs font-semibold uppercase text-slate-500">
+                <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">
                   Visitor Portal
                 </p>
 
-                <h2 className="text-lg font-bold text-slate-900">
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">
                   Your Menu
                 </h2>
               </div>
 
               <button
                 type="button"
-                onClick={() =>
-                  setIsMenuOpen(false)
-                }
-                className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                onClick={() => setIsMenuOpen(false)}
+                className="rounded-md p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white"
                 aria-label="Close visitor menu"
               >
-                <X
-                  size={20}
-                  aria-hidden="true"
-                />
+                <X size={20} aria-hidden="true" />
               </button>
             </div>
 
             {/* MENU SECTIONS */}
 
             <nav
-              className="grid grid-cols-3 border-b border-slate-200"
+              className="grid grid-cols-3 border-b border-slate-200 dark:border-slate-700"
               aria-label="Visitor menu sections"
             >
               {[
-                {
-                  id: 'profile',
-                  label: 'Profile',
-                  Icon: UserRound,
-                },
-                {
-                  id: 'faq',
-                  label: 'FAQ',
-                  Icon: CircleHelp,
-                },
-                {
-                  id: 'settings',
-                  label: 'Settings',
-                  Icon: Settings,
-                },
-              ].map(
-                ({
-                  id,
-                  label,
-                  Icon,
-                }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() =>
-                      setMenuSection(id)
-                    }
-                    aria-current={
-                      menuSection === id
-                        ? 'page'
-                        : undefined
-                    }
-                    className={`flex flex-col items-center gap-1 border-b-2 px-2 py-3 text-xs font-semibold ${
-                      menuSection === id
-                        ? 'border-[#002046] text-[#002046]'
-                        : 'border-transparent text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    <Icon
-                      size={18}
-                      aria-hidden="true"
-                    />
-
-                    {label}
-                  </button>
-                )
-              )}
+                { id: 'profile', label: 'Profile', Icon: UserRound },
+                { id: 'faq', label: 'FAQ', Icon: CircleHelp },
+                { id: 'settings', label: 'Settings', Icon: Settings },
+              ].map(({ id, label, Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setMenuSection(id)}
+                  aria-current={menuSection === id ? 'page' : undefined}
+                  className={`flex flex-col items-center gap-1 border-b-2 px-2 py-3 text-xs font-semibold ${
+                    menuSection === id
+                      ? 'border-[#002046] text-[#002046] dark:border-blue-400 dark:text-blue-400'
+                      : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Icon size={18} aria-hidden="true" />
+                  {label}
+                </button>
+              ))}
             </nav>
 
             {/* MENU CONTENT */}
 
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-
               {/* =================================================
                   PROFILE
               ================================================== */}
 
               {menuSection === 'profile' && (
                 <div className="space-y-6">
-
                   {/* PERSONAL INFORMATION */}
 
                   <section>
-                    <h3 className="mb-3 text-sm font-bold text-slate-900">
+                    <h3 className="mb-3 text-sm font-bold text-slate-900 dark:text-white">
                       Personal Information
                     </h3>
 
-                    <dl className="divide-y divide-slate-100 border-y border-slate-100 text-sm">
+                    <dl className="divide-y divide-slate-100 dark:divide-slate-700 border-y border-slate-100 dark:border-slate-700 text-sm">
                       {[
                         [
                           'Full name',
-                          visitorDetails?.fullName ||
-                            user?.name,
+                          visitorDetails?.fullName || user?.name,
                         ],
                         [
                           'Email',
-                          visitorDetails?.email ||
-                            user?.email,
+                          visitorDetails?.email || user?.email,
                         ],
-                        [
-                          'Contact number',
-                          visitorDetails?.contactNumber,
-                        ],
-                        [
-                          'Address',
-                          visitorDetails?.address,
-                        ],
-                      ].map(
-                        ([label, value]) => (
-                          <div
-                            key={label}
-                            className="grid grid-cols-[7rem_1fr] gap-3 py-2.5"
-                          >
-                            <dt className="text-slate-500">
-                              {label}
-                            </dt>
+                        ['Contact number', visitorDetails?.contactNumber],
+                        ['Address', visitorDetails?.address],
+                      ].map(([label, value]) => (
+                        <div
+                          key={label}
+                          className="grid grid-cols-[7rem_1fr] gap-3 py-2.5"
+                        >
+                          <dt className="text-slate-500 dark:text-slate-400">
+                            {label}
+                          </dt>
 
-                            <dd className="break-words font-medium text-slate-800">
-                              {value ||
-                                'Not provided'}
-                            </dd>
-                          </div>
-                        )
-                      )}
+                          <dd className="break-words font-medium text-slate-800 dark:text-slate-200">
+                            {value || 'Not provided'}
+                          </dd>
+                        </div>
+                      ))}
                     </dl>
                   </section>
 
@@ -737,7 +585,7 @@ export default function VisitorDashboard() {
                   ================================================== */}
 
                   <section className="text-center">
-                    <h3 className="mb-3 text-sm font-bold text-slate-900">
+                    <h3 className="mb-3 text-sm font-bold text-slate-900 dark:text-white">
                       Library QR Pass
                     </h3>
 
@@ -754,19 +602,15 @@ export default function VisitorDashboard() {
                           </div>
                         </div>
 
-                        <p className="mt-2 break-all font-mono text-xs font-bold text-[#002046]">
+                        <p className="mt-2 break-all font-mono text-xs font-bold text-[#002046] dark:text-blue-400">
                           {user.qrCode}
                         </p>
 
                         <button
                           type="button"
-                          onClick={
-                            handleSaveQrAsImage
-                          }
-                          disabled={
-                            isSavingQr
-                          }
-                          className="mt-3 w-full rounded-md bg-[#002046] px-3 py-2 text-xs font-bold text-white hover:opacity-90 disabled:opacity-50"
+                          onClick={handleSaveQrAsImage}
+                          disabled={isSavingQr}
+                          className="mt-3 w-full rounded-md bg-[#002046] dark:bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:opacity-90 disabled:opacity-50"
                         >
                           {isSavingQr
                             ? 'Saving QR image...'
@@ -774,9 +618,8 @@ export default function VisitorDashboard() {
                         </button>
                       </>
                     ) : (
-                      <p className="text-sm text-slate-500">
-                        No QR pass is available
-                        for this account.
+                      <p className="text-sm text-slate-500 dark:text-slate-400">
+                        No QR pass is available for this account.
                       </p>
                     )}
                   </section>
@@ -786,40 +629,30 @@ export default function VisitorDashboard() {
                   ================================================== */}
 
                   <section>
-                    <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-900">
-                      <CalendarDays
-                        size={16}
-                        aria-hidden="true"
-                      />
-
+                    <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+                      <CalendarDays size={16} aria-hidden="true" />
                       Attendance History
                     </h3>
 
                     {myVisits.length ? (
-                      <ul className="divide-y divide-slate-100 border-y border-slate-100">
-                        {myVisits
-                          .slice(0, 10)
-                          .map((visit) => (
-                            <li
-                              key={visit.id}
-                              className="flex justify-between gap-3 py-2.5 text-xs"
-                            >
-                              <span className="font-medium text-slate-700">
-                                {libraryName(
-                                  visit.libraryId
-                                )}
-                              </span>
+                      <ul className="divide-y divide-slate-100 dark:divide-slate-700 border-y border-slate-100 dark:border-slate-700">
+                        {myVisits.slice(0, 10).map((visit) => (
+                          <li
+                            key={visit.id}
+                            className="flex justify-between gap-3 py-2.5 text-xs"
+                          >
+                            <span className="font-medium text-slate-700 dark:text-slate-300">
+                              {libraryName(visit.libraryId)}
+                            </span>
 
-                              <time className="shrink-0 text-slate-500">
-                                {formatDateTime(
-                                  visit.timeIn
-                                )}
-                              </time>
-                            </li>
-                          ))}
+                            <time className="shrink-0 text-slate-500 dark:text-slate-400">
+                              {formatDateTime(visit.timeIn)}
+                            </time>
+                          </li>
+                        ))}
                       </ul>
                     ) : (
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
                         No attendance history yet.
                       </p>
                     )}
@@ -830,214 +663,172 @@ export default function VisitorDashboard() {
                   ================================================== */}
 
                   <section>
-                    <h3 className="mb-3 text-sm font-bold text-slate-900">
+                    <h3 className="mb-3 text-sm font-bold text-slate-900 dark:text-white">
                       Transaction History
                     </h3>
 
                     {myTransactions.length ? (
                       <div className="space-y-3">
-                        {myTransactions
-                          .slice(0, 10)
-                          .map((transaction) => {
-                            const status =
-                              String(
-                                transaction.status ||
-                                  ''
-                              ).toLowerCase();
+                        {myTransactions.slice(0, 10).map((transaction) => {
+                          const status = String(
+                            transaction.status || ''
+                          ).toLowerCase();
 
-                            const statusLabel =
-                              formatStatus(
-                                transaction.status
-                              );
+                          const statusLabel = formatStatus(transaction.status);
 
-                            const statusClass =
-                              getStatusClass(
-                                transaction.status
-                              );
+                          const statusClass = getStatusClass(transaction.status);
 
-                            const fineAmount =
-                              Number(
-                                transaction.fineAmount
-                              );
+                          const fineAmount = Number(
+                            transaction.fineAmount
+                          );
 
-                            return (
-                              <article
-                                key={
-                                  transaction.id
-                                }
-                                className="rounded-lg border border-slate-200 bg-slate-50 p-3"
-                              >
-                                {/* BOOK + STATUS */}
+                          return (
+                            <article
+                              key={transaction.id}
+                              className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 p-3"
+                            >
+                              {/* BOOK + STATUS */}
 
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <h4 className="break-words text-xs font-bold text-slate-800">
-                                      {transaction.bookTitle ||
-                                        'Book transaction'}
-                                    </h4>
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <h4 className="break-words text-xs font-bold text-slate-800 dark:text-slate-200">
+                                    {transaction.bookTitle ||
+                                      'Book transaction'}
+                                  </h4>
 
-                                    {transaction.requestDate && (
-                                      <p className="mt-1 text-[11px] text-slate-500">
-                                        Requested:{' '}
-                                        {formatDateTime(
-                                          transaction.requestDate
-                                        )}
-                                      </p>
-                                    )}
-                                  </div>
-
-                                  <span
-                                    className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${statusClass}`}
-                                  >
-                                    {statusLabel ||
-                                      'Unknown'}
-                                  </span>
+                                  {transaction.requestDate && (
+                                    <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                                      Requested:{' '}
+                                      {formatDateTime(transaction.requestDate)}
+                                    </p>
+                                  )}
                                 </div>
 
-                                {/* TRANSACTION DETAILS */}
+                                <span
+                                  className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${statusClass}`}
+                                >
+                                  {statusLabel || 'Unknown'}
+                                </span>
+                              </div>
 
-                                <div className="mt-3 grid grid-cols-1 gap-1.5 text-[11px] sm:grid-cols-2">
+                              {/* TRANSACTION DETAILS */}
 
-                                  {/* BORROW DATE */}
+                              <div className="mt-3 grid grid-cols-1 gap-1.5 text-[11px] sm:grid-cols-2">
+                                {/* BORROW DATE */}
 
-                                  {transaction.borrowDate && (
-                                    <div>
-                                      <span className="font-semibold text-slate-600">
-                                        Borrowed:{' '}
-                                      </span>
+                                {transaction.borrowDate && (
+                                  <div>
+                                    <span className="font-semibold text-slate-600 dark:text-slate-400">
+                                      Borrowed:{' '}
+                                    </span>
 
-                                      <span className="text-slate-500">
-                                        {formatDateTime(
-                                          transaction.borrowDate
-                                        )}
-                                      </span>
-                                    </div>
-                                  )}
-
-                                  {/* DUE DATE */}
-
-                                  {transaction.dueDate && (
-                                    <div>
-                                      <span className="font-semibold text-slate-600">
-                                        Due:{' '}
-                                      </span>
-
-                                      <span className="text-slate-500">
-                                        {formatDateTime(
-                                          transaction.dueDate
-                                        )}
-                                      </span>
-                                    </div>
-                                  )}
-
-                                  {/* RETURN DATE */}
-
-                                  {transaction.returnDate && (
-                                    <div>
-                                      <span className="font-semibold text-slate-600">
-                                        Returned:{' '}
-                                      </span>
-
-                                      <span className="text-slate-500">
-                                        {formatDateTime(
-                                          transaction.returnDate
-                                        )}
-                                      </span>
-                                    </div>
-                                  )}
-
-                                  {/* FINE */}
-
-                                  {!Number.isNaN(
-                                    fineAmount
-                                  ) &&
-                                    fineAmount > 0 && (
-                                      <div>
-                                        <span className="font-semibold text-red-600">
-                                          Fine:{' '}
-                                        </span>
-
-                                        <span className="font-bold text-red-600">
-                                          ₱
-                                          {fineAmount.toFixed(
-                                            2
-                                          )}
-                                        </span>
-                                      </div>
-                                    )}
-                                </div>
-
-                                {/* PICKUP DEADLINE */}
-
-                                {transaction.pickupDeadline &&
-                                  status !== 'cancelled' && (
-                                    <p className="mt-2 text-[11px] text-amber-700">
-                                      <span className="font-semibold">
-                                        Pickup deadline:{' '}
-                                      </span>
-
+                                    <span className="text-slate-500 dark:text-slate-300">
                                       {formatDateTime(
-                                        transaction.pickupDeadline
+                                        transaction.borrowDate
                                       )}
-                                    </p>
-                                  )}
+                                    </span>
+                                  </div>
+                                )}
 
-                                {/* QUEUE POSITION */}
+                                {/* DUE DATE */}
 
-                                {status === 'queued' &&
-                                  transaction.queuePosition !==
-                                    null &&
-                                  transaction.queuePosition !==
-                                    undefined && (
-                                    <p className="mt-2 text-[11px] font-semibold text-purple-700">
-                                      Queue position: #
-                                      {
-                                        transaction.queuePosition
-                                      }
-                                    </p>
-                                  )}
+                                {transaction.dueDate && (
+                                  <div>
+                                    <span className="font-semibold text-slate-600 dark:text-slate-400">
+                                      Due:{' '}
+                                    </span>
 
-                                {/* CANCELLATION REASON */}
+                                    <span className="text-slate-500 dark:text-slate-300">
+                                      {formatDateTime(transaction.dueDate)}
+                                    </span>
+                                  </div>
+                                )}
 
-                                {status === 'cancelled' &&
-                                  transaction.cancelReason && (
-                                    <p className="mt-2 text-[11px] text-red-600">
-                                      <span className="font-semibold">
-                                        Cancellation reason:{' '}
+                                {/* RETURN DATE */}
+
+                                {transaction.returnDate && (
+                                  <div>
+                                    <span className="font-semibold text-slate-600 dark:text-slate-400">
+                                      Returned:{' '}
+                                    </span>
+
+                                    <span className="text-slate-500 dark:text-slate-300">
+                                      {formatDateTime(
+                                        transaction.returnDate
+                                      )}
+                                    </span>
+                                  </div>
+                                )}
+
+                                {/* FINE */}
+
+                                {!Number.isNaN(fineAmount) &&
+                                  fineAmount > 0 && (
+                                    <div>
+                                      <span className="font-semibold text-red-600 dark:text-red-400">
+                                        Fine:{' '}
                                       </span>
 
-                                      {
-                                        transaction.cancelReason
-                                      }
-                                    </p>
+                                      <span className="font-bold text-red-600 dark:text-red-400">
+                                        ₱{fineAmount.toFixed(2)}
+                                      </span>
+                                    </div>
                                   )}
+                              </div>
 
-                                {/* STAFF CONFIRMATION */}
+                              {/* PICKUP DEADLINE */}
 
-                                {transaction.confirmedBy && (
-                                  <p className="mt-2 text-[10px] text-slate-400">
-                                    Pickup confirmed by:{' '}
-                                    {
-                                      transaction.confirmedBy
-                                    }
+                              {transaction.pickupDeadline &&
+                                status !== 'cancelled' && (
+                                  <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-400">
+                                    <span className="font-semibold">
+                                      Pickup deadline:{' '}
+                                    </span>
+
+                                    {formatDateTime(
+                                      transaction.pickupDeadline
+                                    )}
                                   </p>
                                 )}
 
-                                {transaction.returnConfirmedBy && (
-                                  <p className="mt-1 text-[10px] text-slate-400">
-                                    Return confirmed by:{' '}
-                                    {
-                                      transaction.returnConfirmedBy
-                                    }
+                              {/* QUEUE POSITION */}
+
+                              {status === 'queued' &&
+                                transaction.queuePosition !== null &&
+                                transaction.queuePosition !== undefined && (
+                                  <p className="mt-2 text-[11px] font-semibold text-purple-700 dark:text-purple-400">
+                                    Queue position: #{transaction.queuePosition}
                                   </p>
                                 )}
-                              </article>
-                            );
-                          })}
+
+                              {/* CANCELLATION REASON */}
+
+                              {status === 'cancelled' &&
+                                transaction.cancelReason && (
+                                  <p className="mt-2 text-[11px] text-red-600 dark:text-red-400">
+                                    <span className="font-semibold">
+                                      Cancellation reason:{' '}
+                                    </span>
+
+                                    {transaction.cancelReason}
+                                  </p>
+                                )}
+
+                              {/* STAFF CONFIRMATION */}
+
+                              {transaction.confirmedBy && (
+                                <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">
+                                  Pickup confirmed by:{' '}
+                                  {transaction.confirmedBy}
+                                </p>
+                              )}
+                            </article>
+                          );
+                        })}
                       </div>
                     ) : (
-                      <p className="text-xs text-slate-500">
-                        No book transactions yet.
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        No transaction history found.
                       </p>
                     )}
                   </section>
@@ -1048,144 +839,61 @@ export default function VisitorDashboard() {
                   FAQ
               ================================================== */}
 
-              {menuSection === 'faq' && (
-                <FAQ />
-              )}
+              {menuSection === 'faq' && <FAQ />}
 
               {/* =================================================
                   SETTINGS
               ================================================== */}
 
               {menuSection === 'settings' && (
-                <div className="space-y-7">
-
-                  {/* ACCOUNT SETTINGS */}
-
-                  <section>
-                    <h3 className="mb-3 text-sm font-bold text-slate-900">
-                      Account Settings
+                <div className="space-y-6">
+                  <section className="space-y-3">
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                      Appearance Settings
                     </h3>
 
-                    <p className="mb-3 text-xs text-slate-500">
-                      Account information currently
-                      comes from your registered profile.
-                    </p>
-
-                    <dl className="divide-y divide-slate-100 border-y border-slate-100 text-sm">
-                      {[
-                        [
-                          'Name',
-                          visitorDetails?.fullName ||
-                            user?.name,
-                        ],
-                        [
-                          'Email',
-                          visitorDetails?.email ||
-                            user?.email,
-                        ],
-                        [
-                          'Contact',
-                          visitorDetails?.contactNumber,
-                        ],
-                        [
-                          'Address',
-                          visitorDetails?.address,
-                        ],
-                      ].map(
-                        ([label, value]) => (
-                          <div
-                            key={label}
-                            className="grid grid-cols-[6rem_1fr] gap-3 py-2.5"
-                          >
-                            <dt className="text-slate-500">
-                              {label}
-                            </dt>
-
-                            <dd className="break-words font-medium text-slate-800">
-                              {value ||
-                                'Not provided'}
-                            </dd>
-                          </div>
-                        )
-                      )}
-                    </dl>
-                  </section>
-
-                  {/* APPEARANCE */}
-
-                  <section>
-                    <h3 className="mb-3 text-sm font-bold text-slate-900">
-                      Appearance
-                    </h3>
-
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={
-                        isDarkAppearance
-                      }
-                      onClick={() =>
-                        setIsDarkAppearance(
-                          (current) =>
-                            !current
-                        )
-                      }
-                      className="flex w-full items-center justify-between border-y border-slate-100 py-3 text-sm font-medium text-slate-800"
-                    >
-                      <span className="flex items-center gap-2">
+                    <div className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                      <div className="flex items-center gap-2">
                         {isDarkAppearance ? (
-                          <Moon
-                            size={17}
-                            aria-hidden="true"
-                          />
+                          <Moon size={18} className="text-slate-400" />
                         ) : (
-                          <Sun
-                            size={17}
-                            aria-hidden="true"
-                          />
+                          <Sun size={18} className="text-amber-500" />
                         )}
+                        <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                          Dark Mode
+                        </span>
+                      </div>
 
-                        Dark appearance
-                      </span>
-
-                      <span
-                        className={`relative h-6 w-11 rounded-full transition ${
+                      <button
+                        type="button"
+                        onClick={() => setIsDarkAppearance((prev) => !prev)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                           isDarkAppearance
-                            ? 'bg-[#002046]'
+                            ? 'bg-[#002046] dark:bg-blue-600'
                             : 'bg-slate-300'
                         }`}
                       >
                         <span
-                          className={`absolute top-1 h-4 w-4 rounded-full bg-white transition ${
-                            isDarkAppearance
-                              ? 'left-6'
-                              : 'left-1'
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            isDarkAppearance ? 'translate-x-6' : 'translate-x-1'
                           }`}
                         />
-                      </span>
+                      </button>
+                    </div>
+                  </section>
+
+                  <section className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <button
+                      type="button"
+                      onClick={logout}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-50 dark:bg-red-950/40 p-2.5 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition"
+                    >
+                      <LogOut size={16} aria-hidden="true" />
+                      Sign out of Visitor Account
                     </button>
                   </section>
                 </div>
               )}
-            </div>
-
-            {/* =================================================
-                LOGOUT
-            ================================================== */}
-
-            <div className="border-t border-slate-200 p-4">
-              <button
-                type="button"
-                onClick={logout}
-                className="flex w-full items-center justify-center gap-2 rounded-md bg-red-700 px-4 py-3 text-sm font-bold text-white hover:bg-red-800"
-              >
-                <LogOut
-                  size={17}
-                  aria-hidden="true"
-                />
-
-                Sign Out
-              </button>
             </div>
           </aside>
         </div>
