@@ -7,8 +7,6 @@ import {
   EyeOff,
   Camera,
   Upload,
-  Check,
-  Circle,
 } from 'lucide-react';
 
 import { useAuth } from '../../context/useAuth.js';
@@ -173,7 +171,7 @@ function PasswordRequirement({ valid, children }) {
             : 'bg-slate-100'
         }`}
       >
-        {valid ? <Check size={11} aria-hidden="true" /> : <Circle size={5} fill="currentColor" aria-hidden="true" />}
+        {valid ? '✓' : '•'}
       </span>
 
       <span>{children}</span>
@@ -205,6 +203,17 @@ export default function VisitorLogin() {
 
   const [view, setView] = useState('login');
   const [error, setError] = useState('');
+
+  const [fieldErrors, setFieldErrors] = useState({
+    fullName: '',
+    contactNumber: '',
+    email: '',
+    province: '',
+    city: '',
+    barangay: '',
+    password: '',
+    confirmPassword: '',
+  });
 
   const [showScanner, setShowScanner] =
     useState(false);
@@ -275,7 +284,7 @@ export default function VisitorLogin() {
 
   const passwordRequirements = {
     minLength:
-      formData.password.length >= 8,
+      formData.password.length >= 12,
 
     uppercase:
       /[A-Z]/.test(formData.password),
@@ -303,6 +312,11 @@ export default function VisitorLogin() {
     formData.password.length > 0 &&
     formData.password ===
       formData.confirmPassword;
+
+  const isContactNumberValid =
+    /^09\d{9}$/.test(
+      formData.contactNumber
+    );
 
   // =========================================================
   // CENTRALIZED QR LOGIN
@@ -1107,53 +1121,111 @@ export default function VisitorLogin() {
 
     setError('');
 
-    if (!selectedProvince) {
-      setError(
-        'Please select your province.'
-      );
+    const errors = {
+      fullName: '',
+      contactNumber: '',
+      email: '',
+      province: '',
+      city: '',
+      barangay: '',
+      password: '',
+      confirmPassword: '',
+    };
 
-      return;
+    const trimmedFullName =
+      formData.fullName.trim();
+    const trimmedContactNumber =
+      formData.contactNumber.trim();
+    const trimmedEmail =
+      formData.email.trim();
+    const trimmedBarangay =
+      barangay.trim();
+
+    if (!trimmedFullName) {
+      errors.fullName =
+        'Full name is required.';
+    }
+
+    if (!trimmedContactNumber) {
+      errors.contactNumber =
+        'Contact number is required.';
+    } else if (
+      !/^09\d{9}$/.test(
+        trimmedContactNumber
+      )
+    ) {
+      errors.contactNumber =
+        'Contact number must be exactly 11 digits and start with 09.';
+    }
+
+    if (!trimmedEmail) {
+      errors.email =
+        'Email address is required.';
+    } else if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        trimmedEmail
+      )
+    ) {
+      errors.email =
+        'Please enter a valid email address.';
+    }
+
+    if (!selectedProvince) {
+      errors.province =
+        'Province is required.';
     }
 
     if (!selectedCity) {
-      setError(
-        'Please select your city or municipality.'
-      );
-
-      return;
+      errors.city =
+        'City or municipality is required.';
     }
 
-    if (!barangay.trim()) {
-      setError(
-        'Please enter your barangay.'
-      );
-
-      return;
+    if (!trimmedBarangay) {
+      errors.barangay =
+        'Barangay is required.';
     }
 
-    if (!isPasswordValid) {
-      setError(
-        'Password does not meet all requirements.'
-      );
-
-      return;
+    if (!formData.password) {
+      errors.password =
+        'Password is required.';
+    } else if (!isPasswordValid) {
+      errors.password =
+        'Password must be at least 12 characters and include uppercase, lowercase, number, and special character.';
     }
 
-    if (!passwordsMatch) {
-      setError(
-        'Passwords do not match.'
+    if (!formData.confirmPassword) {
+      errors.confirmPassword =
+        'Please confirm your password.';
+    } else if (
+      formData.password !==
+      formData.confirmPassword
+    ) {
+      errors.confirmPassword =
+        'Passwords do not match.';
+    }
+
+    setFieldErrors(errors);
+
+    const hasErrors =
+      Object.values(errors).some(
+        (message) => message
       );
 
+    if (hasErrors) {
       return;
     }
 
     const completeAddress =
-      `${barangay.trim()}, ${selectedCity}, ${selectedProvince}`;
+      `${trimmedBarangay}, ${selectedCity}, ${selectedProvince}`;
 
     try {
       const result =
         await registerVisitor({
           ...formData,
+          fullName: trimmedFullName,
+          contactNumber:
+            trimmedContactNumber,
+          email: trimmedEmail,
           address: completeAddress,
         });
 
@@ -1162,7 +1234,7 @@ export default function VisitorLogin() {
       );
 
       setPendingEmail(
-        formData.email.trim()
+        trimmedEmail
       );
 
       setOtpInput('');
@@ -1266,6 +1338,17 @@ export default function VisitorLogin() {
   const resetToLogin = () => {
     setView('login');
     setError('');
+
+    setFieldErrors({
+      fullName: '',
+      contactNumber: '',
+      email: '',
+      province: '',
+      city: '',
+      barangay: '',
+      password: '',
+      confirmPassword: '',
+    });
 
     setFormData({
       fullName: '',
@@ -1556,18 +1639,34 @@ export default function VisitorLogin() {
                   type="text"
                   name="user_fullname"
                   autoComplete="off"
-                  required
                   placeholder="Juan Dela Cruz"
                   value={formData.fullName}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const value =
+                      event.target.value;
+
                     setFormData({
                       ...formData,
-                      fullName:
-                        event.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                      fullName: value,
+                    });
+
+                    setFieldErrors({
+                      ...fieldErrors,
+                      fullName: '',
+                    });
+                  }}
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20 ${
+                    fieldErrors.fullName
+                      ? 'border-red-400'
+                      : 'border-slate-300'
+                  }`}
                 />
+
+                {fieldErrors.fullName && (
+                  <p className="mt-1 text-[11px] font-medium text-red-600">
+                    {fieldErrors.fullName}
+                  </p>
+                )}
               </div>
 
               {/* CONTACT NUMBER */}
@@ -1580,21 +1679,41 @@ export default function VisitorLogin() {
                 <input
                   type="tel"
                   name="user_contact"
+                  inputMode="numeric"
                   autoComplete="off"
-                  required
+                  maxLength={11}
                   placeholder="09123456789"
                   value={
                     formData.contactNumber
                   }
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const value =
+                      event.target.value
+                        .replace(/\D/g, '')
+                        .slice(0, 11);
+
                     setFormData({
                       ...formData,
-                      contactNumber:
-                        event.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                      contactNumber: value,
+                    });
+
+                    setFieldErrors({
+                      ...fieldErrors,
+                      contactNumber: '',
+                    });
+                  }}
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20 ${
+                    fieldErrors.contactNumber
+                      ? 'border-red-400'
+                      : 'border-slate-300'
+                  }`}
                 />
+
+                {fieldErrors.contactNumber && (
+                  <p className="mt-1 text-[11px] font-medium text-red-600">
+                    {fieldErrors.contactNumber}
+                  </p>
+                )}
               </div>
 
               {/* EMAIL */}
@@ -1605,21 +1724,37 @@ export default function VisitorLogin() {
                 </label>
 
                 <input
-                  type="email"
+                  type="text"
                   name="user_email"
                   autoComplete="off"
-                  required
                   placeholder="visitor@email.com"
                   value={formData.email}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const value =
+                      event.target.value;
+
                     setFormData({
                       ...formData,
-                      email:
-                        event.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                      email: value,
+                    });
+
+                    setFieldErrors({
+                      ...fieldErrors,
+                      email: '',
+                    });
+                  }}
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20 ${
+                    fieldErrors.email
+                      ? 'border-red-400'
+                      : 'border-slate-300'
+                  }`}
                 />
+
+                {fieldErrors.email && (
+                  <p className="mt-1 text-[11px] font-medium text-red-600">
+                    {fieldErrors.email}
+                  </p>
+                )}
               </div>
 
               {/* =================================================
@@ -1648,9 +1783,19 @@ export default function VisitorLogin() {
                     );
 
                     setBarangay('');
+
+                    setFieldErrors({
+                      ...fieldErrors,
+                      province: '',
+                      city: '',
+                      barangay: '',
+                    });
                   }}
-                  required
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                  className={`w-full px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#002046]/20 ${
+                    fieldErrors.province
+                      ? 'border-red-400'
+                      : 'border-slate-300'
+                  }`}
                 >
                   <option value="">
                     Select Province
@@ -1670,6 +1815,12 @@ export default function VisitorLogin() {
                   )}
                 </select>
 
+                {fieldErrors.province && (
+                  <p className="mt-1 text-[11px] font-medium text-red-600">
+                    {fieldErrors.province}
+                  </p>
+                )}
+
                 {/* CITY / MUNICIPALITY */}
 
                 <select
@@ -1680,12 +1831,21 @@ export default function VisitorLogin() {
                     );
 
                     setBarangay('');
+
+                    setFieldErrors({
+                      ...fieldErrors,
+                      city: '',
+                      barangay: '',
+                    });
                   }}
-                  required
                   disabled={
                     !selectedProvince
                   }
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                  className={`w-full px-3 py-2 border rounded-lg text-sm bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#002046]/20 ${
+                    fieldErrors.city
+                      ? 'border-red-400'
+                      : 'border-slate-300'
+                  }`}
                 >
                   <option value="">
                     {selectedProvince
@@ -1708,25 +1868,46 @@ export default function VisitorLogin() {
                     )}
                 </select>
 
+                {fieldErrors.city && (
+                  <p className="mt-1 text-[11px] font-medium text-red-600">
+                    {fieldErrors.city}
+                  </p>
+                )}
+
                 {/* BARANGAY */}
 
                 <input
                   type="text"
                   name="user_barangay"
                   autoComplete="off"
-                  required
                   disabled={
                     !selectedCity
                   }
                   placeholder="Enter Barangay"
                   value={barangay}
-                  onChange={(event) =>
-                    setBarangay(
-                      event.target.value
-                    )
-                  }
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm disabled:bg-slate-100 disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                  onChange={(event) => {
+                    const value =
+                      event.target.value;
+
+                    setBarangay(value);
+
+                    setFieldErrors({
+                      ...fieldErrors,
+                      barangay: '',
+                    });
+                  }}
+                  className={`w-full px-3 py-2 border rounded-lg text-sm disabled:bg-slate-100 disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#002046]/20 ${
+                    fieldErrors.barangay
+                      ? 'border-red-400'
+                      : 'border-slate-300'
+                  }`}
                 />
+
+                {fieldErrors.barangay && (
+                  <p className="mt-1 text-[11px] font-medium text-red-600">
+                    {fieldErrors.barangay}
+                  </p>
+                )}
 
                 <p className="text-[10px] text-slate-500">
                   Select your province and
@@ -1750,21 +1931,31 @@ export default function VisitorLogin() {
                         : 'password'
                     }
                     name="new_password"
-                    required
-                    minLength={8}
+                    minLength={12}
                     autoComplete="new-password"
-                    placeholder="Example: Juan@2026"
+                    placeholder="Example: Juan@Library2026"
                     value={
                       formData.password
                     }
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const value =
+                        event.target.value;
+
                       setFormData({
                         ...formData,
-                        password:
-                          event.target.value,
-                      })
-                    }
-                    className="w-full px-3 py-2 pr-12 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                        password: value,
+                      });
+
+                      setFieldErrors({
+                        ...fieldErrors,
+                        password: '',
+                      });
+                    }}
+                    className={`w-full px-3 py-2 pr-12 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20 ${
+                      fieldErrors.password
+                        ? 'border-red-400'
+                        : 'border-slate-300'
+                    }`}
                   />
 
                   <button
@@ -1795,7 +1986,7 @@ export default function VisitorLogin() {
                         passwordRequirements.minLength
                       }
                     >
-                      At least 8 characters
+                      At least 12 characters
                     </PasswordRequirement>
 
                     <PasswordRequirement
@@ -1831,6 +2022,12 @@ export default function VisitorLogin() {
                     </PasswordRequirement>
                   </ul>
                 </div>
+
+                {fieldErrors.password && (
+                  <p className="mt-1 text-[11px] font-medium text-red-600">
+                    {fieldErrors.password}
+                  </p>
+                )}
               </div>
 
               {/* CONFIRM PASSWORD */}
@@ -1848,20 +2045,26 @@ export default function VisitorLogin() {
                         : 'password'
                     }
                     name="confirm_password"
-                    required
-                    minLength={8}
+                    minLength={12}
                     autoComplete="new-password"
                     placeholder="Re-enter password"
                     value={
                       formData.confirmPassword
                     }
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const value =
+                        event.target.value;
+
                       setFormData({
                         ...formData,
-                        confirmPassword:
-                          event.target.value,
-                      })
-                    }
+                        confirmPassword: value,
+                      });
+
+                      setFieldErrors({
+                        ...fieldErrors,
+                        confirmPassword: '',
+                      });
+                    }}
                     className={`w-full px-3 py-2 pr-12 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20 ${
                       formData.confirmPassword
                         .length > 0
@@ -1888,28 +2091,19 @@ export default function VisitorLogin() {
                     )}
                   </button>
                 </div>
+
+                {fieldErrors.confirmPassword && (
+                  <p className="mt-1 text-[11px] font-medium text-red-600">
+                    {fieldErrors.confirmPassword}
+                  </p>
+                )}
               </div>
 
               {/* SUBMIT */}
 
               <button
                 type="submit"
-                disabled={
-                  !isPasswordValid ||
-                  !passwordsMatch ||
-                  !selectedProvince ||
-                  !selectedCity ||
-                  !barangay.trim()
-                }
-                className={`w-full py-2.5 rounded-lg font-bold text-sm transition shadow-sm ${
-                  isPasswordValid &&
-                  passwordsMatch &&
-                  selectedProvince &&
-                  selectedCity &&
-                  barangay.trim()
-                    ? 'bg-[#002046] text-white hover:opacity-95'
-                    : 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                }`}
+                className="w-full bg-[#002046] text-white py-2.5 rounded-lg font-bold text-sm transition shadow-sm hover:opacity-95"
               >
                 Send Verification Code
               </button>
