@@ -134,22 +134,11 @@ function formatRole(role) {
 }
 
 /*
- * ---------------------------------------------------------------------------
+ * ============================================================================
  * ANALYTICS DATE WINDOW
- * ---------------------------------------------------------------------------
- *
- * Returns:
- * {
- *   start: Date,
- *   endExclusive: Date,
- *   label: string,
- *   valid: boolean,
- *   error: string
- * }
- *
- * The end is exclusive so records on the selected ending date
- * are included correctly.
+ * ============================================================================
  */
+
 function buildAnalyticsWindow(
   range,
   customStart,
@@ -325,6 +314,26 @@ function isDateInsideWindow(
   );
 }
 
+function getDateKey(value) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return `${date.getFullYear()}-${String(
+    date.getMonth() + 1
+  ).padStart(
+    2,
+    '0'
+  )}-${String(
+    date.getDate()
+  ).padStart(
+    2,
+    '0'
+  )}`;
+}
+
 function AdminWorkspace({
   user,
   libraries = [],
@@ -344,12 +353,14 @@ function AdminWorkspace({
     useState('reports');
 
   /*
-   * -------------------------------------------------------------------------
-   * ANALYTICS FILTERS
-   * -------------------------------------------------------------------------
+   * =========================================================================
+   * ANALYTICS-ONLY FILTERS
+   * =========================================================================
    *
-   * These states are intentionally used ONLY by Analytics.
+   * These states are intentionally isolated from Reports,
+   * Feedback, Announcements, and Staff Accounts.
    */
+
   const [
     analyticsLibraryId,
     setAnalyticsLibraryId,
@@ -370,11 +381,23 @@ function AdminWorkspace({
     setCustomEndDate,
   ] = useState('');
 
+  /*
+   * =========================================================================
+   * REPORT FILTERS
+   * =========================================================================
+   */
+
   const [period, setPeriod] =
     useState('daily');
 
   const [reportSort, setReportSort] =
     useState('time');
+
+  /*
+   * =========================================================================
+   * DATABASE-BACKED STATE
+   * =========================================================================
+   */
 
   const [feedback, setFeedback] =
     useState([]);
@@ -416,6 +439,12 @@ function AdminWorkspace({
       libraryId: currentLibraryId,
     });
 
+  /*
+   * =========================================================================
+   * FORECAST STATE
+   * =========================================================================
+   */
+
   const [forecast, setForecast] =
     useState(null);
 
@@ -423,9 +452,9 @@ function AdminWorkspace({
     useState(false);
 
   /*
-   * -------------------------------------------------------------------------
+   * =========================================================================
    * BOOK LOOKUP
-   * -------------------------------------------------------------------------
+   * =========================================================================
    */
 
   const booksById = useMemo(
@@ -440,13 +469,17 @@ function AdminWorkspace({
   );
 
   /*
-   * -------------------------------------------------------------------------
+   * =========================================================================
    * REPORTS
-   * -------------------------------------------------------------------------
+   * =========================================================================
    *
-   * Reports retain their existing behavior.
-   * Super Admin reports are system-wide.
-   * Sub-Admin reports remain assigned-branch scoped.
+   * Reports are intentionally independent from Analytics filters.
+   *
+   * Sub-Admin:
+   *   assigned branch only
+   *
+   * Super Admin:
+   *   all libraries
    */
 
   const scopedAttendance = useMemo(
@@ -488,9 +521,9 @@ function AdminWorkspace({
   );
 
   /*
-   * -------------------------------------------------------------------------
+   * =========================================================================
    * REPORT ROWS
-   * -------------------------------------------------------------------------
+   * =========================================================================
    */
 
   const reportRows = useMemo(() => {
@@ -581,9 +614,9 @@ function AdminWorkspace({
   ]);
 
   /*
-   * -------------------------------------------------------------------------
+   * =========================================================================
    * LOAD DATABASE-BACKED SECTIONS
-   * -------------------------------------------------------------------------
+   * =========================================================================
    */
 
   useEffect(() => {
@@ -615,14 +648,15 @@ function AdminWorkspace({
           });
 
         /*
-         * Sub-Admin sees only feedback for the
-         * assigned branch.
+         * Sub-Admin:
+         * assigned branch only.
          *
-         * Super Admin sees all feedback.
+         * Super Admin:
+         * all feedback.
          *
-         * The Analytics library filter does not
-         * affect this section.
+         * Analytics filters do NOT affect feedback.
          */
+
         if (isSubAdmin) {
           query = query.eq(
             'library_id',
@@ -726,6 +760,23 @@ function AdminWorkspace({
    * -------------------------------------------------------------------------
    * Analytics library scope
    * -------------------------------------------------------------------------
+   *
+   * Sub-Admin:
+   *   automatically assigned branch.
+   *
+   * Super Admin:
+   *   selected branch or all libraries.
+   */
+
+  const effectiveAnalyticsLibraryId =
+    isSubAdmin
+      ? currentLibraryId
+      : analyticsLibraryId;
+
+  /*
+   * -------------------------------------------------------------------------
+   * Analytics attendance scope
+   * -------------------------------------------------------------------------
    */
 
   const analyticsScopedAttendance =
@@ -733,10 +784,6 @@ function AdminWorkspace({
       () =>
         attendanceLogs.filter(
           (item) => {
-            /*
-             * Sub-Admin is automatically restricted
-             * to the assigned branch.
-             */
             if (isSubAdmin) {
               return (
                 String(
@@ -749,9 +796,10 @@ function AdminWorkspace({
             }
 
             /*
-             * Super Admin:
-             * empty value = All libraries
+             * Empty analyticsLibraryId
+             * means All libraries.
              */
+
             if (
               !analyticsLibraryId
             ) {
@@ -776,6 +824,12 @@ function AdminWorkspace({
       ]
     );
 
+  /*
+   * -------------------------------------------------------------------------
+   * Analytics borrowing scope
+   * -------------------------------------------------------------------------
+   */
+
   const analyticsScopedBorrows =
     useMemo(
       () =>
@@ -786,10 +840,6 @@ function AdminWorkspace({
                 item.bookId
               );
 
-            /*
-             * Sub-Admin:
-             * only books belonging to assigned branch.
-             */
             if (isSubAdmin) {
               return (
                 String(
@@ -802,9 +852,10 @@ function AdminWorkspace({
             }
 
             /*
-             * Super Admin:
-             * empty value = All libraries.
+             * Empty analyticsLibraryId
+             * means All libraries.
              */
+
             if (
               !analyticsLibraryId
             ) {
@@ -832,7 +883,7 @@ function AdminWorkspace({
 
   /*
    * -------------------------------------------------------------------------
-   * Analytics date-filtered records
+   * Analytics date-filtered attendance
    * -------------------------------------------------------------------------
    */
 
@@ -851,6 +902,12 @@ function AdminWorkspace({
         analyticsWindow,
       ]
     );
+
+  /*
+   * -------------------------------------------------------------------------
+   * Analytics date-filtered transactions
+   * -------------------------------------------------------------------------
+   */
 
   const analyticsBorrows =
     useMemo(
@@ -902,33 +959,6 @@ function AdminWorkspace({
       );
     }
 
-    const getDayKey = (value) => {
-      const date = new Date(value);
-
-      if (
-        Number.isNaN(
-          date.getTime()
-        )
-      ) {
-        return '';
-      }
-
-      return `${date.getFullYear()}-${String(
-        date.getMonth() + 1
-      ).padStart(
-        2,
-        '0'
-      )}-${String(
-        date.getDate()
-      ).padStart(
-        2,
-        '0'
-      )}`;
-    };
-
-    const getDateKey = (date) =>
-      getDayKey(date);
-
     return {
       labels: dates.map((date) =>
         date.toLocaleDateString(
@@ -947,7 +977,7 @@ function AdminWorkspace({
 
           return analyticsAttendance.filter(
             (item) =>
-              getDayKey(
+              getDateKey(
                 item.timeIn
               ) === key
           ).length;
@@ -961,7 +991,7 @@ function AdminWorkspace({
 
           return analyticsBorrows.filter(
             (item) =>
-              getDayKey(
+              getDateKey(
                 item.requestDate
               ) === key
           ).length;
@@ -1019,6 +1049,15 @@ function AdminWorkspace({
 
   const demandRecommendations =
     useMemo(() => {
+      if (
+        !analyticsWindow.valid
+      ) {
+        return [
+          analyticsWindow.error ||
+            'Select a valid analytics date range.',
+        ];
+      }
+
       const visitTimes =
         analyticsAttendance
           .map((item) =>
@@ -1110,13 +1149,14 @@ function AdminWorkspace({
       return suggestions;
     }, [
       analyticsAttendance,
+      analyticsWindow,
       topCategories,
     ]);
 
   /*
-   * -------------------------------------------------------------------------
-   * Export
-   * -------------------------------------------------------------------------
+   * =========================================================================
+   * EXPORT
+   * =========================================================================
    */
 
   const handleExport = (format) => {
@@ -1152,9 +1192,9 @@ function AdminWorkspace({
   };
 
   /*
-   * -------------------------------------------------------------------------
-   * Announcements
-   * -------------------------------------------------------------------------
+   * =========================================================================
+   * ANNOUNCEMENTS
+   * =========================================================================
    */
 
   const handleAnnouncementSave =
@@ -1283,9 +1323,9 @@ function AdminWorkspace({
     };
 
   /*
-   * -------------------------------------------------------------------------
-   * Feedback
-   * -------------------------------------------------------------------------
+   * =========================================================================
+   * FEEDBACK
+   * =========================================================================
    */
 
   const handleFeedbackReply =
@@ -1355,9 +1395,9 @@ function AdminWorkspace({
     };
 
   /*
-   * -------------------------------------------------------------------------
-   * Visitor Forecast
-   * -------------------------------------------------------------------------
+   * =========================================================================
+   * VISITOR FORECAST
+   * =========================================================================
    */
 
   const runForecast = async () => {
@@ -1388,7 +1428,14 @@ function AdminWorkspace({
     setError('');
 
     try {
-      const now = Date.now();
+      /*
+       * Build category demand from the
+       * currently selected Analytics date window.
+       *
+       * The selected branch and selected date
+       * range are therefore both reflected in
+       * the forecast input.
+       */
 
       const categorySeries =
         topCategories.map(
@@ -1402,10 +1449,14 @@ function AdminWorkspace({
 
             analyticsBorrows.forEach(
               (request) => {
-                if (
+                const requestCategory =
                   booksById.get(
                     request.bookId
-                  )?.category !==
+                  )?.category ||
+                  'Uncategorized';
+
+                if (
+                  requestCategory !==
                   category
                 ) {
                   return;
@@ -1424,18 +1475,33 @@ function AdminWorkspace({
                   return;
                 }
 
+                const endTime =
+                  analyticsWindow.endExclusive.getTime();
+
                 const ageDays =
                   Math.floor(
-                    (now -
+                    (endTime -
                       requestTime) /
                       86400000
                   );
 
+                if (
+                  ageDays < 0
+                ) {
+                  return;
+                }
+
                 const weekIndex =
-                  3 -
                   Math.floor(
                     ageDays / 7
                   );
+
+                /*
+                 * 0 = most recent week
+                 * 1 = previous week
+                 * 2 = two weeks ago
+                 * 3 = three weeks ago
+                 */
 
                 if (
                   weekIndex >= 0 &&
@@ -1449,10 +1515,16 @@ function AdminWorkspace({
               }
             );
 
+            /*
+             * Reverse so the Python service
+             * receives oldest -> newest
+             * weekly demand.
+             */
+
             return {
               category,
               weekly_demand:
-                weeklyDemand,
+                [...weeklyDemand].reverse(),
             };
           }
         );
@@ -1503,9 +1575,9 @@ function AdminWorkspace({
   };
 
   /*
-   * -------------------------------------------------------------------------
-   * Create staff
-   * -------------------------------------------------------------------------
+   * =========================================================================
+   * CREATE STAFF
+   * =========================================================================
    */
 
   const handleCreateStaff =
@@ -1626,9 +1698,9 @@ function AdminWorkspace({
     };
 
   /*
-   * -------------------------------------------------------------------------
-   * Enable / Disable staff
-   * -------------------------------------------------------------------------
+   * =========================================================================
+   * ENABLE / DISABLE STAFF
+   * =========================================================================
    */
 
   const toggleStaffActive =
@@ -1694,9 +1766,9 @@ function AdminWorkspace({
     };
 
   /*
-   * -------------------------------------------------------------------------
-   * Supabase guard
-   * -------------------------------------------------------------------------
+   * =========================================================================
+   * SUPABASE GUARD
+   * =========================================================================
    */
 
   if (!supabase) {
@@ -1718,7 +1790,7 @@ function AdminWorkspace({
   return (
     <div className="space-y-5">
       {/* ================================================================= */}
-      {/* Navigation                                                        */}
+      {/* NAVIGATION                                                        */}
       {/* ================================================================= */}
 
       <nav
@@ -1772,7 +1844,7 @@ function AdminWorkspace({
       </nav>
 
       {/* ================================================================= */}
-      {/* Messages                                                          */}
+      {/* MESSAGES                                                          */}
       {/* ================================================================= */}
 
       {error && (
@@ -2034,9 +2106,9 @@ function AdminWorkspace({
 
       {tab === 'analytics' && (
         <section className="space-y-5">
-          {/* ------------------------------------------------------------- */}
+          {/* ============================================================= */}
           {/* ANALYTICS FILTERS                                             */}
-          {/* ------------------------------------------------------------- */}
+          {/* ============================================================= */}
 
           <section className="border border-slate-200 bg-white p-4">
             <div className="mb-4">
@@ -2045,18 +2117,18 @@ function AdminWorkspace({
               </h2>
 
               <p className="mt-1 text-sm text-slate-500">
-                Filter the analytics
-                results by branch and
-                date range.
+                {isSubAdmin
+                  ? 'Analytics are automatically limited to your assigned branch. Select a date range to view the corresponding activity.'
+                  : 'Filter analytics by library or branch and date range.'}
               </p>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              {/* ------------------------------------------------------- */}
-              {/* SUPER ADMIN LIBRARY FILTER                              */}
-              {/* ------------------------------------------------------- */}
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* ========================================================= */}
+              {/* SUPER ADMIN ONLY: LIBRARY / BRANCH                        */}
+              {/* ========================================================= */}
 
-              {!isSubAdmin ? (
+              {!isSubAdmin && (
                 <label className="block text-sm font-semibold text-slate-700">
                   Library / Branch
 
@@ -2068,8 +2140,7 @@ function AdminWorkspace({
                       event
                     ) => {
                       setAnalyticsLibraryId(
-                        event.target
-                          .value
+                        event.target.value
                       );
 
                       setForecast(
@@ -2100,26 +2171,19 @@ function AdminWorkspace({
                     )}
                   </select>
                 </label>
-              ) : (
-                <div>
-                  <p className="text-sm font-semibold text-slate-700">
-                    Library / Branch
-                  </p>
-
-                  <div className="mt-1 border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                    {getLibraryName(
-                      libraries,
-                      currentLibraryId
-                    )}
-                  </div>
-                </div>
               )}
 
-              {/* ------------------------------------------------------- */}
-              {/* DATE RANGE                                               */}
-              {/* ------------------------------------------------------- */}
+              {/* ========================================================= */}
+              {/* DATE RANGE - BOTH SUB-ADMIN AND SUPER ADMIN               */}
+              {/* ========================================================= */}
 
-              <label className="block text-sm font-semibold text-slate-700">
+              <label
+                className={`block text-sm font-semibold text-slate-700 ${
+                  isSubAdmin
+                    ? 'md:col-span-1'
+                    : ''
+                }`}
+              >
                 Date range
 
                 <select
@@ -2130,8 +2194,7 @@ function AdminWorkspace({
                     event
                   ) => {
                     setAnalyticsDateRange(
-                      event.target
-                        .value
+                      event.target.value
                     );
 
                     setForecast(
@@ -2160,9 +2223,28 @@ function AdminWorkspace({
               </label>
             </div>
 
-            {/* ----------------------------------------------------------- */}
+            {/* =========================================================== */}
+            {/* SUB-ADMIN ASSIGNED BRANCH                                   */}
+            {/* =========================================================== */}
+
+            {isSubAdmin && (
+              <div className="mt-4">
+                <p className="text-sm font-semibold text-slate-700">
+                  Assigned branch
+                </p>
+
+                <div className="mt-1 border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  {getLibraryName(
+                    libraries,
+                    currentLibraryId
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* =========================================================== */}
             {/* CUSTOM DATE RANGE                                           */}
-            {/* ----------------------------------------------------------- */}
+            {/* =========================================================== */}
 
             {analyticsDateRange ===
               'custom' && (
@@ -2217,9 +2299,9 @@ function AdminWorkspace({
               </div>
             )}
 
-            {/* ----------------------------------------------------------- */}
+            {/* =========================================================== */}
             {/* FILTER SUMMARY                                              */}
-            {/* ----------------------------------------------------------- */}
+            {/* =========================================================== */}
 
             <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
               <span className="font-semibold text-slate-500">
@@ -2232,10 +2314,10 @@ function AdminWorkspace({
                       libraries,
                       currentLibraryId
                     )
-                  : analyticsLibraryId
+                  : effectiveAnalyticsLibraryId
                   ? getLibraryName(
                       libraries,
-                      analyticsLibraryId
+                      effectiveAnalyticsLibraryId
                     )
                   : 'All libraries'}
               </span>
@@ -2252,11 +2334,15 @@ function AdminWorkspace({
             )}
           </section>
 
-          {/* ------------------------------------------------------------- */}
-          {/* ANALYTICS CONTENT                                            */}
-          {/* ------------------------------------------------------------- */}
+          {/* ============================================================= */}
+          {/* ANALYTICS CONTENT                                             */}
+          {/* ============================================================= */}
 
           <section className="grid gap-5 xl:grid-cols-[1.3fr_0.7fr]">
+            {/* =========================================================== */}
+            {/* MAIN ANALYTICS CARD                                         */}
+            {/* =========================================================== */}
+
             <div className="border border-slate-200 bg-white p-4">
               <div className="mb-4">
                 <h2 className="text-lg font-bold text-slate-900">
@@ -2269,10 +2355,10 @@ function AdminWorkspace({
                         libraries,
                         currentLibraryId
                       )
-                    : analyticsLibraryId
+                    : effectiveAnalyticsLibraryId
                     ? getLibraryName(
                         libraries,
-                        analyticsLibraryId
+                        effectiveAnalyticsLibraryId
                       )
                     : 'All libraries'}
                   {' · '}
@@ -2341,9 +2427,9 @@ function AdminWorkspace({
                 </div>
               )}
 
-              {/* --------------------------------------------------------- */}
-              {/* ANALYTICS METRICS                                        */}
-              {/* --------------------------------------------------------- */}
+              {/* ========================================================= */}
+              {/* ANALYTICS METRICS                                         */}
+              {/* ========================================================= */}
 
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 <Metric
@@ -2372,9 +2458,9 @@ function AdminWorkspace({
                 />
               </div>
 
-              {/* --------------------------------------------------------- */}
-              {/* MOST REQUESTED CATEGORIES                                */}
-              {/* --------------------------------------------------------- */}
+              {/* ========================================================= */}
+              {/* MOST REQUESTED CATEGORIES                                 */}
+              {/* ========================================================= */}
 
               <div className="mt-5">
                 <h3 className="text-sm font-bold">
@@ -2418,14 +2504,14 @@ function AdminWorkspace({
               </div>
             </div>
 
-            {/* ----------------------------------------------------------- */}
+            {/* =========================================================== */}
             {/* RIGHT SIDE                                                   */}
-            {/* ----------------------------------------------------------- */}
+            {/* =========================================================== */}
 
             <aside className="space-y-4">
-              {/* --------------------------------------------------------- */}
+              {/* ========================================================= */}
               {/* RECOMMENDATIONS                                            */}
-              {/* --------------------------------------------------------- */}
+              {/* ========================================================= */}
 
               <section className="border border-slate-200 bg-white p-4">
                 <h2 className="text-base font-bold">
@@ -2446,9 +2532,9 @@ function AdminWorkspace({
                 </ul>
               </section>
 
-              {/* --------------------------------------------------------- */}
+              {/* ========================================================= */}
               {/* FORECAST                                                   */}
-              {/* --------------------------------------------------------- */}
+              {/* ========================================================= */}
 
               <section className="border border-slate-200 bg-white p-4">
                 <div className="flex items-center justify-between gap-3">
@@ -2476,7 +2562,7 @@ function AdminWorkspace({
                 <p className="mt-2 text-xs text-slate-500">
                   Forecast input follows
                   the selected analytics
-                  library and date range.
+                  branch and date range.
                 </p>
 
                 {forecast
