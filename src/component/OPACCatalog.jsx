@@ -30,22 +30,6 @@ function formatDate(iso) {
 }
 
 // =========================================================
-// CATEGORY LABEL HELPER
-// =========================================================
-
-function formatCategoryLabel(category) {
-  if (!category) {
-    return 'Uncategorized';
-  }
-
-  return String(category)
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-// =========================================================
 // FINE CALCULATION
 // =========================================================
 
@@ -231,34 +215,11 @@ export default function OPACCatalog({
   const uniqueBooksByCategory = new Map();
 
   books.forEach((book) => {
-    const rawCategory =
+    const category =
       book.category?.trim() || 'Uncategorized';
 
-    /*
-     * Used for grouping categories.
-     *
-     * Example:
-     * COMPUTER SCIENCE
-     * Computer Science
-     * computer science
-     *
-     * are treated as the same category.
-     */
-    const categoryKey = rawCategory
-      .toLocaleLowerCase()
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    /*
-     * Used for display.
-     *
-     * Example:
-     * COMPUTER SCIENCE
-     * becomes:
-     * Computer Science
-     */
-    const categoryLabel =
-      formatCategoryLabel(rawCategory);
+    const categoryKey =
+      category.toLocaleLowerCase();
 
     const normalizedIsbn = String(book.isbn || '')
       .replace(/[^a-z0-9]/gi, '')
@@ -274,10 +235,6 @@ export default function OPACCatalog({
       .replace(/\s+/g, ' ')
       .toLocaleLowerCase();
 
-    /*
-     * Prevent duplicate counting of the same title
-     * across participating libraries.
-     */
     const bookKey = normalizedIsbn
       ? `isbn:${normalizedIsbn}`
       : normalizedTitle || normalizedAuthor
@@ -286,7 +243,7 @@ export default function OPACCatalog({
 
     if (!uniqueBooksByCategory.has(categoryKey)) {
       uniqueBooksByCategory.set(categoryKey, {
-        label: categoryLabel,
+        label: category,
         books: new Set(),
       });
     }
@@ -478,18 +435,14 @@ export default function OPACCatalog({
         isbn.includes(normalizedSearch) ||
         category.includes(normalizedSearch);
 
-      /*
-       * Use the same normalized display label used
-       * by the Book Categories page.
-       *
-       * This keeps category selection consistent even
-       * when database values use different casing.
-       */
       const matchesCategory =
         selectedCategory === 'All' ||
-        formatCategoryLabel(
-          book.category
-        ) === selectedCategory;
+        String(
+          book.category || 'Uncategorized'
+        )
+          .trim()
+          .toLocaleLowerCase() ===
+          selectedCategory.toLocaleLowerCase();
 
       const matchesLibrary =
         libraryFilter
@@ -983,7 +936,6 @@ export default function OPACCatalog({
                 <h2 className="text-base font-bold text-slate-800">
                   Books in {selectedCategory}
                 </h2>
-
                 <p className="mt-1 text-xs text-slate-500">
                   {filteredBooks.length}{' '}
                   catalog{' '}
@@ -1118,9 +1070,8 @@ export default function OPACCatalog({
                       <div className="space-y-1 min-w-0">
 
                         <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
-                          {formatCategoryLabel(
-                            book.category
-                          )}
+                          {book.category ||
+                            'Uncategorized'}
                         </span>
 
                         <h3 className="font-bold text-slate-800 text-sm line-clamp-2">
@@ -1497,9 +1448,8 @@ export default function OPACCatalog({
               <div className="space-y-1">
 
                 <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
-                  {formatCategoryLabel(
-                    selectedBook.category
-                  )}
+                  {selectedBook.category ||
+                    'Uncategorized'}
                 </span>
 
                 <h3 className="text-lg font-bold text-slate-800">
