@@ -17,6 +17,17 @@ import { supabase } from '../lib/supabaseClient.js';
 // ============================================================================
 // COMPATIBILITY CREDENTIAL LISTS
 // ============================================================================
+//
+// IMPORTANT:
+// Staff authentication is NOT performed using these arrays.
+// Actual staff authentication uses:
+//
+//     Supabase Auth
+//          ↓
+//     staff_profiles
+//
+// Passwords are intentionally not stored in the frontend compatibility list.
+// ============================================================================
 
 export const SUPER_ADMIN_CREDENTIALS = [
   {
@@ -28,105 +39,90 @@ export const SUPER_ADMIN_CREDENTIALS = [
 export const SUB_ADMIN_CREDENTIALS = [
   {
     email: 'malvar.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Malvar Campus Sub-Admin',
     libraryId:
       '277829af-1475-47ae-9e26-4b64c68f54f4',
   },
   {
     email: 'lipa.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Lipa Campus Sub-Admin',
     libraryId:
       '3ccf575d-4573-4ed9-acdb-c8d9cf8a949e',
   },
   {
     email: 'lemery.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Lemery Campus Sub-Admin',
     libraryId:
       '41dec6e1-28cd-4057-a046-982269698cdc',
   },
   {
     email: 'sanjuan.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'San Juan Campus Sub-Admin',
     libraryId:
       '4226ff5c-21f1-48bd-9cf8-a5a272c81e3d',
   },
   {
     email: 'mabini.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Mabini Campus Sub-Admin',
     libraryId:
       '66ea1120-0789-410f-bb87-ae22d115ce1e',
   },
   {
     email: 'nasugbu.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Nasugbu Campus Sub-Admin',
     libraryId:
       '67487fb6-6988-433c-aeef-9b770f59f010',
   },
   {
     email: 'batangascity.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Batangas City Library Staff',
     libraryId:
       '78c0a005-06cd-48f5-92d2-daa06fe36e12',
   },
   {
     email: 'lobo.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Lobo Campus Sub-Admin',
     libraryId:
       '7c23ab9b-b42d-4420-b5b7-fdc71c49792a',
   },
   {
     email: 'alangilan.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Alangilan Campus Sub-Admin',
     libraryId:
       '84819f90-5923-4bd8-8aa0-1805e7613e81',
   },
   {
     email: 'balayan.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Balayan Campus Sub-Admin',
     libraryId:
       '971893c8-5670-46b5-833c-398b2968ad1c',
   },
   {
     email: 'provincial.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Provincial Library Staff',
     libraryId:
       '9c82c34b-6059-47e1-983a-d03755cb830b',
   },
   {
     email: 'pabloborbon.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Pablo Borbon Campus Sub-Admin',
     libraryId:
       'bde57b8b-d3b8-4676-823e-7573f80d3a36',
   },
   {
     email: 'rosario.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Rosario Campus Sub-Admin',
     libraryId:
       'c5613110-237e-4e93-b27b-95b41da95f3a',
   },
   {
     email: 'librarian@shelf.edu',
-    password: 'Librarian@2026',
     name: 'Maria Santos',
     libraryId:
       '78c0a005-06cd-48f5-92d2-daa06fe36e12',
   },
   {
     email: 'circdesk@shelf.edu',
-    password: 'CircDesk@2026',
     name: 'Circulation Desk Staff',
     libraryId:
       '9c82c34b-6059-47e1-983a-d03755cb830b',
@@ -273,23 +269,28 @@ function cleanErr(
 }
 
 // ============================================================================
-// FETCHING
+// FETCHING — LIBRARIES
 // ============================================================================
 
 export async function fetchLibraries() {
-  const { data, error } = await supabase
-    .from('libraries')
-    .select('*')
-    .order('name');
+  const { data, error } =
+    await supabase
+      .from('libraries')
+      .select('*')
+      .order('name');
 
   if (error) {
     throw cleanErr(error);
   }
 
-  return (data || []).map(mapLibrary);
+  return (data || []).map(
+    mapLibrary
+  );
 }
 
-export async function addLibrary(library) {
+export async function addLibrary(
+  library
+) {
   const id =
     library.id ||
     globalThis.crypto?.randomUUID?.();
@@ -300,30 +301,36 @@ export async function addLibrary(library) {
     );
   }
 
-  const { error } = await supabase
-    .from('libraries')
-    .insert({
-      id,
-      name: String(
-        library.name || ''
-      ).trim(),
-      campus:
-        String(
-          library.campus || ''
-        ).trim() || null,
-      address:
-        String(
-          library.address || ''
-        ).trim() || null,
-      lat: Number(library.lat),
-      lng: Number(library.lng),
-      hours:
-        String(
-          library.hours || ''
-        ).trim() || null,
-      status:
-        library.status || 'Open',
-    });
+  const { error } =
+    await supabase
+      .from('libraries')
+      .insert({
+        id,
+        name: String(
+          library.name || ''
+        ).trim(),
+        campus:
+          String(
+            library.campus || ''
+          ).trim() || null,
+        address:
+          String(
+            library.address || ''
+          ).trim() || null,
+        lat: Number(
+          library.lat
+        ),
+        lng: Number(
+          library.lng
+        ),
+        hours:
+          String(
+            library.hours || ''
+          ).trim() || null,
+        status:
+          library.status ||
+          'Open',
+      });
 
   if (error) {
     throw cleanErr(error);
@@ -331,6 +338,10 @@ export async function addLibrary(library) {
 
   return id;
 }
+
+// ============================================================================
+// FETCHING — BOOKS
+// ============================================================================
 
 export async function fetchBooks() {
   const { data, error } =
@@ -345,8 +356,23 @@ export async function fetchBooks() {
     throw cleanErr(error);
   }
 
-  return (data || []).map(mapBook);
+  return (data || []).map(
+    mapBook
+  );
 }
+
+// ============================================================================
+// FETCHING — VISITORS
+// ============================================================================
+//
+// Administrative function.
+// Do NOT use this for normal visitor sessions.
+//
+// Visitors should use:
+//     getVisitor(visitorId)
+//
+// or an appropriately secured RPC.
+//
 
 export async function fetchVisitors() {
   const { data, error } =
@@ -355,25 +381,43 @@ export async function fetchVisitors() {
       .select(
         'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at'
       )
-      .order('registered_at', {
-        ascending: false,
-      });
+      .order(
+        'registered_at',
+        {
+          ascending: false,
+        }
+      );
 
   if (error) {
     throw cleanErr(error);
   }
 
-  return (data || []).map(mapVisitor);
+  return (data || []).map(
+    mapVisitor
+  );
 }
+
+// ============================================================================
+// FETCHING — ALL BORROW REQUESTS
+// ============================================================================
+//
+// Administrative function.
+// Used by staff dashboards.
+//
+// Do NOT use this for visitor sessions.
+//
 
 export async function fetchBorrowRequests() {
   const { data, error } =
     await supabase
       .from('borrow_requests')
       .select('*')
-      .order('request_date', {
-        ascending: false,
-      });
+      .order(
+        'request_date',
+        {
+          ascending: false,
+        }
+      );
 
   if (error) {
     throw cleanErr(error);
@@ -384,14 +428,73 @@ export async function fetchBorrowRequests() {
   );
 }
 
+// ============================================================================
+// FETCHING — CURRENT VISITOR'S BORROW REQUESTS
+// ============================================================================
+//
+// Transitional visitor-specific query.
+//
+// IMPORTANT:
+// This is intentionally filtered by visitorId so the visitor UI
+// only requests its own borrow requests.
+//
+// The database currently still has public SELECT access on
+// borrow_requests. That RLS issue will be fixed in the next
+// security step.
+//
+// Once the RLS policy is secured, this function will continue
+// to work with the visitor-owned policy.
+//
+
+export async function fetchMyBorrowRequests(
+  visitorId
+) {
+  if (!visitorId) {
+    return [];
+  }
+
+  const { data, error } =
+    await supabase
+      .from('borrow_requests')
+      .select('*')
+      .eq(
+        'visitor_id',
+        visitorId
+      )
+      .order(
+        'request_date',
+        {
+          ascending: false,
+        }
+      );
+
+  if (error) {
+    throw cleanErr(error);
+  }
+
+  return (data || []).map(
+    mapBorrowRequest
+  );
+}
+
+// ============================================================================
+// FETCHING — ATTENDANCE
+// ============================================================================
+//
+// Administrative function.
+//
+
 export async function fetchAttendanceLogs() {
   const { data, error } =
     await supabase
       .from('attendance_logs')
       .select('*')
-      .order('time_in', {
-        ascending: false,
-      });
+      .order(
+        'time_in',
+        {
+          ascending: false,
+        }
+      );
 
   if (error) {
     throw cleanErr(error);
@@ -402,16 +505,32 @@ export async function fetchAttendanceLogs() {
   );
 }
 
+// ============================================================================
+// GET ONE VISITOR
+// ============================================================================
+//
+// Used by visitor-related workflows and staff lookups.
+//
+// Database authorization will be tightened separately.
+//
+
 export async function getVisitor(
   visitorId
 ) {
+  if (!visitorId) {
+    return null;
+  }
+
   const { data, error } =
     await supabase
       .from('visitors')
       .select(
         'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at'
       )
-      .eq('id', visitorId)
+      .eq(
+        'id',
+        visitorId
+      )
       .maybeSingle();
 
   if (error) {
@@ -438,12 +557,20 @@ export async function registerVisitor({
     await supabase.rpc(
       'register_visitor',
       {
-        p_full_name: fullName,
+        p_full_name:
+          fullName,
+
         p_contact_number:
           contactNumber,
-        p_email: email,
-        p_address: address,
-        p_password: password,
+
+        p_email:
+          email,
+
+        p_address:
+          address,
+
+        p_password:
+          password,
       }
     );
 
@@ -451,7 +578,8 @@ export async function registerVisitor({
     throw cleanErr(error);
   }
 
-  const row = data?.[0];
+  const row =
+    data?.[0];
 
   if (!row?.visitor_id) {
     throw new Error(
@@ -462,7 +590,9 @@ export async function registerVisitor({
   const visitorId =
     row.visitor_id;
 
-  const { error: emailError } =
+  const {
+    error: emailError,
+  } =
     await supabase.functions.invoke(
       'send-visitor-otp',
       {
@@ -499,7 +629,9 @@ export async function resendOtp(
     throw cleanErr(error);
   }
 
-  const { error: emailError } =
+  const {
+    error: emailError,
+  } =
     await supabase.functions.invoke(
       'send-visitor-otp',
       {
@@ -530,9 +662,11 @@ export async function verifyVisitorOtp(
       {
         p_visitor_id:
           visitorId,
-        p_code: String(
-          code
-        ).trim(),
+
+        p_code:
+          String(
+            code
+          ).trim(),
       }
     );
 
@@ -540,7 +674,8 @@ export async function verifyVisitorOtp(
     throw cleanErr(error);
   }
 
-  const row = data?.[0];
+  const row =
+    data?.[0];
 
   if (!row) {
     throw new Error(
@@ -550,10 +685,16 @@ export async function verifyVisitorOtp(
 
   return {
     id: row.id,
+
     fullName:
       row.full_name,
-    email: row.email,
-    qrCode: row.qr_code,
+
+    email:
+      row.email,
+
+    qrCode:
+      row.qr_code,
+
     otpVerified: true,
   };
 }
@@ -570,6 +711,7 @@ export async function loginVisitor({
           String(
             identifier || ''
           ).trim(),
+
         p_password:
           password || '',
       }
@@ -584,7 +726,8 @@ export async function loginVisitor({
     throw cleanErr(error);
   }
 
-  const row = data?.[0];
+  const row =
+    data?.[0];
 
   if (!row) {
     throw new Error(
@@ -594,10 +737,15 @@ export async function loginVisitor({
 
   return {
     id: row.id,
+
     fullName:
       row.full_name,
-    email: row.email,
-    qrCode: row.qr_code,
+
+    email:
+      row.email,
+
+    qrCode:
+      row.qr_code,
   };
 }
 
@@ -608,9 +756,10 @@ export async function findVisitorByQr(
     await supabase.rpc(
       'find_visitor_by_qr',
       {
-        p_qr: String(
-          qrCode || ''
-        ).trim(),
+        p_qr:
+          String(
+            qrCode || ''
+          ).trim(),
       }
     );
 
@@ -625,14 +774,20 @@ export async function findVisitorByQr(
     return null;
   }
 
-  const row = data[0];
+  const row =
+    data[0];
 
   return {
     id: row.id,
+
     fullName:
       row.full_name,
-    email: row.email,
-    qrCode: row.qr_code,
+
+    email:
+      row.email,
+
+    qrCode:
+      row.qr_code,
   };
 }
 
@@ -663,12 +818,16 @@ export async function loginStaffAccount(
   }
 
   const normalizedEmail =
-    String(email || '')
+    String(
+      email || ''
+    )
       .trim()
       .toLowerCase();
 
   const normalizedPassword =
-    String(password || '');
+    String(
+      password || ''
+    );
 
   if (
     !normalizedEmail ||
@@ -691,16 +850,14 @@ export async function loginStaffAccount(
       {
         email:
           normalizedEmail,
+
         password:
           normalizedPassword,
       }
     );
 
   // --------------------------------------------------------------------------
-  // IMPORTANT:
-  // Handle disabled/banned staff accounts explicitly.
-  // Supabase Auth may return "User is banned" before we can
-  // read staff_profiles.is_active.
+  // Handle disabled/banned staff accounts.
   // --------------------------------------------------------------------------
 
   if (error) {
@@ -877,10 +1034,18 @@ export async function loginStaffAccount(
   // --------------------------------------------------------------------------
 
   return {
-    id: profile.id,
-    email: profile.email,
-    name: profile.full_name,
-    role: profile.role,
+    id:
+      profile.id,
+
+    email:
+      profile.email,
+
+    name:
+      profile.full_name,
+
+    role:
+      profile.role,
+
     libraryId:
       profile.library_id,
   };
@@ -962,9 +1127,11 @@ export async function scanAttendance(
     await supabase.rpc(
       'toggle_attendance',
       {
-        p_qr: String(
-          qrCode || ''
-        ).trim(),
+        p_qr:
+          String(
+            qrCode || ''
+          ).trim(),
+
         p_library_id:
           libraryId,
       }
@@ -974,7 +1141,8 @@ export async function scanAttendance(
     throw cleanErr(error);
   }
 
-  const row = data?.[0];
+  const row =
+    data?.[0];
 
   if (!row) {
     throw new Error(
@@ -984,13 +1152,19 @@ export async function scanAttendance(
 
   return {
     visitor: {
-      id: row.visitor_id,
+      id:
+        row.visitor_id,
+
       fullName:
         row.visitor_name,
     },
+
     log: {
-      id: row.log_id,
-      action: row.action,
+      id:
+        row.log_id,
+
+      action:
+        row.action,
     },
   };
 }
@@ -1068,7 +1242,9 @@ export async function addBook(
     throw cleanErr(error);
   }
 
-  return mapBook(data);
+  return mapBook(
+    data
+  );
 }
 
 export async function updateBook(
@@ -1160,8 +1336,13 @@ export async function updateBook(
   const { error } =
     await supabase
       .from('books')
-      .update(dbPatch)
-      .eq('id', bookId);
+      .update(
+        dbPatch
+      )
+      .eq(
+        'id',
+        bookId
+      );
 
   if (error) {
     throw cleanErr(error);
@@ -1175,7 +1356,10 @@ export async function deleteBook(
     await supabase
       .from('books')
       .delete()
-      .eq('id', bookId);
+      .eq(
+        'id',
+        bookId
+      );
 
   if (error) {
     throw cleanErr(error);
@@ -1201,7 +1385,9 @@ export async function loadSampleCatalog(
 
   let allBooks = [];
 
-  for (const cat of categories) {
+  for (
+    const cat of categories
+  ) {
     try {
       const response =
         await fetch(
@@ -1218,11 +1404,17 @@ export async function loadSampleCatalog(
         await response.json();
 
       const mapped =
-        (data.docs || []).map(
-          (doc, index) => {
+        (
+          data.docs || []
+        ).map(
+          (
+            doc,
+            index
+          ) => {
             const copies =
               Math.floor(
-                Math.random() * 5
+                Math.random() *
+                  5
               ) + 3;
 
             return {
@@ -1235,12 +1427,13 @@ export async function loadSampleCatalog(
                   .author_name?.[0] ||
                 'Unknown Author',
 
-              category: cat
-                .replace(
-                  '+',
-                  ' '
-                )
-                .toUpperCase(),
+              category:
+                cat
+                  .replace(
+                    '+',
+                    ' '
+                  )
+                  .toUpperCase(),
 
               isbn:
                 doc.isbn?.[0] ||
@@ -1298,7 +1491,8 @@ export async function loadSampleCatalog(
   }
 
   if (
-    allBooks.length > 0
+    allBooks.length >
+    0
   ) {
     const { error } =
       await supabase
@@ -1327,6 +1521,7 @@ export async function requestBorrow(
       {
         p_visitor_id:
           visitorId,
+
         p_book_id:
           bookId,
       }
@@ -1362,6 +1557,7 @@ export async function cancelBorrowRequest(
       {
         p_request_id:
           requestId,
+
         p_reason:
           reason,
       }
@@ -1403,6 +1599,7 @@ export async function confirmPickup(
       {
         p_request_id:
           requestId,
+
         p_staff_name:
           staffName,
       }
@@ -1427,6 +1624,7 @@ export async function confirmReturn(
       {
         p_request_id:
           requestId,
+
         p_staff_name:
           staffName,
       }
