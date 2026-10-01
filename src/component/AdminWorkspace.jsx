@@ -135,6 +135,38 @@ function formatRole(role) {
 
 /*
  * ============================================================================
+ * CATEGORY LABEL NORMALIZATION
+ * ============================================================================
+ *
+ * This is used only for display, analytics grouping,
+ * recommendations, and forecast category matching.
+ *
+ * Existing category values in Supabase are NOT modified.
+ *
+ * Examples:
+ *   FICTION              -> Fiction
+ *   fiction              -> Fiction
+ *   Fiction              -> Fiction
+ *   SCIENCE AND TECHNOLOGY -> Science And Technology
+ *   science and technology -> Science And Technology
+ */
+
+function formatCategoryLabel(category) {
+  if (!category) {
+    return 'Uncategorized';
+  }
+
+  return String(category)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/\b\w/g, (char) =>
+      char.toUpperCase()
+    );
+}
+
+/*
+ * ============================================================================
  * ANALYTICS DATE WINDOW
  * ============================================================================
  */
@@ -1008,6 +1040,14 @@ function AdminWorkspace({
    * -------------------------------------------------------------------------
    * Most requested categories
    * -------------------------------------------------------------------------
+   *
+   * Category labels are normalized here so that:
+   *
+   *   Fiction
+   *   FICTION
+   *   fiction
+   *
+   * are counted as one category.
    */
 
   const topCategories = useMemo(() => {
@@ -1015,17 +1055,19 @@ function AdminWorkspace({
 
     analyticsBorrows.forEach(
       (request) => {
-        const category =
+        const rawCategory =
           booksById.get(
             request.bookId
-          )?.category ||
-          'Uncategorized';
+          )?.category;
+
+        const category =
+          formatCategoryLabel(
+            rawCategory
+          );
 
         counts.set(
           category,
-          (counts.get(
-            category
-          ) || 0) + 1
+          (counts.get(category) || 0) + 1
         );
       }
     );
@@ -1432,9 +1474,9 @@ function AdminWorkspace({
        * Build category demand from the
        * currently selected Analytics date window.
        *
-       * The selected branch and selected date
-       * range are therefore both reflected in
-       * the forecast input.
+       * Category labels are normalized using
+       * formatCategoryLabel() so forecast
+       * categories match Analytics categories.
        */
 
       const categorySeries =
@@ -1450,10 +1492,11 @@ function AdminWorkspace({
             analyticsBorrows.forEach(
               (request) => {
                 const requestCategory =
-                  booksById.get(
-                    request.bookId
-                  )?.category ||
-                  'Uncategorized';
+                  formatCategoryLabel(
+                    booksById.get(
+                      request.bookId
+                    )?.category
+                  );
 
                 if (
                   requestCategory !==
@@ -2178,11 +2221,7 @@ function AdminWorkspace({
               {/* ========================================================= */}
 
               <label
-                className={`block text-sm font-semibold text-slate-700 ${
-                  isSubAdmin
-                    ? 'md:col-span-1'
-                    : ''
-                }`}
+                className="block text-sm font-semibold text-slate-700"
               >
                 Date range
 
@@ -2612,7 +2651,9 @@ function AdminWorkspace({
                     >
                       <span>
                         {
-                          item.category
+                          formatCategoryLabel(
+                            item.category
+                          )
                         }{' '}
                         projected
                         demand
