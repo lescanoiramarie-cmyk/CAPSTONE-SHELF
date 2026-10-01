@@ -547,7 +547,7 @@ export default function OPACCatalog({
 
       if (status === 'ready_for_pickup') {
         setNotice(
-          `"${bookEntry.title}" is on hold for you at ${libraryName(
+          `"${bookEntry.title}" is ready for pickup at ${libraryName(
             bookEntry.libraryId
           )}. Please visit within ${PICKUP_WINDOW_HOURS} hours to scan your QR pass.`
         );
@@ -936,6 +936,7 @@ export default function OPACCatalog({
                 <h2 className="text-base font-bold text-slate-800">
                   Books in {selectedCategory}
                 </h2>
+
                 <p className="mt-1 text-xs text-slate-500">
                   {filteredBooks.length}{' '}
                   catalog{' '}
@@ -963,6 +964,7 @@ export default function OPACCatalog({
 
           {books.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center">
+
               <span className="mx-auto grid size-14 place-items-center rounded-full bg-amber-50 text-amber-700">
                 <BookOpen
                   size={26}
@@ -993,9 +995,11 @@ export default function OPACCatalog({
                 />
                 Explore library locations
               </button>
+
             </div>
           ) : filteredBooks.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-10 text-center">
+
               <Search
                 size={28}
                 className="mx-auto text-slate-400"
@@ -1030,6 +1034,7 @@ export default function OPACCatalog({
                   Clear All Filters
                 </button>
               )}
+
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1127,6 +1132,7 @@ export default function OPACCatalog({
           aria-labelledby="opac-category-heading"
           className="space-y-5"
         >
+
           <div>
             <h2
               id="opac-category-heading"
@@ -1142,6 +1148,7 @@ export default function OPACCatalog({
 
           {categorySummaries.length ? (
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+
               {categorySummaries.map(
                 ({ label, count }) => (
                   <button
@@ -1161,6 +1168,7 @@ export default function OPACCatalog({
                     }}
                     className="flex min-h-16 items-center justify-between gap-3 border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-[#002046] hover:bg-blue-50"
                   >
+
                     <span className="min-w-0 text-sm font-semibold text-slate-700">
                       {label}
                     </span>
@@ -1171,15 +1179,18 @@ export default function OPACCatalog({
                         ? 'book'
                         : 'books'}
                     </span>
+
                   </button>
                 )
               )}
+
             </div>
           ) : (
             <p className="border border-dashed border-slate-300 px-4 py-5 text-center text-sm text-slate-500">
               No book categories are available yet.
             </p>
           )}
+
         </section>
       ) : (
 
@@ -1201,6 +1212,7 @@ export default function OPACCatalog({
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase tracking-wider">
 
                 <tr>
+
                   <th className="p-4">
                     Book Title
                   </th>
@@ -1220,6 +1232,7 @@ export default function OPACCatalog({
                   <th className="p-4 text-right">
                     Action
                   </th>
+
                 </tr>
 
               </thead>
@@ -1228,6 +1241,7 @@ export default function OPACCatalog({
 
                 {myRequests.map(
                   (request) => {
+
                     const currentFine =
                       calculateCurrentFine(
                         request
@@ -1315,12 +1329,22 @@ export default function OPACCatalog({
 
                           {request.status ===
                             'ready_for_pickup' && (
-                            <p>
-                              Pick up by:{' '}
-                              {formatDateTime(
-                                request.pickupDeadline
-                              )}
-                            </p>
+                            <>
+                              <p className="font-semibold text-amber-700">
+                                Ready for pickup.
+                              </p>
+
+                              <p>
+                                Pick up by:{' '}
+                                {formatDateTime(
+                                  request.pickupDeadline
+                                )}
+                              </p>
+
+                              <p>
+                                Please scan your QR pass at the library.
+                              </p>
+                            </>
                           )}
 
                           {request.status ===
