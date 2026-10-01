@@ -1,12 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
+  BookMarked,
   BookOpen,
   CalendarDays,
+  Bookmark,
   CircleHelp,
+  CircleDollarSign,
   LogOut,
+  MapPinned,
+  Megaphone,
   Menu,
   Moon,
+  QrCode,
+  Search,
   Settings,
   Sun,
   UserRound,
@@ -22,6 +29,7 @@ import FAQ from '../../component/FAQ.jsx';
 import VisitorServices from '../../component/VisitorServices.jsx';
 import AIRecommendations from '../../component/AIRecommendations.jsx';
 import PersonalBooks from '../../component/PersonalBooks.jsx';
+import DashboardWelcome from '../../component/DashboardWelcome.jsx';
 
 function formatDateTime(iso) {
   if (!iso) {
@@ -343,19 +351,15 @@ export default function VisitorDashboard() {
 
       <main className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
         {/* PAGE HEADER */}
-
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-[#0f172a] dark:text-white">
-              Online Library Catalog & Management
-            </h1>
-
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Search books, check real-time availability, borrow or reserve
-              items, and track fines.
-            </p>
-          </div>
-        </div>
+        <DashboardWelcome
+          name={user?.name?.split(' ')[0]}
+          description="Search books, check availability, manage requests, and keep track of your library visits."
+          actions={[
+            { label: 'Scan QR Pass', Icon: QrCode, onClick: () => { setMenuSection('profile'); setIsMenuOpen(true); } },
+            { label: 'Search Catalog', Icon: Search, onClick: () => { setTab('catalog'); document.getElementById('visitor-catalog')?.scrollIntoView({ behavior: 'smooth' }); } },
+            { label: 'View Fines', Icon: CircleDollarSign, onClick: () => { setTab('myBorrows'); document.getElementById('visitor-catalog')?.scrollIntoView({ behavior: 'smooth' }); } },
+          ]}
+        />
 
         {/* =================================================
             PRIMARY NAVIGATION
@@ -366,13 +370,37 @@ export default function VisitorDashboard() {
           className="flex border-b border-slate-200 dark:border-slate-700 gap-6 overflow-x-auto whitespace-nowrap pb-1"
         >
           {[
-            { id: 'catalog', label: 'Catalog' },
-            { id: 'categories', label: 'Book Categories' },
-            { id: 'myBorrows', label: 'My Requests & Borrows' },
-            { id: 'personalBooks', label: 'My Personal Books' },
-            { id: 'map', label: 'Library Map' },
-            { id: 'services', label: 'Announcements & Feedback' },
-          ].map((tabItem) => (
+            {
+              id: 'catalog',
+              label: 'Catalog',
+              Icon: BookOpen,
+            },
+            {
+              id: 'categories',
+              label: 'Book Categories',
+              Icon: Bookmark,
+            },
+            {
+              id: 'myBorrows',
+              label: 'My Requests & Borrows',
+              Icon: CalendarDays,
+            },
+            {
+              id: 'personalBooks',
+              label: 'My Personal Books',
+              Icon: BookMarked,
+            },
+            {
+              id: 'map',
+              label: 'Library Map',
+              Icon: MapPinned,
+            },
+            {
+              id: 'services',
+              label: 'Announcements & Feedback',
+              Icon: Megaphone,
+            },
+          ].map(({ Icon, ...tabItem }) => (
             <button
               type="button"
               key={tabItem.id}
@@ -385,10 +413,11 @@ export default function VisitorDashboard() {
               }}
               className={`pb-3 text-sm font-bold transition flex-shrink-0 ${
                 tab === tabItem.id
-                  ? 'text-[#002046] dark:text-blue-400 border-b-2 border-[#002046] dark:border-blue-400'
+                  ? 'text-amber-700 dark:text-amber-400 border-b-2 border-amber-500'
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
+              <Icon size={16} aria-hidden="true" />{' '}
               {tabItem.label}
             </button>
           ))}
@@ -399,9 +428,8 @@ export default function VisitorDashboard() {
         ================================================== */}
 
         {['catalog', 'categories', 'myBorrows'].includes(tab) && (
-          <div className="space-y-6">
-            {/* AI RECOMMENDATIONS */}
-
+          <div id="visitor-catalog" className="space-y-6 scroll-mt-5">
+            {/* AI RECOMMENDATIONS SECTION */}
             {tab === 'catalog' && <AIRecommendations />}
 
             {/* LIBRARY FILTER */}

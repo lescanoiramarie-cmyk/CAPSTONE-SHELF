@@ -10,6 +10,14 @@
   --color-shelf-border: #e2e8f0;
 }
 
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  border-color: #64748b;
+  box-shadow: 0 0 0 3px rgb(15 23 42 / 10%);
+}
+
 .visitor-dashboard.theme-dark {
   background-color: #0b1220;
   color: #e2e8f0;
