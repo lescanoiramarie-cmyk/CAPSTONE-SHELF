@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLibraryData } from '../context/useLibrary.js';
 import { Html5Qrcode } from 'html5-qrcode';
+import { QrCode, X } from 'lucide-react';
 
 export default function QrScanner({
   onScan,
@@ -196,7 +197,8 @@ export default function QrScanner({
           onClick={startCamera}
           className="w-full sm:w-auto bg-emerald-600 text-white text-sm font-bold px-5 py-2.5 rounded-lg hover:bg-emerald-700 transition"
         >
-          📷 Scan QR with Camera
+          <QrCode size={16} className="mr-2 inline-block align-[-3px]" aria-hidden="true" />
+          Scan QR with Camera
         </button>
       ) : (
         <div className="space-y-2">
@@ -213,7 +215,8 @@ export default function QrScanner({
             onClick={stopCamera}
             className="w-full bg-red-600 text-white text-sm font-bold px-4 py-2.5 rounded-lg hover:bg-red-700 transition"
           >
-            ✕ Stop Camera
+            <X size={16} className="mr-2 inline-block align-[-3px]" aria-hidden="true" />
+            Stop Camera
           </button>
 
         </div>

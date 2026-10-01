@@ -1,5 +1,16 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
+import {
+  Activity,
+  AlertTriangle,
+  BookOpen,
+  ClipboardList,
+  Clock3,
+  FileSpreadsheet,
+  QrCode,
+  Upload,
+  UsersRound,
+} from 'lucide-react';
 
 import { useAuth } from '../../context/useAuth.js';
 import { useLibraryData } from '../../context/useLibrary.js';
@@ -9,6 +20,7 @@ import BookTransactions from '../../component/BookTransactions.jsx';
 import BookInventory from '../../component/BookInventory.jsx';
 import ReservationQueue from '../../component/ReservationQueue.jsx';
 import AdminWorkspace from '../../component/AdminWorkspace.jsx';
+import DashboardWelcome from '../../component/DashboardWelcome.jsx';
 
 import { supabase } from '../../lib/supabaseClient.js';
 import { exportToExcel, exportToCSV, parseImportFile } from '../../lib/excelUtils.js';
@@ -18,31 +30,33 @@ import {
 } from '../../data/store.js';
 
 const NAV = [
-  { id: 'overview', label: '📊 Overview' },
-  { id: 'attendance', label: '🪪 Attendance' },
-  { id: 'transactions', label: '🔁 Book Transactions' },
-  { id: 'inventory', label: '📚 Inventory' },
-  { id: 'queue', label: '⏳ Reservation Queue' },
-  { id: 'workspace', label: '📈 Reports & Services' },
+  { id: 'overview', label: 'Overview', Icon: Activity },
+  { id: 'attendance', label: 'Attendance', Icon: QrCode },
+  { id: 'transactions', label: 'Book Transactions', Icon: BookOpen },
+  { id: 'inventory', label: 'Inventory', Icon: ClipboardList },
+  { id: 'queue', label: 'Reservation Queue', Icon: Clock3 },
+  { id: 'workspace', label: 'Reports & Services', Icon: FileSpreadsheet },
 ];
 
 function StatCard({ label, value, tone = 'default' }) {
   const tones = {
-    default: 'bg-white border-slate-200 text-slate-800',
-    amber: 'bg-amber-50 border-amber-200 text-amber-800',
-    red: 'bg-red-50 border-red-200 text-red-700',
-    blue: 'bg-blue-50 border-blue-200 text-blue-800',
+    default: 'bg-white border-slate-200 border-l-slate-300 text-slate-800',
+    amber: 'bg-amber-50 border-amber-200 border-l-amber-500 text-amber-800',
+    red: 'bg-red-50 border-red-200 border-l-red-500 text-red-700',
+    blue: 'bg-blue-50 border-blue-200 border-l-blue-500 text-blue-800',
   };
 
   return (
-    <div className={`rounded-xl border p-5 shadow-sm ${tones[tone]}`}>
-      <p className="text-xs font-semibold uppercase tracking-wider opacity-70">
-        {label}
-      </p>
-
-      <p className="text-3xl font-extrabold mt-1">
-        {value}
-      </p>
+    <div className={`rounded-r-xl border border-l-4 p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${tones[tone]}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider opacity-70">{label}</p>
+          <p className="mt-1 text-3xl font-extrabold">{value}</p>
+        </div>
+        <span className="rounded-lg bg-white/70 p-2 text-current shadow-sm" aria-hidden="true">
+          {tone === 'amber' ? <Clock3 size={18} /> : tone === 'red' ? <AlertTriangle size={18} /> : tone === 'blue' ? <UsersRound size={18} /> : <Activity size={18} />}
+        </span>
+      </div>
     </div>
   );
 }
@@ -768,10 +782,6 @@ export default function SubAdminDashboard() {
     });
   };
 
-  const currentNav = NAV.find(
-    (n) => n.id === section
-  );
-
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex">
 
@@ -790,7 +800,7 @@ export default function SubAdminDashboard() {
 
         <nav className="flex-1 p-3 space-y-1">
 
-          {NAV.map((item) => (
+          {NAV.map(({ Icon, ...item }) => (
             <button
               key={item.id}
               type="button"
@@ -799,10 +809,11 @@ export default function SubAdminDashboard() {
               }
               className={`w-full text-left text-sm px-3 py-2.5 rounded-lg transition ${
                 section === item.id
-                  ? 'bg-white/15 font-bold'
+                  ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
                   : 'text-slate-300 hover:bg-white/5'
               }`}
             >
+              <Icon size={18} className="mr-3 inline-block align-[-3px]" aria-hidden="true" />
               {item.label}
             </button>
           ))}
@@ -831,20 +842,16 @@ export default function SubAdminDashboard() {
       </aside>
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 p-8 space-y-6 overflow-y-auto">
-
-        <div>
-          <h1 className="text-2xl font-bold text-[#0f172a]">
-            {currentNav?.label.replace(
-              /^\S+\s/,
-              ''
-            )}
-          </h1>
-
-          <p className="text-xs text-slate-500 mt-1">
-            Manage book inventories, issue books, and process returns for your branch.
-          </p>
-        </div>
+      <main className="min-w-0 flex-1 space-y-6 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <DashboardWelcome
+          name={user?.name?.split(' ')[0]}
+          description={`Manage circulation, reservations, and inventory${user?.assignedBranchName ? ` for ${user.assignedBranchName}` : ' for your branch'}.`}
+          actions={[
+            { label: 'Scan Visitor QR', Icon: QrCode, onClick: () => setSection('attendance') },
+            { label: 'Open Inventory', Icon: BookOpen, onClick: () => setSection('inventory') },
+            { label: 'Review Queue', Icon: Clock3, onClick: () => setSection('queue') },
+          ]}
+        />
 
         {/* OVERVIEW */}
         {section === 'overview' && (
@@ -904,7 +911,8 @@ export default function SubAdminDashboard() {
                   </select>
 
                   <label className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg cursor-pointer transition">
-                    📤 Import File
+                    <Upload size={14} className="mr-1.5 inline-block align-[-2px]" aria-hidden="true" />
+                    Import File
                     <input
                       type="file"
                       accept=".csv, .xlsx, .xls"
@@ -920,7 +928,7 @@ export default function SubAdminDashboard() {
                 {/* BRANCH BOOKS EXPORT */}
                 <div className="p-3.5 border border-slate-100 bg-slate-50/50 rounded-lg flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-bold text-slate-700">📚 Branch Books Inventory</p>
+                    <p className="flex items-center gap-1.5 text-xs font-bold text-slate-700"><BookOpen size={14} aria-hidden="true" /> Branch Books Inventory</p>
                     <p className="text-[11px] text-slate-500">Total Books: {branchBooks.length}</p>
                   </div>
                   <div className="flex gap-2">
@@ -944,7 +952,7 @@ export default function SubAdminDashboard() {
                 {/* BRANCH ATTENDANCE EXPORT */}
                 <div className="p-3.5 border border-slate-100 bg-slate-50/50 rounded-lg flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-bold text-slate-700">📊 Branch Visitor Attendance</p>
+                    <p className="flex items-center gap-1.5 text-xs font-bold text-slate-700"><Activity size={14} aria-hidden="true" /> Branch Visitor Attendance</p>
                     <p className="text-[11px] text-slate-500">Total Attendance Logs: {branchAttendance.length}</p>
                   </div>
                   <div className="flex gap-2">

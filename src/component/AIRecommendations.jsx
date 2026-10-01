@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { CircleAlert, CircleCheck, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/useAuth.js';
 import { useLibraryData } from '../context/useLibrary.js';
 import { getAIRecommendations } from '../lib/recommendationEngine.js';
@@ -21,7 +22,9 @@ export default function AIRecommendations({ onRequestBorrow }) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-lg">🤖</span>
+            <span className="rounded-lg bg-amber-400/15 p-2 text-amber-300">
+              <Sparkles size={18} aria-hidden="true" />
+            </span>
             <h3 className="text-base font-bold text-white">
               AI Recommended for You
             </h3>
@@ -55,7 +58,7 @@ export default function AIRecommendations({ onRequestBorrow }) {
         {recommendations.map((book) => (
           <div
             key={book.id}
-            className="bg-white/5 border border-white/10 rounded-xl p-4 flex flex-col justify-between hover:bg-white/10 transition"
+            className="bg-white/5 border border-white/10 rounded-xl p-4 flex flex-col justify-between transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/10 hover:shadow-md"
           >
             <div className="space-y-2">
               <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
@@ -72,15 +75,16 @@ export default function AIRecommendations({ onRequestBorrow }) {
             </div>
 
             <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between gap-2">
-              <span className="text-[11px] text-slate-400">
-                {book.availableCopies > 0 ? '🟢 Available' : '🔴 Reserved'}
+              <span className={`inline-flex items-center gap-1.5 text-[11px] ${book.availableCopies > 0 ? 'text-emerald-300' : 'text-slate-400'}`}>
+                {book.availableCopies > 0 ? <CircleCheck size={14} aria-hidden="true" /> : <CircleAlert size={14} aria-hidden="true" />}
+                {book.availableCopies > 0 ? 'Available' : 'Reserved'}
               </span>
 
               {onRequestBorrow && (
                 <button
                   type="button"
                   onClick={() => onRequestBorrow(book)}
-                  className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition"
+                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold px-3 py-1.5 rounded-lg transition"
                 >
                   Borrow
                 </button>

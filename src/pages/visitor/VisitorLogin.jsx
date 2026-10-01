@@ -7,6 +7,8 @@ import {
   EyeOff,
   Camera,
   Upload,
+  Check,
+  Circle,
 } from 'lucide-react';
 
 import { useAuth } from '../../context/useAuth.js';
@@ -171,7 +173,7 @@ function PasswordRequirement({ valid, children }) {
             : 'bg-slate-100'
         }`}
       >
-        {valid ? '✓' : '•'}
+        {valid ? <Check size={11} aria-hidden="true" /> : <Circle size={5} fill="currentColor" aria-hidden="true" />}
       </span>
 
       <span>{children}</span>

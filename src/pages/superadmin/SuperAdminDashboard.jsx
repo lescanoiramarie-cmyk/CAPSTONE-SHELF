@@ -20,6 +20,17 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
+import {
+  Activity,
+  AlertTriangle,
+  BookOpen,
+  Building2,
+  FileSpreadsheet,
+  MapPinned,
+  ShieldCheck,
+  Upload,
+  UsersRound,
+} from 'lucide-react';
 
 import { useAuth } from '../../context/useAuth.js';
 import {
@@ -30,6 +41,7 @@ import {
 import BookInventory from '../../component/BookInventory.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
 import AdminWorkspace from '../../component/AdminWorkspace.jsx';
+import DashboardWelcome from '../../component/DashboardWelcome.jsx';
 
 import { supabase } from '../../lib/supabaseClient.js';
 
@@ -53,23 +65,28 @@ ChartJS.register(
 const NAV = [
   {
     id: 'overview',
-    label: '📊 Overview & Analytics',
+    label: 'Overview & Analytics',
+    Icon: Activity,
   },
   {
     id: 'inventory',
-    label: '📚 Inventory',
+    label: 'Inventory',
+    Icon: BookOpen,
   },
   {
     id: 'map',
-    label: '🗺️ Libraries & Map',
+    label: 'Libraries & Map',
+    Icon: MapPinned,
   },
   {
     id: 'accounts',
-    label: '🔐 Staff Accounts',
+    label: 'Staff Accounts',
+    Icon: ShieldCheck,
   },
   {
     id: 'workspace',
-    label: '📈 Reports & Services',
+    label: 'Reports & Services',
+    Icon: FileSpreadsheet,
   },
 ];
 
@@ -80,29 +97,31 @@ function StatCard({
 }) {
   const tones = {
     default:
-      'bg-white border-slate-200 text-slate-800',
+      'bg-white border-slate-200 border-l-slate-300 text-slate-800',
 
     amber:
-      'bg-amber-50 border-amber-200 text-amber-800',
+      'bg-amber-50 border-amber-200 border-l-amber-500 text-amber-800',
 
     red:
-      'bg-red-50 border-red-200 text-red-700',
+      'bg-red-50 border-red-200 border-l-red-500 text-red-700',
 
     blue:
-      'bg-blue-50 border-blue-200 text-blue-800',
+      'bg-blue-50 border-blue-200 border-l-blue-500 text-blue-800',
   };
 
   return (
     <div
-      className={`rounded-xl border p-5 shadow-sm ${tones[tone]}`}
+      className={`rounded-r-xl border border-l-4 p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${tones[tone]}`}
     >
-      <p className="text-xs font-semibold uppercase tracking-wider opacity-70">
-        {label}
-      </p>
-
-      <p className="mt-1 text-3xl font-extrabold">
-        {value}
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider opacity-70">{label}</p>
+          <p className="mt-1 text-3xl font-extrabold">{value}</p>
+        </div>
+        <span className="rounded-lg bg-white/70 p-2 text-current shadow-sm" aria-hidden="true">
+          {tone === 'amber' ? <Building2 size={18} /> : tone === 'red' ? <AlertTriangle size={18} /> : tone === 'blue' ? <UsersRound size={18} /> : <Activity size={18} />}
+        </span>
+      </div>
     </div>
   );
 }
@@ -838,7 +857,7 @@ export default function SuperAdminDashboard() {
         <nav className="flex-1 space-y-1 p-3">
 
           {NAV.map(
-            (item) => (
+            ({ Icon, ...item }) => (
               <button
                 type="button"
                 key={item.id}
@@ -866,10 +885,11 @@ export default function SuperAdminDashboard() {
                 className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
                   section ===
                   item.id
-                    ? 'bg-white/15 font-bold'
+                    ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
                     : 'text-slate-300 hover:bg-white/5'
                 }`}
               >
+                <Icon size={18} className="mr-3 inline-block align-[-3px]" aria-hidden="true" />
                 {item.label}
               </button>
             )
@@ -904,26 +924,16 @@ export default function SuperAdminDashboard() {
           MAIN CONTENT
       ====================================================== */}
 
-      <main className="flex-1 space-y-6 overflow-y-auto p-8">
-
-        <div>
-          <h1 className="text-2xl font-bold text-[#0f172a]">
-            {NAV.find(
-              (item) =>
-                item.id ===
-                section
-            )?.label.replace(
-              /^\S+\s/,
-              ''
-            )}
-          </h1>
-
-          <p className="mt-1 text-xs text-slate-500">
-            System metrics, user
-            management, and analytics
-            overview.
-          </p>
-        </div>
+      <main className="min-w-0 flex-1 space-y-6 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <DashboardWelcome
+          name={user?.name?.split(' ')[0]}
+          description="System metrics, library operations, staff accounts, and reports at a glance."
+          actions={[
+            { label: 'View Inventory', Icon: BookOpen, onClick: () => setSection('inventory') },
+            { label: 'Manage Staff', Icon: ShieldCheck, onClick: () => setSection('accounts') },
+            { label: 'Open Reports', Icon: FileSpreadsheet, onClick: () => setSection('workspace') },
+          ]}
+        />
 
         {/* ====================================================
             OVERVIEW
@@ -1022,7 +1032,8 @@ export default function SuperAdminDashboard() {
 
                   <label className="cursor-pointer rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-bold text-white transition hover:bg-blue-700">
 
-                    📤 Import File
+                    <Upload size={14} className="mr-1.5 inline-block align-[-2px]" aria-hidden="true" />
+                    Import File
 
                     <input
                       type="file"
@@ -1047,7 +1058,8 @@ export default function SuperAdminDashboard() {
 
                   <div>
                     <p className="text-xs font-bold text-slate-700">
-                      📚 All Books
+                      <BookOpen size={14} className="mr-1.5 inline-block align-[-2px]" aria-hidden="true" />
+                      All Books
                       Catalog
                     </p>
 
@@ -1095,7 +1107,8 @@ export default function SuperAdminDashboard() {
 
                   <div>
                     <p className="text-xs font-bold text-slate-700">
-                      📊 Total
+                      <Activity size={14} className="mr-1.5 inline-block align-[-2px]" aria-hidden="true" />
+                      Total
                       Attendance
                     </p>
 
@@ -1308,7 +1321,7 @@ export default function SuperAdminDashboard() {
                   className="rounded-lg bg-[#002046] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#003568]"
                 >
                   {showAddLibrary
-                    ? '✕ Cancel'
+                    ? 'Cancel'
                     : '+ Add Library'}
                 </button>
 
@@ -1591,7 +1604,8 @@ export default function SuperAdminDashboard() {
                     }
                     className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"
                   >
-                    📍 Use Current
+                    <MapPinned size={14} className="mr-1.5 inline-block align-[-2px]" aria-hidden="true" />
+                    Use Current
                     Location
                   </button>
 

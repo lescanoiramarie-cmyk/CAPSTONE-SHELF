@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { Eye, EyeOff, Camera } from 'lucide-react';
+import { Check, Circle, Eye, EyeOff, Camera, X } from 'lucide-react';
 
 import { useAuth } from '../../context/useAuth.js';
 import libraryBg from '../../assets/library.jpg';
@@ -19,7 +19,7 @@ function PasswordRequirement({ valid, children }) {
           valid ? 'bg-green-100' : 'bg-slate-100'
         }`}
       >
-        {valid ? '✓' : '•'}
+        {valid ? <Check size={11} aria-hidden="true" /> : <Circle size={5} fill="currentColor" aria-hidden="true" />}
       </span>
       <span>{children}</span>
     </li>
@@ -639,9 +639,10 @@ export default function VisitorLogin() {
                       passwordsMatch ? 'text-green-600' : 'text-red-600'
                     }`}
                   >
-                    {passwordsMatch
-                      ? '✓ Passwords match.'
-                      : '✕ Passwords do not match.'}
+                    <span className="inline-flex items-center gap-1">
+                      {passwordsMatch ? <Check size={13} aria-hidden="true" /> : <X size={13} aria-hidden="true" />}
+                      {passwordsMatch ? 'Passwords match.' : 'Passwords do not match.'}
+                    </span>
                   </p>
                 )}
               </div>

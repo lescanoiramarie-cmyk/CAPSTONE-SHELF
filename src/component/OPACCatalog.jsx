@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/useAuth.js';
+import { BookOpen, MapPinned, Search, X } from 'lucide-react';
 import {
   useLibrary,
   useLibraryData,
@@ -641,7 +642,7 @@ export default function OPACCatalog({
             className="font-bold text-blue-400 hover:text-blue-700"
             aria-label="Close notification"
           >
-            ✕
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
       )}
@@ -833,22 +834,19 @@ export default function OPACCatalog({
           ================================================== */}
 
           {books.length === 0 ? (
-            <div className="bg-white border border-dashed border-slate-300 rounded-xl p-10 text-center text-sm text-slate-500">
-              No books in the catalog yet.
-              Please check back soon — the
-              library team is still populating
-              the collection.
+            <div className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center">
+              <span className="mx-auto grid size-14 place-items-center rounded-full bg-amber-50 text-amber-700"><BookOpen size={26} aria-hidden="true" /></span>
+              <h3 className="mt-4 text-lg font-bold text-slate-800">The shelves are waiting for their first readers.</h3>
+              <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">This catalog is being prepared. Explore nearby branches while new titles are added.</p>
+              <button type="button" onClick={() => onViewChange?.('map')} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-bold text-slate-950 transition hover:bg-amber-400">
+                <MapPinned size={16} aria-hidden="true" /> Explore library locations
+              </button>
             </div>
           ) : filteredBooks.length === 0 ? (
-            <div className="bg-white border border-dashed border-slate-300 rounded-xl p-10 text-center text-sm text-slate-500">
-              <p className="font-bold text-slate-700 mb-1">
-                No books found
-              </p>
-
-              <p>
-                No books matched your search
-                or filter criteria.
-              </p>
+            <div className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-10 text-center">
+              <Search size={28} className="mx-auto text-slate-400" aria-hidden="true" />
+              <h3 className="mt-3 text-base font-bold text-slate-800">Nothing on the shelf matched that search.</h3>
+              <p className="mt-1 text-sm text-slate-500">Try another title or clear your filters to see more books.</p>
 
               {(searchTerm ||
                 selectedCategory !== 'All' ||
@@ -862,7 +860,7 @@ export default function OPACCatalog({
                     setSelectedLibrary('All');
                     setSelectedAvailability('All');
                   }}
-                  className="mt-4 px-4 py-2 bg-[#002046] text-white rounded-lg text-xs font-bold hover:opacity-90 transition"
+                  className="mt-4 rounded-lg bg-amber-500 px-4 py-2 text-xs font-bold text-slate-950 transition hover:bg-amber-400"
                 >
                   Clear All Filters
                 </button>
@@ -878,7 +876,7 @@ export default function OPACCatalog({
                     key={book.id}
                     onClick={() => setSelectedBook(book)}
                     aria-label={`View details for ${book.title || 'Untitled Book'}`}
-                    className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition flex flex-col justify-between text-left"
+                    className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between text-left"
                   >
 
                     <div className="p-4 flex gap-4">
@@ -1218,7 +1216,7 @@ export default function OPACCatalog({
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 font-bold"
               aria-label="Close book information"
             >
-              ✕
+              <X size={18} aria-hidden="true" />
             </button>
 
             {/* BOOK HEADER */}

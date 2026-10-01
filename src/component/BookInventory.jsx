@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { BookOpen, MapPin, Plus, SearchX } from 'lucide-react';
 import { useLibraryData, useLibrary } from '../context/useLibrary.js';
 import { useAuth } from '../context/useAuth.js';
 
@@ -119,7 +120,7 @@ export default function BookInventory() {
     <div className="space-y-4">
       {isSubAdmin && (
         <div className="bg-blue-50 border border-blue-200 text-blue-800 text-xs px-4 py-2.5 rounded-lg flex items-center justify-between">
-          <span>📍 Managing inventory exclusively for: <b>{currentLibraryName}</b></span>
+          <span className="flex items-center gap-2"><MapPin size={15} aria-hidden="true" /> Managing inventory exclusively for: <b>{currentLibraryName}</b></span>
         </div>
       )}
 
@@ -146,7 +147,7 @@ export default function BookInventory() {
             onClick={startAdd}
             className="text-xs font-bold px-4 py-2.5 rounded-lg bg-[#002046] text-white hover:opacity-90 transition"
           >
-            + Add Book
+            <Plus size={15} className="mr-1 inline-block align-[-3px]" aria-hidden="true" /> Add Book
           </button>
         </div>
       </div>
@@ -159,10 +160,19 @@ export default function BookInventory() {
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
         {filtered.length === 0 ? (
-          <div className="p-10 text-center text-sm text-slate-500">
-            {isSubAdmin 
-              ? `Your branch (${currentLibraryName}) has no books in inventory yet. Add a book or load API books to start populating the branch.`
-              : 'The catalog is empty. Use Add Book to populate the catalog.'}
+          <div className="px-5 py-12 text-center">
+            {search ? <SearchX size={30} className="mx-auto text-slate-400" aria-hidden="true" /> : <BookOpen size={30} className="mx-auto text-amber-700" aria-hidden="true" />}
+            <h3 className="mt-3 text-base font-bold text-slate-800">
+              {search ? 'No titles match that search.' : 'Your shelves are ready for their first titles.'}
+            </h3>
+            <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
+              {search ? 'Try another title, author, or ISBN.' : isSubAdmin ? `Start building the collection at ${currentLibraryName}.` : 'Add a book to begin building the catalog.'}
+            </p>
+            {search ? (
+              <button type="button" onClick={() => setSearch('')} className="mt-4 rounded-lg bg-amber-500 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-amber-400">Clear search</button>
+            ) : (
+              <button type="button" onClick={startAdd} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-amber-400"><Plus size={16} aria-hidden="true" /> Add a book</button>
+            )}
           </div>
         ) : (
           <table className="w-full text-left text-sm">

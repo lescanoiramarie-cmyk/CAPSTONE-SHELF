@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Clock3, MapPin } from 'lucide-react';
 import {
   MapContainer,
   TileLayer,
@@ -207,14 +208,14 @@ export default function LibraryMap({ onBrowseLibrary }) {
                         )}
 
                         {library.address && (
-                          <p className="text-xs text-slate-600 mt-2">
-                            📍 {library.address}
+                          <p className="mt-2 flex items-start gap-1 text-xs text-slate-600">
+                            <MapPin size={13} className="mt-0.5 shrink-0" aria-hidden="true" /> {library.address}
                           </p>
                         )}
 
                         {library.hours && (
-                          <p className="text-xs text-slate-500 mt-1">
-                            🕒 {library.hours}
+                          <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                            <Clock3 size={13} aria-hidden="true" /> {library.hours}
                           </p>
                         )}
 
