@@ -15,6 +15,7 @@ export default function AttendanceScanner() {
   const { attendanceLogs, libraries } = useLibraryData();
   const { scanAttendance } = useLibrary();
   const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
 
   const libraryId = user?.libraryId || libraries[0]?.id;
 
@@ -32,9 +33,14 @@ export default function AttendanceScanner() {
     );
 
   const handleScan = async (code) => {
-    const { visitor, log } = await scanAttendance(code, libraryId);
-
-    setMessage(`${visitor.fullName} checked ${log.action === 'checked_out' ? 'out' : 'in'}.`);
+    setError('');
+    setMessage('');
+    try {
+      const { visitor, log } = await scanAttendance(code, libraryId);
+      setMessage(`${visitor.fullName} checked ${log.action === 'checked_out' ? 'out' : 'in'}.`);
+    } catch (scanError) {
+      setError(scanError.message || 'Unable to record attendance for this branch.');
+    }
   };
 
   return (
@@ -58,6 +64,11 @@ export default function AttendanceScanner() {
         {message && (
           <div className="text-xs font-semibold bg-blue-50 border border-blue-200 text-blue-800 rounded-lg px-3 py-2">
             {message}
+          </div>
+        )}
+        {error && (
+          <div role="alert" className="text-xs font-semibold bg-red-50 border border-red-200 text-red-800 rounded-lg px-3 py-2">
+            {error}
           </div>
         )}
       </div>

@@ -465,7 +465,7 @@ export default function VisitorDashboard() {
             PERSONAL BOOKS TAB
         ================================================== */}
 
-        {tab === 'personalBooks' && <PersonalBooks user={user} />}
+        {tab === 'personalBooks' && <PersonalBooks userId={user?.id} />}
 
         {/* =================================================
             LIBRARY MAP

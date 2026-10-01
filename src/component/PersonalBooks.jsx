@@ -1,5 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from "../lib/supabaseClient.js";
+
+async function loadBooksForVisitor(userId) {
+  if (!userId) return [];
+  const { data, error } = await supabase
+    .from('personal_books')
+    .select('*')
+    .eq('owner_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
 
 export default function PersonalBooks({ userId }) {
   const [books, setBooks] = useState([]);
@@ -9,30 +21,33 @@ export default function PersonalBooks({ userId }) {
   const [listingType, setListingType] = useState('none');
   const [price, setPrice] = useState(''); // Ginawang empty string bilang default placeholder
   const [loading, setLoading] = useState(false);
-
-  // Fetch personal books ng kasalukuyang user
-  const fetchMyBooks = async () => {
-    if (!userId) return;
-    const { data, error } = await supabase
-      .from('personal_books')
-      .select('*')
-      .eq('owner_id', userId)
-      .order('created_at', { ascending: false });
-
-    if (!error) setBooks(data);
-  };
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
-    fetchMyBooks();
+    let active = true;
+    loadBooksForVisitor(userId)
+      .then((rows) => {
+        if (active) setBooks(rows);
+      })
+      .catch((loadError) => {
+        if (active) setError(loadError.message || 'Unable to load personal books.');
+      });
+
+    return () => {
+      active = false;
+    };
   }, [userId]);
 
   // Handle Add Book
   const handleAddBook = async (e) => {
     e.preventDefault();
+    setError('');
+    setMessage('');
 
     // Validation para sa Price kapag Selling
     if (privacyStatus === 'public' && listingType === 'sell' && (parseFloat(price) <= 0 || !price)) {
-      alert('Please enter a valid selling price greater than 0.');
+      setError('Please enter a valid selling price greater than 0.');
       return;
     }
 
@@ -52,15 +67,15 @@ export default function PersonalBooks({ userId }) {
     setLoading(false);
 
     if (error) {
-      alert('Error adding book: ' + error.message);
+      setError('Error adding book: ' + error.message);
     } else {
-      alert('Book added successfully!');
+      setMessage('Book added successfully.');
       setTitle('');
       setAuthor('');
       setPrivacyStatus('private');
       setListingType('none');
       setPrice('');
-      fetchMyBooks();
+      setBooks(await loadBooksForVisitor(userId));
     }
   };
 
@@ -69,6 +84,8 @@ export default function PersonalBooks({ userId }) {
       <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '15px' }}>
         Add Personal Book
       </h2>
+      {error && <p role="alert" style={{ border: '1px solid #fecaca', background: '#fef2f2', color: '#991b1b', padding: '10px' }}>{error}</p>}
+      {message && <p role="status" style={{ border: '1px solid #a7f3d0', background: '#ecfdf5', color: '#065f46', padding: '10px' }}>{message}</p>}
       
       <form onSubmit={handleAddBook} style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '30px' }}>
         <input 

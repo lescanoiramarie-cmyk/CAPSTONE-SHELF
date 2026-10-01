@@ -15,7 +15,12 @@ npm run dev
 
 Operational data is stored in Supabase. The browser connects using
 `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; copy `.env.example` to `.env`,
-set those values, and run `supabase/schema.sql` in the project's SQL editor.
+set those values, run `supabase/schema.sql` in the project's SQL editor, then
+apply the SQL files in `supabase/migrations/` in filename order. Visitor
+registration uses Supabase Auth email OTP; enable email signup and email
+confirmation, then configure the email provider/template before testing.
+Existing visitor profiles are linked when a visitor signs up using the same
+email address; the security migration clears legacy plaintext passwords.
 `src/data/store.js` contains most database operations and business actions,
 while `src/context/LibraryContext.jsx` loads data and subscribes to Supabase
 Realtime updates. Some dashboard operations also call Supabase directly.
@@ -32,23 +37,16 @@ or books — admins add real books via **Sub-Admin/Super-Admin → Inventory →
 Add Book**, or click **Load Sample Catalog** there for dummy demo data.
 Visitors self-register through the Visitor Portal (register → OTP → QR pass).
 
-Staff accounts are hardcoded (per the system requirements — no
-self-registration for admins):
-
-| Role        | Email                     | Password           |
-|-------------|---------------------------|---------------------|
-| Super-Admin | superadmin@shelf.edu      | SuperAdmin@2026     |
-| Sub-Admin   | librarian@shelf.edu       | Librarian@2026      |
-| Sub-Admin   | circdesk@shelf.edu        | CircDesk@2026       |
-
-These live in `src/data/store.js` (`SUPER_ADMIN_CREDENTIALS` /
-`SUB_ADMIN_CREDENTIALS`) — edit that list directly to change them.
+Staff accounts are provisioned through Supabase Auth and staff profiles;
+there are no staff passwords embedded in the frontend. See the Auth-backed
+staff provisioning steps below.
 
 ## Core workflow implemented
 
-1. **Visitor**: register → OTP verification (simulated delivery, shown
-   on-screen since no email/SMS provider is wired up yet) → receives a QR
-   pass → log in with email/password or the QR pass ID.
+1. **Visitor**: register with Supabase Auth → verify the emailed OTP → receives
+   a unique QR pass. Visitors can sign in with email/password or scan that pass;
+   staff also scan it to confirm attendance, pickups, and returns. Treat the QR
+   pass like a password because anyone holding it can access the account.
 2. **Attendance**: visitor scans their QR pass at the entrance
    (Sub-Admin → Attendance) to log a visit.
 3. **Borrowing**: visitor requests a book from the OPAC catalog.
@@ -71,24 +69,27 @@ These live in `src/data/store.js` (`SUPER_ADMIN_CREDENTIALS` /
 
 Both admin dashboards include **Reports & Services**. Sub-admins see only
 their assigned branch; super-admins can select a branch or view the whole
-network. Reports support daily, weekly, monthly, and annual periods, sorting,
-and Excel/CSV export. Analytics charts use attendance and borrowing records,
+network. Reports and analytics share date filters, sorting, and CSV/Excel/PDF
+exports. Analytics charts use attendance and borrowing records,
 with demand-based operational suggestions. Visitors can submit feedback and
 questions, receive FAQ answers for common topics, read announcements, and see
 replies from the library team.
 
 Attendance QR scans alternate between check-in and check-out for the active
-branch/day. New Supabase tables and functions for feedback, announcements,
-staff profiles, and checkout are defined in `supabase/schema.sql`; re-run that
-schema in the Supabase SQL editor when upgrading an existing deployment.
+branch/day. The security migration adds branch-aware RLS, Auth-linked visitor
+profiles, personal books, reviews, audit logs, and a `pg_cron` job that expires
+24-hour holds every minute. Verify the scheduled job under Database → Cron
+after applying the migration. The migration rotates existing visitor QR passes;
+visitors should sign in and save their refreshed pass after it is applied.
+Deploy `visitor-qr-login` with `supabase functions deploy visitor-qr-login` and
+set the Edge Function secret `APP_ORIGIN` (or comma-separated `APP_ORIGINS`) to
+the exact deployed frontend origin so QR sign-in passes CORS.
 
 ### Auth-backed staff provisioning
 
-The old hardcoded demo staff accounts continue to work for legacy features,
-but they cannot authorize staff management or access protected feedback
-moderation. Move staff to Supabase Auth to use those features. Provisioning
-uses the `manage-staff` Supabase Edge Function and requires a real Auth
-super-admin session:
+Staff sign-in and authorization use Supabase Auth and `staff_profiles`.
+Provisioning uses the `manage-staff` Supabase Edge Function and requires an
+Auth-backed super-admin session:
 
 1. Create a super-admin user in Supabase Authentication.
 2. In the SQL editor, mark that account as the initial super-admin and create
@@ -135,10 +136,9 @@ restart Vite. The service exposes `GET /health` and `POST /forecast`.
 ## Known simplifications (flagged in-code)
 
 - QR scanning supports both camera decoding (`html5-qrcode`) and manual input.
-- OTP delivery is handled through the `send-visitor-otp` Supabase Edge
-   Function; configure its email provider and secrets for the target deployment.
-- Staff credentials are hardcoded in the frontend for the capstone demo, and
-   the SQL schema currently uses permissive public policies and plaintext
-   visitor passwords. Do not use this setup with real accounts or personal data
-   without replacing those demo security choices.
+- Existing email/branch labels may remain in frontend constants for old UI
+   paths, but no staff passwords are stored or used there.
+- `schema.sql` is the initial demo schema and defines permissive policies.
+   Apply `supabase/migrations/20261002_security_features.sql` after it before
+   exposing a deployment.
 - Map markers use approximate, clearly-flagged sample coordinates.

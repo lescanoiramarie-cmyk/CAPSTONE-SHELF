@@ -35,6 +35,12 @@ export function LibraryProvider({ children }) {
   useEffect(() => {
     void Promise.resolve().then(refreshAll);
 
+    const { data: authSubscription } = supabase?.auth.onAuthStateChange(() => {
+      setTimeout(() => {
+        refreshAll();
+      }, 0);
+    }) || { data: {} };
+
     const channel = supabase
       ? supabase
           .channel('shelf-ilms-realtime')
@@ -46,16 +52,9 @@ export function LibraryProvider({ children }) {
           .subscribe()
       : null;
 
-    // Belt-and-suspenders: also sweep for expired pickups every 30s in case
-    // no one is actively watching the affected rows.
-    const interval = setInterval(() => {
-      store.autoExpireOverduePickups().catch(() => {});
-    }, 30000);
-    store.autoExpireOverduePickups().catch(() => {});
-
     return () => {
       if (supabase && channel) supabase.removeChannel(channel);
-      clearInterval(interval);
+      authSubscription.subscription?.unsubscribe();
     };
   }, [refreshAll]);
 
@@ -77,6 +76,7 @@ export function LibraryProvider({ children }) {
     addLibrary: withRefresh(store.addLibrary),
     // books
     addBook: withRefresh(store.addBook),
+    addBooksBulk: withRefresh(store.addBooksBulk),
     updateBook: withRefresh(store.updateBook),
     deleteBook: withRefresh(store.deleteBook),
     loadSampleCatalog: withRefresh(store.loadSampleCatalog),

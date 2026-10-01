@@ -17,6 +17,13 @@ import {
   exportToCSV,
   exportToExcel,
 } from '../lib/excelUtils.js';
+import AnalyticsDateFilter from './AnalyticsDateFilter.jsx';
+import AuditLogViewer from './AuditLogViewer.jsx';
+import { recordAuditEvent } from '../lib/auditLog.js';
+import {
+  getTimeframeBuckets,
+  getTimeframeRange,
+} from '../lib/analyticsDateRange.js';
 
 ChartJS.register(
   CategoryScale,
@@ -44,62 +51,6 @@ const TABS = [
     label: 'Announcements',
   },
 ];
-
-const ANALYTICS_DATE_RANGES = [
-  {
-    id: '7d',
-    label: 'Last 7 days',
-  },
-  {
-    id: '30d',
-    label: 'Last 30 days',
-  },
-  {
-    id: 'month',
-    label: 'This month',
-  },
-  {
-    id: 'year',
-    label: 'This year',
-  },
-  {
-    id: 'custom',
-    label: 'Custom range',
-  },
-];
-
-function startOfPeriod(period) {
-  const date = new Date();
-
-  date.setHours(0, 0, 0, 0);
-
-  if (period === 'daily') {
-    return date;
-  }
-
-  if (period === 'weekly') {
-    date.setDate(
-      date.getDate() -
-        ((date.getDay() + 6) % 7)
-    );
-
-    return date;
-  }
-
-  if (period === 'monthly') {
-    return new Date(
-      date.getFullYear(),
-      date.getMonth(),
-      1
-    );
-  }
-
-  return new Date(
-    date.getFullYear(),
-    0,
-    1
-  );
-}
 
 function getLibraryName(libraries, id) {
   if (!id) {
@@ -133,167 +84,6 @@ function formatRole(role) {
   );
 }
 
-/*
- * ============================================================================
- * ANALYTICS DATE WINDOW
- * ============================================================================
- */
-
-function buildAnalyticsWindow(
-  range,
-  customStart,
-  customEnd
-) {
-  const now = new Date();
-
-  const today = new Date(now);
-
-  today.setHours(
-    0,
-    0,
-    0,
-    0
-  );
-
-  const tomorrow = new Date(today);
-
-  tomorrow.setDate(
-    tomorrow.getDate() + 1
-  );
-
-  if (range === '7d') {
-    const start = new Date(today);
-
-    start.setDate(
-      start.getDate() - 6
-    );
-
-    return {
-      start,
-      endExclusive: tomorrow,
-      label: 'Last 7 days',
-      valid: true,
-      error: '',
-    };
-  }
-
-  if (range === '30d') {
-    const start = new Date(today);
-
-    start.setDate(
-      start.getDate() - 29
-    );
-
-    return {
-      start,
-      endExclusive: tomorrow,
-      label: 'Last 30 days',
-      valid: true,
-      error: '',
-    };
-  }
-
-  if (range === 'month') {
-    const start = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      1
-    );
-
-    return {
-      start,
-      endExclusive: tomorrow,
-      label: 'This month',
-      valid: true,
-      error: '',
-    };
-  }
-
-  if (range === 'year') {
-    const start = new Date(
-      today.getFullYear(),
-      0,
-      1
-    );
-
-    return {
-      start,
-      endExclusive: tomorrow,
-      label: 'This year',
-      valid: true,
-      error: '',
-    };
-  }
-
-  if (range === 'custom') {
-    if (!customStart || !customEnd) {
-      return {
-        start: today,
-        endExclusive: tomorrow,
-        label: 'Custom range',
-        valid: false,
-        error:
-          'Select both a start date and an end date.',
-      };
-    }
-
-    const start = new Date(
-      `${customStart}T00:00:00`
-    );
-
-    const end = new Date(
-      `${customEnd}T00:00:00`
-    );
-
-    if (
-      Number.isNaN(start.getTime()) ||
-      Number.isNaN(end.getTime())
-    ) {
-      return {
-        start: today,
-        endExclusive: tomorrow,
-        label: 'Custom range',
-        valid: false,
-        error:
-          'Please enter valid start and end dates.',
-      };
-    }
-
-    if (end < start) {
-      return {
-        start: today,
-        endExclusive: tomorrow,
-        label: 'Custom range',
-        valid: false,
-        error:
-          'The end date cannot be earlier than the start date.',
-      };
-    }
-
-    const endExclusive = new Date(end);
-
-    endExclusive.setDate(
-      endExclusive.getDate() + 1
-    );
-
-    return {
-      start,
-      endExclusive,
-      label: `${start.toLocaleDateString()} – ${end.toLocaleDateString()}`,
-      valid: true,
-      error: '',
-    };
-  }
-
-  return {
-    start: new Date(today),
-    endExclusive: tomorrow,
-    label: 'Last 7 days',
-    valid: true,
-    error: '',
-  };
-}
-
 function isDateInsideWindow(
   value,
   window
@@ -314,19 +104,22 @@ function isDateInsideWindow(
   );
 }
 
-function getDateKey(value) {
+function getDateKey(value, timeframe) {
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
     return '';
   }
 
-  return `${date.getFullYear()}-${String(
+  const monthKey = `${date.getFullYear()}-${String(
     date.getMonth() + 1
-  ).padStart(
-    2,
-    '0'
-  )}-${String(
+  ).padStart(2, '0')}`;
+
+  if (timeframe === 'year') {
+    return monthKey;
+  }
+
+  return `${monthKey}-${String(
     date.getDate()
   ).padStart(
     2,
@@ -366,10 +159,8 @@ function AdminWorkspace({
     setAnalyticsLibraryId,
   ] = useState('');
 
-  const [
-    analyticsDateRange,
-    setAnalyticsDateRange,
-  ] = useState('7d');
+  const [timeframe, setTimeframe] =
+    useState('7d');
 
   const [
     customStartDate,
@@ -387,17 +178,8 @@ function AdminWorkspace({
    * =========================================================================
    */
 
-  const [period, setPeriod] =
-    useState('daily');
-
   const [reportSort, setReportSort] =
     useState('time');
-
-  /*
-   * =========================================================================
-   * DATABASE-BACKED STATE
-   * =========================================================================
-   */
 
   const [feedback, setFeedback] =
     useState([]);
@@ -423,10 +205,8 @@ function AdminWorkspace({
       message: '',
     });
 
-  const [
-    editingAnnouncementId,
-    setEditingAnnouncementId,
-  ] = useState(null);
+  const [editingAnnouncementId, setEditingAnnouncementId] =
+    useState(null);
 
   const [feedbackReply, setFeedbackReply] =
     useState({});
@@ -439,33 +219,27 @@ function AdminWorkspace({
       libraryId: currentLibraryId,
     });
 
-  /*
-   * =========================================================================
-   * FORECAST STATE
-   * =========================================================================
-   */
-
   const [forecast, setForecast] =
     useState(null);
 
   const [forecastLoading, setForecastLoading] =
     useState(false);
 
-  /*
-   * =========================================================================
-   * BOOK LOOKUP
-   * =========================================================================
-   */
-
   const booksById = useMemo(
     () =>
       new Map(
-        books.map((book) => [
-          book.id,
-          book,
-        ])
+        books.map((book) => [book.id, book])
       ),
     [books]
+  );
+
+  const analyticsWindow = useMemo(
+    () => getTimeframeRange(
+      timeframe,
+      customStartDate,
+      customEndDate
+    ),
+    [timeframe, customStartDate, customEndDate]
   );
 
   /*
@@ -473,13 +247,8 @@ function AdminWorkspace({
    * REPORTS
    * =========================================================================
    *
-   * Reports are intentionally independent from Analytics filters.
-   *
-   * Sub-Admin:
-   *   assigned branch only
-   *
-   * Super Admin:
-   *   all libraries
+   * Sub-Admin: assigned branch only.
+   * Super Admin: all libraries.
    */
 
   const scopedAttendance = useMemo(
@@ -527,14 +296,14 @@ function AdminWorkspace({
    */
 
   const reportRows = useMemo(() => {
-    const start = startOfPeriod(period);
-
     const attendanceRows =
       scopedAttendance
         .filter(
           (item) =>
-            new Date(item.timeIn) >=
-            start
+            isDateInsideWindow(
+              item.timeIn,
+              analyticsWindow
+            )
         )
         .map((item) => ({
           type: 'Visitor',
@@ -556,9 +325,10 @@ function AdminWorkspace({
       scopedBorrows
         .filter(
           (item) =>
-            new Date(
-              item.requestDate
-            ) >= start
+            isDateInsideWindow(
+              item.requestDate,
+              analyticsWindow
+            )
         )
         .map((item) => ({
           type: 'Book transaction',
@@ -583,9 +353,26 @@ function AdminWorkspace({
           ),
         }));
 
+    const returnRows = scopedBorrows
+      .filter((item) =>
+        isDateInsideWindow(item.returnDate, analyticsWindow)
+      )
+      .map((item) => ({
+        type: 'Book return',
+        time: item.returnDate,
+        person: item.visitorName || 'Unknown visitor',
+        detail: item.bookTitle || 'Book return',
+        branch: getLibraryName(
+          libraries,
+          booksById.get(item.bookId)?.libraryId
+        ),
+        status: `Returned${Number(item.fineAmount) > 0 ? `; fine ${item.fineAmount}` : ''}`,
+      }));
+
     return [
       ...attendanceRows,
       ...transactionRows,
+      ...returnRows,
     ].sort((a, b) => {
       if (reportSort === 'name') {
         return a.person.localeCompare(
@@ -607,7 +394,7 @@ function AdminWorkspace({
   }, [
     booksById,
     libraries,
-    period,
+    analyticsWindow,
     reportSort,
     scopedAttendance,
     scopedBorrows,
@@ -741,20 +528,6 @@ function AdminWorkspace({
    * Analytics date window
    * -------------------------------------------------------------------------
    */
-
-  const analyticsWindow = useMemo(
-    () =>
-      buildAnalyticsWindow(
-        analyticsDateRange,
-        customStartDate,
-        customEndDate
-      ),
-    [
-      analyticsDateRange,
-      customStartDate,
-      customEndDate,
-    ]
-  );
 
   /*
    * -------------------------------------------------------------------------
@@ -940,69 +713,57 @@ function AdminWorkspace({
       };
     }
 
-    const dates = [];
-
-    const cursor = new Date(
-      analyticsWindow.start
+    const buckets = getTimeframeBuckets(
+      timeframe,
+      analyticsWindow
     );
+    const visitCounts = new Map();
+    const transactionCounts = new Map();
 
-    while (
-      cursor <
-      analyticsWindow.endExclusive
-    ) {
-      dates.push(
-        new Date(cursor)
-      );
+    analyticsAttendance.forEach((item) => {
+      const key = getDateKey(item.timeIn, timeframe);
+      visitCounts.set(key, (visitCounts.get(key) || 0) + 1);
+    });
 
-      cursor.setDate(
-        cursor.getDate() + 1
-      );
-    }
+    analyticsBorrows.forEach((item) => {
+      const key = getDateKey(item.requestDate, timeframe);
+      transactionCounts.set(key, (transactionCounts.get(key) || 0) + 1);
+    });
 
     return {
-      labels: dates.map((date) =>
-        date.toLocaleDateString(
-          undefined,
-          {
-            month: 'short',
-            day: 'numeric',
-          }
-        )
+      labels: buckets.map((bucket) => bucket.label),
+      visits: buckets.map(
+        (bucket) => visitCounts.get(bucket.key) || 0
       ),
-
-      visits: dates.map(
-        (date) => {
-          const key =
-            getDateKey(date);
-
-          return analyticsAttendance.filter(
-            (item) =>
-              getDateKey(
-                item.timeIn
-              ) === key
-          ).length;
-        }
-      ),
-
-      transactions: dates.map(
-        (date) => {
-          const key =
-            getDateKey(date);
-
-          return analyticsBorrows.filter(
-            (item) =>
-              getDateKey(
-                item.requestDate
-              ) === key
-          ).length;
-        }
+      transactions: buckets.map(
+        (bucket) => transactionCounts.get(bucket.key) || 0
       ),
     };
   }, [
     analyticsAttendance,
     analyticsBorrows,
     analyticsWindow,
+    timeframe,
   ]);
+
+  const forecastDailyVisitorCounts = useMemo(() => {
+    if (!analyticsWindow.valid) {
+      return [];
+    }
+
+    const buckets = getTimeframeBuckets(
+      'custom',
+      analyticsWindow
+    ).slice(-366);
+    const counts = new Map();
+
+    analyticsAttendance.forEach((item) => {
+      const key = getDateKey(item.timeIn, 'custom');
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+
+    return buckets.map((bucket) => counts.get(bucket.key) || 0);
+  }, [analyticsAttendance, analyticsWindow]);
 
   /*
    * -------------------------------------------------------------------------
@@ -1159,9 +920,13 @@ function AdminWorkspace({
    * =========================================================================
    */
 
-  const handleExport = (format) => {
-    const rows =
-      reportRows.map(
+  const handleExport = async (format) => {
+    if (!analyticsWindow.valid) {
+      setError(analyticsWindow.error);
+      return;
+    }
+
+    const rows = reportRows.map(
         (row) => ({
           ...row,
           time: new Date(
@@ -1171,12 +936,57 @@ function AdminWorkspace({
       );
 
     const suffix = `${
-      period
+      timeframe
     }_${
       isSubAdmin
         ? currentLibraryId
         : 'all-libraries'
     }`;
+
+    if (format === 'pdf') {
+      const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable'),
+      ]);
+      const document = new jsPDF({
+        orientation: 'landscape',
+      });
+      const branchLabel = isSubAdmin
+        ? getLibraryName(libraries, currentLibraryId)
+        : 'All libraries';
+
+      document.setFontSize(16);
+      document.text('SHELF ILMS Circulation Report', 14, 16);
+      document.setFontSize(10);
+      document.text(
+        `${branchLabel} | ${analyticsWindow.label}`,
+        14,
+        23
+      );
+      autoTable(document, {
+        startY: 29,
+        head: [[
+          'Time',
+          'Activity',
+          'Visitor',
+          'Details',
+          'Branch',
+          'Status',
+        ]],
+        body: rows.map((row) => [
+          row.time,
+          row.type,
+          row.person,
+          row.detail,
+          row.branch,
+          row.status,
+        ]),
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [15, 74, 82] },
+      });
+      document.save(`SHELF_Report_${suffix}.pdf`);
+      return;
+    }
 
     if (format === 'xlsx') {
       exportToExcel(
@@ -1440,12 +1250,18 @@ function AdminWorkspace({
       const categorySeries =
         topCategories.map(
           ([category]) => {
-            const weeklyDemand = [
-              0,
-              0,
-              0,
-              0,
-            ];
+            const weekCount = Math.max(
+              1,
+              Math.min(
+                52,
+                Math.ceil(
+                  (analyticsWindow.endExclusive.getTime() -
+                    analyticsWindow.start.getTime()) /
+                    (7 * 86400000)
+                )
+              )
+            );
+            const weeklyDemand = Array(weekCount).fill(0);
 
             analyticsBorrows.forEach(
               (request) => {
@@ -1491,10 +1307,7 @@ function AdminWorkspace({
                   return;
                 }
 
-                const weekIndex =
-                  Math.floor(
-                    ageDays / 7
-                  );
+                const weekIndex = Math.floor(ageDays / 7);
 
                 /*
                  * 0 = most recent week
@@ -1534,7 +1347,7 @@ function AdminWorkspace({
           `${endpoint.replace(
             /\/$/,
             ''
-          )}/forecast`,
+          )}/forecast?timeframe=${encodeURIComponent(timeframe)}`,
           {
             method: 'POST',
 
@@ -1545,7 +1358,7 @@ function AdminWorkspace({
 
             body: JSON.stringify({
               daily_visitors:
-                periodCounts.visits,
+                forecastDailyVisitorCounts,
 
               categories:
                 categorySeries,
@@ -1672,6 +1485,11 @@ function AdminWorkspace({
       setMessage(
         'Sub-admin account created successfully. Share its temporary password securely.'
       );
+      await recordAuditEvent({
+        action: 'staff.account.created',
+        branchId: libraryId,
+        details: { email, fullName, role: 'subadmin' },
+      });
 
       const {
         data: updatedStaff,
@@ -1763,6 +1581,13 @@ function AdminWorkspace({
             : 'disabled'
         }.`
       );
+      await recordAuditEvent({
+        action: profile.is_active
+          ? 'staff.account.disabled'
+          : 'staff.account.enabled',
+        branchId: profile.library_id,
+        details: { staffId: profile.id, email: profile.email },
+      });
     };
 
   /*
@@ -1805,6 +1630,10 @@ function AdminWorkspace({
                 {
                   id: 'staff',
                   label: 'Staff accounts',
+                },
+                {
+                  id: 'audit',
+                  label: 'Audit trail',
                 },
               ]
             : []),
@@ -1894,35 +1723,20 @@ function AdminWorkspace({
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <label className="text-xs font-semibold text-slate-600">
-                Period
-
-                <select
-                  value={period}
-                  onChange={(event) =>
-                    setPeriod(
-                      event.target.value
-                    )
-                  }
-                  className="ml-2 border border-slate-300 bg-white px-2 py-2 text-sm"
-                >
-                  <option value="daily">
-                    Daily
-                  </option>
-
-                  <option value="weekly">
-                    Weekly
-                  </option>
-
-                  <option value="monthly">
-                    Monthly
-                  </option>
-
-                  <option value="annual">
-                    Annual
-                  </option>
-                </select>
-              </label>
+              <div className="min-w-48">
+                <AnalyticsDateFilter
+                  timeframe={timeframe}
+                  onTimeframeChange={(value) => {
+                    setTimeframe(value);
+                    setForecast(null);
+                  }}
+                  customStart={customStartDate}
+                  onCustomStartChange={setCustomStartDate}
+                  customEnd={customEndDate}
+                  onCustomEndChange={setCustomEndDate}
+                  range={analyticsWindow}
+                />
+              </div>
 
               <label className="text-xs font-semibold text-slate-600">
                 Sort
@@ -1973,38 +1787,31 @@ function AdminWorkspace({
               >
                 Export CSV
               </button>
+
+              <button
+                type="button"
+                onClick={() => handleExport('pdf')}
+                className="border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700"
+              >
+                Export PDF
+              </button>
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Metric
               label="Visitor check-ins"
-              value={
-                scopedAttendance.filter(
-                  (item) =>
-                    new Date(
-                      item.timeIn
-                    ) >=
-                    startOfPeriod(
-                      period
-                    )
-                ).length
-              }
+              value={reportRows.filter((row) => row.type === 'Visitor').length}
             />
 
             <Metric
               label="Book requests"
-              value={
-                scopedBorrows.filter(
-                  (item) =>
-                    new Date(
-                      item.requestDate
-                    ) >=
-                    startOfPeriod(
-                      period
-                    )
-                ).length
-              }
+              value={reportRows.filter((row) => row.type === 'Book transaction').length}
+            />
+
+            <Metric
+              label="Book returns"
+              value={reportRows.filter((row) => row.type === 'Book return').length}
             />
 
             <Metric
@@ -2013,7 +1820,11 @@ function AdminWorkspace({
                 scopedBorrows.filter(
                   (item) =>
                     item.status ===
-                    'borrowed'
+                      'borrowed' &&
+                    isDateInsideWindow(
+                      item.borrowDate || item.requestDate,
+                      analyticsWindow
+                    )
                 ).length
               }
             />
@@ -2177,50 +1988,18 @@ function AdminWorkspace({
               {/* DATE RANGE - BOTH SUB-ADMIN AND SUPER ADMIN               */}
               {/* ========================================================= */}
 
-              <label
-                className={`block text-sm font-semibold text-slate-700 ${
-                  isSubAdmin
-                    ? 'md:col-span-1'
-                    : ''
-                }`}
-              >
-                Date range
-
-                <select
-                  value={
-                    analyticsDateRange
-                  }
-                  onChange={(
-                    event
-                  ) => {
-                    setAnalyticsDateRange(
-                      event.target.value
-                    );
-
-                    setForecast(
-                      null
-                    );
-                  }}
-                  className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-700"
-                >
-                  {ANALYTICS_DATE_RANGES.map(
-                    (range) => (
-                      <option
-                        key={
-                          range.id
-                        }
-                        value={
-                          range.id
-                        }
-                      >
-                        {
-                          range.label
-                        }
-                      </option>
-                    )
-                  )}
-                </select>
-              </label>
+              <AnalyticsDateFilter
+                timeframe={timeframe}
+                onTimeframeChange={(value) => {
+                  setTimeframe(value);
+                  setForecast(null);
+                }}
+                customStart={customStartDate}
+                onCustomStartChange={setCustomStartDate}
+                customEnd={customEndDate}
+                onCustomEndChange={setCustomEndDate}
+                range={analyticsWindow}
+              />
             </div>
 
             {/* =========================================================== */}
@@ -2239,63 +2018,6 @@ function AdminWorkspace({
                     currentLibraryId
                   )}
                 </div>
-              </div>
-            )}
-
-            {/* =========================================================== */}
-            {/* CUSTOM DATE RANGE                                           */}
-            {/* =========================================================== */}
-
-            {analyticsDateRange ===
-              'custom' && (
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <label className="block text-sm font-semibold text-slate-700">
-                  Start date
-
-                  <input
-                    type="date"
-                    value={
-                      customStartDate
-                    }
-                    onChange={(
-                      event
-                    ) => {
-                      setCustomStartDate(
-                        event.target
-                          .value
-                      );
-
-                      setForecast(
-                        null
-                      );
-                    }}
-                    className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-700"
-                  />
-                </label>
-
-                <label className="block text-sm font-semibold text-slate-700">
-                  End date
-
-                  <input
-                    type="date"
-                    value={
-                      customEndDate
-                    }
-                    onChange={(
-                      event
-                    ) => {
-                      setCustomEndDate(
-                        event.target
-                          .value
-                      );
-
-                      setForecast(
-                        null
-                      );
-                    }}
-                    className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-700"
-                  />
-                </label>
               </div>
             )}
 
@@ -3253,6 +2975,10 @@ function AdminWorkspace({
             </div>
           </section>
         )}
+
+      {tab === 'audit' && !isSubAdmin && (
+        <AuditLogViewer libraries={libraries} />
+      )}
     </div>
   );
 }

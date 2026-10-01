@@ -28,105 +28,90 @@ export const SUPER_ADMIN_CREDENTIALS = [
 export const SUB_ADMIN_CREDENTIALS = [
   {
     email: 'malvar.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Malvar Campus Sub-Admin',
     libraryId:
       '277829af-1475-47ae-9e26-4b64c68f54f4',
   },
   {
     email: 'lipa.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Lipa Campus Sub-Admin',
     libraryId:
       '3ccf575d-4573-4ed9-acdb-c8d9cf8a949e',
   },
   {
     email: 'lemery.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Lemery Campus Sub-Admin',
     libraryId:
       '41dec6e1-28cd-4057-a046-982269698cdc',
   },
   {
     email: 'sanjuan.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'San Juan Campus Sub-Admin',
     libraryId:
       '4226ff5c-21f1-48bd-9cf8-a5a272c81e3d',
   },
   {
     email: 'mabini.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Mabini Campus Sub-Admin',
     libraryId:
       '66ea1120-0789-410f-bb87-ae22d115ce1e',
   },
   {
     email: 'nasugbu.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Nasugbu Campus Sub-Admin',
     libraryId:
       '67487fb6-6988-433c-aeef-9b770f59f010',
   },
   {
     email: 'batangascity.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Batangas City Library Staff',
     libraryId:
       '78c0a005-06cd-48f5-92d2-daa06fe36e12',
   },
   {
     email: 'lobo.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Lobo Campus Sub-Admin',
     libraryId:
       '7c23ab9b-b42d-4420-b5b7-fdc71c49792a',
   },
   {
     email: 'alangilan.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Alangilan Campus Sub-Admin',
     libraryId:
       '84819f90-5923-4bd8-8aa0-1805e7613e81',
   },
   {
     email: 'balayan.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Balayan Campus Sub-Admin',
     libraryId:
       '971893c8-5670-46b5-833c-398b2968ad1c',
   },
   {
     email: 'provincial.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Provincial Library Staff',
     libraryId:
       '9c82c34b-6059-47e1-983a-d03755cb830b',
   },
   {
     email: 'pabloborbon.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Pablo Borbon Campus Sub-Admin',
     libraryId:
       'bde57b8b-d3b8-4676-823e-7573f80d3a36',
   },
   {
     email: 'rosario.admin@shelf.edu',
-    password: 'Password@2026',
     name: 'Rosario Campus Sub-Admin',
     libraryId:
       'c5613110-237e-4e93-b27b-95b41da95f3a',
   },
   {
     email: 'librarian@shelf.edu',
-    password: 'Librarian@2026',
     name: 'Maria Santos',
     libraryId:
       '78c0a005-06cd-48f5-92d2-daa06fe36e12',
   },
   {
     email: 'circdesk@shelf.edu',
-    password: 'CircDesk@2026',
     name: 'Circulation Desk Staff',
     libraryId:
       '9c82c34b-6059-47e1-983a-d03755cb830b',
@@ -349,6 +334,11 @@ export async function fetchBooks() {
 }
 
 export async function fetchVisitors() {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) {
+    return [];
+  }
+
   const { data, error } =
     await supabase
       .from('visitors')
@@ -367,6 +357,9 @@ export async function fetchVisitors() {
 }
 
 export async function fetchBorrowRequests() {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) return [];
+
   const { data, error } =
     await supabase
       .from('borrow_requests')
@@ -385,6 +378,9 @@ export async function fetchBorrowRequests() {
 }
 
 export async function fetchAttendanceLogs() {
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) return [];
+
   const { data, error } =
     await supabase
       .from('attendance_logs')
@@ -434,86 +430,41 @@ export async function registerVisitor({
   address,
   password,
 }) {
-  const { data, error } =
-    await supabase.rpc(
-      'register_visitor',
-      {
-        p_full_name: fullName,
-        p_contact_number:
-          contactNumber,
-        p_email: email,
-        p_address: address,
-        p_password: password,
-      }
-    );
+  const { data, error } = await supabase.auth.signUp({
+    email: String(email || '').trim().toLowerCase(),
+    password,
+    options: {
+      data: {
+        role: 'visitor',
+        full_name: String(fullName || '').trim(),
+        contact_number: String(contactNumber || '').trim(),
+        address: String(address || '').trim(),
+      },
+    },
+  });
 
   if (error) {
     throw cleanErr(error);
   }
 
-  const row = data?.[0];
-
-  if (!row?.visitor_id) {
-    throw new Error(
-      'Registration was unsuccessful. Please try again.'
-    );
-  }
-
-  const visitorId =
-    row.visitor_id;
-
-  const { error: emailError } =
-    await supabase.functions.invoke(
-      'send-visitor-otp',
-      {
-        body: {
-          visitorId,
-        },
-      }
-    );
-
-  if (emailError) {
-    throw new Error(
-      'Your registration was created, but we could not send the verification email. Please try again.'
-    );
+  if (!data?.user?.email || data.user.identities?.length === 0) {
+    throw new Error('Registration could not be started. Check the email and try again.');
   }
 
   return {
-    visitorId,
+    visitorId: data.user.email,
   };
 }
 
 export async function resendOtp(
   visitorId
 ) {
-  const { error } =
-    await supabase.rpc(
-      'resend_otp',
-      {
-        p_visitor_id:
-          visitorId,
-      }
-    );
+  const { error } = await supabase.auth.resend({
+    type: 'signup',
+    email: String(visitorId || '').trim().toLowerCase(),
+  });
 
-  if (error) {
-    throw cleanErr(error);
-  }
-
-  const { error: emailError } =
-    await supabase.functions.invoke(
-      'send-visitor-otp',
-      {
-        body: {
-          visitorId,
-        },
-      }
-    );
-
-  if (emailError) {
-    throw new Error(
-      'A new verification code was generated, but we could not send the email. Please try again.'
-    );
-  }
+  if (error) throw cleanErr(error);
 
   return {
     success: true,
@@ -524,36 +475,31 @@ export async function verifyVisitorOtp(
   visitorId,
   code
 ) {
-  const { data, error } =
-    await supabase.rpc(
-      'verify_visitor_otp',
-      {
-        p_visitor_id:
-          visitorId,
-        p_code: String(
-          code
-        ).trim(),
-      }
-    );
+  const { data, error } = await supabase.auth.verifyOtp({
+    email: String(visitorId || '').trim().toLowerCase(),
+    token: String(code || '').trim(),
+    type: 'signup',
+  });
 
   if (error) {
     throw cleanErr(error);
   }
 
-  const row = data?.[0];
+  const { data: profile, error: profileError } = await supabase
+    .from('visitors')
+    .select('id, full_name, email, qr_code, otp_verified')
+    .eq('auth_user_id', data.user.id)
+    .single();
 
-  if (!row) {
-    throw new Error(
-      'Unable to verify the OTP. Please try again.'
-    );
+  if (profileError || !profile) {
+    throw cleanErr(profileError || new Error('Visitor profile was not created.'));
   }
 
   return {
-    id: row.id,
-    fullName:
-      row.full_name,
-    email: row.email,
-    qrCode: row.qr_code,
+    id: profile.id,
+    fullName: profile.full_name,
+    email: profile.email,
+    qrCode: profile.qr_code,
     otpVerified: true,
   };
 }
@@ -562,47 +508,59 @@ export async function loginVisitor({
   identifier,
   password,
 }) {
-  const { data, error } =
-    await supabase.rpc(
-      'login_visitor',
-      {
-        p_identifier:
-          String(
-            identifier || ''
-          ).trim(),
-        p_password:
-          password || '',
-      }
+  const normalizedIdentifier = String(identifier || '').trim();
+  let authUser;
+
+  if (normalizedIdentifier.includes('@')) {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: normalizedIdentifier.toLowerCase(),
+      password: password || '',
+    });
+
+    if (error) throw cleanErr(error);
+    authUser = data.user;
+  } else {
+    const { data: qrLogin, error: qrLoginError } = await supabase.functions.invoke(
+      'visitor-qr-login',
+      { body: { qrCode: normalizedIdentifier } }
     );
 
-  if (error) {
-    console.error(
-      'VISITOR LOGIN RPC ERROR:',
-      error
-    );
+    if (qrLoginError) throw cleanErr(qrLoginError);
+    if (!qrLogin?.tokenHash) {
+      throw new Error('This QR pass could not be used to sign in.');
+    }
 
-    throw cleanErr(error);
+    const { data, error } = await supabase.auth.verifyOtp({
+      token_hash: qrLogin.tokenHash,
+      type: 'magiclink',
+    });
+
+    if (error) throw cleanErr(error);
+    authUser = data.user;
   }
 
-  const row = data?.[0];
+  const { data: profile, error: profileError } = await supabase
+    .from('visitors')
+    .select('id, full_name, email, qr_code, otp_verified')
+    .eq('auth_user_id', authUser.id)
+    .single();
 
-  if (!row) {
-    throw new Error(
-      'Invalid visitor credentials.'
-    );
+  if (profileError || !profile) {
+    await supabase.auth.signOut();
+    throw cleanErr(profileError || new Error('Visitor profile was not found.'));
   }
 
   return {
-    id: row.id,
-    fullName:
-      row.full_name,
-    email: row.email,
-    qrCode: row.qr_code,
+    id: profile.id,
+    fullName: profile.full_name,
+    email: profile.email,
+    qrCode: profile.qr_code,
   };
 }
 
 export async function findVisitorByQr(
-  qrCode
+  qrCode,
+  libraryId
 ) {
   const { data, error } =
     await supabase.rpc(
@@ -611,6 +569,7 @@ export async function findVisitorByQr(
         p_qr: String(
           qrCode || ''
         ).trim(),
+        p_library_id: libraryId,
       }
     );
 
@@ -1071,6 +1030,61 @@ export async function addBook(
   return mapBook(data);
 }
 
+export async function addBooksBulk(books) {
+  if (!Array.isArray(books) || books.length === 0) {
+    throw new Error('Choose a file containing at least one book.');
+  }
+
+  const rows = books.map((book, index) => {
+    const normalized = Object.fromEntries(
+      Object.entries(book).map(([key, value]) => [
+        String(key).trim().toLowerCase().replace(/[\s-]+/g, '_'),
+        value,
+      ])
+    );
+    const title = String(normalized.title || '').trim();
+    const author = String(normalized.author || '').trim();
+    const isbn = String(normalized.isbn || '').trim();
+    const category = String(normalized.category || '').trim();
+    const stock = Number(
+      normalized.stock_count ??
+      normalized.stock ??
+      normalized.total_copies ??
+      normalized.copies
+    );
+
+    if (!title || !author || !isbn || !category || !Number.isInteger(stock) || stock < 1) {
+      throw new Error(
+        `Row ${index + 1} requires title, author, ISBN, category, and a positive whole-number stock count.`
+      );
+    }
+
+    return {
+      library_id: String(normalized.library_id || '').trim() || null,
+      title,
+      author,
+      isbn,
+      category,
+      total_copies: stock,
+      available_copies: stock,
+      shelf_location: String(normalized.shelf_location || '').trim() || null,
+      summary: String(normalized.summary || '').trim() || null,
+      cover_url: String(normalized.cover_url || '').trim() || null,
+    };
+  });
+
+  const { data, error } = await supabase
+    .from('books')
+    .insert(rows)
+    .select();
+
+  if (error) {
+    throw cleanErr(error);
+  }
+
+  return (data || []).map(mapBook);
+}
+
 export async function updateBook(
   bookId,
   patch
@@ -1370,23 +1384,6 @@ export async function cancelBorrowRequest(
   if (error) {
     throw cleanErr(error);
   }
-}
-
-// ============================================================================
-// AUTOMATIC PICKUP EXPIRY
-// ============================================================================
-
-export async function autoExpireOverduePickups() {
-  const { data, error } =
-    await supabase.rpc(
-      'auto_expire_pickups'
-    );
-
-  if (error) {
-    throw cleanErr(error);
-  }
-
-  return data;
 }
 
 // ============================================================================

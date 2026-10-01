@@ -10,10 +10,6 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../../context/useAuth.js';
-import {
-  SUPER_ADMIN_CREDENTIALS,
-  SUB_ADMIN_CREDENTIALS,
-} from '../../data/store.js';
 
 import libraryBg from '../../assets/library.jpg';
 
@@ -192,8 +188,6 @@ export default function VisitorLogin() {
     resendVisitorOtp,
     login,
     loginVisitor,
-    loginSuperAdmin,
-    loginSubAdmin,
     loginAsVisitorSession,
   } = useAuth();
 
@@ -313,316 +307,17 @@ export default function VisitorLogin() {
     formData.password ===
       formData.confirmPassword;
 
-  const isContactNumberValid =
-    /^09\d{9}$/.test(
-      formData.contactNumber
-    );
-
   // =========================================================
   // CENTRALIZED QR LOGIN
   // =========================================================
 
-  const handleQrLogin = useCallback(
-    async (decodedText) => {
-      const qrValue =
-        typeof decodedText === 'string'
-          ? decodedText.trim()
-          : '';
+  const handleQrLogin = useCallback(async (decodedText) => {
+    const qrCode = String(decodedText || '').trim();
+    if (!qrCode) throw new Error('The QR code does not contain a visitor pass.');
 
-      if (!qrValue) {
-        throw new Error(
-          'The QR code does not contain valid data.'
-        );
-      }
-
-      console.log(
-        'Centralized QR login - decoded value:',
-        qrValue
-      );
-
-      // =====================================================
-      // PARSE JSON QR
-      // =====================================================
-
-      let qrPayload = null;
-
-      try {
-        const parsed = JSON.parse(qrValue);
-
-        if (
-          parsed &&
-          typeof parsed === 'object' &&
-          !Array.isArray(parsed)
-        ) {
-          qrPayload = parsed;
-        }
-      } catch {
-        qrPayload = null;
-      }
-
-      // =====================================================
-      // NORMALIZE ROLE
-      // =====================================================
-
-      const normalizedRole = String(
-        qrPayload?.role || ''
-      )
-        .trim()
-        .toLowerCase()
-        .replace(/[\s_-]/g, '');
-
-      console.log(
-        'QR normalized role:',
-        normalizedRole
-      );
-
-      // =====================================================
-      // SUPER ADMIN QR
-      // =====================================================
-
-      if (normalizedRole === 'superadmin') {
-        const email = String(
-          qrPayload?.email || ''
-        )
-          .trim()
-          .toLowerCase();
-
-        if (!email) {
-          throw new Error(
-            'The Super Admin QR code does not contain an email address.'
-          );
-        }
-
-        const account =
-          SUPER_ADMIN_CREDENTIALS.find(
-            (item) =>
-              String(item.email)
-                .trim()
-                .toLowerCase() === email
-          );
-
-        if (!account) {
-          throw new Error(
-            'The Super Admin QR code contains an unrecognized account.'
-          );
-        }
-
-        const password =
-          String(
-            qrPayload?.password || ''
-          ) || account.password;
-
-        await loginSuperAdmin(
-          account.email,
-          password
-        );
-
-        setLoginData({
-          identifier: account.email,
-          password: '',
-        });
-
-        navigate('/superadmin');
-
-        return {
-          role: 'superadmin',
-          email: account.email,
-        };
-      }
-
-      // =====================================================
-      // SUB-ADMIN / STAFF / CIRCULATION DESK QR
-      // =====================================================
-
-      if (
-        normalizedRole === 'subadmin' ||
-        normalizedRole === 'admin' ||
-        normalizedRole === 'circulationdesk' ||
-        normalizedRole === 'circulation' ||
-        normalizedRole ===
-          'circulationdeskstaff'
-      ) {
-        const email = String(
-          qrPayload?.email || ''
-        )
-          .trim()
-          .toLowerCase();
-
-        if (!email) {
-          throw new Error(
-            'The staff QR code does not contain an email address.'
-          );
-        }
-
-        const account =
-          SUB_ADMIN_CREDENTIALS.find(
-            (item) =>
-              String(item.email)
-                .trim()
-                .toLowerCase() === email
-          );
-
-        if (!account) {
-          throw new Error(
-            'The staff QR code contains an unrecognized account.'
-          );
-        }
-
-        const password =
-          String(
-            qrPayload?.password || ''
-          ) || account.password;
-
-        await loginSubAdmin(
-          account.email,
-          password
-        );
-
-        setLoginData({
-          identifier: account.email,
-          password: '',
-        });
-
-        navigate('/subadmin');
-
-        return {
-          role: 'subadmin',
-          email: account.email,
-        };
-      }
-
-      // =====================================================
-      // VISITOR JSON QR
-      // =====================================================
-
-      if (normalizedRole === 'visitor') {
-        const visitorQr = String(
-          qrPayload?.qrCode ||
-            qrPayload?.qr_code ||
-            qrPayload?.passId ||
-            qrPayload?.pass_id ||
-            qrPayload?.identifier ||
-            ''
-        ).trim();
-
-        if (!visitorQr) {
-          throw new Error(
-            'The Visitor QR code does not contain a valid QR pass ID.'
-          );
-        }
-
-        await loginVisitor({
-          identifier: visitorQr,
-          password: '',
-        });
-
-        setLoginData({
-          identifier: visitorQr,
-          password: '',
-        });
-
-        navigate('/visitor');
-
-        return {
-          role: 'visitor',
-          identifier: visitorQr,
-        };
-      }
-
-      // =====================================================
-      // PLAIN SUPER ADMIN EMAIL
-      // =====================================================
-
-      const superAdminAccount =
-        SUPER_ADMIN_CREDENTIALS.find(
-          (item) =>
-            String(item.email)
-              .trim()
-              .toLowerCase() ===
-            qrValue.toLowerCase()
-        );
-
-      if (superAdminAccount) {
-        await loginSuperAdmin(
-          superAdminAccount.email,
-          superAdminAccount.password
-        );
-
-        setLoginData({
-          identifier:
-            superAdminAccount.email,
-          password: '',
-        });
-
-        navigate('/superadmin');
-
-        return {
-          role: 'superadmin',
-          email: superAdminAccount.email,
-        };
-      }
-
-      // =====================================================
-      // PLAIN SUB-ADMIN / STAFF EMAIL
-      // =====================================================
-
-      const subAdminAccount =
-        SUB_ADMIN_CREDENTIALS.find(
-          (item) =>
-            String(item.email)
-              .trim()
-              .toLowerCase() ===
-            qrValue.toLowerCase()
-        );
-
-      if (subAdminAccount) {
-        await loginSubAdmin(
-          subAdminAccount.email,
-          subAdminAccount.password
-        );
-
-        setLoginData({
-          identifier:
-            subAdminAccount.email,
-          password: '',
-        });
-
-        navigate('/subadmin');
-
-        return {
-          role: 'subadmin',
-          email: subAdminAccount.email,
-        };
-      }
-
-      // =====================================================
-      // NORMAL VISITOR QR
-      // =====================================================
-
-      await loginVisitor({
-        identifier: qrValue,
-        password: '',
-      });
-
-      setLoginData({
-        identifier: qrValue,
-        password: '',
-      });
-
-      navigate('/visitor');
-
-      return {
-        role: 'visitor',
-        identifier: qrValue,
-      };
-    },
-    [
-      loginSuperAdmin,
-      loginSubAdmin,
-      loginVisitor,
-      navigate,
-    ]
-  );
+    await loginVisitor({ identifier: qrCode, password: '' });
+    navigate('/visitor');
+  }, [loginVisitor, navigate]);
 
   // =========================================================
   // CAMERA QR SCANNER
@@ -1064,13 +759,13 @@ export default function VisitorLogin() {
 
     if (!identifier) {
       setError(
-        'Please enter your email, account ID, or QR pass ID.'
+        'Please enter your email address.'
       );
 
       return;
     }
 
-    if (!loginData.password) {
+    if (identifier.includes('@') && !loginData.password) {
       setError(
         'Please enter your password.'
       );
@@ -1456,7 +1151,7 @@ export default function VisitorLogin() {
 
             <p className="text-xs text-slate-500">
               {view === 'login' &&
-                'Sign in using your email, account ID, or QR pass ID.'}
+                'Sign in using your email and password.'}
 
               {view === 'register' &&
                 'Fill in your personal details to receive your digital library pass.'}
@@ -1465,7 +1160,7 @@ export default function VisitorLogin() {
                 'Enter the one-time verification code sent to your email.'}
 
               {view === 'success' &&
-                'Save your QR pass and use it for quick library access.'}
+                'Keep your QR pass private. It signs you in and is used for library attendance and circulation.'}
             </p>
           </div>
 
@@ -1521,9 +1216,8 @@ export default function VisitorLogin() {
                 </p>
 
                 <p className="text-xs text-slate-500">
-                  Keep this QR pass available
-                  for library attendance and
-                  quick login.
+                  Keep this QR pass private. Use it to sign in and present it
+                  for attendance, book pickup, and returns at the library.
                 </p>
 
                 <button
@@ -2169,8 +1863,7 @@ export default function VisitorLogin() {
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
-                      Email / Account ID /
-                      QR Pass ID
+                      Email or visitor QR pass
                     </label>
 
                     <input
@@ -2208,7 +1901,7 @@ export default function VisitorLogin() {
                             : 'password'
                         }
                         name="visitor_login_password"
-                        required
+                        required={loginData.identifier.includes('@')}
                         autoComplete="new-password"
                         placeholder="••••••••"
                         value={

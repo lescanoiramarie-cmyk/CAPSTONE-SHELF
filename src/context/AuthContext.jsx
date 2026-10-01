@@ -380,21 +380,37 @@ export const AuthProvider = ({ children }) => {
 
     if (!normalizedIdentifier) {
       throw new Error(
-        'Email or ID is required.'
+        'Email or visitor QR pass is required.'
       );
     }
 
-    if (!normalizedPassword) {
+    if (!normalizedPassword && normalizedIdentifier.includes('@')) {
       throw new Error(
         'Password is required.'
       );
+    }
+
+    if (!normalizedIdentifier.includes('@')) {
+      const visitor = await store.loginVisitor({
+        identifier: normalizedIdentifier,
+        password: '',
+      });
+      const visitorSession = {
+        role: 'visitor',
+        id: visitor.id,
+        name: visitor.fullName,
+        email: visitor.email,
+        qrCode: visitor.qrCode,
+      };
+      setUser(visitorSession);
+      return { success: true, role: 'visitor', user: visitor };
     }
 
     // =======================================================
     // 1. TRY STAFF LOGIN FIRST
     // =======================================================
 
-    let staffError = null;
+    let staffError;
 
     try {
       const staff =

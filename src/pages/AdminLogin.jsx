@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth.js';
-import { SUB_ADMIN_CREDENTIALS } from '../data/store';
 import libraryBg from '../assets/library.jpg';
 
 export default function AdminLogin() {
@@ -11,11 +10,11 @@ export default function AdminLogin() {
   const { loginSubAdmin } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubAdminLogin = (e) => {
+  const handleSubAdminLogin = async (e) => {
     e.preventDefault();
     setError('');
     try {
-      loginSubAdmin(email, password);
+      await loginSubAdmin(email, password);
       navigate('/subadmin');
     } catch (err) {
       setError(err.message);
@@ -89,11 +88,8 @@ export default function AdminLogin() {
             </button>
           </form>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-[11px] text-slate-500 space-y-1">
-            <p className="font-bold text-slate-600">Demo credentials (hardcoded):</p>
-            {SUB_ADMIN_CREDENTIALS.map((c) => (
-              <p key={c.email} className="font-mono">{c.email} / {c.password}</p>
-            ))}
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-[11px] text-slate-600">
+            Staff access is provisioned through Supabase Auth by a super-admin.
           </div>
 
           <div className="pt-4 border-t border-slate-200 flex justify-between text-xs font-semibold">

@@ -16,16 +16,21 @@ export default function BookTransactions() {
   const [mode, setMode] = useState('borrowing'); // 'borrowing' | 'returning'
   const [scannedVisitor, setScannedVisitor] = useState(null);
   const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
 
-  const handleScan = (code) => {
-    const visitor = findVisitorByQr(code);
-    if (!visitor) {
-      setMessage('QR code not recognized. Please check the visitor pass and try again.');
+  const handleScan = async (code) => {
+    try {
+      const visitor = await findVisitorByQr(code, libraryId);
+      if (!visitor) {
+        throw new Error('QR code not recognized. Please check the visitor pass and try again.');
+      }
+      setScannedVisitor(visitor);
+      setMessage('');
+      setError('');
+    } catch (error) {
+      setError(error.message || 'Unable to verify this visitor pass.');
       setScannedVisitor(null);
-      return;
     }
-    setScannedVisitor(visitor);
-    setMessage('');
   };
 
   const libraryId = user?.libraryId || user?.assignedBranch;
@@ -39,21 +44,23 @@ export default function BookTransactions() {
       )
     : [];
 
-  const handleConfirmPickup = (requestId) => {
+  const handleConfirmPickup = async (requestId) => {
     try {
-      confirmPickup(requestId, user.name);
+      await confirmPickup(requestId, user.name);
       setMessage('Pickup confirmed — the book is now marked as borrowed in real time.');
+      setError('');
     } catch (err) {
-      setMessage(err.message);
+      setError(err.message || 'Unable to confirm pickup.');
     }
   };
 
-  const handleConfirmReturn = (requestId) => {
+  const handleConfirmReturn = async (requestId) => {
     try {
-      confirmReturn(requestId, user.name);
+      await confirmReturn(requestId, user.name);
       setMessage('Return confirmed — the copy is now available again, and the queue was updated.');
+      setError('');
     } catch (err) {
-      setMessage(err.message);
+      setError(err.message || 'Unable to confirm return.');
     }
   };
 
@@ -70,6 +77,7 @@ export default function BookTransactions() {
               setMode(t.id);
               setScannedVisitor(null);
               setMessage('');
+              setError('');
             }}
             className={`px-4 py-2 text-sm font-bold rounded-lg transition ${
               mode === t.id ? 'bg-[#002046] text-white' : 'bg-white border border-slate-300 text-slate-600 hover:bg-slate-50'
@@ -93,8 +101,14 @@ export default function BookTransactions() {
         </div>
 
         {message && (
-          <div className="text-xs font-semibold bg-blue-50 border border-blue-200 text-blue-800 rounded-lg px-3 py-2">
+          <div role="status" className="text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-3 py-2">
             {message}
+          </div>
+        )}
+
+        {error && (
+          <div role="alert" className="text-xs font-semibold bg-red-50 border border-red-200 text-red-800 rounded-lg px-3 py-2">
+            {error}
           </div>
         )}
 

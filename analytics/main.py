@@ -1,8 +1,9 @@
 from datetime import date, timedelta
 import os
+from typing import Literal
 
 import pandas as pd
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sklearn.linear_model import LinearRegression
@@ -10,11 +11,11 @@ from sklearn.linear_model import LinearRegression
 
 class CategorySeries(BaseModel):
     category: str = Field(min_length=1, max_length=120)
-    weekly_demand: list[int] = Field(min_length=1, max_length=26)
+    weekly_demand: list[int] = Field(min_length=1, max_length=52)
 
 
 class ForecastRequest(BaseModel):
-    daily_visitors: list[int] = Field(min_length=2, max_length=90)
+    daily_visitors: list[int] = Field(min_length=1, max_length=366)
     categories: list[CategorySeries] = Field(default_factory=list, max_length=30)
     horizon_days: int = Field(default=7, ge=1, le=30)
 
@@ -45,7 +46,19 @@ def health():
 
 
 @app.post("/forecast")
-def forecast(request: ForecastRequest):
+def forecast(
+    request: ForecastRequest,
+    timeframe: Literal[
+        "today",
+        "7d",
+        "this_week",
+        "last_week",
+        "this_month",
+        "last_month",
+        "year",
+        "custom",
+    ] = Query(default="7d"),
+):
     visitor_counts = linear_forecast(request.daily_visitors, request.horizon_days)
     start_date = date.today() + timedelta(days=1)
     visitor_forecasts = [
@@ -73,6 +86,7 @@ def forecast(request: ForecastRequest):
         )
 
     return {
+        "timeframe": timeframe,
         "forecasts": visitor_forecasts,
         "highDemandCategories": category_forecasts,
         "recommendations": recommendations,

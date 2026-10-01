@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import {
   Activity,
@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../../context/useAuth.js';
-import { useLibraryData } from '../../context/useLibrary.js';
+import { useLibrary, useLibraryData } from '../../context/useLibrary.js';
 
 import AttendanceScanner from '../../component/AttendanceScanner.jsx';
 import BookTransactions from '../../component/BookTransactions.jsx';
@@ -23,7 +23,8 @@ import AdminWorkspace from '../../component/AdminWorkspace.jsx';
 import DashboardWelcome from '../../component/DashboardWelcome.jsx';
 
 import { supabase } from '../../lib/supabaseClient.js';
-import { exportToExcel, exportToCSV, parseImportFile } from '../../lib/excelUtils.js';
+import { exportToExcel, exportToCSV } from '../../lib/excelUtils.js';
+import Papa from 'papaparse';
 import {
   findVisitorByQr,
   confirmPickup,
@@ -121,7 +122,7 @@ function QRBookBorrowing({
     setShowScanner(true);
   };
 
-  async function handleQrScan(qrValue) {
+  const handleQrScan = useCallback(async (qrValue) => {
     setLoading(true);
     setError('');
     setMessage('');
@@ -129,8 +130,8 @@ function QRBookBorrowing({
     setVisitorRequests([]);
 
     try {
-      const foundVisitor = await findVisitorByQr(qrValue);
       const currentLibraryId = user?.libraryId || user?.assignedBranch;
+      const foundVisitor = await findVisitorByQr(qrValue, currentLibraryId);
 
       if (!foundVisitor) {
         throw new Error(
@@ -226,7 +227,7 @@ function QRBookBorrowing({
     } finally {
       setLoading(false);
     }
-  }
+  }, [user]);
 
   useEffect(() => {
     if (!showScanner) return;
@@ -311,7 +312,7 @@ function QRBookBorrowing({
           });
       }
     };
-  }, [showScanner]);
+  }, [showScanner, handleQrScan]);
 
   const handleConfirmBorrow = async (request) => {
     if (!request?.id) return;
@@ -693,6 +694,7 @@ export default function SubAdminDashboard() {
   } = useLibraryData();
 
   const [section, setSection] = useState('overview');
+  const { addBooksBulk } = useLibrary();
 
   // ============================================================
   // BRANCH SPECIFIC DATA & IMPORT / EXPORT LOGIC
@@ -701,7 +703,7 @@ export default function SubAdminDashboard() {
 
   // 1. Filter Books para sa branch ng Sub-Admin lang
   const branchBooks = useMemo(() => {
-    if (!currentLibraryId) return books;
+    if (!currentLibraryId) return [];
     return books.filter(
       (b) => b.libraryId === currentLibraryId || b.library_id === currentLibraryId
     );
@@ -709,34 +711,94 @@ export default function SubAdminDashboard() {
 
   // 2. Filter Attendance Logs para sa branch ng Sub-Admin lang
   const branchAttendance = useMemo(() => {
-    if (!currentLibraryId) return attendanceLogs;
+    if (!currentLibraryId) return [];
     return attendanceLogs.filter(
       (a) => a.libraryId === currentLibraryId || a.library_id === currentLibraryId
     );
   }, [attendanceLogs, currentLibraryId]);
 
+  const branchBookIds = useMemo(
+    () => new Set(branchBooks.map((book) => String(book.id))),
+    [branchBooks]
+  );
+
+  const branchBorrowRequests = useMemo(
+    () => borrowRequests.filter((request) =>
+      branchBookIds.has(String(request.bookId || request.book_id))
+    ),
+    [borrowRequests, branchBookIds]
+  );
+
   // 3. Import File Handler para sa Branch
-  const [importTarget, setImportTarget] = useState('books');
+  const [importError, setImportError] = useState('');
+  const [importMessage, setImportMessage] = useState('');
+  const [importingBooks, setImportingBooks] = useState(false);
 
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
+  const handleFileUpload = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
     if (!file) return;
+    setImportError('');
+    setImportMessage('');
 
-    parseImportFile(file, async (importedJSON) => {
-      // Isasama ang current library ID sa bawat imported item
-      const dataWithLibrary = importedJSON.map((item) => ({
-        ...item,
-        library_id: currentLibraryId || item.library_id,
-      }));
+    if (!currentLibraryId) {
+      setImportError('Your account has no assigned branch. Contact a super-admin.');
+      return;
+    }
 
-      const { error } = await supabase.from(importTarget).insert(dataWithLibrary);
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    if (!['csv', 'json'].includes(extension)) {
+      setImportError('Choose a .csv or .json book file.');
+      return;
+    }
 
-      if (error) {
-        alert('Failed to import data: ' + error.message);
-      } else {
-        alert(`Data successfully imported for your branch to ${importTarget}!`);
-        window.location.reload();
+    setImportingBooks(true);
+    const importRows = async (records) => {
+      try {
+        if (!Array.isArray(records)) {
+          throw new Error('The file must contain a JSON array of book records.');
+        }
+
+        const booksToInsert = records.map((record) => ({
+          ...record,
+          library_id: currentLibraryId,
+        }));
+        await addBooksBulk(booksToInsert);
+        setImportMessage(`${records.length} book${records.length === 1 ? '' : 's'} imported to your branch.`);
+      } catch (error) {
+        setImportError(error.message || 'Unable to import books.');
+      } finally {
+        setImportingBooks(false);
       }
+    };
+
+    if (extension === 'json') {
+      file.text()
+        .then((text) => importRows(JSON.parse(text)))
+        .catch((error) => {
+          setImportError(error.message || 'The JSON file could not be parsed.');
+          setImportingBooks(false);
+        });
+      return;
+    }
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: ({ data, errors }) => {
+        if (errors.length) {
+          setImportError(`CSV parsing failed on row ${errors[0].row + 1}: ${errors[0].message}`);
+          setImportingBooks(false);
+          return;
+        }
+
+        importRows(data);
+      },
+      error: (error) => {
+        setImportError(error.message || 'The CSV file could not be parsed.');
+        setImportingBooks(false);
+      },
     });
   };
 
@@ -750,24 +812,21 @@ export default function SubAdminDashboard() {
   ).length;
 
   const pendingPickups =
-    borrowRequests.filter(
+    branchBorrowRequests.filter(
       (r) =>
-        (r.libraryId === currentLibraryId || r.library_id === currentLibraryId) &&
         r.status === 'ready_for_pickup' &&
         !locallyConfirmedPickups.includes(r.id)
     ).length;
 
   const activeBorrows =
-    borrowRequests.filter(
+    branchBorrowRequests.filter(
       (r) =>
-        (r.libraryId === currentLibraryId || r.library_id === currentLibraryId) &&
         (r.status === 'borrowed' || locallyConfirmedPickups.includes(r.id))
     ).length;
 
   const overdue =
-    borrowRequests.filter(
+    branchBorrowRequests.filter(
       (r) =>
-        (r.libraryId === currentLibraryId || r.library_id === currentLibraryId) &&
         r.status === 'borrowed' &&
         new Date(r.dueDate) < new Date()
     ).length;
@@ -901,27 +960,30 @@ export default function SubAdminDashboard() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <select
-                    value={importTarget}
-                    onChange={(e) => setImportTarget(e.target.value)}
-                    className="text-xs border border-slate-300 rounded-lg px-2.5 py-2 bg-slate-50 font-semibold text-slate-700"
-                  >
-                    <option value="books">Import Books to Branch</option>
-                    <option value="attendance_logs">Import Attendance Logs</option>
-                  </select>
-
                   <label className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg cursor-pointer transition">
                     <Upload size={14} className="mr-1.5 inline-block align-[-2px]" aria-hidden="true" />
-                    Import File
+                    {importingBooks ? 'Importing...' : 'Import Books'}
                     <input
                       type="file"
-                      accept=".csv, .xlsx, .xls"
+                      accept=".csv,.json,text/csv,application/json"
                       onChange={handleFileUpload}
+                      disabled={importingBooks}
                       className="hidden"
                     />
                   </label>
                 </div>
               </div>
+
+              <div className="border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900">
+                <p className="font-bold">Book import fields</p>
+                <p className="mt-1">Required: title, author, ISBN, category, and stock count (a positive whole number). Optional: shelf_location, summary, cover_url. Accepts CSV or a JSON array.</p>
+              </div>
+              {importError && (
+                <p role="alert" className="border border-red-200 bg-red-50 p-3 text-sm text-red-800">{importError}</p>
+              )}
+              {importMessage && (
+                <p role="status" className="border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{importMessage}</p>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
                 
@@ -1000,7 +1062,7 @@ export default function SubAdminDashboard() {
 
         {/* RESERVATION QUEUE */}
         {section === 'queue' && (
-          <ReservationQueue />
+          <ReservationQueue user={user} />
         )}
 
         {section === 'workspace' && (

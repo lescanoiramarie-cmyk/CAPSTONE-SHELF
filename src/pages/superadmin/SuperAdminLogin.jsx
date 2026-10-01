@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/useAuth.js';
-import { SUPER_ADMIN_CREDENTIALS } from '../../data/store';
 import libraryBg from '../../assets/library.jpg';
 
 export default function SuperAdminLogin() {
@@ -11,11 +10,11 @@ export default function SuperAdminLogin() {
   const { loginSuperAdmin } = useAuth();
   const navigate = useNavigate();
 
-  const handleSuperAdminLogin = (e) => {
+  const handleSuperAdminLogin = async (e) => {
     e.preventDefault();
     setError('');
     try {
-      loginSuperAdmin(email, passkey);
+      await loginSuperAdmin(email, passkey);
       navigate('/superadmin');
     } catch (err) {
       setError(err.message);
@@ -88,11 +87,8 @@ export default function SuperAdminLogin() {
             </button>
           </form>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-[11px] text-slate-500 space-y-1">
-            <p className="font-bold text-slate-600">Demo credentials (hardcoded):</p>
-            {SUPER_ADMIN_CREDENTIALS.map((c) => (
-              <p key={c.email} className="font-mono">{c.email} / {c.password}</p>
-            ))}
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-[11px] text-slate-600">
+            Super-admin access requires a provisioned Supabase Auth account.
           </div>
 
           <div className="pt-4 border-t border-slate-200 text-center">

@@ -5,17 +5,26 @@ function formatDateTime(iso) {
   return new Date(iso).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-export default function ReservationQueue() {
+export default function ReservationQueue({ user }) {
   const { books, borrowRequests } = useLibraryData();
+  const isSubAdmin = user?.role === 'subadmin';
+  const branchId = user?.libraryId || user?.assignedBranch;
+  const branchBooks = books.filter((book) =>
+    !isSubAdmin || String(book.libraryId || book.library_id) === String(branchId)
+  );
+  const branchBookIds = new Set(branchBooks.map((book) => String(book.id)));
+  const branchRequests = borrowRequests.filter((request) =>
+    !isSubAdmin || branchBookIds.has(String(request.bookId || request.book_id))
+  );
 
-  const readyForPickup = borrowRequests
+  const readyForPickup = branchRequests
     .filter((r) => r.status === 'ready_for_pickup')
     .sort((a, b) => new Date(a.pickupDeadline) - new Date(b.pickupDeadline));
 
-  const booksWithQueue = books
+  const booksWithQueue = branchBooks
     .map((b) => ({
       book: b,
-      queue: borrowRequests
+      queue: branchRequests
         .filter((r) => r.bookId === b.id && r.status === 'queued')
         .sort((a, b2) => (a.queuePosition || 0) - (b2.queuePosition || 0)),
     }))
