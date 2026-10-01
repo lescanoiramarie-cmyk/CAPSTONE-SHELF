@@ -107,6 +107,37 @@ create table if not exists visitor_feedback (
 alter table visitor_feedback
   add column if not exists library_id text;
 
+-- Existing RLS policies can depend on library_id and block its type upgrade.
+-- The policy definitions are recreated below after the column is aligned.
+do $$
+declare
+  dependent_policy text;
+begin
+  for dependent_policy in
+    select distinct policy.polname
+    from pg_policy policy
+    join pg_depend dependency
+      on dependency.classid = 'pg_policy'::regclass
+     and dependency.objid = policy.oid
+     and dependency.refclassid = 'pg_class'::regclass
+     and dependency.refobjid = 'public.visitor_feedback'::regclass
+    where policy.polrelid = 'public.visitor_feedback'::regclass
+      and dependency.refobjsubid = (
+        select attribute.attnum
+        from pg_attribute attribute
+        where attribute.attrelid = 'public.visitor_feedback'::regclass
+          and attribute.attname = 'library_id'
+          and not attribute.attisdropped
+      )
+  loop
+    execute format(
+      'drop policy %I on public.visitor_feedback',
+      dependent_policy
+    );
+  end loop;
+end;
+$$;
+
 do $$
 declare
   visitor_id_type text;

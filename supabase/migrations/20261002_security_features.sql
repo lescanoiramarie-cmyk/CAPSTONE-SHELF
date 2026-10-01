@@ -5,11 +5,21 @@ alter table public.visitors
   add column if not exists auth_user_id uuid unique references auth.users(id) on delete cascade,
   add column if not exists otp_expires_at timestamptz;
 
-alter table public.visitors alter column password drop not null;
-update public.visitors set password = null where password is not null;
 drop function if exists public.register_visitor(text, text, text, text, text);
 drop function if exists public.login_visitor(text, text);
-alter table public.visitors drop column password;
+
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'visitors'
+      and column_name = 'password'
+  ) then
+    execute 'alter table public.visitors drop column password';
+  end if;
+end;
+$$;
 
 create or replace function public.is_active_staff_for_branch(p_branch_id text default null)
 returns boolean
@@ -79,7 +89,7 @@ begin
         address = coalesce(new.raw_user_meta_data ->> 'address', address),
         otp_verified = new.email_confirmed_at is not null,
         qr_code = coalesce(qr_code, 'SHELF-QR-' || upper(replace(gen_random_uuid()::text, '-', '')))
-    where id = visitor_id_value;
+    where id::text = visitor_id_value;
   end if;
 
   return new;
@@ -135,7 +145,7 @@ create table if not exists public.audit_logs (
   id uuid primary key default gen_random_uuid(),
   actor_id uuid references auth.users(id) on delete set null,
   action text not null,
-  branch_id text references public.libraries(id) on delete set null,
+  branch_id text,
   details jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
@@ -158,7 +168,9 @@ begin
     else
       request_row := new;
     end if;
-    select library_id::text into branch_value from public.books where id = request_row.book_id;
+    select library_id::text into branch_value
+    from public.books
+    where id::text = request_row.book_id::text;
     event_action := 'circulation.borrow_request.' || lower(tg_op);
     event_details := jsonb_build_object(
       'requestId', request_row.id,
@@ -311,16 +323,25 @@ create policy "visitor and staff read scoped visitor profiles" on public.visitor
 create policy "visitors and branch staff read requests" on public.borrow_requests
   for select to authenticated
   using (
-    exists (select 1 from public.visitors visitor where visitor.id = visitor_id and visitor.auth_user_id = auth.uid())
+    exists (
+      select 1 from public.visitors visitor
+      where visitor.id::text = public.borrow_requests.visitor_id::text
+        and visitor.auth_user_id = auth.uid()
+    )
     or exists (
       select 1 from public.books book
-      where book.id = book_id and public.is_active_staff_for_branch(book.library_id::text)
+      where book.id::text = public.borrow_requests.book_id::text
+        and public.is_active_staff_for_branch(book.library_id::text)
     )
   );
 create policy "visitors and branch staff read attendance" on public.attendance_logs
   for select to authenticated
   using (
-    exists (select 1 from public.visitors visitor where visitor.id = visitor_id and visitor.auth_user_id = auth.uid())
+    exists (
+      select 1 from public.visitors visitor
+      where visitor.id::text = public.attendance_logs.visitor_id::text
+        and visitor.auth_user_id = auth.uid()
+    )
     or public.is_active_staff_for_branch(library_id::text)
   );
 
@@ -376,19 +397,19 @@ create policy "read public reviews" on public.book_reviews
   for select to anon, authenticated using (true);
 create policy "visitors manage own reviews" on public.book_reviews
   for all to authenticated
-  using (exists (select 1 from public.visitors visitor where visitor.id = visitor_id and visitor.auth_user_id = auth.uid()))
-  with check (exists (select 1 from public.visitors visitor where visitor.id = visitor_id and visitor.auth_user_id = auth.uid()));
+  using (exists (select 1 from public.visitors visitor where visitor.id::text = public.book_reviews.visitor_id::text and visitor.auth_user_id = auth.uid()))
+  with check (exists (select 1 from public.visitors visitor where visitor.id::text = public.book_reviews.visitor_id::text and visitor.auth_user_id = auth.uid()));
 
 create policy "owners and public listings read personal books" on public.personal_books
   for select to authenticated
   using (
     privacy_status = 'public'
-    or exists (select 1 from public.visitors visitor where visitor.id = owner_id and visitor.auth_user_id = auth.uid())
+    or exists (select 1 from public.visitors visitor where visitor.id::text = public.personal_books.owner_id::text and visitor.auth_user_id = auth.uid())
   );
 create policy "visitors manage own personal books" on public.personal_books
   for all to authenticated
-  using (exists (select 1 from public.visitors visitor where visitor.id = owner_id and visitor.auth_user_id = auth.uid()))
-  with check (exists (select 1 from public.visitors visitor where visitor.id = owner_id and visitor.auth_user_id = auth.uid()));
+  using (exists (select 1 from public.visitors visitor where visitor.id::text = public.personal_books.owner_id::text and visitor.auth_user_id = auth.uid()))
+  with check (exists (select 1 from public.visitors visitor where visitor.id::text = public.personal_books.owner_id::text and visitor.auth_user_id = auth.uid()));
 
 create policy "superadmins read audit logs" on public.audit_logs
   for select to authenticated using (public.is_active_staff_for_branch(null));
@@ -459,7 +480,7 @@ begin
   end if;
 
   return query
-    select visitor.id, visitor.full_name, visitor.email, visitor.qr_code
+    select visitor.id::text, visitor.full_name, visitor.email, visitor.qr_code
     from public.visitors visitor
     where visitor.qr_code = trim(p_qr);
 end;
@@ -480,24 +501,24 @@ declare
   v_queue_count integer;
 begin
   select * into v_visitor from public.visitors
-  where id = p_visitor_id and auth_user_id = auth.uid();
+  where id::text = p_visitor_id and auth_user_id = auth.uid();
   if v_visitor.id is null then raise exception 'Visitor authentication is required.'; end if;
 
-  select * into v_book from public.books where id = p_book_id for update;
+  select * into v_book from public.books where id::text = p_book_id for update;
   if v_book.id is null then raise exception 'Book not found.'; end if;
   if exists (
     select 1 from public.borrow_requests
-    where visitor_id = p_visitor_id and book_id = p_book_id
+    where visitor_id::text = p_visitor_id and book_id::text = p_book_id
       and status in ('queued', 'ready_for_pickup', 'borrowed')
   ) then raise exception 'You already have an active request or loan for this title.'; end if;
 
   if v_book.available_copies > 0 then
-    update public.books set available_copies = available_copies - 1 where id = p_book_id;
+    update public.books set available_copies = available_copies - 1 where id::text = p_book_id;
     insert into public.borrow_requests (book_id, book_title, visitor_id, visitor_name, status, pickup_deadline)
     values (p_book_id, v_book.title, p_visitor_id, v_visitor.full_name, 'ready_for_pickup', now() + interval '24 hours')
     returning * into v_req;
   else
-    select count(*) into v_queue_count from public.borrow_requests where book_id = p_book_id and status = 'queued';
+    select count(*) into v_queue_count from public.borrow_requests where book_id::text = p_book_id and status = 'queued';
     insert into public.borrow_requests (book_id, book_title, visitor_id, visitor_name, status, queue_position)
     values (p_book_id, v_book.title, p_visitor_id, v_visitor.full_name, 'queued', v_queue_count + 1)
     returning * into v_req;
@@ -519,16 +540,16 @@ declare
 begin
   select request.* into v_req
   from public.borrow_requests request
-  join public.books book on book.id = request.book_id
-  where request.id = p_request_id
+  join public.books book on book.id::text = request.book_id::text
+  where request.id::text = p_request_id
     and (
-      exists (select 1 from public.visitors visitor where visitor.id = request.visitor_id and visitor.auth_user_id = auth.uid())
+      exists (select 1 from public.visitors visitor where visitor.id::text = request.visitor_id::text and visitor.auth_user_id = auth.uid())
       or public.is_active_staff_for_branch(book.library_id::text)
     );
   if v_req.id is null then raise exception 'Request not found or access denied.'; end if;
   if v_req.status not in ('queued', 'ready_for_pickup') then raise exception 'This request can no longer be cancelled.'; end if;
   if p_reason <> 'cancelled' then raise exception 'Unsupported cancellation reason.'; end if;
-  update public.borrow_requests set status = p_reason where id = p_request_id;
+  update public.borrow_requests set status = p_reason where id::text = p_request_id;
   if v_req.status = 'ready_for_pickup' then
     perform public.release_copy_and_promote(v_req.book_id);
   else
@@ -559,7 +580,7 @@ begin
   select * into v_visitor from public.visitors where qr_code = trim(p_qr);
   if v_visitor.id is null then raise exception 'QR code not recognized.'; end if;
   select * into v_log from public.attendance_logs
-    where attendance_logs.visitor_id = v_visitor.id
+    where attendance_logs.visitor_id::text = v_visitor.id::text
       and attendance_logs.library_id::text = p_library_id
       and attendance_logs.time_in::date = current_date
       and attendance_logs.checked_out_at is null
@@ -572,7 +593,7 @@ begin
     update public.attendance_logs set checked_out_at = now() where id = v_log.id returning * into v_log;
     v_action := 'checked_out';
   end if;
-  return query select v_log.id, v_visitor.id, v_visitor.full_name, v_action;
+  return query select v_log.id::text, v_visitor.id::text, v_visitor.full_name, v_action;
 end;
 $$;
 revoke all on function public.toggle_attendance(text, text) from public, anon;
@@ -587,13 +608,13 @@ as $$
 declare v_req public.borrow_requests%rowtype;
 begin
   select request.* into v_req from public.borrow_requests request
-  join public.books book on book.id = request.book_id
-  where request.id = p_request_id and public.is_active_staff_for_branch(book.library_id::text)
+  join public.books book on book.id::text = request.book_id::text
+  where request.id::text = p_request_id and public.is_active_staff_for_branch(book.library_id::text)
   for update of request;
   if v_req.id is null then raise exception 'Request not found or branch access denied.'; end if;
   if v_req.status <> 'ready_for_pickup' then raise exception 'This request is not ready for pickup.'; end if;
   if v_req.pickup_deadline <= now() then raise exception 'Pickup window expired. The hold must be released before checkout.'; end if;
-  update public.borrow_requests set status = 'borrowed', borrow_date = now(), due_date = now() + interval '7 days', confirmed_by = p_staff_name where id = p_request_id;
+  update public.borrow_requests set status = 'borrowed', borrow_date = now(), due_date = now() + interval '7 days', confirmed_by = p_staff_name where id::text = p_request_id;
 end;
 $$;
 revoke all on function public.confirm_pickup(text, text) from public, anon;
@@ -610,13 +631,13 @@ declare
   v_overdue_days integer;
 begin
   select request.* into v_req from public.borrow_requests request
-  join public.books book on book.id = request.book_id
-  where request.id = p_request_id and public.is_active_staff_for_branch(book.library_id::text)
+  join public.books book on book.id::text = request.book_id::text
+  where request.id::text = p_request_id and public.is_active_staff_for_branch(book.library_id::text)
   for update of request;
   if v_req.id is null then raise exception 'Loan not found or branch access denied.'; end if;
   if v_req.status <> 'borrowed' then raise exception 'This item is not currently on loan.'; end if;
   v_overdue_days := greatest(0, ceil(extract(epoch from (now() - v_req.due_date)) / 86400));
-  update public.borrow_requests set status = 'returned', return_date = now(), fine_amount = v_overdue_days * 10, return_confirmed_by = p_staff_name where id = p_request_id;
+  update public.borrow_requests set status = 'returned', return_date = now(), fine_amount = v_overdue_days * 10, return_confirmed_by = p_staff_name where id::text = p_request_id;
   perform public.release_copy_and_promote(v_req.book_id);
 end;
 $$;

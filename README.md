@@ -21,6 +21,10 @@ registration uses Supabase Auth email OTP; enable email signup and email
 confirmation, then configure the email provider/template before testing.
 Existing visitor profiles are linked when a visitor signs up using the same
 email address; the security migration clears legacy plaintext passwords.
+Run `schema.sql` once on a fresh database. For an existing pre-migration
+database, rerun it only to complete the base upgrade, then apply the security
+migration. Do not rerun the base schema after that migration; it reinstates
+the initial permissive demo policies.
 `src/data/store.js` contains most database operations and business actions,
 while `src/context/LibraryContext.jsx` loads data and subscribes to Supabase
 Realtime updates. Some dashboard operations also call Supabase directly.
