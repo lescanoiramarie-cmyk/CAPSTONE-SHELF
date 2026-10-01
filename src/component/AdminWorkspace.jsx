@@ -26,14 +26,27 @@ ChartJS.register(
 );
 
 const TABS = [
-  { id: 'reports', label: 'Reports' },
-  { id: 'analytics', label: 'Analytics' },
-  { id: 'feedback', label: 'Feedback' },
-  { id: 'announcements', label: 'Announcements' },
+  {
+    id: 'reports',
+    label: 'Reports',
+  },
+  {
+    id: 'analytics',
+    label: 'Analytics',
+  },
+  {
+    id: 'feedback',
+    label: 'Feedback',
+  },
+  {
+    id: 'announcements',
+    label: 'Announcements',
+  },
 ];
 
 function startOfPeriod(period) {
   const date = new Date();
+
   date.setHours(0, 0, 0, 0);
 
   if (period === 'daily') {
@@ -45,6 +58,7 @@ function startOfPeriod(period) {
       date.getDate() -
         ((date.getDay() + 6) % 7)
     );
+
     return date;
   }
 
@@ -64,10 +78,17 @@ function startOfPeriod(period) {
 }
 
 function getLibraryName(libraries, id) {
+  if (!id) {
+    return 'All libraries';
+  }
+
   return (
     libraries.find(
-      (library) => library.id === id
-    )?.name || 'System-wide'
+      (library) =>
+        String(library.id) ===
+        String(id)
+    )?.name ||
+    'Unknown library'
   );
 }
 
@@ -83,11 +104,220 @@ function formatRole(role) {
     labels[role] ||
     String(role || '')
       .replaceAll('_', ' ')
-      .replace(/\b\w/g, (char) =>
-        char.toUpperCase()
+      .replace(
+        /\b\w/g,
+        (char) => char.toUpperCase()
       ) ||
     'Staff'
   );
+}
+
+function toStartOfDay(value) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  date.setHours(0, 0, 0, 0);
+
+  return date;
+}
+
+function toEndOfDay(value) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  date.setHours(
+    23,
+    59,
+    59,
+    999
+  );
+
+  return date;
+}
+
+function formatDateInput(date) {
+  const year = date.getFullYear();
+
+  const month = String(
+    date.getMonth() + 1
+  ).padStart(2, '0');
+
+  const day = String(
+    date.getDate()
+  ).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
+
+function getAnalyticsDateRange(
+  range,
+  customStartDate,
+  customEndDate
+) {
+  const today = new Date();
+
+  today.setHours(0, 0, 0, 0);
+
+  if (range === 'today') {
+    const end = new Date(today);
+
+    end.setHours(
+      23,
+      59,
+      59,
+      999
+    );
+
+    return {
+      start: today,
+      end,
+    };
+  }
+
+  if (range === '7d') {
+    const start = new Date(today);
+
+    start.setDate(
+      start.getDate() - 6
+    );
+
+    const end = new Date(today);
+
+    end.setHours(
+      23,
+      59,
+      59,
+      999
+    );
+
+    return {
+      start,
+      end,
+    };
+  }
+
+  if (range === '30d') {
+    const start = new Date(today);
+
+    start.setDate(
+      start.getDate() - 29
+    );
+
+    const end = new Date(today);
+
+    end.setHours(
+      23,
+      59,
+      59,
+      999
+    );
+
+    return {
+      start,
+      end,
+    };
+  }
+
+  if (range === 'month') {
+    const start = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      1
+    );
+
+    const end = new Date(today);
+
+    end.setHours(
+      23,
+      59,
+      59,
+      999
+    );
+
+    return {
+      start,
+      end,
+    };
+  }
+
+  if (range === 'custom') {
+    const start =
+      customStartDate
+        ? toStartOfDay(
+            `${customStartDate}T00:00:00`
+          )
+        : null;
+
+    const end =
+      customEndDate
+        ? toEndOfDay(
+            `${customEndDate}T23:59:59`
+          )
+        : null;
+
+    return {
+      start,
+      end,
+    };
+  }
+
+  const start = new Date(today);
+
+  start.setDate(
+    start.getDate() - 6
+  );
+
+  const end = new Date(today);
+
+  end.setHours(
+    23,
+    59,
+    59,
+    999
+  );
+
+  return {
+    start,
+    end,
+  };
+}
+
+function formatAnalyticsRangeLabel(
+  range,
+  customStartDate,
+  customEndDate
+) {
+  if (range === 'today') {
+    return 'Today';
+  }
+
+  if (range === '7d') {
+    return 'Last 7 Days';
+  }
+
+  if (range === '30d') {
+    return 'Last 30 Days';
+  }
+
+  if (range === 'month') {
+    return 'This Month';
+  }
+
+  if (
+    range === 'custom' &&
+    customStartDate &&
+    customEndDate
+  ) {
+    return `${customStartDate} to ${customEndDate}`;
+  }
+
+  return 'Custom Date Range';
 }
 
 function AdminWorkspace({
@@ -108,14 +338,63 @@ function AdminWorkspace({
   const [tab, setTab] =
     useState('reports');
 
-  const [selectedLibraryId, setSelectedLibraryId] =
-    useState('');
+  /*
+   * -------------------------------------------------------------------------
+   * Analytics filters
+   *
+   * IMPORTANT:
+   * These states are used ONLY by the Analytics tab.
+   * They do not control Reports, Feedback, Announcements, or Staff Accounts.
+   * -------------------------------------------------------------------------
+   */
+
+  const [
+    analyticsLibraryId,
+    setAnalyticsLibraryId,
+  ] = useState('');
+
+  const [
+    analyticsDateRange,
+    setAnalyticsDateRange,
+  ] = useState('7d');
+
+  const [
+    customStartDate,
+    setCustomStartDate,
+  ] = useState(() => {
+    const date = new Date();
+
+    date.setDate(
+      date.getDate() - 6
+    );
+
+    return formatDateInput(date);
+  });
+
+  const [
+    customEndDate,
+    setCustomEndDate,
+  ] = useState(() =>
+    formatDateInput(new Date())
+  );
+
+  /*
+   * -------------------------------------------------------------------------
+   * Reports
+   * -------------------------------------------------------------------------
+   */
 
   const [period, setPeriod] =
     useState('daily');
 
   const [reportSort, setReportSort] =
     useState('time');
+
+  /*
+   * -------------------------------------------------------------------------
+   * Database-backed sections
+   * -------------------------------------------------------------------------
+   */
 
   const [feedback, setFeedback] =
     useState([]);
@@ -135,11 +414,13 @@ function AdminWorkspace({
   const [message, setMessage] =
     useState('');
 
-  const [announcementForm, setAnnouncementForm] =
-    useState({
-      title: '',
-      message: '',
-    });
+  const [
+    announcementForm,
+    setAnnouncementForm,
+  ] = useState({
+    title: '',
+    message: '',
+  });
 
   const [
     editingAnnouncementId,
@@ -157,11 +438,42 @@ function AdminWorkspace({
       libraryId: currentLibraryId,
     });
 
+  /*
+   * -------------------------------------------------------------------------
+   * Forecast
+   * -------------------------------------------------------------------------
+   */
+
   const [forecast, setForecast] =
     useState(null);
 
   const [forecastLoading, setForecastLoading] =
     useState(false);
+
+  /*
+   * -------------------------------------------------------------------------
+   * Keep staff form branch aligned with current sub-admin assignment.
+   * -------------------------------------------------------------------------
+   */
+
+  useEffect(() => {
+    if (isSubAdmin) {
+      setStaffForm((current) => ({
+        ...current,
+        libraryId:
+          currentLibraryId || '',
+      }));
+    }
+  }, [
+    currentLibraryId,
+    isSubAdmin,
+  ]);
+
+  /*
+   * -------------------------------------------------------------------------
+   * Books lookup
+   * -------------------------------------------------------------------------
+   */
 
   const booksById = useMemo(
     () =>
@@ -174,70 +486,88 @@ function AdminWorkspace({
     [books]
   );
 
-  // -------------------------------------------------------------------------
-  // Branch-scoped attendance
-  // -------------------------------------------------------------------------
+  /*
+   * -------------------------------------------------------------------------
+   * Reports:
+   * Sub-admin = assigned branch
+   * Super-admin = all libraries
+   *
+   * NOTE:
+   * Analytics has its OWN filters below.
+   * -------------------------------------------------------------------------
+   */
 
-  const scopedAttendance = useMemo(
-    () =>
-      attendanceLogs.filter((item) =>
-        isSubAdmin
-          ? item.libraryId ===
-            currentLibraryId
-          : !selectedLibraryId ||
-            item.libraryId ===
-              selectedLibraryId
-      ),
-    [
-      attendanceLogs,
-      currentLibraryId,
-      isSubAdmin,
-      selectedLibraryId,
-    ]
-  );
+  const reportAttendance =
+    useMemo(
+      () =>
+        attendanceLogs.filter((item) =>
+          isSubAdmin
+            ? String(item.libraryId) ===
+              String(currentLibraryId)
+            : true
+        ),
+      [
+        attendanceLogs,
+        currentLibraryId,
+        isSubAdmin,
+      ]
+    );
 
-  // -------------------------------------------------------------------------
-  // Branch-scoped borrow transactions
-  // -------------------------------------------------------------------------
+  const reportBorrows =
+    useMemo(
+      () =>
+        borrowRequests.filter((item) => {
+          if (isSubAdmin) {
+            return (
+              String(
+                booksById.get(
+                  item.bookId
+                )?.libraryId
+              ) ===
+              String(currentLibraryId)
+            );
+          }
 
-  const scopedBorrows = useMemo(
-    () =>
-      borrowRequests.filter((item) =>
-        isSubAdmin
-          ? booksById.get(item.bookId)
-              ?.libraryId ===
-            currentLibraryId
-          : !selectedLibraryId ||
-            booksById.get(item.bookId)
-              ?.libraryId ===
-              selectedLibraryId
-      ),
-    [
-      booksById,
-      borrowRequests,
-      currentLibraryId,
-      isSubAdmin,
-      selectedLibraryId,
-    ]
-  );
+          return true;
+        }),
+      [
+        booksById,
+        borrowRequests,
+        currentLibraryId,
+        isSubAdmin,
+      ]
+    );
 
-  // -------------------------------------------------------------------------
-  // Reports
-  // -------------------------------------------------------------------------
+  /*
+   * -------------------------------------------------------------------------
+   * Reports
+   * -------------------------------------------------------------------------
+   */
 
   const reportRows = useMemo(() => {
-    const start = startOfPeriod(period);
+    const start =
+      startOfPeriod(period);
 
     const attendanceRows =
-      scopedAttendance
-        .filter(
-          (item) =>
-            new Date(item.timeIn) >= start
-        )
+      reportAttendance
+        .filter((item) => {
+          const value = new Date(
+            item.timeIn
+          );
+
+          return (
+            !Number.isNaN(
+              value.getTime()
+            ) &&
+            value >= start
+          );
+        })
         .map((item) => ({
           type: 'Visitor',
           time: item.timeIn,
-          person: item.visitorName,
+          person:
+            item.visitorName ||
+            'Unknown visitor',
           detail: 'Library visit',
           branch: getLibraryName(
             libraries,
@@ -249,25 +579,40 @@ function AdminWorkspace({
         }));
 
     const transactionRows =
-      scopedBorrows
-        .filter(
-          (item) =>
-            new Date(item.requestDate) >=
-            start
-        )
+      reportBorrows
+        .filter((item) => {
+          const value = new Date(
+            item.requestDate
+          );
+
+          return (
+            !Number.isNaN(
+              value.getTime()
+            ) &&
+            value >= start
+          );
+        })
         .map((item) => ({
           type: 'Book transaction',
           time: item.requestDate,
-          person: item.visitorName,
-          detail: item.bookTitle,
+          person:
+            item.visitorName ||
+            'Unknown visitor',
+          detail:
+            item.bookTitle ||
+            'Book transaction',
           branch: getLibraryName(
             libraries,
-            booksById.get(item.bookId)
-              ?.libraryId
+            booksById.get(
+              item.bookId
+            )?.libraryId
           ),
           status: String(
             item.status || ''
-          ).replaceAll('_', ' '),
+          ).replaceAll(
+            '_',
+            ' '
+          ),
         }));
 
     return [
@@ -295,14 +640,26 @@ function AdminWorkspace({
     booksById,
     libraries,
     period,
+    reportAttendance,
+    reportBorrows,
     reportSort,
-    scopedAttendance,
-    scopedBorrows,
   ]);
 
-  // -------------------------------------------------------------------------
-  // Load database-backed sections
-  // -------------------------------------------------------------------------
+  /*
+   * -------------------------------------------------------------------------
+   * Load database-backed sections
+   *
+   * Feedback:
+   * - Sub-admin sees assigned branch.
+   * - Super-admin sees all feedback.
+   *
+   * Announcements:
+   * - Existing behavior retained.
+   *
+   * Staff:
+   * - Existing behavior retained.
+   * -------------------------------------------------------------------------
+   */
 
   useEffect(() => {
     if (
@@ -337,15 +694,12 @@ function AdminWorkspace({
             'library_id',
             currentLibraryId
           );
-        } else if (selectedLibraryId) {
-          query = query.eq(
-            'library_id',
-            selectedLibraryId
-          );
         }
 
         result = await query;
-      } else if (tab === 'announcements') {
+      } else if (
+        tab === 'announcements'
+      ) {
         result = await supabase
           .from('announcements')
           .select('*')
@@ -353,13 +707,6 @@ function AdminWorkspace({
             ascending: false,
           });
       } else {
-        // -------------------------------------------------------------------
-        // STAFF ACCOUNTS
-        // -------------------------------------------------------------------
-        // This is now loaded directly from staff_profiles.
-        // No hardcoded credential array is used here.
-        // -------------------------------------------------------------------
-
         result = await supabase
           .from('staff_profiles')
           .select(
@@ -370,32 +717,47 @@ function AdminWorkspace({
           });
       }
 
-      if (!active) return;
+      if (!active) {
+        return;
+      }
 
       if (result.error) {
-        setError(result.error.message);
-      } else if (tab === 'feedback') {
-        setFeedback(result.data || []);
-      } else if (tab === 'announcements') {
+        setError(
+          result.error.message
+        );
+      } else if (
+        tab === 'feedback'
+      ) {
+        setFeedback(
+          result.data || []
+        );
+      } else if (
+        tab === 'announcements'
+      ) {
         setAnnouncements(
           result.data || []
         );
       } else {
-        setStaff(result.data || []);
+        setStaff(
+          result.data || []
+        );
       }
 
       setLoading(false);
     }
 
-    loadData().catch((loadError) => {
-      if (active) {
-        setError(
-          loadError.message ||
-            'Unable to load this section.'
-        );
-        setLoading(false);
+    loadData().catch(
+      (loadError) => {
+        if (active) {
+          setError(
+            loadError.message ||
+              'Unable to load this section.'
+          );
+
+          setLoading(false);
+        }
       }
-    });
+    );
 
     return () => {
       active = false;
@@ -403,194 +765,518 @@ function AdminWorkspace({
   }, [
     currentLibraryId,
     isSubAdmin,
-    selectedLibraryId,
     tab,
   ]);
 
-  // -------------------------------------------------------------------------
-  // Analytics period counts
-  // -------------------------------------------------------------------------
+  /*
+   * -------------------------------------------------------------------------
+   * ANALYTICS LIBRARY SCOPE
+   *
+   * Super-admin:
+   *   '' = All libraries
+   *   UUID = selected library
+   *
+   * Sub-admin:
+   *   Always assigned branch.
+   * -------------------------------------------------------------------------
+   */
 
-  const periodCounts = useMemo(() => {
-    const labels = Array.from(
-      { length: 7 },
-      (_, index) => {
-        const date = new Date();
+  const effectiveAnalyticsLibraryId =
+    isSubAdmin
+      ? currentLibraryId
+      : analyticsLibraryId;
 
-        date.setDate(
-          date.getDate() -
-            (6 - index)
-        );
+  /*
+   * -------------------------------------------------------------------------
+   * Analytics date range
+   * -------------------------------------------------------------------------
+   */
 
-        return date;
-      }
-    );
-
-    return {
-      labels: labels.map((date) =>
-        date.toLocaleDateString(
-          undefined,
-          {
-            month: 'short',
-            day: 'numeric',
-          }
-        )
-      ),
-
-      visits: labels.map((date) =>
-        scopedAttendance.filter(
-          (item) =>
-            new Date(
-              item.timeIn
-            ).toDateString() ===
-            date.toDateString()
-        ).length
-      ),
-
-      transactions: labels.map(
-        (date) =>
-          scopedBorrows.filter(
-            (item) =>
-              new Date(
-                item.requestDate
-              ).toDateString() ===
-              date.toDateString()
-          ).length
-      ),
-    };
-  }, [
-    scopedAttendance,
-    scopedBorrows,
-  ]);
-
-  // -------------------------------------------------------------------------
-  // Most requested categories
-  // -------------------------------------------------------------------------
-
-  const topCategories = useMemo(() => {
-    const counts = new Map();
-
-    scopedBorrows.forEach(
-      (request) => {
-        const category =
-          booksById.get(
-            request.bookId
-          )?.category ||
-          'Uncategorized';
-
-        counts.set(
-          category,
-          (counts.get(category) || 0) +
-            1
-        );
-      }
-    );
-
-    return [...counts]
-      .sort(
-        (a, b) => b[1] - a[1]
-      )
-      .slice(0, 5);
-  }, [
-    booksById,
-    scopedBorrows,
-  ]);
-
-  // -------------------------------------------------------------------------
-  // Operational recommendations
-  // -------------------------------------------------------------------------
-
-  const demandRecommendations =
-    useMemo(() => {
-      const latestVisit = Math.max(
-        ...scopedAttendance.map(
-          (item) =>
-            new Date(
-              item.timeIn
-            ).getTime()
+  const analyticsDateRangeValues =
+    useMemo(
+      () =>
+        getAnalyticsDateRange(
+          analyticsDateRange,
+          customStartDate,
+          customEndDate
         ),
+      [
+        analyticsDateRange,
+        customEndDate,
+        customStartDate,
+      ]
+    );
+
+  const analyticsStart =
+    analyticsDateRangeValues.start;
+
+  const analyticsEnd =
+    analyticsDateRangeValues.end;
+
+  /*
+   * -------------------------------------------------------------------------
+   * Analytics scoped attendance
+   * -------------------------------------------------------------------------
+   */
+
+  const analyticsAttendance =
+    useMemo(() => {
+      return attendanceLogs.filter(
+        (item) => {
+          const itemLibraryId =
+            item.libraryId;
+
+          const time = new Date(
+            item.timeIn
+          );
+
+          if (
+            Number.isNaN(
+              time.getTime()
+            )
+          ) {
+            return false;
+          }
+
+          const matchesLibrary =
+            !effectiveAnalyticsLibraryId ||
+            String(itemLibraryId) ===
+              String(
+                effectiveAnalyticsLibraryId
+              );
+
+          const matchesDate =
+            (!analyticsStart ||
+              time >=
+                analyticsStart) &&
+            (!analyticsEnd ||
+              time <= analyticsEnd);
+
+          return (
+            matchesLibrary &&
+            matchesDate
+          );
+        }
+      );
+    }, [
+      analyticsEnd,
+      analyticsStart,
+      attendanceLogs,
+      effectiveAnalyticsLibraryId,
+    ]);
+
+  /*
+   * -------------------------------------------------------------------------
+   * Analytics scoped borrow transactions
+   * -------------------------------------------------------------------------
+   */
+
+  const analyticsBorrows =
+    useMemo(() => {
+      return borrowRequests.filter(
+        (item) => {
+          const book =
+            booksById.get(
+              item.bookId
+            );
+
+          const time = new Date(
+            item.requestDate
+          );
+
+          if (
+            Number.isNaN(
+              time.getTime()
+            )
+          ) {
+            return false;
+          }
+
+          const matchesLibrary =
+            !effectiveAnalyticsLibraryId ||
+            String(
+              book?.libraryId
+            ) ===
+              String(
+                effectiveAnalyticsLibraryId
+              );
+
+          const matchesDate =
+            (!analyticsStart ||
+              time >=
+                analyticsStart) &&
+            (!analyticsEnd ||
+              time <= analyticsEnd);
+
+          return (
+            matchesLibrary &&
+            matchesDate
+          );
+        }
+      );
+    }, [
+      analyticsEnd,
+      analyticsStart,
+      booksById,
+      borrowRequests,
+      effectiveAnalyticsLibraryId,
+    ]);
+
+  /*
+   * -------------------------------------------------------------------------
+   * Analytics chart period
+   * -------------------------------------------------------------------------
+   */
+
+  const analyticsChartData =
+    useMemo(() => {
+      if (
+        !analyticsStart ||
+        !analyticsEnd
+      ) {
+        return {
+          labels: [],
+          visits: [],
+          transactions: [],
+        };
+      }
+
+      const start = new Date(
+        analyticsStart
+      );
+
+      start.setHours(0, 0, 0, 0);
+
+      const end = new Date(
+        analyticsEnd
+      );
+
+      end.setHours(
+        0,
+        0,
+        0,
         0
       );
 
-      const recent =
-        scopedAttendance.filter(
-          (item) =>
-            latestVisit -
-              new Date(
-                item.timeIn
-              ).getTime() <
-            7 * 86400000
-        ).length;
+      const difference =
+        Math.floor(
+          (end.getTime() -
+            start.getTime()) /
+            86400000
+        ) + 1;
 
-      const prior =
-        scopedAttendance.filter(
-          (item) => {
-            const age =
-              latestVisit -
-              new Date(
-                item.timeIn
-              ).getTime();
+      /*
+       * For large custom ranges, keep the chart readable by grouping
+       * into monthly buckets.
+       *
+       * Normal ranges up to 31 days remain daily.
+       */
+      if (difference > 62) {
+        const months = [];
+        const cursor = new Date(
+          start.getFullYear(),
+          start.getMonth(),
+          1
+        );
 
-            return (
-              age >=
-                7 * 86400000 &&
-              age <
-                14 * 86400000
+        const lastMonth =
+          new Date(
+            end.getFullYear(),
+            end.getMonth(),
+            1
+          );
+
+        while (
+          cursor <= lastMonth
+        ) {
+          months.push(
+            new Date(cursor)
+          );
+
+          cursor.setMonth(
+            cursor.getMonth() + 1
+          );
+        }
+
+        const labels =
+          months.map((date) =>
+            date.toLocaleDateString(
+              undefined,
+              {
+                month: 'short',
+                year: 'numeric',
+              }
+            )
+          );
+
+        const visits =
+          months.map(
+            (monthStart) => {
+              const monthEnd =
+                new Date(
+                  monthStart.getFullYear(),
+                  monthStart.getMonth() +
+                    1,
+                  0
+                );
+
+              monthEnd.setHours(
+                23,
+                59,
+                59,
+                999
+              );
+
+              return analyticsAttendance.filter(
+                (item) => {
+                  const time =
+                    new Date(
+                      item.timeIn
+                    );
+
+                  return (
+                    time >=
+                      monthStart &&
+                    time <=
+                      monthEnd
+                  );
+                }
+              ).length;
+            }
+          );
+
+        const transactions =
+          months.map(
+            (monthStart) => {
+              const monthEnd =
+                new Date(
+                  monthStart.getFullYear(),
+                  monthStart.getMonth() +
+                    1,
+                  0
+                );
+
+              monthEnd.setHours(
+                23,
+                59,
+                59,
+                999
+              );
+
+              return analyticsBorrows.filter(
+                (item) => {
+                  const time =
+                    new Date(
+                      item.requestDate
+                    );
+
+                  return (
+                    time >=
+                      monthStart &&
+                    time <=
+                      monthEnd
+                  );
+                }
+              ).length;
+            }
+          );
+
+        return {
+          labels,
+          visits,
+          transactions,
+        };
+      }
+
+      const dates =
+        Array.from(
+          {
+            length:
+              Math.max(
+                difference,
+                1
+              ),
+          },
+          (_, index) => {
+            const date =
+              new Date(start);
+
+            date.setDate(
+              start.getDate() +
+                index
             );
-          }
-        ).length;
 
+            return date;
+          }
+        );
+
+      return {
+        labels: dates.map(
+          (date) =>
+            date.toLocaleDateString(
+              undefined,
+              {
+                month: 'short',
+                day: 'numeric',
+              }
+            )
+        ),
+
+        visits: dates.map(
+          (date) =>
+            analyticsAttendance.filter(
+              (item) => {
+                const time =
+                  new Date(
+                    item.timeIn
+                  );
+
+                return (
+                  time.toDateString() ===
+                  date.toDateString()
+                );
+              }
+            ).length
+        ),
+
+        transactions:
+          dates.map(
+            (date) =>
+              analyticsBorrows.filter(
+                (item) => {
+                  const time =
+                    new Date(
+                      item.requestDate
+                    );
+
+                  return (
+                    time.toDateString() ===
+                    date.toDateString()
+                  );
+                }
+              ).length
+          ),
+      };
+    }, [
+      analyticsAttendance,
+      analyticsBorrows,
+      analyticsEnd,
+      analyticsStart,
+    ]);
+
+  /*
+   * -------------------------------------------------------------------------
+   * Most requested categories
+   * -------------------------------------------------------------------------
+   */
+
+  const topCategories =
+    useMemo(() => {
+      const counts = new Map();
+
+      analyticsBorrows.forEach(
+        (request) => {
+          const category =
+            booksById.get(
+              request.bookId
+            )?.category ||
+            'Uncategorized';
+
+          counts.set(
+            category,
+            (counts.get(
+              category
+            ) || 0) + 1
+          );
+        }
+      );
+
+      return [...counts]
+        .sort(
+          (a, b) =>
+            b[1] - a[1]
+        )
+        .slice(0, 5);
+    }, [
+      analyticsBorrows,
+      booksById,
+    ]);
+
+  /*
+   * -------------------------------------------------------------------------
+   * Operational recommendations
+   * -------------------------------------------------------------------------
+   */
+
+  const demandRecommendations =
+    useMemo(() => {
       const suggestions = [];
 
       if (
-        recent >
-          prior * 1.2 &&
-        recent >= 5
+        analyticsAttendance.length ===
+        0
       ) {
         suggestions.push(
-          'Visitor volume is up at least 20% week over week. Consider adding front-desk coverage during peak hours.'
+          'There is not enough attendance activity in the selected period to recommend a staffing change.'
+        );
+      } else if (
+        analyticsAttendance.length >=
+        20
+      ) {
+        suggestions.push(
+          'Visitor activity is relatively high for the selected period. Review peak attendance times when planning front-desk coverage.'
+        );
+      } else {
+        suggestions.push(
+          'Visitor demand is currently moderate based on the selected analytics period.'
         );
       }
 
       if (topCategories[0]) {
         suggestions.push(
-          `Review copy levels for ${topCategories[0][0]}, the highest-demand category in the transaction data.`
+          `Review copy levels for ${topCategories[0][0]}, the highest-demand category in the selected transaction data.`
         );
       }
 
       if (
-        suggestions.length === 0
+        analyticsBorrows.length ===
+        0
       ) {
         suggestions.push(
-          'Demand is steady or there is not yet enough activity to recommend a staffing change. Continue collecting branch activity.'
+          'No book transactions were recorded in the selected period. Continue monitoring activity before making inventory changes.'
         );
       }
 
       return suggestions;
     }, [
-      scopedAttendance,
+      analyticsAttendance.length,
+      analyticsBorrows.length,
       topCategories,
     ]);
 
-  // -------------------------------------------------------------------------
-  // Export
-  // -------------------------------------------------------------------------
+  /*
+   * -------------------------------------------------------------------------
+   * Export
+   * -------------------------------------------------------------------------
+   */
 
-  const handleExport = (format) => {
-    const rows = reportRows.map(
-      (row) => ({
-        ...row,
-        time: new Date(
-          row.time
-        ).toISOString(),
-      })
-    );
+  const handleExport = (
+    format
+  ) => {
+    const rows =
+      reportRows.map(
+        (row) => ({
+          ...row,
+          time: new Date(
+            row.time
+          ).toISOString(),
+        })
+      );
 
     const suffix = `${period}_${
-      (isSubAdmin
+      isSubAdmin
         ? currentLibraryId
-        : selectedLibraryId) ||
-      'all-libraries'
+        : 'all-libraries'
     }`;
 
     if (format === 'xlsx') {
@@ -606,9 +1292,11 @@ function AdminWorkspace({
     }
   };
 
-  // -------------------------------------------------------------------------
-  // Announcements
-  // -------------------------------------------------------------------------
+  /*
+   * -------------------------------------------------------------------------
+   * Announcements
+   * -------------------------------------------------------------------------
+   */
 
   const handleAnnouncementSave =
     async (event) => {
@@ -647,6 +1335,7 @@ function AdminWorkspace({
         setError(
           result.error.message
         );
+
         return;
       }
 
@@ -665,24 +1354,38 @@ function AdminWorkspace({
 
       setTab('announcements');
 
-      const { data } =
-        await supabase
-          .from('announcements')
-          .select('*')
-          .order('created_at', {
-            ascending: false,
-          });
+      const {
+        data,
+        error: reloadError,
+      } = await supabase
+        .from('announcements')
+        .select('*')
+        .order('created_at', {
+          ascending: false,
+        });
 
-      setAnnouncements(data || []);
+      if (reloadError) {
+        setError(
+          reloadError.message
+        );
+
+        return;
+      }
+
+      setAnnouncements(
+        data || []
+      );
     };
 
   const handleAnnouncementEdit = (
     announcement
   ) => {
     setAnnouncementForm({
-      title: announcement.title,
+      title:
+        announcement.title || '',
       message:
-        announcement.message,
+        announcement.message ||
+        '',
     });
 
     setEditingAnnouncementId(
@@ -724,20 +1427,29 @@ function AdminWorkspace({
                 item.id !== id
             )
         );
+
+        setMessage(
+          'Announcement deleted.'
+        );
       }
     };
 
-  // -------------------------------------------------------------------------
-  // Feedback
-  // -------------------------------------------------------------------------
+  /*
+   * -------------------------------------------------------------------------
+   * Feedback
+   * -------------------------------------------------------------------------
+   */
 
   const handleFeedbackReply =
     async (item) => {
       const reply = String(
-        feedbackReply[item.id] || ''
+        feedbackReply[item.id] ||
+          ''
       ).trim();
 
-      if (!reply) return;
+      if (!reply) {
+        return;
+      }
 
       const {
         error: replyError,
@@ -790,9 +1502,11 @@ function AdminWorkspace({
       }
     };
 
-  // -------------------------------------------------------------------------
-  // Visitor Forecast
-  // -------------------------------------------------------------------------
+  /*
+   * -------------------------------------------------------------------------
+   * Visitor Forecast
+   * -------------------------------------------------------------------------
+   */
 
   const runForecast = async () => {
     const endpoint =
@@ -803,6 +1517,19 @@ function AdminWorkspace({
       setError(
         'Set VITE_ANALYTICS_API_URL to the Python analytics service URL to enable forecasts.'
       );
+
+      return;
+    }
+
+    if (
+      analyticsAttendance.length ===
+        0 &&
+      analyticsBorrows.length === 0
+    ) {
+      setError(
+        'There is not enough data in the selected Analytics filters to generate a forecast.'
+      );
+
       return;
     }
 
@@ -810,8 +1537,6 @@ function AdminWorkspace({
     setError('');
 
     try {
-      const now = Date.now();
-
       const categorySeries =
         topCategories.map(
           ([category]) => {
@@ -822,13 +1547,32 @@ function AdminWorkspace({
               0,
             ];
 
-            scopedBorrows.forEach(
+            const now = Date.now();
+
+            analyticsBorrows.forEach(
               (request) => {
-                if (
+                const requestCategory =
                   booksById.get(
                     request.bookId
-                  )?.category !==
+                  )?.category ||
+                  'Uncategorized';
+
+                if (
+                  requestCategory !==
                   category
+                ) {
+                  return;
+                }
+
+                const requestTime =
+                  new Date(
+                    request.requestDate
+                  ).getTime();
+
+                if (
+                  Number.isNaN(
+                    requestTime
+                  )
                 ) {
                   return;
                 }
@@ -836,9 +1580,7 @@ function AdminWorkspace({
                 const ageDays =
                   Math.floor(
                     (now -
-                      new Date(
-                        request.requestDate
-                      ).getTime()) /
+                      requestTime) /
                       86400000
                   );
 
@@ -882,7 +1624,7 @@ function AdminWorkspace({
             },
             body: JSON.stringify({
               daily_visitors:
-                periodCounts.visits,
+                analyticsChartData.visits,
               categories:
                 categorySeries,
               horizon_days: 7,
@@ -899,7 +1641,9 @@ function AdminWorkspace({
       setForecast(
         await response.json()
       );
-    } catch (forecastError) {
+    } catch (
+      forecastError
+    ) {
       setError(
         forecastError.message ||
           'Forecast request failed.'
@@ -909,9 +1653,11 @@ function AdminWorkspace({
     }
   };
 
-  // -------------------------------------------------------------------------
-  // Create staff
-  // -------------------------------------------------------------------------
+  /*
+   * -------------------------------------------------------------------------
+   * Create staff
+   * -------------------------------------------------------------------------
+   */
 
   const handleCreateStaff =
     async (event) => {
@@ -921,6 +1667,7 @@ function AdminWorkspace({
         setError(
           'Supabase is not configured.'
         );
+
         return;
       }
 
@@ -950,6 +1697,7 @@ function AdminWorkspace({
         setError(
           'Please complete all staff account fields.'
         );
+
         return;
       }
 
@@ -957,24 +1705,26 @@ function AdminWorkspace({
         setError(
           'Temporary password must contain at least 10 characters.'
         );
+
         return;
       }
 
       const {
         data,
         error: provisionError,
-      } = await supabase.functions.invoke(
-        'manage-staff',
-        {
-          body: {
-            operation: 'create',
-            email,
-            fullName,
-            password,
-            libraryId,
-          },
-        }
-      );
+      } =
+        await supabase.functions.invoke(
+          'manage-staff',
+          {
+            body: {
+              operation: 'create',
+              email,
+              fullName,
+              password,
+              libraryId,
+            },
+          }
+        );
 
       if (
         provisionError ||
@@ -985,6 +1735,7 @@ function AdminWorkspace({
             data?.error ||
             'Unable to create the staff account.'
         );
+
         return;
       }
 
@@ -1000,7 +1751,6 @@ function AdminWorkspace({
         'Sub-admin account created successfully. Share its temporary password securely.'
       );
 
-      // Refresh directly from staff_profiles.
       const {
         data: updatedStaff,
         error: queryError,
@@ -1024,9 +1774,11 @@ function AdminWorkspace({
       }
     };
 
-  // -------------------------------------------------------------------------
-  // Enable / Disable staff
-  // -------------------------------------------------------------------------
+  /*
+   * -------------------------------------------------------------------------
+   * Enable / Disable staff
+   * -------------------------------------------------------------------------
+   */
 
   const toggleStaffActive =
     async (profile) => {
@@ -1036,17 +1788,19 @@ function AdminWorkspace({
       const {
         data,
         error: updateError,
-      } = await supabase.functions.invoke(
-        'manage-staff',
-        {
-          body: {
-            operation: 'set-active',
-            userId: profile.id,
-            isActive:
-              !profile.is_active,
-          },
-        }
-      );
+      } =
+        await supabase.functions.invoke(
+          'manage-staff',
+          {
+            body: {
+              operation:
+                'set-active',
+              userId: profile.id,
+              isActive:
+                !profile.is_active,
+            },
+          }
+        );
 
       if (
         updateError ||
@@ -1057,6 +1811,7 @@ function AdminWorkspace({
             data?.error ||
             'Unable to update the staff account.'
         );
+
         return;
       }
 
@@ -1083,60 +1838,29 @@ function AdminWorkspace({
       );
     };
 
-  // -------------------------------------------------------------------------
-  // Supabase guard
-  // -------------------------------------------------------------------------
+  /*
+   * -------------------------------------------------------------------------
+   * Supabase guard
+   * -------------------------------------------------------------------------
+   */
 
   if (!supabase) {
     return (
       <p className="border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        Configure Supabase to use reports
-        and management tools.
+        Configure Supabase to use
+        reports and management tools.
       </p>
     );
   }
 
-  // -------------------------------------------------------------------------
-  // UI
-  // -------------------------------------------------------------------------
+  /*
+   * -------------------------------------------------------------------------
+   * UI
+   * -------------------------------------------------------------------------
+   */
 
   return (
     <div className="space-y-5">
-      {/* ------------------------------------------------------------------- */}
-      {/* Library scope                                                       */}
-      {/* ------------------------------------------------------------------- */}
-
-      {!isSubAdmin && (
-        <label className="flex w-fit items-center gap-3 text-sm font-semibold text-slate-700">
-          Library scope
-
-          <select
-            value={selectedLibraryId}
-            onChange={(event) =>
-              setSelectedLibraryId(
-                event.target.value
-              )
-            }
-            className="border border-slate-300 bg-white px-3 py-2 font-normal"
-          >
-            <option value="">
-              All libraries
-            </option>
-
-            {libraries.map(
-              (library) => (
-                <option
-                  key={library.id}
-                  value={library.id}
-                >
-                  {library.name}
-                </option>
-              )
-            )}
-          </select>
-        </label>
-      )}
-
       {/* ------------------------------------------------------------------- */}
       {/* Navigation                                                          */}
       {/* ------------------------------------------------------------------- */}
@@ -1236,10 +1960,7 @@ function AdminWorkspace({
                       libraries,
                       currentLibraryId
                     )
-                  : getLibraryName(
-                      libraries,
-                      selectedLibraryId
-                    )}
+                  : 'All libraries'}
               </p>
             </div>
 
@@ -1259,12 +1980,15 @@ function AdminWorkspace({
                   <option value="daily">
                     Daily
                   </option>
+
                   <option value="weekly">
                     Weekly
                   </option>
+
                   <option value="monthly">
                     Monthly
                   </option>
+
                   <option value="annual">
                     Annual
                   </option>
@@ -1286,9 +2010,11 @@ function AdminWorkspace({
                   <option value="time">
                     Newest
                   </option>
+
                   <option value="name">
                     Visitor
                   </option>
+
                   <option value="type">
                     Activity type
                   </option>
@@ -1321,14 +2047,23 @@ function AdminWorkspace({
             <Metric
               label="Visitor check-ins"
               value={
-                scopedAttendance.filter(
-                  (item) =>
-                    new Date(
-                      item.timeIn
-                    ) >=
-                    startOfPeriod(
-                      period
-                    )
+                reportAttendance.filter(
+                  (item) => {
+                    const time =
+                      new Date(
+                        item.timeIn
+                      );
+
+                    return (
+                      !Number.isNaN(
+                        time.getTime()
+                      ) &&
+                      time >=
+                        startOfPeriod(
+                          period
+                        )
+                    );
+                  }
                 ).length
               }
             />
@@ -1336,14 +2071,23 @@ function AdminWorkspace({
             <Metric
               label="Book requests"
               value={
-                scopedBorrows.filter(
-                  (item) =>
-                    new Date(
-                      item.requestDate
-                    ) >=
-                    startOfPeriod(
-                      period
-                    )
+                reportBorrows.filter(
+                  (item) => {
+                    const time =
+                      new Date(
+                        item.requestDate
+                      );
+
+                    return (
+                      !Number.isNaN(
+                        time.getTime()
+                      ) &&
+                      time >=
+                        startOfPeriod(
+                          period
+                        )
+                    );
+                  }
                 ).length
               }
             />
@@ -1351,7 +2095,7 @@ function AdminWorkspace({
             <Metric
               label="Active loans"
               value={
-                scopedBorrows.filter(
+                reportBorrows.filter(
                   (item) =>
                     item.status ===
                     'borrowed'
@@ -1367,18 +2111,23 @@ function AdminWorkspace({
                   <th className="p-3">
                     Time
                   </th>
+
                   <th className="p-3">
                     Activity
                   </th>
+
                   <th className="p-3">
                     Visitor
                   </th>
+
                   <th className="p-3">
                     Details
                   </th>
+
                   <th className="p-3">
                     Branch
                   </th>
+
                   <th className="p-3">
                     Status
                   </th>
@@ -1441,199 +2190,480 @@ function AdminWorkspace({
       {/* =================================================================== */}
 
       {tab === 'analytics' && (
-        <section className="grid gap-5 xl:grid-cols-[1.3fr_0.7fr]">
-          <div className="border border-slate-200 bg-white p-4">
-            <div className="mb-4">
-              <h2 className="text-lg font-bold text-slate-900">
-                Branch demand, last 7
-                days
+        <section className="space-y-5">
+          {/* ---------------------------------------------------------------- */}
+          {/* ANALYTICS FILTERS ONLY                                          */}
+          {/* ---------------------------------------------------------------- */}
+
+          <section className="border border-slate-200 bg-white p-4">
+            <div className="mb-3">
+              <h2 className="text-base font-bold text-slate-900">
+                Analytics filters
               </h2>
 
-              <p className="text-sm text-slate-500">
-                Counts are calculated
-                from live attendance
-                and transaction
-                records.
+              <p className="text-xs text-slate-500">
+                Filter the analytics data
+                by branch and date range.
               </p>
             </div>
 
-            <Bar
-              data={{
-                labels:
-                  periodCounts.labels,
-                datasets: [
-                  {
-                    label: 'Visitors',
-                    data:
-                      periodCounts.visits,
-                    backgroundColor:
-                      '#0f766e',
-                  },
-                  {
-                    label:
-                      'Book transactions',
-                    data:
-                      periodCounts.transactions,
-                    backgroundColor:
-                      '#d97706',
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    ticks: {
-                      precision: 0,
-                    },
-                  },
-                },
-              }}
-            />
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+              {!isSubAdmin && (
+                <label className="text-xs font-semibold text-slate-600">
+                  Library / Branch
 
-            <div className="mt-4">
-              <h3 className="text-sm font-bold">
-                Most requested
-                categories
-              </h3>
+                  <select
+                    value={
+                      analyticsLibraryId
+                    }
+                    onChange={(
+                      event
+                    ) => {
+                      setAnalyticsLibraryId(
+                        event.target
+                          .value
+                      );
 
-              <ol className="mt-2 space-y-1 text-sm text-slate-600">
-                {topCategories.map(
-                  ([
-                    category,
-                    count,
-                  ]) => (
-                    <li
-                      key={category}
-                      className="flex justify-between"
-                    >
-                      <span>
-                        {category}
-                      </span>
+                      setForecast(
+                        null
+                      );
+                    }}
+                    className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900"
+                  >
+                    <option value="">
+                      All Libraries
+                    </option>
 
-                      <span className="font-semibold">
-                        {count}
-                      </span>
-                    </li>
-                  )
-                )}
-              </ol>
+                    {libraries.map(
+                      (library) => (
+                        <option
+                          key={
+                            library.id
+                          }
+                          value={
+                            library.id
+                          }
+                        >
+                          {
+                            library.name
+                          }
+                        </option>
+                      )
+                    )}
+                  </select>
+                </label>
+              )}
+
+              <label className="text-xs font-semibold text-slate-600">
+                Date Range
+
+                <select
+                  value={
+                    analyticsDateRange
+                  }
+                  onChange={(
+                    event
+                  ) => {
+                    setAnalyticsDateRange(
+                      event.target
+                        .value
+                    );
+
+                    setForecast(
+                      null
+                    );
+                  }}
+                  className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900"
+                >
+                  <option value="today">
+                    Today
+                  </option>
+
+                  <option value="7d">
+                    Last 7 Days
+                  </option>
+
+                  <option value="30d">
+                    Last 30 Days
+                  </option>
+
+                  <option value="month">
+                    This Month
+                  </option>
+
+                  <option value="custom">
+                    Custom Date Range
+                  </option>
+                </select>
+              </label>
+
+              {analyticsDateRange ===
+                'custom' && (
+                <>
+                  <label className="text-xs font-semibold text-slate-600">
+                    Start Date
+
+                    <input
+                      type="date"
+                      value={
+                        customStartDate
+                      }
+                      max={
+                        customEndDate ||
+                        undefined
+                      }
+                      onChange={(
+                        event
+                      ) => {
+                        setCustomStartDate(
+                          event.target
+                            .value
+                        );
+
+                        setForecast(
+                          null
+                        );
+                      }}
+                      className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900"
+                    />
+                  </label>
+
+                  <label className="text-xs font-semibold text-slate-600">
+                    End Date
+
+                    <input
+                      type="date"
+                      value={
+                        customEndDate
+                      }
+                      min={
+                        customStartDate ||
+                        undefined
+                      }
+                      onChange={(
+                        event
+                      ) => {
+                        setCustomEndDate(
+                          event.target
+                            .value
+                        );
+
+                        setForecast(
+                          null
+                        );
+                      }}
+                      className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900"
+                    />
+                  </label>
+                </>
+              )}
             </div>
-          </div>
 
-          <aside className="space-y-4">
-            <section className="border border-slate-200 bg-white p-4">
-              <h2 className="text-base font-bold">
-                Operational
-                recommendations
-              </h2>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+              <span className="rounded-full bg-slate-100 px-3 py-1">
+                Branch:{' '}
+                <strong className="text-slate-700">
+                  {isSubAdmin
+                    ? getLibraryName(
+                        libraries,
+                        currentLibraryId
+                      )
+                    : getLibraryName(
+                        libraries,
+                        analyticsLibraryId
+                      )}
+                </strong>
+              </span>
 
-              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-600">
-                {demandRecommendations.map(
-                  (item) => (
-                    <li key={item}>
-                      {item}
-                    </li>
-                  )
-                )}
-              </ul>
-            </section>
+              <span className="rounded-full bg-slate-100 px-3 py-1">
+                Period:{' '}
+                <strong className="text-slate-700">
+                  {formatAnalyticsRangeLabel(
+                    analyticsDateRange,
+                    customStartDate,
+                    customEndDate
+                  )}
+                </strong>
+              </span>
+            </div>
+          </section>
 
-            <section className="border border-slate-200 bg-white p-4">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-base font-bold">
-                  Visitor forecast
+          {/* ---------------------------------------------------------------- */}
+          {/* ANALYTICS CONTENT                                               */}
+          {/* ---------------------------------------------------------------- */}
+
+          <section className="grid gap-5 xl:grid-cols-[1.3fr_0.7fr]">
+            <div className="border border-slate-200 bg-white p-4">
+              <div className="mb-4">
+                <h2 className="text-lg font-bold text-slate-900">
+                  {isSubAdmin
+                    ? getLibraryName(
+                        libraries,
+                        currentLibraryId
+                      )
+                    : analyticsLibraryId
+                    ? getLibraryName(
+                        libraries,
+                        analyticsLibraryId
+                      )
+                    : 'All libraries'}{' '}
+                  demand
                 </h2>
 
-                <button
-                  type="button"
-                  onClick={
-                    runForecast
-                  }
-                  disabled={
-                    forecastLoading
-                  }
-                  className="bg-shelf-primary px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
-                >
-                  {forecastLoading
-                    ? 'Forecasting...'
-                    : 'Run forecast'}
-                </button>
+                <p className="text-sm text-slate-500">
+                  {formatAnalyticsRangeLabel(
+                    analyticsDateRange,
+                    customStartDate,
+                    customEndDate
+                  )}
+                  . Counts are
+                  calculated from
+                  attendance and
+                  transaction
+                  records.
+                </p>
               </div>
 
-              {forecast
-                ?.forecasts
-                ?.length ? (
-                <ol className="mt-3 space-y-1 text-sm text-slate-600">
-                  {forecast.forecasts.map(
-                    (item) => (
-                      <li
-                        key={
-                          item.date
-                        }
-                        className="flex justify-between"
-                      >
-                        <span>
-                          {item.date}
-                        </span>
+              {analyticsDateRange ===
+                'custom' &&
+                (!customStartDate ||
+                  !customEndDate ||
+                  customStartDate >
+                    customEndDate) && (
+                  <p className="mb-4 border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                    Please select a
+                    valid custom date
+                    range.
+                  </p>
+                )}
 
-                        <span>
-                          {
-                            item.visitorCount
-                          }{' '}
-                          visitors
-                        </span>
+              <Bar
+                data={{
+                  labels:
+                    analyticsChartData.labels,
+
+                  datasets: [
+                    {
+                      label: 'Visitors',
+                      data:
+                        analyticsChartData.visits,
+                      backgroundColor:
+                        '#0f766e',
+                    },
+
+                    {
+                      label:
+                        'Book transactions',
+                      data:
+                        analyticsChartData.transactions,
+                      backgroundColor:
+                        '#d97706',
+                    },
+                  ],
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio:
+                    true,
+
+                  plugins: {
+                    legend: {
+                      display: true,
+                    },
+                  },
+
+                  scales: {
+                    y: {
+                      beginAtZero: true,
+
+                      ticks: {
+                        precision: 0,
+                      },
+                    },
+                  },
+                }}
+              />
+
+              <div className="mt-4">
+                <h3 className="text-sm font-bold">
+                  Most requested
+                  categories
+                </h3>
+
+                {topCategories.length >
+                0 ? (
+                  <ol className="mt-2 space-y-1 text-sm text-slate-600">
+                    {topCategories.map(
+                      ([
+                        category,
+                        count,
+                      ]) => (
+                        <li
+                          key={
+                            category
+                          }
+                          className="flex justify-between"
+                        >
+                          <span>
+                            {category}
+                          </span>
+
+                          <span className="font-semibold">
+                            {count}
+                          </span>
+                        </li>
+                      )
+                    )}
+                  </ol>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-500">
+                    No book transaction
+                    data found for
+                    the selected
+                    filters.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <aside className="space-y-4">
+              {/* ------------------------------------------------------------ */}
+              {/* Recommendations                                              */}
+              {/* ------------------------------------------------------------ */}
+
+              <section className="border border-slate-200 bg-white p-4">
+                <h2 className="text-base font-bold">
+                  Operational
+                  recommendations
+                </h2>
+
+                <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-600">
+                  {demandRecommendations.map(
+                    (item) => (
+                      <li key={item}>
+                        {item}
                       </li>
                     )
                   )}
-                </ol>
-              ) : (
-                <p className="mt-2 text-xs text-slate-500">
-                  Connect the Python
-                  analytics service
-                  to generate a
-                  seven-day forecast.
-                </p>
-              )}
+                </ul>
+              </section>
 
-              {forecast?.highDemandCategories?.map(
-                (item) => (
-                  <p
-                    key={
-                      item.category
+              {/* ------------------------------------------------------------ */}
+              {/* Forecast                                                     */}
+              {/* ------------------------------------------------------------ */}
+
+              <section className="border border-slate-200 bg-white p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-base font-bold">
+                    Visitor forecast
+                  </h2>
+
+                  <button
+                    type="button"
+                    onClick={
+                      runForecast
                     }
-                    className="mt-2 flex justify-between text-xs text-slate-600"
+                    disabled={
+                      forecastLoading ||
+                      (analyticsAttendance.length ===
+                        0 &&
+                        analyticsBorrows.length ===
+                          0)
+                    }
+                    className="bg-shelf-primary px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <span>
-                      {
+                    {forecastLoading
+                      ? 'Forecasting...'
+                      : 'Run forecast'}
+                  </button>
+                </div>
+
+                <p className="mt-2 text-xs text-slate-500">
+                  Forecast is based
+                  on the currently
+                  selected Analytics
+                  filters.
+                </p>
+
+                {forecast
+                  ?.forecasts
+                  ?.length ? (
+                  <ol className="mt-3 space-y-1 text-sm text-slate-600">
+                    {forecast.forecasts.map(
+                      (item) => (
+                        <li
+                          key={
+                            item.date
+                          }
+                          className="flex justify-between"
+                        >
+                          <span>
+                            {
+                              item.date
+                            }
+                          </span>
+
+                          <span>
+                            {
+                              item.visitorCount
+                            }{' '}
+                            visitors
+                          </span>
+                        </li>
+                      )
+                    )}
+                  </ol>
+                ) : (
+                  <p className="mt-2 text-xs text-slate-500">
+                    Select an
+                    Analytics scope
+                    and run the
+                    forecast to
+                    generate a
+                    seven-day
+                    visitor
+                    forecast.
+                  </p>
+                )}
+
+                {forecast?.highDemandCategories?.map(
+                  (item) => (
+                    <p
+                      key={
                         item.category
-                      }{' '}
-                      projected
-                      demand
-                    </span>
-
-                    <span>
-                      {
-                        item.projectedDemand
                       }
-                    </span>
-                  </p>
-                )
-              )}
+                      className="mt-2 flex justify-between text-xs text-slate-600"
+                    >
+                      <span>
+                        {
+                          item.category
+                        }{' '}
+                        projected
+                        demand
+                      </span>
 
-              {forecast?.recommendations?.map(
-                (item) => (
-                  <p
-                    key={item}
-                    className="mt-2 text-sm text-emerald-800"
-                  >
-                    {item}
-                  </p>
-                )
-              )}
-            </section>
-          </aside>
+                      <span>
+                        {
+                          item.projectedDemand
+                        }
+                      </span>
+                    </p>
+                  )
+                )}
+
+                {forecast?.recommendations?.map(
+                  (item) => (
+                    <p
+                      key={item}
+                      className="mt-2 text-sm text-emerald-800"
+                    >
+                      {item}
+                    </p>
+                  )
+                )}
+              </section>
+            </aside>
+          </section>
         </section>
       )}
 
@@ -1925,6 +2955,7 @@ function AdminWorkspace({
                         message: '',
                       }
                     );
+
                     setEditingAnnouncementId(
                       null
                     );
@@ -1961,10 +2992,6 @@ function AdminWorkspace({
                 handled by Supabase Auth.
               </p>
             </div>
-
-            {/* ------------------------------------------------------------- */}
-            {/* CREATE SUB-ADMIN                                              */}
-            {/* ------------------------------------------------------------- */}
 
             <form
               onSubmit={
@@ -2106,10 +3133,6 @@ function AdminWorkspace({
                 Create sub-admin
               </button>
             </form>
-
-            {/* ------------------------------------------------------------- */}
-            {/* STAFF TABLE                                                    */}
-            {/* ------------------------------------------------------------- */}
 
             <div className="overflow-x-auto border border-slate-200 bg-white">
               <table className="w-full min-w-[900px] text-left text-sm">
