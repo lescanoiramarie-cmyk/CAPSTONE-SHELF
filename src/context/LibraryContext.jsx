@@ -3,7 +3,13 @@ import { supabase } from '../lib/supabaseClient';
 import * as store from '../data/store';
 import { LibraryContext } from './libraryContext.js';
 
-const emptyData = { books: [], libraries: [], visitors: [], borrowRequests: [], attendanceLogs: [] };
+const emptyData = {
+  books: [],
+  libraries: [],
+  visitors: [],
+  borrowRequests: [],
+  attendanceLogs: [],
+};
 
 export function LibraryProvider({ children }) {
   const [data, setData] = useState(emptyData);
@@ -12,26 +18,39 @@ export function LibraryProvider({ children }) {
 
   const refreshAll = useCallback(async () => {
     try {
-      const [books, libraries, visitors, borrowRequests, attendanceLogs] = await Promise.all([
+      const [
+        books,
+        libraries,
+        visitors,
+        borrowRequests,
+        attendanceLogs,
+      ] = await Promise.all([
         store.fetchBooks(),
         store.fetchLibraries(),
         store.fetchVisitors(),
         store.fetchBorrowRequests(),
         store.fetchAttendanceLogs(),
       ]);
-      setData({ books, libraries, visitors, borrowRequests, attendanceLogs });
+
+      setData({
+        books,
+        libraries,
+        visitors,
+        borrowRequests,
+        attendanceLogs,
+      });
+
       setConnectionError('');
     } catch (err) {
-      setConnectionError(err.message || 'Could not connect to the database.');
+      setConnectionError(
+        err.message ||
+          'Could not connect to the database.'
+      );
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Initial load + live sync across every open tab/device via Supabase
-  // Realtime (Postgres Changes) — this is what makes borrow/return/attendance
-  // updates appear instantly on the librarian's screen and the visitor's
-  // screen at the same time, even on different devices.
   useEffect(() => {
     void Promise.resolve().then(refreshAll);
 
@@ -44,11 +63,51 @@ export function LibraryProvider({ children }) {
     const channel = supabase
       ? supabase
           .channel('shelf-ilms-realtime')
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'books' }, refreshAll)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'borrow_requests' }, refreshAll)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, refreshAll)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'visitors' }, refreshAll)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'libraries' }, refreshAll)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'books',
+            },
+            refreshAll
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'borrow_requests',
+            },
+            refreshAll
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'attendance_logs',
+            },
+            refreshAll
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'visitors',
+            },
+            refreshAll
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'libraries',
+            },
+            refreshAll
+          )
           .subscribe()
       : null;
 
@@ -58,8 +117,6 @@ export function LibraryProvider({ children }) {
     };
   }, [refreshAll]);
 
-  // Wrap mutating calls so the UI updates immediately after a successful
-  // write, rather than waiting on the realtime round-trip.
   const withRefresh =
     (fn) =>
     async (...args) => {
@@ -72,40 +129,60 @@ export function LibraryProvider({ children }) {
     data,
     loading,
     connectionError,
-    // libraries
+
     addLibrary: withRefresh(store.addLibrary),
-    // books
+
     addBook: withRefresh(store.addBook),
     addBooksBulk: withRefresh(store.addBooksBulk),
     updateBook: withRefresh(store.updateBook),
     deleteBook: withRefresh(store.deleteBook),
-    loadSampleCatalog: withRefresh(store.loadSampleCatalog),
-    // borrowing / queue
-    requestBorrow: withRefresh(store.requestBorrow),
-    cancelBorrowRequest: withRefresh(store.cancelBorrowRequest),
-    confirmPickup: withRefresh(store.confirmPickup),
-    confirmReturn: withRefresh(store.confirmReturn),
-    // attendance
-    scanAttendance: withRefresh(store.scanAttendance),
-    // visitors (read-only lookups, no refresh needed)
-    findVisitorByQr: store.findVisitorByQr,
-    getVisitor: store.getVisitor,
-    // constants
-    PICKUP_WINDOW_HOURS: store.PICKUP_WINDOW_HOURS,
-    BORROW_PERIOD_DAYS: store.BORROW_PERIOD_DAYS,
-    FINE_PER_DAY: store.FINE_PER_DAY,
+
+    loadSampleCatalog:
+      withRefresh(store.loadSampleCatalog),
+
+    requestBorrow:
+      withRefresh(store.requestBorrow),
+
+    cancelBorrowRequest:
+      withRefresh(store.cancelBorrowRequest),
+
+    confirmPickup:
+      withRefresh(store.confirmPickup),
+
+    confirmReturn:
+      withRefresh(store.confirmReturn),
+
+    scanAttendance:
+      withRefresh(store.scanAttendance),
+
+    findVisitorByQr:
+      store.findVisitorByQr,
+
+    getVisitor:
+      store.getVisitor,
+
+    PICKUP_WINDOW_HOURS:
+      store.PICKUP_WINDOW_HOURS,
+
+    BORROW_PERIOD_DAYS:
+      store.BORROW_PERIOD_DAYS,
+
+    FINE_PER_DAY:
+      store.FINE_PER_DAY,
   };
 
   return (
     <LibraryContext.Provider value={value}>
       {connectionError && (
         <div className="bg-red-600 text-white text-xs font-semibold px-4 py-2 text-center">
-          Could not reach the database: {connectionError} — check your .env Supabase credentials (see .env.example)
-          and that supabase/schema.sql has been run.
+          Could not reach the database:{' '}
+          {connectionError} — check your .env Supabase
+          credentials (see .env.example) and that
+          supabase/schema.sql has been run.
         </div>
       )}
+
       {children}
     </LibraryContext.Provider>
   );
 }
-

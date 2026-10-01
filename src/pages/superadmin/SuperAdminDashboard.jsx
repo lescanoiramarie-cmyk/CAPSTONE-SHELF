@@ -390,7 +390,7 @@ export default function SuperAdminDashboard() {
     if (
       section === 'accounts'
     ) {
-      loadStaffAccounts();
+      void Promise.resolve().then(loadStaffAccounts);
     }
   }, [section]);
 
