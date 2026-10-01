@@ -12,6 +12,7 @@ import {
 } from 'chart.js';
 
 import { supabase } from '../lib/supabaseClient.js';
+
 import {
   exportToCSV,
   exportToExcel,
@@ -41,6 +42,29 @@ const TABS = [
   {
     id: 'announcements',
     label: 'Announcements',
+  },
+];
+
+const ANALYTICS_DATE_RANGES = [
+  {
+    id: '7d',
+    label: 'Last 7 days',
+  },
+  {
+    id: '30d',
+    label: 'Last 30 days',
+  },
+  {
+    id: 'month',
+    label: 'This month',
+  },
+  {
+    id: 'year',
+    label: 'This year',
+  },
+  {
+    id: 'custom',
+    label: 'Custom range',
   },
 ];
 
@@ -85,10 +109,8 @@ function getLibraryName(libraries, id) {
   return (
     libraries.find(
       (library) =>
-        String(library.id) ===
-        String(id)
-    )?.name ||
-    'Unknown library'
+        String(library.id) === String(id)
+    )?.name || 'Unknown library'
   );
 }
 
@@ -104,81 +126,51 @@ function formatRole(role) {
     labels[role] ||
     String(role || '')
       .replaceAll('_', ' ')
-      .replace(
-        /\b\w/g,
-        (char) => char.toUpperCase()
+      .replace(/\b\w/g, (char) =>
+        char.toUpperCase()
       ) ||
     'Staff'
   );
 }
 
-function toStartOfDay(value) {
-  const date = new Date(value);
+/*
+ * ---------------------------------------------------------------------------
+ * ANALYTICS DATE WINDOW
+ * ---------------------------------------------------------------------------
+ *
+ * Returns:
+ * {
+ *   start: Date,
+ *   endExclusive: Date,
+ *   label: string,
+ *   valid: boolean,
+ *   error: string
+ * }
+ *
+ * The end is exclusive so records on the selected ending date
+ * are included correctly.
+ */
+function buildAnalyticsWindow(
+  range,
+  customStart,
+  customEnd
+) {
+  const now = new Date();
 
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
+  const today = new Date(now);
 
-  date.setHours(0, 0, 0, 0);
-
-  return date;
-}
-
-function toEndOfDay(value) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  date.setHours(
-    23,
-    59,
-    59,
-    999
+  today.setHours(
+    0,
+    0,
+    0,
+    0
   );
 
-  return date;
-}
+  const tomorrow = new Date(today);
 
-function formatDateInput(date) {
-  const year = date.getFullYear();
-
-  const month = String(
-    date.getMonth() + 1
-  ).padStart(2, '0');
-
-  const day = String(
-    date.getDate()
-  ).padStart(2, '0');
-
-  return `${year}-${month}-${day}`;
-}
-
-function getAnalyticsDateRange(
-  range,
-  customStartDate,
-  customEndDate
-) {
-  const today = new Date();
-
-  today.setHours(0, 0, 0, 0);
-
-  if (range === 'today') {
-    const end = new Date(today);
-
-    end.setHours(
-      23,
-      59,
-      59,
-      999
-    );
-
-    return {
-      start: today,
-      end,
-    };
-  }
+  tomorrow.setDate(
+    tomorrow.getDate() + 1
+  );
 
   if (range === '7d') {
     const start = new Date(today);
@@ -187,18 +179,12 @@ function getAnalyticsDateRange(
       start.getDate() - 6
     );
 
-    const end = new Date(today);
-
-    end.setHours(
-      23,
-      59,
-      59,
-      999
-    );
-
     return {
       start,
-      end,
+      endExclusive: tomorrow,
+      label: 'Last 7 days',
+      valid: true,
+      error: '',
     };
   }
 
@@ -209,18 +195,12 @@ function getAnalyticsDateRange(
       start.getDate() - 29
     );
 
-    const end = new Date(today);
-
-    end.setHours(
-      23,
-      59,
-      59,
-      999
-    );
-
     return {
       start,
-      end,
+      endExclusive: tomorrow,
+      label: 'Last 30 days',
+      valid: true,
+      error: '',
     };
   }
 
@@ -231,93 +211,118 @@ function getAnalyticsDateRange(
       1
     );
 
-    const end = new Date(today);
+    return {
+      start,
+      endExclusive: tomorrow,
+      label: 'This month',
+      valid: true,
+      error: '',
+    };
+  }
 
-    end.setHours(
-      23,
-      59,
-      59,
-      999
+  if (range === 'year') {
+    const start = new Date(
+      today.getFullYear(),
+      0,
+      1
     );
 
     return {
       start,
-      end,
+      endExclusive: tomorrow,
+      label: 'This year',
+      valid: true,
+      error: '',
     };
   }
 
   if (range === 'custom') {
-    const start =
-      customStartDate
-        ? toStartOfDay(
-            `${customStartDate}T00:00:00`
-          )
-        : null;
+    if (!customStart || !customEnd) {
+      return {
+        start: today,
+        endExclusive: tomorrow,
+        label: 'Custom range',
+        valid: false,
+        error:
+          'Select both a start date and an end date.',
+      };
+    }
 
-    const end =
-      customEndDate
-        ? toEndOfDay(
-            `${customEndDate}T23:59:59`
-          )
-        : null;
+    const start = new Date(
+      `${customStart}T00:00:00`
+    );
+
+    const end = new Date(
+      `${customEnd}T00:00:00`
+    );
+
+    if (
+      Number.isNaN(start.getTime()) ||
+      Number.isNaN(end.getTime())
+    ) {
+      return {
+        start: today,
+        endExclusive: tomorrow,
+        label: 'Custom range',
+        valid: false,
+        error:
+          'Please enter valid start and end dates.',
+      };
+    }
+
+    if (end < start) {
+      return {
+        start: today,
+        endExclusive: tomorrow,
+        label: 'Custom range',
+        valid: false,
+        error:
+          'The end date cannot be earlier than the start date.',
+      };
+    }
+
+    const endExclusive = new Date(end);
+
+    endExclusive.setDate(
+      endExclusive.getDate() + 1
+    );
 
     return {
       start,
-      end,
+      endExclusive,
+      label: `${start.toLocaleDateString()} – ${end.toLocaleDateString()}`,
+      valid: true,
+      error: '',
     };
   }
 
-  const start = new Date(today);
-
-  start.setDate(
-    start.getDate() - 6
-  );
-
-  const end = new Date(today);
-
-  end.setHours(
-    23,
-    59,
-    59,
-    999
-  );
-
   return {
-    start,
-    end,
+    start: new Date(today),
+    endExclusive: tomorrow,
+    label: 'Last 7 days',
+    valid: true,
+    error: '',
   };
 }
 
-function formatAnalyticsRangeLabel(
-  range,
-  customStartDate,
-  customEndDate
+function isDateInsideWindow(
+  value,
+  window
 ) {
-  if (range === 'today') {
-    return 'Today';
+  if (!window?.valid || !value) {
+    return false;
   }
 
-  if (range === '7d') {
-    return 'Last 7 Days';
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return false;
   }
 
-  if (range === '30d') {
-    return 'Last 30 Days';
-  }
-
-  if (range === 'month') {
-    return 'This Month';
-  }
-
-  if (
-    range === 'custom' &&
-    customStartDate &&
-    customEndDate
-  ) {
-    return `${customStartDate} to ${customEndDate}`;
-  }
-
-  return 'Custom Date Range';
+  return (
+    date >= window.start &&
+    date < window.endExclusive
+  );
 }
 
 function AdminWorkspace({
@@ -340,14 +345,11 @@ function AdminWorkspace({
 
   /*
    * -------------------------------------------------------------------------
-   * Analytics filters
-   *
-   * IMPORTANT:
-   * These states are used ONLY by the Analytics tab.
-   * They do not control Reports, Feedback, Announcements, or Staff Accounts.
+   * ANALYTICS FILTERS
    * -------------------------------------------------------------------------
+   *
+   * These states are intentionally used ONLY by Analytics.
    */
-
   const [
     analyticsLibraryId,
     setAnalyticsLibraryId,
@@ -361,40 +363,18 @@ function AdminWorkspace({
   const [
     customStartDate,
     setCustomStartDate,
-  ] = useState(() => {
-    const date = new Date();
-
-    date.setDate(
-      date.getDate() - 6
-    );
-
-    return formatDateInput(date);
-  });
+  ] = useState('');
 
   const [
     customEndDate,
     setCustomEndDate,
-  ] = useState(() =>
-    formatDateInput(new Date())
-  );
-
-  /*
-   * -------------------------------------------------------------------------
-   * Reports
-   * -------------------------------------------------------------------------
-   */
+  ] = useState('');
 
   const [period, setPeriod] =
     useState('daily');
 
   const [reportSort, setReportSort] =
     useState('time');
-
-  /*
-   * -------------------------------------------------------------------------
-   * Database-backed sections
-   * -------------------------------------------------------------------------
-   */
 
   const [feedback, setFeedback] =
     useState([]);
@@ -414,13 +394,11 @@ function AdminWorkspace({
   const [message, setMessage] =
     useState('');
 
-  const [
-    announcementForm,
-    setAnnouncementForm,
-  ] = useState({
-    title: '',
-    message: '',
-  });
+  const [announcementForm, setAnnouncementForm] =
+    useState({
+      title: '',
+      message: '',
+    });
 
   const [
     editingAnnouncementId,
@@ -438,12 +416,6 @@ function AdminWorkspace({
       libraryId: currentLibraryId,
     });
 
-  /*
-   * -------------------------------------------------------------------------
-   * Forecast
-   * -------------------------------------------------------------------------
-   */
-
   const [forecast, setForecast] =
     useState(null);
 
@@ -452,26 +424,7 @@ function AdminWorkspace({
 
   /*
    * -------------------------------------------------------------------------
-   * Keep staff form branch aligned with current sub-admin assignment.
-   * -------------------------------------------------------------------------
-   */
-
-  useEffect(() => {
-    if (isSubAdmin) {
-      setStaffForm((current) => ({
-        ...current,
-        libraryId:
-          currentLibraryId || '',
-      }));
-    }
-  }, [
-    currentLibraryId,
-    isSubAdmin,
-  ]);
-
-  /*
-   * -------------------------------------------------------------------------
-   * Books lookup
+   * BOOK LOOKUP
    * -------------------------------------------------------------------------
    */
 
@@ -488,80 +441,68 @@ function AdminWorkspace({
 
   /*
    * -------------------------------------------------------------------------
-   * Reports:
-   * Sub-admin = assigned branch
-   * Super-admin = all libraries
-   *
-   * NOTE:
-   * Analytics has its OWN filters below.
+   * REPORTS
    * -------------------------------------------------------------------------
+   *
+   * Reports retain their existing behavior.
+   * Super Admin reports are system-wide.
+   * Sub-Admin reports remain assigned-branch scoped.
    */
 
-  const reportAttendance =
-    useMemo(
-      () =>
-        attendanceLogs.filter((item) =>
-          isSubAdmin
-            ? String(item.libraryId) ===
-              String(currentLibraryId)
-            : true
-        ),
-      [
-        attendanceLogs,
-        currentLibraryId,
-        isSubAdmin,
-      ]
-    );
+  const scopedAttendance = useMemo(
+    () =>
+      attendanceLogs.filter((item) =>
+        isSubAdmin
+          ? String(item.libraryId) ===
+            String(currentLibraryId)
+          : true
+      ),
+    [
+      attendanceLogs,
+      currentLibraryId,
+      isSubAdmin,
+    ]
+  );
 
-  const reportBorrows =
-    useMemo(
-      () =>
-        borrowRequests.filter((item) => {
-          if (isSubAdmin) {
-            return (
-              String(
-                booksById.get(
-                  item.bookId
-                )?.libraryId
-              ) ===
-              String(currentLibraryId)
-            );
-          }
+  const scopedBorrows = useMemo(
+    () =>
+      borrowRequests.filter((item) => {
+        const book =
+          booksById.get(item.bookId);
 
-          return true;
-        }),
-      [
-        booksById,
-        borrowRequests,
-        currentLibraryId,
-        isSubAdmin,
-      ]
-    );
+        if (isSubAdmin) {
+          return (
+            String(book?.libraryId) ===
+            String(currentLibraryId)
+          );
+        }
+
+        return true;
+      }),
+    [
+      booksById,
+      borrowRequests,
+      currentLibraryId,
+      isSubAdmin,
+    ]
+  );
 
   /*
    * -------------------------------------------------------------------------
-   * Reports
+   * REPORT ROWS
    * -------------------------------------------------------------------------
    */
 
   const reportRows = useMemo(() => {
-    const start =
-      startOfPeriod(period);
+    const start = startOfPeriod(period);
 
     const attendanceRows =
-      reportAttendance
-        .filter((item) => {
-          const value = new Date(
-            item.timeIn
-          );
-
-          return (
-            !Number.isNaN(
-              value.getTime()
-            ) &&
-            value >= start
-          );
-        })
+      scopedAttendance
+        .filter(
+          (item) =>
+            new Date(item.timeIn) >=
+            start
+        )
         .map((item) => ({
           type: 'Visitor',
           time: item.timeIn,
@@ -579,19 +520,13 @@ function AdminWorkspace({
         }));
 
     const transactionRows =
-      reportBorrows
-        .filter((item) => {
-          const value = new Date(
-            item.requestDate
-          );
-
-          return (
-            !Number.isNaN(
-              value.getTime()
-            ) &&
-            value >= start
-          );
-        })
+      scopedBorrows
+        .filter(
+          (item) =>
+            new Date(
+              item.requestDate
+            ) >= start
+        )
         .map((item) => ({
           type: 'Book transaction',
           time: item.requestDate,
@@ -640,24 +575,14 @@ function AdminWorkspace({
     booksById,
     libraries,
     period,
-    reportAttendance,
-    reportBorrows,
     reportSort,
+    scopedAttendance,
+    scopedBorrows,
   ]);
 
   /*
    * -------------------------------------------------------------------------
-   * Load database-backed sections
-   *
-   * Feedback:
-   * - Sub-admin sees assigned branch.
-   * - Super-admin sees all feedback.
-   *
-   * Announcements:
-   * - Existing behavior retained.
-   *
-   * Staff:
-   * - Existing behavior retained.
+   * LOAD DATABASE-BACKED SECTIONS
    * -------------------------------------------------------------------------
    */
 
@@ -689,6 +614,15 @@ function AdminWorkspace({
             ascending: false,
           });
 
+        /*
+         * Sub-Admin sees only feedback for the
+         * assigned branch.
+         *
+         * Super Admin sees all feedback.
+         *
+         * The Analytics library filter does not
+         * affect this section.
+         */
         if (isSubAdmin) {
           query = query.eq(
             'library_id',
@@ -722,12 +656,8 @@ function AdminWorkspace({
       }
 
       if (result.error) {
-        setError(
-          result.error.message
-        );
-      } else if (
-        tab === 'feedback'
-      ) {
+        setError(result.error.message);
+      } else if (tab === 'feedback') {
         setFeedback(
           result.data || []
         );
@@ -746,18 +676,16 @@ function AdminWorkspace({
       setLoading(false);
     }
 
-    loadData().catch(
-      (loadError) => {
-        if (active) {
-          setError(
-            loadError.message ||
-              'Unable to load this section.'
-          );
+    loadData().catch((loadError) => {
+      if (active) {
+        setError(
+          loadError.message ||
+            'Unable to load this section.'
+        );
 
-          setLoading(false);
-        }
+        setLoading(false);
       }
-    );
+    });
 
     return () => {
       active = false;
@@ -769,400 +697,282 @@ function AdminWorkspace({
   ]);
 
   /*
-   * -------------------------------------------------------------------------
-   * ANALYTICS LIBRARY SCOPE
-   *
-   * Super-admin:
-   *   '' = All libraries
-   *   UUID = selected library
-   *
-   * Sub-admin:
-   *   Always assigned branch.
-   * -------------------------------------------------------------------------
+   * =========================================================================
+   * ANALYTICS
+   * =========================================================================
    */
-
-  const effectiveAnalyticsLibraryId =
-    isSubAdmin
-      ? currentLibraryId
-      : analyticsLibraryId;
 
   /*
    * -------------------------------------------------------------------------
-   * Analytics date range
+   * Analytics date window
    * -------------------------------------------------------------------------
    */
 
-  const analyticsDateRangeValues =
+  const analyticsWindow = useMemo(
+    () =>
+      buildAnalyticsWindow(
+        analyticsDateRange,
+        customStartDate,
+        customEndDate
+      ),
+    [
+      analyticsDateRange,
+      customStartDate,
+      customEndDate,
+    ]
+  );
+
+  /*
+   * -------------------------------------------------------------------------
+   * Analytics library scope
+   * -------------------------------------------------------------------------
+   */
+
+  const analyticsScopedAttendance =
     useMemo(
       () =>
-        getAnalyticsDateRange(
-          analyticsDateRange,
-          customStartDate,
-          customEndDate
+        attendanceLogs.filter(
+          (item) => {
+            /*
+             * Sub-Admin is automatically restricted
+             * to the assigned branch.
+             */
+            if (isSubAdmin) {
+              return (
+                String(
+                  item.libraryId
+                ) ===
+                String(
+                  currentLibraryId
+                )
+              );
+            }
+
+            /*
+             * Super Admin:
+             * empty value = All libraries
+             */
+            if (
+              !analyticsLibraryId
+            ) {
+              return true;
+            }
+
+            return (
+              String(
+                item.libraryId
+              ) ===
+              String(
+                analyticsLibraryId
+              )
+            );
+          }
         ),
       [
-        analyticsDateRange,
-        customEndDate,
-        customStartDate,
+        attendanceLogs,
+        currentLibraryId,
+        isSubAdmin,
+        analyticsLibraryId,
       ]
     );
 
-  const analyticsStart =
-    analyticsDateRangeValues.start;
+  const analyticsScopedBorrows =
+    useMemo(
+      () =>
+        borrowRequests.filter(
+          (item) => {
+            const book =
+              booksById.get(
+                item.bookId
+              );
 
-  const analyticsEnd =
-    analyticsDateRangeValues.end;
+            /*
+             * Sub-Admin:
+             * only books belonging to assigned branch.
+             */
+            if (isSubAdmin) {
+              return (
+                String(
+                  book?.libraryId
+                ) ===
+                String(
+                  currentLibraryId
+                )
+              );
+            }
+
+            /*
+             * Super Admin:
+             * empty value = All libraries.
+             */
+            if (
+              !analyticsLibraryId
+            ) {
+              return true;
+            }
+
+            return (
+              String(
+                book?.libraryId
+              ) ===
+              String(
+                analyticsLibraryId
+              )
+            );
+          }
+        ),
+      [
+        booksById,
+        borrowRequests,
+        currentLibraryId,
+        isSubAdmin,
+        analyticsLibraryId,
+      ]
+    );
 
   /*
    * -------------------------------------------------------------------------
-   * Analytics scoped attendance
+   * Analytics date-filtered records
    * -------------------------------------------------------------------------
    */
 
   const analyticsAttendance =
-    useMemo(() => {
-      return attendanceLogs.filter(
-        (item) => {
-          const itemLibraryId =
-            item.libraryId;
-
-          const time = new Date(
-            item.timeIn
-          );
-
-          if (
-            Number.isNaN(
-              time.getTime()
+    useMemo(
+      () =>
+        analyticsScopedAttendance.filter(
+          (item) =>
+            isDateInsideWindow(
+              item.timeIn,
+              analyticsWindow
             )
-          ) {
-            return false;
-          }
-
-          const matchesLibrary =
-            !effectiveAnalyticsLibraryId ||
-            String(itemLibraryId) ===
-              String(
-                effectiveAnalyticsLibraryId
-              );
-
-          const matchesDate =
-            (!analyticsStart ||
-              time >=
-                analyticsStart) &&
-            (!analyticsEnd ||
-              time <= analyticsEnd);
-
-          return (
-            matchesLibrary &&
-            matchesDate
-          );
-        }
-      );
-    }, [
-      analyticsEnd,
-      analyticsStart,
-      attendanceLogs,
-      effectiveAnalyticsLibraryId,
-    ]);
-
-  /*
-   * -------------------------------------------------------------------------
-   * Analytics scoped borrow transactions
-   * -------------------------------------------------------------------------
-   */
+        ),
+      [
+        analyticsScopedAttendance,
+        analyticsWindow,
+      ]
+    );
 
   const analyticsBorrows =
-    useMemo(() => {
-      return borrowRequests.filter(
-        (item) => {
-          const book =
-            booksById.get(
-              item.bookId
-            );
-
-          const time = new Date(
-            item.requestDate
-          );
-
-          if (
-            Number.isNaN(
-              time.getTime()
+    useMemo(
+      () =>
+        analyticsScopedBorrows.filter(
+          (item) =>
+            isDateInsideWindow(
+              item.requestDate,
+              analyticsWindow
             )
-          ) {
-            return false;
-          }
-
-          const matchesLibrary =
-            !effectiveAnalyticsLibraryId ||
-            String(
-              book?.libraryId
-            ) ===
-              String(
-                effectiveAnalyticsLibraryId
-              );
-
-          const matchesDate =
-            (!analyticsStart ||
-              time >=
-                analyticsStart) &&
-            (!analyticsEnd ||
-              time <= analyticsEnd);
-
-          return (
-            matchesLibrary &&
-            matchesDate
-          );
-        }
-      );
-    }, [
-      analyticsEnd,
-      analyticsStart,
-      booksById,
-      borrowRequests,
-      effectiveAnalyticsLibraryId,
-    ]);
+        ),
+      [
+        analyticsScopedBorrows,
+        analyticsWindow,
+      ]
+    );
 
   /*
    * -------------------------------------------------------------------------
-   * Analytics chart period
+   * Analytics chart data
    * -------------------------------------------------------------------------
    */
 
-  const analyticsChartData =
-    useMemo(() => {
-      if (
-        !analyticsStart ||
-        !analyticsEnd
-      ) {
-        return {
-          labels: [],
-          visits: [],
-          transactions: [],
-        };
-      }
-
-      const start = new Date(
-        analyticsStart
-      );
-
-      start.setHours(0, 0, 0, 0);
-
-      const end = new Date(
-        analyticsEnd
-      );
-
-      end.setHours(
-        0,
-        0,
-        0,
-        0
-      );
-
-      const difference =
-        Math.floor(
-          (end.getTime() -
-            start.getTime()) /
-            86400000
-        ) + 1;
-
-      /*
-       * For large custom ranges, keep the chart readable by grouping
-       * into monthly buckets.
-       *
-       * Normal ranges up to 31 days remain daily.
-       */
-      if (difference > 62) {
-        const months = [];
-        const cursor = new Date(
-          start.getFullYear(),
-          start.getMonth(),
-          1
-        );
-
-        const lastMonth =
-          new Date(
-            end.getFullYear(),
-            end.getMonth(),
-            1
-          );
-
-        while (
-          cursor <= lastMonth
-        ) {
-          months.push(
-            new Date(cursor)
-          );
-
-          cursor.setMonth(
-            cursor.getMonth() + 1
-          );
-        }
-
-        const labels =
-          months.map((date) =>
-            date.toLocaleDateString(
-              undefined,
-              {
-                month: 'short',
-                year: 'numeric',
-              }
-            )
-          );
-
-        const visits =
-          months.map(
-            (monthStart) => {
-              const monthEnd =
-                new Date(
-                  monthStart.getFullYear(),
-                  monthStart.getMonth() +
-                    1,
-                  0
-                );
-
-              monthEnd.setHours(
-                23,
-                59,
-                59,
-                999
-              );
-
-              return analyticsAttendance.filter(
-                (item) => {
-                  const time =
-                    new Date(
-                      item.timeIn
-                    );
-
-                  return (
-                    time >=
-                      monthStart &&
-                    time <=
-                      monthEnd
-                  );
-                }
-              ).length;
-            }
-          );
-
-        const transactions =
-          months.map(
-            (monthStart) => {
-              const monthEnd =
-                new Date(
-                  monthStart.getFullYear(),
-                  monthStart.getMonth() +
-                    1,
-                  0
-                );
-
-              monthEnd.setHours(
-                23,
-                59,
-                59,
-                999
-              );
-
-              return analyticsBorrows.filter(
-                (item) => {
-                  const time =
-                    new Date(
-                      item.requestDate
-                    );
-
-                  return (
-                    time >=
-                      monthStart &&
-                    time <=
-                      monthEnd
-                  );
-                }
-              ).length;
-            }
-          );
-
-        return {
-          labels,
-          visits,
-          transactions,
-        };
-      }
-
-      const dates =
-        Array.from(
-          {
-            length:
-              Math.max(
-                difference,
-                1
-              ),
-          },
-          (_, index) => {
-            const date =
-              new Date(start);
-
-            date.setDate(
-              start.getDate() +
-                index
-            );
-
-            return date;
-          }
-        );
-
+  const periodCounts = useMemo(() => {
+    if (!analyticsWindow.valid) {
       return {
-        labels: dates.map(
-          (date) =>
-            date.toLocaleDateString(
-              undefined,
-              {
-                month: 'short',
-                day: 'numeric',
-              }
-            )
-        ),
-
-        visits: dates.map(
-          (date) =>
-            analyticsAttendance.filter(
-              (item) => {
-                const time =
-                  new Date(
-                    item.timeIn
-                  );
-
-                return (
-                  time.toDateString() ===
-                  date.toDateString()
-                );
-              }
-            ).length
-        ),
-
-        transactions:
-          dates.map(
-            (date) =>
-              analyticsBorrows.filter(
-                (item) => {
-                  const time =
-                    new Date(
-                      item.requestDate
-                    );
-
-                  return (
-                    time.toDateString() ===
-                    date.toDateString()
-                  );
-                }
-              ).length
-          ),
+        labels: [],
+        visits: [],
+        transactions: [],
       };
-    }, [
-      analyticsAttendance,
-      analyticsBorrows,
-      analyticsEnd,
-      analyticsStart,
-    ]);
+    }
+
+    const dates = [];
+
+    const cursor = new Date(
+      analyticsWindow.start
+    );
+
+    while (
+      cursor <
+      analyticsWindow.endExclusive
+    ) {
+      dates.push(
+        new Date(cursor)
+      );
+
+      cursor.setDate(
+        cursor.getDate() + 1
+      );
+    }
+
+    const getDayKey = (value) => {
+      const date = new Date(value);
+
+      if (
+        Number.isNaN(
+          date.getTime()
+        )
+      ) {
+        return '';
+      }
+
+      return `${date.getFullYear()}-${String(
+        date.getMonth() + 1
+      ).padStart(
+        2,
+        '0'
+      )}-${String(
+        date.getDate()
+      ).padStart(
+        2,
+        '0'
+      )}`;
+    };
+
+    const getDateKey = (date) =>
+      getDayKey(date);
+
+    return {
+      labels: dates.map((date) =>
+        date.toLocaleDateString(
+          undefined,
+          {
+            month: 'short',
+            day: 'numeric',
+          }
+        )
+      ),
+
+      visits: dates.map(
+        (date) => {
+          const key =
+            getDateKey(date);
+
+          return analyticsAttendance.filter(
+            (item) =>
+              getDayKey(
+                item.timeIn
+              ) === key
+          ).length;
+        }
+      ),
+
+      transactions: dates.map(
+        (date) => {
+          const key =
+            getDateKey(date);
+
+          return analyticsBorrows.filter(
+            (item) =>
+              getDayKey(
+                item.requestDate
+              ) === key
+          ).length;
+        }
+      ),
+    };
+  }, [
+    analyticsAttendance,
+    analyticsBorrows,
+    analyticsWindow,
+  ]);
 
   /*
    * -------------------------------------------------------------------------
@@ -1170,37 +980,36 @@ function AdminWorkspace({
    * -------------------------------------------------------------------------
    */
 
-  const topCategories =
-    useMemo(() => {
-      const counts = new Map();
+  const topCategories = useMemo(() => {
+    const counts = new Map();
 
-      analyticsBorrows.forEach(
-        (request) => {
-          const category =
-            booksById.get(
-              request.bookId
-            )?.category ||
-            'Uncategorized';
+    analyticsBorrows.forEach(
+      (request) => {
+        const category =
+          booksById.get(
+            request.bookId
+          )?.category ||
+          'Uncategorized';
 
-          counts.set(
-            category,
-            (counts.get(
-              category
-            ) || 0) + 1
-          );
-        }
-      );
+        counts.set(
+          category,
+          (counts.get(
+            category
+          ) || 0) + 1
+        );
+      }
+    );
 
-      return [...counts]
-        .sort(
-          (a, b) =>
-            b[1] - a[1]
-        )
-        .slice(0, 5);
-    }, [
-      analyticsBorrows,
-      booksById,
-    ]);
+    return [...counts]
+      .sort(
+        (a, b) =>
+          b[1] - a[1]
+      )
+      .slice(0, 5);
+  }, [
+    booksById,
+    analyticsBorrows,
+  ]);
 
   /*
    * -------------------------------------------------------------------------
@@ -1210,25 +1019,76 @@ function AdminWorkspace({
 
   const demandRecommendations =
     useMemo(() => {
+      const visitTimes =
+        analyticsAttendance
+          .map((item) =>
+            new Date(
+              item.timeIn
+            ).getTime()
+          )
+          .filter(
+            (value) =>
+              Number.isFinite(
+                value
+              )
+          );
+
+      const latestVisit =
+        Math.max(
+          ...visitTimes,
+          0
+        );
+
+      if (!latestVisit) {
+        return [
+          'There is not yet enough visitor activity in the selected date range to generate a demand recommendation.',
+        ];
+      }
+
+      const recent =
+        analyticsAttendance.filter(
+          (item) => {
+            const time =
+              new Date(
+                item.timeIn
+              ).getTime();
+
+            return (
+              latestVisit - time <
+              7 * 86400000
+            );
+          }
+        ).length;
+
+      const prior =
+        analyticsAttendance.filter(
+          (item) => {
+            const time =
+              new Date(
+                item.timeIn
+              ).getTime();
+
+            const age =
+              latestVisit - time;
+
+            return (
+              age >=
+                7 * 86400000 &&
+              age <
+                14 * 86400000
+            );
+          }
+        ).length;
+
       const suggestions = [];
 
       if (
-        analyticsAttendance.length ===
-        0
+        recent >
+          prior * 1.2 &&
+        recent >= 5
       ) {
         suggestions.push(
-          'There is not enough attendance activity in the selected period to recommend a staffing change.'
-        );
-      } else if (
-        analyticsAttendance.length >=
-        20
-      ) {
-        suggestions.push(
-          'Visitor activity is relatively high for the selected period. Review peak attendance times when planning front-desk coverage.'
-        );
-      } else {
-        suggestions.push(
-          'Visitor demand is currently moderate based on the selected analytics period.'
+          'Visitor volume is up at least 20% week over week. Consider adding front-desk coverage during peak hours.'
         );
       }
 
@@ -1239,18 +1099,17 @@ function AdminWorkspace({
       }
 
       if (
-        analyticsBorrows.length ===
+        suggestions.length ===
         0
       ) {
         suggestions.push(
-          'No book transactions were recorded in the selected period. Continue monitoring activity before making inventory changes.'
+          'Demand is steady or there is not yet enough activity to recommend a staffing change. Continue collecting branch activity.'
         );
       }
 
       return suggestions;
     }, [
-      analyticsAttendance.length,
-      analyticsBorrows.length,
+      analyticsAttendance,
       topCategories,
     ]);
 
@@ -1260,9 +1119,7 @@ function AdminWorkspace({
    * -------------------------------------------------------------------------
    */
 
-  const handleExport = (
-    format
-  ) => {
+  const handleExport = (format) => {
     const rows =
       reportRows.map(
         (row) => ({
@@ -1273,7 +1130,9 @@ function AdminWorkspace({
         })
       );
 
-    const suffix = `${period}_${
+    const suffix = `${
+      period
+    }_${
       isSubAdmin
         ? currentLibraryId
         : 'all-libraries'
@@ -1307,8 +1166,10 @@ function AdminWorkspace({
       const values = {
         title:
           announcementForm.title.trim(),
+
         message:
           announcementForm.message.trim(),
+
         created_by:
           user?.name ||
           user?.email,
@@ -1354,23 +1215,13 @@ function AdminWorkspace({
 
       setTab('announcements');
 
-      const {
-        data,
-        error: reloadError,
-      } = await supabase
-        .from('announcements')
-        .select('*')
-        .order('created_at', {
-          ascending: false,
-        });
-
-      if (reloadError) {
-        setError(
-          reloadError.message
-        );
-
-        return;
-      }
+      const { data } =
+        await supabase
+          .from('announcements')
+          .select('*')
+          .order('created_at', {
+            ascending: false,
+          });
 
       setAnnouncements(
         data || []
@@ -1382,7 +1233,8 @@ function AdminWorkspace({
   ) => {
     setAnnouncementForm({
       title:
-        announcement.title || '',
+        announcement.title ||
+        '',
       message:
         announcement.message ||
         '',
@@ -1427,10 +1279,6 @@ function AdminWorkspace({
                 item.id !== id
             )
         );
-
-        setMessage(
-          'Announcement deleted.'
-        );
       }
     };
 
@@ -1466,7 +1314,10 @@ function AdminWorkspace({
           updated_at:
             new Date().toISOString(),
         })
-        .eq('id', item.id);
+        .eq(
+          'id',
+          item.id
+        );
 
       if (replyError) {
         setError(
@@ -1477,7 +1328,8 @@ function AdminWorkspace({
           (current) =>
             current.map(
               (entry) =>
-                entry.id === item.id
+                entry.id ===
+                item.id
                   ? {
                       ...entry,
                       admin_reply:
@@ -1522,12 +1374,11 @@ function AdminWorkspace({
     }
 
     if (
-      analyticsAttendance.length ===
-        0 &&
-      analyticsBorrows.length === 0
+      !analyticsWindow.valid
     ) {
       setError(
-        'There is not enough data in the selected Analytics filters to generate a forecast.'
+        analyticsWindow.error ||
+          'Please select a valid analytics date range.'
       );
 
       return;
@@ -1537,6 +1388,8 @@ function AdminWorkspace({
     setError('');
 
     try {
+      const now = Date.now();
+
       const categorySeries =
         topCategories.map(
           ([category]) => {
@@ -1547,18 +1400,12 @@ function AdminWorkspace({
               0,
             ];
 
-            const now = Date.now();
-
             analyticsBorrows.forEach(
               (request) => {
-                const requestCategory =
+                if (
                   booksById.get(
                     request.bookId
-                  )?.category ||
-                  'Uncategorized';
-
-                if (
-                  requestCategory !==
+                  )?.category !==
                   category
                 ) {
                   return;
@@ -1570,7 +1417,7 @@ function AdminWorkspace({
                   ).getTime();
 
                 if (
-                  Number.isNaN(
+                  !Number.isFinite(
                     requestTime
                   )
                 ) {
@@ -1618,15 +1465,19 @@ function AdminWorkspace({
           )}/forecast`,
           {
             method: 'POST',
+
             headers: {
               'Content-Type':
                 'application/json',
             },
+
             body: JSON.stringify({
               daily_visitors:
-                analyticsChartData.visits,
+                periodCounts.visits,
+
               categories:
                 categorySeries,
+
               horizon_days: 7,
             }),
           }
@@ -1641,9 +1492,7 @@ function AdminWorkspace({
       setForecast(
         await response.json()
       );
-    } catch (
-      forecastError
-    ) {
+    } catch (forecastError) {
       setError(
         forecastError.message ||
           'Forecast request failed.'
@@ -1744,7 +1593,8 @@ function AdminWorkspace({
         fullName: '',
         password: '',
         libraryId:
-          currentLibraryId || '',
+          currentLibraryId ||
+          '',
       });
 
       setMessage(
@@ -1754,14 +1604,15 @@ function AdminWorkspace({
       const {
         data: updatedStaff,
         error: queryError,
-      } = await supabase
-        .from('staff_profiles')
-        .select(
-          'id, email, full_name, role, library_id, is_active, created_at'
-        )
-        .order('created_at', {
-          ascending: false,
-        });
+      } =
+        await supabase
+          .from('staff_profiles')
+          .select(
+            'id, email, full_name, role, library_id, is_active, created_at'
+          )
+          .order('created_at', {
+            ascending: false,
+          });
 
       if (queryError) {
         setError(
@@ -1795,7 +1646,10 @@ function AdminWorkspace({
             body: {
               operation:
                 'set-active',
-              userId: profile.id,
+
+              userId:
+                profile.id,
+
               isActive:
                 !profile.is_active,
             },
@@ -1819,7 +1673,8 @@ function AdminWorkspace({
         (current) =>
           current.map(
             (item) =>
-              item.id === profile.id
+              item.id ===
+              profile.id
                 ? {
                     ...item,
                     is_active:
@@ -1848,22 +1703,23 @@ function AdminWorkspace({
     return (
       <p className="border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
         Configure Supabase to use
-        reports and management tools.
+        reports and management
+        tools.
       </p>
     );
   }
 
   /*
-   * -------------------------------------------------------------------------
+   * =========================================================================
    * UI
-   * -------------------------------------------------------------------------
+   * =========================================================================
    */
 
   return (
     <div className="space-y-5">
-      {/* ------------------------------------------------------------------- */}
-      {/* Navigation                                                          */}
-      {/* ------------------------------------------------------------------- */}
+      {/* ================================================================= */}
+      {/* Navigation                                                        */}
+      {/* ================================================================= */}
 
       <nav
         className="flex gap-2 overflow-x-auto border-b border-slate-200"
@@ -1871,6 +1727,7 @@ function AdminWorkspace({
       >
         {[
           ...TABS,
+
           ...(!isSubAdmin
             ? [
                 {
@@ -1914,9 +1771,9 @@ function AdminWorkspace({
         ))}
       </nav>
 
-      {/* ------------------------------------------------------------------- */}
-      {/* Messages                                                            */}
-      {/* ------------------------------------------------------------------- */}
+      {/* ================================================================= */}
+      {/* Messages                                                          */}
+      {/* ================================================================= */}
 
       {error && (
         <p
@@ -1942,9 +1799,9 @@ function AdminWorkspace({
         </p>
       )}
 
-      {/* =================================================================== */}
-      {/* REPORTS                                                             */}
-      {/* =================================================================== */}
+      {/* ================================================================= */}
+      {/* REPORTS                                                           */}
+      {/* ================================================================= */}
 
       {tab === 'reports' && (
         <section className="space-y-4">
@@ -2024,7 +1881,9 @@ function AdminWorkspace({
               <button
                 type="button"
                 onClick={() =>
-                  handleExport('xlsx')
+                  handleExport(
+                    'xlsx'
+                  )
                 }
                 className="bg-shelf-primary px-3 py-2 text-sm font-semibold text-white"
               >
@@ -2034,7 +1893,9 @@ function AdminWorkspace({
               <button
                 type="button"
                 onClick={() =>
-                  handleExport('csv')
+                  handleExport(
+                    'csv'
+                  )
                 }
                 className="border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700"
               >
@@ -2047,23 +1908,14 @@ function AdminWorkspace({
             <Metric
               label="Visitor check-ins"
               value={
-                reportAttendance.filter(
-                  (item) => {
-                    const time =
-                      new Date(
-                        item.timeIn
-                      );
-
-                    return (
-                      !Number.isNaN(
-                        time.getTime()
-                      ) &&
-                      time >=
-                        startOfPeriod(
-                          period
-                        )
-                    );
-                  }
+                scopedAttendance.filter(
+                  (item) =>
+                    new Date(
+                      item.timeIn
+                    ) >=
+                    startOfPeriod(
+                      period
+                    )
                 ).length
               }
             />
@@ -2071,23 +1923,14 @@ function AdminWorkspace({
             <Metric
               label="Book requests"
               value={
-                reportBorrows.filter(
-                  (item) => {
-                    const time =
-                      new Date(
-                        item.requestDate
-                      );
-
-                    return (
-                      !Number.isNaN(
-                        time.getTime()
-                      ) &&
-                      time >=
-                        startOfPeriod(
-                          period
-                        )
-                    );
-                  }
+                scopedBorrows.filter(
+                  (item) =>
+                    new Date(
+                      item.requestDate
+                    ) >=
+                    startOfPeriod(
+                      period
+                    )
                 ).length
               }
             />
@@ -2095,7 +1938,7 @@ function AdminWorkspace({
             <Metric
               label="Active loans"
               value={
-                reportBorrows.filter(
+                scopedBorrows.filter(
                   (item) =>
                     item.status ===
                     'borrowed'
@@ -2185,31 +2028,36 @@ function AdminWorkspace({
         </section>
       )}
 
-      {/* =================================================================== */}
-      {/* ANALYTICS                                                           */}
-      {/* =================================================================== */}
+      {/* ================================================================= */}
+      {/* ANALYTICS                                                         */}
+      {/* ================================================================= */}
 
       {tab === 'analytics' && (
         <section className="space-y-5">
-          {/* ---------------------------------------------------------------- */}
-          {/* ANALYTICS FILTERS ONLY                                          */}
-          {/* ---------------------------------------------------------------- */}
+          {/* ------------------------------------------------------------- */}
+          {/* ANALYTICS FILTERS                                             */}
+          {/* ------------------------------------------------------------- */}
 
           <section className="border border-slate-200 bg-white p-4">
-            <div className="mb-3">
+            <div className="mb-4">
               <h2 className="text-base font-bold text-slate-900">
                 Analytics filters
               </h2>
 
-              <p className="text-xs text-slate-500">
-                Filter the analytics data
-                by branch and date range.
+              <p className="mt-1 text-sm text-slate-500">
+                Filter the analytics
+                results by branch and
+                date range.
               </p>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-              {!isSubAdmin && (
-                <label className="text-xs font-semibold text-slate-600">
+            <div className="grid gap-4 lg:grid-cols-2">
+              {/* ------------------------------------------------------- */}
+              {/* SUPER ADMIN LIBRARY FILTER                              */}
+              {/* ------------------------------------------------------- */}
+
+              {!isSubAdmin ? (
+                <label className="block text-sm font-semibold text-slate-700">
                   Library / Branch
 
                   <select
@@ -2228,10 +2076,10 @@ function AdminWorkspace({
                         null
                       );
                     }}
-                    className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900"
+                    className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-700"
                   >
                     <option value="">
-                      All Libraries
+                      All libraries
                     </option>
 
                     {libraries.map(
@@ -2252,10 +2100,27 @@ function AdminWorkspace({
                     )}
                   </select>
                 </label>
+              ) : (
+                <div>
+                  <p className="text-sm font-semibold text-slate-700">
+                    Library / Branch
+                  </p>
+
+                  <div className="mt-1 border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                    {getLibraryName(
+                      libraries,
+                      currentLibraryId
+                    )}
+                  </div>
+                </div>
               )}
 
-              <label className="text-xs font-semibold text-slate-600">
-                Date Range
+              {/* ------------------------------------------------------- */}
+              {/* DATE RANGE                                               */}
+              {/* ------------------------------------------------------- */}
+
+              <label className="block text-sm font-semibold text-slate-700">
+                Date range
 
                 <select
                   value={
@@ -2273,129 +2138,132 @@ function AdminWorkspace({
                       null
                     );
                   }}
-                  className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900"
+                  className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-700"
                 >
-                  <option value="today">
-                    Today
-                  </option>
-
-                  <option value="7d">
-                    Last 7 Days
-                  </option>
-
-                  <option value="30d">
-                    Last 30 Days
-                  </option>
-
-                  <option value="month">
-                    This Month
-                  </option>
-
-                  <option value="custom">
-                    Custom Date Range
-                  </option>
+                  {ANALYTICS_DATE_RANGES.map(
+                    (range) => (
+                      <option
+                        key={
+                          range.id
+                        }
+                        value={
+                          range.id
+                        }
+                      >
+                        {
+                          range.label
+                        }
+                      </option>
+                    )
+                  )}
                 </select>
               </label>
-
-              {analyticsDateRange ===
-                'custom' && (
-                <>
-                  <label className="text-xs font-semibold text-slate-600">
-                    Start Date
-
-                    <input
-                      type="date"
-                      value={
-                        customStartDate
-                      }
-                      max={
-                        customEndDate ||
-                        undefined
-                      }
-                      onChange={(
-                        event
-                      ) => {
-                        setCustomStartDate(
-                          event.target
-                            .value
-                        );
-
-                        setForecast(
-                          null
-                        );
-                      }}
-                      className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900"
-                    />
-                  </label>
-
-                  <label className="text-xs font-semibold text-slate-600">
-                    End Date
-
-                    <input
-                      type="date"
-                      value={
-                        customEndDate
-                      }
-                      min={
-                        customStartDate ||
-                        undefined
-                      }
-                      onChange={(
-                        event
-                      ) => {
-                        setCustomEndDate(
-                          event.target
-                            .value
-                        );
-
-                        setForecast(
-                          null
-                        );
-                      }}
-                      className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900"
-                    />
-                  </label>
-                </>
-              )}
             </div>
 
-            <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
-              <span className="rounded-full bg-slate-100 px-3 py-1">
-                Branch:{' '}
-                <strong className="text-slate-700">
-                  {isSubAdmin
-                    ? getLibraryName(
-                        libraries,
-                        currentLibraryId
-                      )
-                    : getLibraryName(
-                        libraries,
-                        analyticsLibraryId
-                      )}
-                </strong>
+            {/* ----------------------------------------------------------- */}
+            {/* CUSTOM DATE RANGE                                           */}
+            {/* ----------------------------------------------------------- */}
+
+            {analyticsDateRange ===
+              'custom' && (
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <label className="block text-sm font-semibold text-slate-700">
+                  Start date
+
+                  <input
+                    type="date"
+                    value={
+                      customStartDate
+                    }
+                    onChange={(
+                      event
+                    ) => {
+                      setCustomStartDate(
+                        event.target
+                          .value
+                      );
+
+                      setForecast(
+                        null
+                      );
+                    }}
+                    className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-700"
+                  />
+                </label>
+
+                <label className="block text-sm font-semibold text-slate-700">
+                  End date
+
+                  <input
+                    type="date"
+                    value={
+                      customEndDate
+                    }
+                    onChange={(
+                      event
+                    ) => {
+                      setCustomEndDate(
+                        event.target
+                          .value
+                      );
+
+                      setForecast(
+                        null
+                      );
+                    }}
+                    className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-700"
+                  />
+                </label>
+              </div>
+            )}
+
+            {/* ----------------------------------------------------------- */}
+            {/* FILTER SUMMARY                                              */}
+            {/* ----------------------------------------------------------- */}
+
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+              <span className="font-semibold text-slate-500">
+                Showing:
               </span>
 
-              <span className="rounded-full bg-slate-100 px-3 py-1">
-                Period:{' '}
-                <strong className="text-slate-700">
-                  {formatAnalyticsRangeLabel(
-                    analyticsDateRange,
-                    customStartDate,
-                    customEndDate
-                  )}
-                </strong>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
+                {isSubAdmin
+                  ? getLibraryName(
+                      libraries,
+                      currentLibraryId
+                    )
+                  : analyticsLibraryId
+                  ? getLibraryName(
+                      libraries,
+                      analyticsLibraryId
+                    )
+                  : 'All libraries'}
+              </span>
+
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
+                {analyticsWindow.label}
               </span>
             </div>
+
+            {!analyticsWindow.valid && (
+              <p className="mt-3 border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                {analyticsWindow.error}
+              </p>
+            )}
           </section>
 
-          {/* ---------------------------------------------------------------- */}
-          {/* ANALYTICS CONTENT                                               */}
-          {/* ---------------------------------------------------------------- */}
+          {/* ------------------------------------------------------------- */}
+          {/* ANALYTICS CONTENT                                            */}
+          {/* ------------------------------------------------------------- */}
 
           <section className="grid gap-5 xl:grid-cols-[1.3fr_0.7fr]">
             <div className="border border-slate-200 bg-white p-4">
               <div className="mb-4">
                 <h2 className="text-lg font-bold text-slate-900">
+                  Branch demand
+                </h2>
+
+                <p className="text-sm text-slate-500">
                   {isSubAdmin
                     ? getLibraryName(
                         libraries,
@@ -2406,85 +2274,109 @@ function AdminWorkspace({
                         libraries,
                         analyticsLibraryId
                       )
-                    : 'All libraries'}{' '}
-                  demand
-                </h2>
-
-                <p className="text-sm text-slate-500">
-                  {formatAnalyticsRangeLabel(
-                    analyticsDateRange,
-                    customStartDate,
-                    customEndDate
-                  )}
-                  . Counts are
-                  calculated from
-                  attendance and
-                  transaction
-                  records.
+                    : 'All libraries'}
+                  {' · '}
+                  {analyticsWindow.label}
                 </p>
               </div>
 
-              {analyticsDateRange ===
-                'custom' &&
-                (!customStartDate ||
-                  !customEndDate ||
-                  customStartDate >
-                    customEndDate) && (
-                  <p className="mb-4 border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                    Please select a
-                    valid custom date
-                    range.
-                  </p>
-                )}
+              {analyticsWindow.valid ? (
+                <Bar
+                  data={{
+                    labels:
+                      periodCounts.labels,
 
-              <Bar
-                data={{
-                  labels:
-                    analyticsChartData.labels,
+                    datasets: [
+                      {
+                        label:
+                          'Visitors',
 
-                  datasets: [
-                    {
-                      label: 'Visitors',
-                      data:
-                        analyticsChartData.visits,
-                      backgroundColor:
-                        '#0f766e',
-                    },
+                        data:
+                          periodCounts.visits,
 
-                    {
-                      label:
-                        'Book transactions',
-                      data:
-                        analyticsChartData.transactions,
-                      backgroundColor:
-                        '#d97706',
-                    },
-                  ],
-                }}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio:
-                    true,
+                        backgroundColor:
+                          '#0f766e',
+                      },
 
-                  plugins: {
-                    legend: {
-                      display: true,
-                    },
-                  },
+                      {
+                        label:
+                          'Book transactions',
 
-                  scales: {
-                    y: {
-                      beginAtZero: true,
+                        data:
+                          periodCounts.transactions,
 
-                      ticks: {
-                        precision: 0,
+                        backgroundColor:
+                          '#d97706',
+                      },
+                    ],
+                  }}
+                  options={{
+                    responsive: true,
+
+                    maintainAspectRatio:
+                      true,
+
+                    scales: {
+                      y: {
+                        beginAtZero: true,
+
+                        ticks: {
+                          precision: 0,
+                        },
                       },
                     },
-                  },
-                }}
-              />
 
-              <div className="mt-4">
+                    plugins: {
+                      legend: {
+                        display: true,
+                      },
+                    },
+                  }}
+                />
+              ) : (
+                <div className="border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
+                  Select a valid
+                  date range to
+                  display analytics.
+                </div>
+              )}
+
+              {/* --------------------------------------------------------- */}
+              {/* ANALYTICS METRICS                                        */}
+              {/* --------------------------------------------------------- */}
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <Metric
+                  label="Visitors"
+                  value={
+                    analyticsAttendance.length
+                  }
+                />
+
+                <Metric
+                  label="Book transactions"
+                  value={
+                    analyticsBorrows.length
+                  }
+                />
+
+                <Metric
+                  label="Active loans"
+                  value={
+                    analyticsBorrows.filter(
+                      (item) =>
+                        item.status ===
+                        'borrowed'
+                    ).length
+                  }
+                />
+              </div>
+
+              {/* --------------------------------------------------------- */}
+              {/* MOST REQUESTED CATEGORIES                                */}
+              {/* --------------------------------------------------------- */}
+
+              <div className="mt-5">
                 <h3 className="text-sm font-bold">
                   Most requested
                   categories
@@ -2502,7 +2394,7 @@ function AdminWorkspace({
                           key={
                             category
                           }
-                          className="flex justify-between"
+                          className="flex justify-between border-b border-slate-100 py-1"
                         >
                           <span>
                             {category}
@@ -2526,10 +2418,14 @@ function AdminWorkspace({
               </div>
             </div>
 
+            {/* ----------------------------------------------------------- */}
+            {/* RIGHT SIDE                                                   */}
+            {/* ----------------------------------------------------------- */}
+
             <aside className="space-y-4">
-              {/* ------------------------------------------------------------ */}
-              {/* Recommendations                                              */}
-              {/* ------------------------------------------------------------ */}
+              {/* --------------------------------------------------------- */}
+              {/* RECOMMENDATIONS                                            */}
+              {/* --------------------------------------------------------- */}
 
               <section className="border border-slate-200 bg-white p-4">
                 <h2 className="text-base font-bold">
@@ -2540,7 +2436,9 @@ function AdminWorkspace({
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-600">
                   {demandRecommendations.map(
                     (item) => (
-                      <li key={item}>
+                      <li
+                        key={item}
+                      >
                         {item}
                       </li>
                     )
@@ -2548,9 +2446,9 @@ function AdminWorkspace({
                 </ul>
               </section>
 
-              {/* ------------------------------------------------------------ */}
-              {/* Forecast                                                     */}
-              {/* ------------------------------------------------------------ */}
+              {/* --------------------------------------------------------- */}
+              {/* FORECAST                                                   */}
+              {/* --------------------------------------------------------- */}
 
               <section className="border border-slate-200 bg-white p-4">
                 <div className="flex items-center justify-between gap-3">
@@ -2565,10 +2463,7 @@ function AdminWorkspace({
                     }
                     disabled={
                       forecastLoading ||
-                      (analyticsAttendance.length ===
-                        0 &&
-                        analyticsBorrows.length ===
-                          0)
+                      !analyticsWindow.valid
                     }
                     className="bg-shelf-primary px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -2579,10 +2474,9 @@ function AdminWorkspace({
                 </div>
 
                 <p className="mt-2 text-xs text-slate-500">
-                  Forecast is based
-                  on the currently
-                  selected Analytics
-                  filters.
+                  Forecast input follows
+                  the selected analytics
+                  library and date range.
                 </p>
 
                 {forecast
@@ -2614,14 +2508,10 @@ function AdminWorkspace({
                     )}
                   </ol>
                 ) : (
-                  <p className="mt-2 text-xs text-slate-500">
-                    Select an
-                    Analytics scope
-                    and run the
-                    forecast to
-                    generate a
-                    seven-day
-                    visitor
+                  <p className="mt-3 text-xs text-slate-500">
+                    Run the forecast
+                    to generate a
+                    seven-day visitor
                     forecast.
                   </p>
                 )}
@@ -2667,9 +2557,9 @@ function AdminWorkspace({
         </section>
       )}
 
-      {/* =================================================================== */}
-      {/* FEEDBACK                                                            */}
-      {/* =================================================================== */}
+      {/* ================================================================= */}
+      {/* FEEDBACK                                                          */}
+      {/* ================================================================= */}
 
       {tab === 'feedback' && (
         <section className="space-y-3">
@@ -2698,9 +2588,13 @@ function AdminWorkspace({
                     </p>
 
                     <p className="text-xs text-slate-500">
-                      {item.visitor_name}{' '}
+                      {
+                        item.visitor_name
+                      }{' '}
                       ·{' '}
-                      {item.category}{' '}
+                      {
+                        item.category
+                      }{' '}
                       ·{' '}
                       {getLibraryName(
                         libraries,
@@ -2733,7 +2627,9 @@ function AdminWorkspace({
                     <strong>
                       Reply:
                     </strong>{' '}
-                    {item.admin_reply}
+                    {
+                      item.admin_reply
+                    }
                   </p>
                 )}
 
@@ -2749,7 +2645,9 @@ function AdminWorkspace({
                       event
                     ) =>
                       setFeedbackReply(
-                        (current) => ({
+                        (
+                          current
+                        ) => ({
                           ...current,
                           [item.id]:
                             event.target
@@ -2788,9 +2686,9 @@ function AdminWorkspace({
         </section>
       )}
 
-      {/* =================================================================== */}
-      {/* ANNOUNCEMENTS                                                       */}
-      {/* =================================================================== */}
+      {/* ================================================================= */}
+      {/* ANNOUNCEMENTS                                                     */}
+      {/* ================================================================= */}
 
       {tab === 'announcements' && (
         <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
@@ -2970,9 +2868,9 @@ function AdminWorkspace({
         </section>
       )}
 
-      {/* =================================================================== */}
-      {/* STAFF ACCOUNTS                                                      */}
-      {/* =================================================================== */}
+      {/* ================================================================= */}
+      {/* STAFF ACCOUNTS                                                    */}
+      {/* ================================================================= */}
 
       {tab === 'staff' &&
         !isSubAdmin && (
@@ -2983,13 +2881,15 @@ function AdminWorkspace({
               </h2>
 
               <p className="text-sm text-slate-500">
-                Staff records are loaded
-                directly from the
+                Staff records are
+                loaded directly
+                from the
                 <code className="mx-1 rounded bg-slate-100 px-1 py-0.5">
                   staff_profiles
                 </code>
-                table. Authentication is
-                handled by Supabase Auth.
+                table. Authentication
+                is handled by
+                Supabase Auth.
               </p>
             </div>
 
@@ -3005,10 +2905,11 @@ function AdminWorkspace({
                 </h3>
 
                 <p className="mt-1 text-xs text-slate-500">
-                  This creates a Supabase
-                  Auth account and its
-                  corresponding staff
-                  profile.
+                  This creates a
+                  Supabase Auth
+                  account and its
+                  corresponding
+                  staff profile.
                 </p>
               </div>
 
@@ -3081,7 +2982,8 @@ function AdminWorkspace({
                 />
 
                 <span className="mt-1 block text-xs font-normal text-slate-500">
-                  Minimum 10 characters.
+                  Minimum 10
+                  characters.
                 </span>
               </label>
 
@@ -3119,7 +3021,9 @@ function AdminWorkspace({
                           library.id
                         }
                       >
-                        {library.name}
+                        {
+                          library.name
+                        }
                       </option>
                     )
                   )}
@@ -3267,9 +3171,11 @@ function AdminWorkspace({
   );
 }
 
-// ============================================================================
-// Metric component
-// ============================================================================
+/*
+ * ============================================================================
+ * METRIC COMPONENT
+ * ============================================================================
+ */
 
 function Metric({
   label,
