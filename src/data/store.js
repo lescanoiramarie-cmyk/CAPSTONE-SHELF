@@ -487,12 +487,13 @@ export async function verifyVisitorOtp(
 
   const { data: profile, error: profileError } = await supabase
     .from('visitors')
-    .select('id, full_name, email, qr_code, otp_verified')
+    .select('id, full_name, email, qr_code, otp_verified, is_active')
     .eq('auth_user_id', data.user.id)
     .single();
 
-  if (profileError || !profile) {
-    throw cleanErr(profileError || new Error('Visitor profile was not created.'));
+  if (profileError || !profile || !profile.is_active || !profile.otp_verified || !profile.qr_code) {
+    await supabase.auth.signOut();
+    throw cleanErr(profileError || new Error('Visitor account is unverified or inactive.'));
   }
 
   return {
@@ -541,13 +542,13 @@ export async function loginVisitor({
 
   const { data: profile, error: profileError } = await supabase
     .from('visitors')
-    .select('id, full_name, email, qr_code, otp_verified')
+    .select('id, full_name, email, qr_code, otp_verified, is_active')
     .eq('auth_user_id', authUser.id)
     .single();
 
-  if (profileError || !profile) {
+  if (profileError || !profile || !profile.is_active || !profile.otp_verified || !profile.qr_code) {
     await supabase.auth.signOut();
-    throw cleanErr(profileError || new Error('Visitor profile was not found.'));
+    throw cleanErr(profileError || new Error('Visitor account is unverified or inactive.'));
   }
 
   return {

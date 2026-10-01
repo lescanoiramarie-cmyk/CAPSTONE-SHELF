@@ -21,10 +21,14 @@ registration uses Supabase Auth email OTP; enable email signup and email
 confirmation, then configure the email provider/template before testing.
 Existing visitor profiles are linked when a visitor signs up using the same
 email address; the security migration clears legacy plaintext passwords.
+The visitor QR is generated only after Auth confirms the six-digit email OTP;
+set Supabase Auth email OTP length to 6 and use an email template that renders
+`{{ .Token }}`.
 Run `schema.sql` once on a fresh database. For an existing pre-migration
-database, rerun it only to complete the base upgrade, then apply the security
-migration. Do not rerun the base schema after that migration; it reinstates
-the initial permissive demo policies.
+database, rerun it only to complete the base upgrade, then apply
+`20261002_security_features.sql` followed by
+`20261002_visitor_qr_activation.sql`. Do not rerun the base schema after those
+migrations; it reinstates the initial permissive demo policies.
 `src/data/store.js` contains most database operations and business actions,
 while `src/context/LibraryContext.jsx` loads data and subscribes to Supabase
 Realtime updates. Some dashboard operations also call Supabase directly.
@@ -82,9 +86,10 @@ replies from the library team.
 Attendance QR scans alternate between check-in and check-out for the active
 branch/day. The security migration adds branch-aware RLS, Auth-linked visitor
 profiles, personal books, reviews, audit logs, and a `pg_cron` job that expires
-24-hour holds every minute. Verify the scheduled job under Database → Cron
-after applying the migration. The migration rotates existing visitor QR passes;
-visitors should sign in and save their refreshed pass after it is applied.
+24-hour holds every minute. The QR activation follow-up withholds passes until
+email verification and rotates existing passes; visitors should sign in and
+save their refreshed pass after both migrations. Verify the scheduled job
+under Database → Cron.
 Deploy `visitor-qr-login` with `supabase functions deploy visitor-qr-login` and
 set the Edge Function secret `APP_ORIGIN` (or comma-separated `APP_ORIGINS`) to
 the exact deployed frontend origin so QR sign-in passes CORS.

@@ -65,7 +65,7 @@ Deno.serve(async (request: Request) => {
 
   const { data: visitor, error: visitorError } = await admin
     .from("visitors")
-    .select("auth_user_id, email, otp_verified")
+    .select("auth_user_id, email, otp_verified, is_active, qr_code")
     .eq("qr_code", qrCode)
     .maybeSingle();
 
@@ -73,7 +73,10 @@ Deno.serve(async (request: Request) => {
     visitorError ||
     !visitor?.auth_user_id ||
     !visitor.email ||
-    !visitor.otp_verified
+    !visitor.otp_verified ||
+    !visitor.is_active ||
+    !visitor.qr_code ||
+    visitor.qr_code !== qrCode
   ) {
     return respond(origin, 401, { error: "This QR pass could not be used to sign in." });
   }
@@ -84,7 +87,10 @@ Deno.serve(async (request: Request) => {
   if (
     accountError ||
     !account.user ||
-    account.user.user_metadata?.role !== "visitor"
+    account.user.user_metadata?.role !== "visitor" ||
+    !account.user.email_confirmed_at ||
+    (account.user.banned_until &&
+      Date.parse(account.user.banned_until) > Date.now())
   ) {
     return respond(origin, 401, { error: "This QR pass could not be used to sign in." });
   }
