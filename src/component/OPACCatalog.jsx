@@ -44,113 +44,6 @@ function formatDate(iso) {
 }
 
 // =========================================================
-// NORMALIZE OWNER COMMUNITY REQUEST (snake_case -> camelCase)
-// =========================================================
-
-function normalizeOwnerCommunityRequest(request) {
-  return {
-          ...request,
-
-          id: request.id,
-
-          bookId:
-            request.book_id ??
-            request.bookId ??
-            null,
-
-          bookTitle:
-            request.book_title ??
-            request.bookTitle ??
-            'Untitled Book',
-
-          ownerVisitorId:
-            request.owner_visitor_id ??
-            request.ownerVisitorId ??
-            null,
-
-          ownerName:
-            request.owner_name ??
-            request.ownerName ??
-            null,
-
-          requesterVisitorId:
-            request.requester_visitor_id ??
-            request.requesterVisitorId ??
-            null,
-
-          requesterName:
-            request.requester_name ??
-            request.requesterName ??
-            'SHELF Visitor',
-
-          status:
-            String(
-              request.status ?? 'pending'
-            )
-              .trim()
-              .toLowerCase(),
-
-          requestDate:
-            request.request_date ??
-            request.requestDate ??
-            null,
-
-          approvedAt:
-            request.approved_at ??
-            request.approvedAt ??
-            null,
-
-          rejectedAt:
-            request.rejected_at ??
-            request.rejectedAt ??
-            null,
-
-          ownerResponse:
-            request.owner_response ??
-            request.ownerResponse ??
-            null,
-
-          pickupDeadline:
-            request.pickup_deadline ??
-            request.pickupDeadline ??
-            null,
-
-          borrowDate:
-            request.borrow_date ??
-            request.borrowDate ??
-            null,
-
-          dueDate:
-            request.due_date ??
-            request.dueDate ??
-            null,
-
-          returnDate:
-            request.return_date ??
-            request.returnDate ??
-            null,
-
-          fineAmount:
-            request.fine_amount ??
-            request.fineAmount ??
-            0,
-
-          confirmedBy:
-            request.confirmed_by ??
-            request.confirmedBy ??
-            null,
-
-          returnConfirmedBy:
-            request.return_confirmed_by ??
-            request.returnConfirmedBy ??
-            null,
-
-          requestType: 'community',
-          isCommunityBook: true,
-};
-}
-
-// =========================================================
 // FINE CALCULATION
 // =========================================================
 
@@ -474,7 +367,106 @@ export default function OPACCatalog({
 if (!cancelled) {
   const normalizedRequests =
     Array.isArray(requests)
-      ? requests.map(normalizeOwnerCommunityRequest)
+      ? requests.map((request) => ({
+          ...request,
+
+          id: request.id,
+
+          bookId:
+            request.book_id ??
+            request.bookId ??
+            null,
+
+          bookTitle:
+            request.book_title ??
+            request.bookTitle ??
+            'Untitled Book',
+
+          ownerVisitorId:
+            request.owner_visitor_id ??
+            request.ownerVisitorId ??
+            null,
+
+          ownerName:
+            request.owner_name ??
+            request.ownerName ??
+            null,
+
+          requesterVisitorId:
+            request.requester_visitor_id ??
+            request.requesterVisitorId ??
+            null,
+
+          requesterName:
+            request.requester_name ??
+            request.requesterName ??
+            'SHELF Visitor',
+
+          status:
+            String(
+              request.status ?? 'pending'
+            )
+              .trim()
+              .toLowerCase(),
+
+          requestDate:
+            request.request_date ??
+            request.requestDate ??
+            null,
+
+          approvedAt:
+            request.approved_at ??
+            request.approvedAt ??
+            null,
+
+          rejectedAt:
+            request.rejected_at ??
+            request.rejectedAt ??
+            null,
+
+          ownerResponse:
+            request.owner_response ??
+            request.ownerResponse ??
+            null,
+
+          pickupDeadline:
+            request.pickup_deadline ??
+            request.pickupDeadline ??
+            null,
+
+          borrowDate:
+            request.borrow_date ??
+            request.borrowDate ??
+            null,
+
+          dueDate:
+            request.due_date ??
+            request.dueDate ??
+            null,
+
+          returnDate:
+            request.return_date ??
+            request.returnDate ??
+            null,
+
+          fineAmount:
+            request.fine_amount ??
+            request.fineAmount ??
+            0,
+
+          confirmedBy:
+            request.confirmed_by ??
+            request.confirmedBy ??
+            null,
+
+          returnConfirmedBy:
+            request.return_confirmed_by ??
+            request.returnConfirmedBy ??
+            null,
+
+          requestType: 'community',
+          isCommunityBook: true,
+        }))
       : [];
 
   console.log(
@@ -1566,9 +1558,7 @@ const myRequests = useMemo(() => {
     try {
       const requests = await fetchOwnerCommunityBookRequests(user.id);
       setOwnerCommunityRequests(
-        Array.isArray(requests)
-          ? requests.map(normalizeOwnerCommunityRequest)
-          : []
+        Array.isArray(requests) ? requests : []
       );
     } catch (error) {
       console.error('Reload owner community requests error:', error);
@@ -3232,6 +3222,9 @@ const handleConfirmCommunityBookReturn = async (request) => {
                                     ? 'Rejected'
                                     : 'Pending'}
 
+                            {/* TEMPORARY DEBUG */}
+<span className="rounded bg-red-100 px-2 py-1 text-[10px] font-bold text-red-700">
+  DEBUG: {JSON.stringify(request?.status)}
                           </span>
 
                         </div>
@@ -3716,6 +3709,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                                   ] ||
                                   request.status ||
                                   'Pending'
+                          )
                         : STATUS_LABELS[
                             request.status
                           ] ||
@@ -3944,9 +3938,6 @@ const handleConfirmCommunityBookReturn = async (request) => {
   )}
 
 </div>
-
-      )}
-
       {/* =====================================================
           REJECT COMMUNITY REQUEST MODAL
       ====================================================== */}
