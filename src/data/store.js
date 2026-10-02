@@ -437,60 +437,65 @@ export async function registerVisitor({
   address,
   password,
 }) {
-  const normalizedFullName =
-    String(fullName || '').trim();
-
-  const normalizedContactNumber =
-    String(contactNumber || '').trim();
-
-  const normalizedEmail =
-    String(email || '')
-      .trim()
-      .toLowerCase();
-
-  const normalizedAddress =
-    String(address || '').trim();
-
-  const normalizedPassword =
-    String(password || '');
+  const normalizedFullName = String(fullName || '').trim();
+  const normalizedContactNumber = String(contactNumber || '').trim();
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const normalizedAddress = String(address || '').trim();
+  const normalizedPassword = String(password || '');
 
   if (!normalizedFullName) {
-    throw new Error(
-      'Full name is required.'
-    );
+    throw new Error('Full name is required.');
   }
 
   if (!normalizedContactNumber) {
-    throw new Error(
-      'Contact number is required.'
-    );
+    throw new Error('Contact number is required.');
   }
 
   if (!normalizedEmail) {
-    throw new Error(
-      'Email address is required.'
-    );
+    throw new Error('Email address is required.');
   }
 
   if (!normalizedAddress) {
-    throw new Error(
-      'Address is required.'
-    );
+    throw new Error('Address is required.');
   }
 
   if (!normalizedPassword) {
-    throw new Error(
-      'Password is required.'
+    throw new Error('Password is required.');
+  }
+
+  // ------------------------------------------------------------
+  // 1. Check if this email already has a visitor profile
+  // ------------------------------------------------------------
+  const {
+    data: existingVisitor,
+    error: existingVisitorError,
+  } = await supabase
+    .from('visitors')
+    .select('id, auth_user_id, email, is_active')
+    .eq('email', normalizedEmail)
+    .maybeSingle();
+
+  if (existingVisitorError) {
+    console.error(
+      'CHECK EXISTING VISITOR ERROR:',
+      existingVisitorError
+    );
+
+    throw cleanErr(
+      existingVisitorError,
+      'Unable to check the visitor account.'
     );
   }
 
-  // ==========================================================================
-  // CREATE OR RESOLVE SUPABASE AUTH ACCOUNT
-  // ==========================================================================
+  if (existingVisitor?.id) {
+    throw new Error(
+      'A visitor account with this email already exists.'
+    );
+  }
 
-  let authUserId = '';
-  let existingAuthAccount = false;
-
+  // ------------------------------------------------------------
+  // 2. Create a NEW Supabase Auth account
+  // ------------------------------------------------------------
   const {
     data: authData,
     error: authError,
@@ -507,212 +512,53 @@ export async function registerVisitor({
     },
   });
 
-  // ==========================================================================
-  // HANDLE AUTH SIGN-UP RESULT
-  // ==========================================================================
-
   if (authError) {
-    const message =
-      String(
-        authError?.message || ''
-      ).toLowerCase();
+    console.error(
+      'SUPABASE AUTH REGISTRATION ERROR:',
+      authError
+    );
 
-    const duplicateAuthEmail =
+    const message = String(
+      authError?.message || ''
+    ).toLowerCase();
+
+    if (
       message.includes('already registered') ||
       message.includes('already exists') ||
-      message.includes('user already registered');
-
-    if (!duplicateAuthEmail) {
-      throw cleanErr(
-        authError,
-        'Unable to create the visitor account.'
+      message.includes('user already registered')
+    ) {
+      throw new Error(
+        'This email is already registered in the authentication system. Please use another email address.'
       );
     }
 
-    existingAuthAccount = true;
-  } else if (authData?.user?.id) {
-    authUserId =
-      String(
-        authData.user.id
-      ).trim();
+    throw cleanErr(
+      authError,
+      'Unable to create the visitor authentication account.'
+    );
+  }
 
-    /*
-     * Supabase may return an existing account
-     * with an empty identities array.
-     *
-     * This means the Auth account already exists.
-     * It does NOT mean a visitors row exists.
-     */
-    if (
-      Array.isArray(
-        authData.user.identities
-      ) &&
-      authData.user.identities.length === 0
-    ) {
-      existingAuthAccount = true;
-    }
-  } else {
+  if (!authData?.user?.id) {
     throw new Error(
       'Supabase Auth did not return a user account. Please try again.'
     );
   }
 
-  // ==========================================================================
-  // EXISTING AUTH ACCOUNT
-  // ==========================================================================
+  const authUserId = String(authData.user.id).trim();
 
-  if (existingAuthAccount) {
-    /*
-     * Authenticate the existing Auth account using
-     * the password entered during registration.
-     */
-
-    const {
-      data: existingAuthData,
-      error: existingAuthError,
-    } =
-      await supabase.auth.signInWithPassword({
-        email: normalizedEmail,
-        password: normalizedPassword,
-      });
-
-    if (
-      existingAuthError ||
-      !existingAuthData?.user?.id
-    ) {
-      const message =
-        String(
-          existingAuthError?.message || ''
-        ).toLowerCase();
-
-      try {
-        await supabase.auth.signOut();
-      } catch {
-        // Ignore cleanup errors.
-      }
-
-      if (
-        message.includes(
-          'email not confirmed'
-        )
-      ) {
-        throw new Error(
-          'This email account already exists but has not been confirmed.'
-        );
-      }
-
-      if (
-        message.includes(
-          'invalid login credentials'
-        )
-      ) {
-        throw new Error(
-          'This email is already registered. Please use the correct password or another email address.'
-        );
-      }
-
-      throw cleanErr(
-        existingAuthError,
-        'Unable to authenticate the existing email account.'
-      );
-    }
-
-    authUserId =
-      String(
-        existingAuthData.user.id
-      ).trim();
-
-    // ========================================================================
-    // CHECK WHETHER VISITOR PROFILE ALREADY EXISTS
-    // ========================================================================
-
-    const {
-      data: existingVisitor,
-      error: existingVisitorError,
-    } =
-      await supabase
-        .from('visitors')
-        .select(
-          'id, auth_user_id, email'
-        )
-        .eq(
-          'auth_user_id',
-          authUserId
-        )
-        .maybeSingle();
-
-    if (existingVisitorError) {
-      try {
-        await supabase.auth.signOut();
-      } catch {
-        // Ignore cleanup errors.
-      }
-
-      throw cleanErr(
-        existingVisitorError,
-        'Unable to check the existing visitor profile.'
-      );
-    }
-
-    /*
-     * ONLY a real visitors row makes this
-     * a duplicate SHELF visitor account.
-     */
-    if (existingVisitor?.id) {
-      try {
-        await supabase.auth.signOut();
-      } catch {
-        // Ignore cleanup errors.
-      }
-
-      throw new Error(
-        'A visitor account with this email already exists.'
-      );
-    }
-
-    /*
-     * Auth account exists but no visitor profile exists.
-     * Continue to register_visitor().
-     */
-  }
-
-  // ==========================================================================
-  // VERIFY AUTH USER ID
-  // ==========================================================================
-
-  if (!authUserId) {
-    throw new Error(
-      'Supabase Auth did not return a valid user ID.'
-    );
-  }
-
-  // ==========================================================================
-  // CREATE VISITOR PROFILE THROUGH RPC
-  // ==========================================================================
-
+  // ------------------------------------------------------------
+  // 3. Create the visitor profile
+  // ------------------------------------------------------------
   const {
     data: registrationData,
     error: registrationError,
-  } =
-    await supabase.rpc(
-      'register_visitor',
-      {
-        p_auth_user_id:
-          authUserId,
-
-        p_full_name:
-          normalizedFullName,
-
-        p_contact_number:
-          normalizedContactNumber,
-
-        p_email:
-          normalizedEmail,
-
-        p_address:
-          normalizedAddress,
-      }
-    );
+  } = await supabase.rpc('register_visitor', {
+    p_auth_user_id: authUserId,
+    p_full_name: normalizedFullName,
+    p_contact_number: normalizedContactNumber,
+    p_email: normalizedEmail,
+    p_address: normalizedAddress,
+  });
 
   if (registrationError) {
     console.error(
@@ -722,9 +568,7 @@ export async function registerVisitor({
 
     try {
       await supabase.auth.signOut();
-    } catch {
-      // Ignore cleanup errors.
-    }
+    } catch {}
 
     throw cleanErr(
       registrationError,
@@ -732,60 +576,43 @@ export async function registerVisitor({
     );
   }
 
-  // ==========================================================================
-  // GET VISITOR ID
-  // ==========================================================================
-
-  const row =
-    Array.isArray(
-      registrationData
-    )
-      ? registrationData[0]
-      : registrationData;
+  const row = Array.isArray(registrationData)
+    ? registrationData[0]
+    : registrationData;
 
   if (!row?.visitor_id) {
     try {
       await supabase.auth.signOut();
-    } catch {
-      // Ignore cleanup errors.
-    }
+    } catch {}
 
     throw new Error(
       'The visitor profile could not be created. Please try again.'
     );
   }
 
-  const visitorId =
-    String(
-      row.visitor_id
-    ).trim();
+  const visitorId = String(row.visitor_id).trim();
 
-  // ==========================================================================
-  // SIGN OUT AFTER REGISTRATION
-  // ==========================================================================
-
+  // ------------------------------------------------------------
+  // 4. Sign out before OTP verification
+  // ------------------------------------------------------------
   try {
     await supabase.auth.signOut();
-  } catch {
-    // Ignore cleanup errors.
-  }
+  } catch {}
 
-  // ==========================================================================
-  // SEND OTP EMAIL
-  // ==========================================================================
-
+  // ------------------------------------------------------------
+  // 5. Send OTP email
+  // ------------------------------------------------------------
   const {
     data: emailData,
     error: emailError,
-  } =
-    await supabase.functions.invoke(
-      'send-visitor-otp',
-      {
-        body: {
-          visitorId,
-        },
-      }
-    );
+  } = await supabase.functions.invoke(
+    'send-visitor-otp',
+    {
+      body: {
+        visitorId,
+      },
+    }
+  );
 
   if (emailError) {
     console.error(
