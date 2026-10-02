@@ -2290,6 +2290,140 @@ export async function addPersonalBook({
 }
 
 // ============================================================================
+// COMMUNITY BOOK REQUEST
+// ============================================================================
+
+export async function requestCommunityBook(
+  requesterVisitorId,
+  bookId
+) {
+  const normalizedRequesterId =
+    normalizeText(requesterVisitorId);
+
+  const normalizedBookId =
+    normalizeText(bookId);
+
+  if (!normalizedRequesterId) {
+    throw new Error(
+      'Visitor ID is required.'
+    );
+  }
+
+  if (
+    !isValidUuid(
+      normalizedRequesterId
+    )
+  ) {
+    throw new Error(
+      'Invalid visitor ID.'
+    );
+  }
+
+  if (!normalizedBookId) {
+    throw new Error(
+      'Book ID is required.'
+    );
+  }
+
+  if (
+    !isValidUuid(
+      normalizedBookId
+    )
+  ) {
+    throw new Error(
+      'Invalid book ID.'
+    );
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await supabase.rpc(
+      'request_community_book',
+      {
+        p_requester_visitor_id:
+          normalizedRequesterId,
+
+        p_book_id:
+          normalizedBookId,
+      }
+    );
+
+  if (error) {
+    console.error(
+      'COMMUNITY BOOK REQUEST RPC ERROR:',
+      {
+        code:
+          error?.code,
+
+        message:
+          error?.message,
+
+        details:
+          error?.details,
+
+        hint:
+          error?.hint,
+
+        requesterVisitorId:
+          normalizedRequesterId,
+
+        bookId:
+          normalizedBookId,
+      }
+    );
+
+    throw cleanErr(
+      error,
+      'Unable to request this community book.'
+    );
+  }
+
+  const row =
+    firstRow(data);
+
+  if (!row?.id) {
+    throw new Error(
+      'The community book request was not created.'
+    );
+  }
+
+  return {
+    id:
+      row.id,
+
+    bookId:
+      row.book_id,
+
+    bookTitle:
+      row.book_title,
+
+    ownerVisitorId:
+      row.owner_visitor_id,
+
+    ownerName:
+      row.owner_name,
+
+    requesterVisitorId:
+      row.requester_visitor_id,
+
+    requesterName:
+      row.requester_name,
+
+    status:
+      row.status,
+
+    requestDate:
+      row.request_date,
+
+    ownerResponse:
+      row.owner_response ||
+      null,
+  };
+}
+
+// ============================================================================
 // BULK BOOK UPLOAD
 // ============================================================================
 
