@@ -554,6 +554,10 @@ export async function registerVisitor({
   const normalizedPassword =
     asString(password);
 
+  // --------------------------------------------------------------------------
+  // VALIDATION
+  // --------------------------------------------------------------------------
+
   if (!normalizedFullName) {
     throw new Error(
       'Full name is required.'
@@ -585,7 +589,7 @@ export async function registerVisitor({
   }
 
   // --------------------------------------------------------------------------
-  // 1. CREATE SUPABASE AUTH ACCOUNT
+  // 1. CREATE / RESUME SUPABASE AUTH ACCOUNT
   // --------------------------------------------------------------------------
 
   const {
@@ -611,8 +615,9 @@ export async function registerVisitor({
     );
 
     const message =
-      normalizeText(authError?.message)
-        .toLowerCase();
+      normalizeText(
+        authError?.message
+      ).toLowerCase();
 
     if (
       message.includes('already registered') ||
@@ -641,7 +646,9 @@ export async function registerVisitor({
   }
 
   const authUserId =
-    normalizeText(authData.user.id);
+    normalizeText(
+      authData.user.id
+    );
 
   if (!isValidUuid(authUserId)) {
     await safeSignOut();
@@ -651,19 +658,38 @@ export async function registerVisitor({
     );
   }
 
-  if (
-    Array.isArray(authData.user.identities) &&
-    authData.user.identities.length === 0
-  ) {
-    await safeSignOut();
+  // IMPORTANT:
+  // DO NOT reject identities.length === 0 here.
+  //
+  // Supabase may return an existing Auth user with an empty identities array
+  // when the user is retrying a registration that has not completed SHELF OTP
+  // verification yet.
+  //
+  // The register_visitor RPC is responsible for determining whether the
+  // visitor is:
+  //
+  //   1. already verified      -> reject duplicate
+  //   2. pending/unverified    -> resume registration
+  //   3. completely new        -> create visitor
+  //
+  // --------------------------------------------------------------------------
 
-    throw new Error(
-      'This email is already registered. Please log in instead.'
-    );
-  }
+  console.log(
+    'SUPABASE AUTH USER FOR VISITOR REGISTRATION:',
+    {
+      authUserId,
+      email: normalizedEmail,
+      identities:
+        Array.isArray(
+          authData.user.identities
+        )
+          ? authData.user.identities.length
+          : null,
+    }
+  );
 
   // --------------------------------------------------------------------------
-  // 3. CREATE VISITOR PROFILE THROUGH RPC
+  // 3. CREATE OR RESUME VISITOR PROFILE THROUGH RPC
   // --------------------------------------------------------------------------
 
   const {
@@ -700,9 +726,16 @@ export async function registerVisitor({
         registrationError?.message
       ).toLowerCase();
 
+    // ------------------------------------------------------------------------
+    // EXISTING VERIFIED SHELF VISITOR
+    // ------------------------------------------------------------------------
+
     if (
       databaseMessage.includes(
-        'authentication account is already registered as a visitor'
+        'already registered as a shelf visitor'
+      ) ||
+      databaseMessage.includes(
+        'already registered as a visitor'
       )
     ) {
       await safeSignOut();
@@ -711,6 +744,10 @@ export async function registerVisitor({
         'This email is already registered as a SHELF visitor. Please log in instead.'
       );
     }
+
+    // ------------------------------------------------------------------------
+    // DUPLICATE EMAIL
+    // ------------------------------------------------------------------------
 
     if (
       databaseMessage.includes(
@@ -724,11 +761,15 @@ export async function registerVisitor({
       );
     }
 
+    // ------------------------------------------------------------------------
+    // OTHER DATABASE ERROR
+    // ------------------------------------------------------------------------
+
     await safeSignOut();
 
     throw cleanErr(
       registrationError,
-      'The authentication account was created, but the visitor profile could not be created.'
+      'The visitor authentication account was created, but the visitor profile could not be created.'
     );
   }
 
@@ -748,7 +789,9 @@ export async function registerVisitor({
   }
 
   const visitorId =
-    normalizeText(row.visitor_id);
+    normalizeText(
+      row.visitor_id
+    );
 
   if (!isValidUuid(visitorId)) {
     await safeSignOut();
@@ -758,6 +801,14 @@ export async function registerVisitor({
     );
   }
 
+  console.log(
+    'SHELF VISITOR REGISTRATION PROFILE READY:',
+    {
+      visitorId,
+      email: normalizedEmail,
+    }
+  );
+
   // --------------------------------------------------------------------------
   // 5. SIGN OUT BEFORE OTP VERIFICATION
   // --------------------------------------------------------------------------
@@ -765,7 +816,7 @@ export async function registerVisitor({
   await safeSignOut();
 
   // --------------------------------------------------------------------------
-  // 6. SEND OTP
+  // 6. SEND SHELF OTP
   // --------------------------------------------------------------------------
 
   const {
@@ -803,11 +854,14 @@ export async function registerVisitor({
     );
   }
 
+  // --------------------------------------------------------------------------
+  // 7. RETURN OTP REGISTRATION SESSION
+  // --------------------------------------------------------------------------
+
   return {
     visitorId,
   };
 }
-
 // ============================================================================
 // RESEND VISITOR OTP
 // ============================================================================
