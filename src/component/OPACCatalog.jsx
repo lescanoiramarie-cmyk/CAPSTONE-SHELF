@@ -911,31 +911,41 @@ export default function OPACCatalog({
       }
     );
 
-  // =========================================================
-  // MY REQUESTS
-  // =========================================================
+ // =========================================================
+// MY REQUESTS
+// =========================================================
 
-  const myRequests =
-    borrowRequests
-      .filter(
-        (request) =>
-          String(
-            request.visitorId
-          ) ===
-          String(
-            user?.id
-          )
-      )
-      .sort(
-        (a, b) =>
-          new Date(
-            b.requestDate || 0
-          ) -
-          new Date(
-            a.requestDate || 0
-          )
-      );
+const myRequests =
+  borrowRequests
+    .filter(
+      (request) => {
+        const requestVisitorId =
+          request?.visitorId ??
+          request?.requesterVisitorId ??
+          request?.requester_visitor_id ??
+          null;
 
+        const currentVisitorId =
+          user?.id ??
+          null;
+
+        return (
+          requestVisitorId &&
+          currentVisitorId &&
+          String(requestVisitorId).trim() ===
+            String(currentVisitorId).trim()
+        );
+      }
+    )
+    .sort(
+      (a, b) =>
+        new Date(
+          b?.requestDate || 0
+        ) -
+        new Date(
+          a?.requestDate || 0
+        )
+    );
   // =========================================================
   // PERSONAL BOOK SEARCH
   // =========================================================
