@@ -914,29 +914,55 @@ export default function OPACCatalog({
  // =========================================================
 // MY REQUESTS
 // =========================================================
+//
+// Library requests:
+//   - Must match the currently logged-in visitor.
+//
+// Community-book requests:
+//   - fetch_my_community_book_requests() already filters
+//     records by the current visitor on the Supabase side.
+//   - Therefore, do not require another user.id match here.
+//   - Keep pending, approved, rejected, and cancelled records
+//     visible in the request history.
+//
 
 const myRequests =
   borrowRequests
-    .filter(
-      (request) => {
-        const requestVisitorId =
-          request?.visitorId ??
-          request?.requesterVisitorId ??
-          request?.requester_visitor_id ??
-          null;
-
-        const currentVisitorId =
-          user?.id ??
-          null;
-
-        return (
-          requestVisitorId &&
-          currentVisitorId &&
-          String(requestVisitorId).trim() ===
-            String(currentVisitorId).trim()
-        );
+    .filter((request) => {
+      if (!request) {
+        return false;
       }
-    )
+
+      const isCommunityRequest =
+        request.isCommunityBook === true ||
+        request.requestType === 'community';
+
+      // Community-book requests are already scoped to
+      // the current visitor by the fetch RPC.
+      if (isCommunityRequest) {
+        return Boolean(request.id);
+      }
+
+      // Normal library borrow requests still need to
+      // belong to the currently logged-in visitor.
+      const requestVisitorId =
+        request?.visitorId ??
+        request?.visitor_id ??
+        null;
+
+      const currentVisitorId =
+        user?.id ??
+        user?.visitorId ??
+        user?.visitor_id ??
+        null;
+
+      return (
+        requestVisitorId &&
+        currentVisitorId &&
+        String(requestVisitorId).trim() ===
+          String(currentVisitorId).trim()
+      );
+    })
     .sort(
       (a, b) =>
         new Date(
@@ -946,6 +972,7 @@ const myRequests =
           a?.requestDate || 0
         )
     );
+  
   // =========================================================
   // PERSONAL BOOK SEARCH
   // =========================================================
@@ -2827,259 +2854,431 @@ const myRequests =
 
         </section>
       ) : (
-        /* =====================================================
-           MY REQUESTS
-        ====================================================== */
+/* =====================================================
+   MY REQUESTS
+====================================================== */
 
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+<div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
 
-          {myRequests.length ===
-          0 ? (
-            <p className="p-6 text-sm text-slate-500">
-              You have no borrow
-              requests yet. Browse
-              the catalog to get
-              started.
-            </p>
-          ) : (
-            <table className="w-full text-left text-sm">
+  {myRequests.length === 0 ? (
+    <p className="p-6 text-sm text-slate-500">
+      You have no borrow requests yet. Browse
+      the catalog to get started.
+    </p>
+  ) : (
+    <table className="w-full text-left text-sm">
 
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase tracking-wider">
+      <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase tracking-wider">
 
-                <tr>
+        <tr>
 
-                  <th className="p-4">
-                    Book Title
-                  </th>
+          <th className="p-4">
+            Book Title
+          </th>
 
-                  <th className="p-4">
-                    Status
-                  </th>
+          <th className="p-4">
+            Status
+          </th>
 
-                  <th className="p-4">
-                    Details
-                  </th>
+          <th className="p-4">
+            Details
+          </th>
 
-                  <th className="p-4">
-                    Fine (PHP)
-                  </th>
+          <th className="p-4">
+            Fine (PHP)
+          </th>
 
-                  <th className="p-4 text-right">
-                    Action
-                  </th>
+          <th className="p-4 text-right">
+            Action
+          </th>
 
-                </tr>
+        </tr>
 
-              </thead>
+      </thead>
 
-              <tbody className="divide-y divide-slate-100 text-slate-700">
+      <tbody className="divide-y divide-slate-100 text-slate-700">
 
-                {myRequests.map(
-                  (request) => {
-                    const currentFine =
-                      calculateCurrentFine(
-                        request
-                      );
+        {myRequests.map(
+          (request) => {
 
-                    const isOverdue =
-                      request.status ===
-                        'borrowed' &&
-                      currentFine >
-                        0;
+            const currentFine =
+              calculateCurrentFine(
+                request
+              );
 
-                    const overdueDays =
-                      request.dueDate &&
+            const isCommunityRequest =
+              request?.isCommunityBook === true ||
+              request?.requestType === 'community';
+
+            const isOverdue =
+              !isCommunityRequest &&
+              request.status ===
+                'borrowed' &&
+              currentFine > 0;
+
+            const overdueDays =
+              request.dueDate &&
+              isOverdue
+                ? calculateOverdueDays(
+                    request.dueDate
+                  )
+                : 0;
+
+            /*
+             * Normal library requests can be cancelled
+             * while queued or ready for pickup.
+             *
+             * Community requests use their own lifecycle,
+             * so do not send them through the normal
+             * cancel_borrow_request flow.
+             */
+            const canCancel =
+              !isCommunityRequest &&
+              [
+                'queued',
+                'ready_for_pickup',
+              ].includes(
+                request.status
+              );
+
+            const isCancelling =
+              cancellingRequestId ===
+              request.id;
+
+            const queuePosition =
+              request.queuePosition ??
+              request.queue_position ??
+              request.position;
+
+            return (
+              <tr
+                key={
+                  request.id
+                }
+                className="hover:bg-slate-50"
+              >
+
+                {/* =================================================
+                    BOOK TITLE
+                ================================================== */}
+
+                <td className="p-4 font-bold text-slate-800">
+
+                  <div className="flex flex-col gap-1">
+
+                    <span>
+                      {request.bookTitle ||
+                        'Untitled Book'}
+                    </span>
+
+                    {isCommunityRequest && (
+                      <span className="w-fit text-[10px] px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-bold uppercase tracking-wide">
+                        Community Book
+                      </span>
+                    )}
+
+                  </div>
+
+                </td>
+
+
+                {/* =================================================
+                    STATUS
+                ================================================== */}
+
+                <td className="p-4">
+
+                  <span
+                    className={`text-xs px-2.5 py-1 rounded-full font-bold ${
                       isOverdue
-                        ? calculateOverdueDays(
-                            request.dueDate
+                        ? 'bg-red-100 text-red-700'
+                        : STATUS_STYLES[
+                            request.status
+                          ] ||
+                          (
+                            isCommunityRequest &&
+                            request.status ===
+                              'pending'
                           )
-                        : 0;
-
-                    const canCancel =
-                      [
-                        'queued',
-                        'ready_for_pickup',
-                      ].includes(
-                        request.status
-                      );
-
-                    const isCancelling =
-                      cancellingRequestId ===
-                      request.id;
-
-                    const queuePosition =
-                      request.queuePosition ??
-                      request.queue_position ??
-                      request.position;
-
-                    return (
-                      <tr
-                        key={
-                          request.id
-                        }
-                        className="hover:bg-slate-50"
-                      >
-
-                        <td className="p-4 font-bold text-slate-800">
-                          {
-                            request.bookTitle
-                          }
-                        </td>
-
-                        <td className="p-4">
-
-                          <span
-                            className={`text-xs px-2.5 py-1 rounded-full font-bold ${
-                              isOverdue
+                            ? 'bg-amber-100 text-amber-700'
+                            : (
+                                isCommunityRequest &&
+                                request.status ===
+                                  'approved'
+                              )
+                              ? 'bg-green-100 text-green-700'
+                              : (
+                                  isCommunityRequest &&
+                                  request.status ===
+                                    'rejected'
+                                )
                                 ? 'bg-red-100 text-red-700'
-                                : STATUS_STYLES[
+                                : (
+                                    isCommunityRequest &&
+                                    request.status ===
+                                      'cancelled'
+                                  )
+                                  ? 'bg-slate-100 text-slate-600'
+                                  : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {isOverdue
+                      ? 'Overdue'
+                      : isCommunityRequest
+                        ? (
+                            request.status ===
+                            'pending'
+                          )
+                          ? 'Pending Approval'
+                          : (
+                              request.status ===
+                              'approved'
+                            )
+                            ? 'Approved'
+                            : (
+                                request.status ===
+                                'rejected'
+                              )
+                              ? 'Rejected'
+                              : (
+                                  request.status ===
+                                  'cancelled'
+                                )
+                                ? 'Cancelled'
+                                : STATUS_LABELS[
                                     request.status
                                   ] ||
-                                  'bg-slate-100 text-slate-600'
-                            }`}
-                          >
-                            {isOverdue
-                              ? 'Overdue'
-                              : STATUS_LABELS[
-                                  request.status
-                                ] ||
-                                request.status}
-                          </span>
+                                  request.status ||
+                                  'Pending'
+                          )
+                        : STATUS_LABELS[
+                            request.status
+                          ] ||
+                          request.status}
 
-                        </td>
+                  </span>
 
-                        <td className="p-4 text-xs text-slate-500 space-y-0.5">
+                </td>
 
-                          {request.status ===
-                            'queued' && (
-                            <p>
-                              Queue
-                              position:{' '}
-                              {queuePosition !==
-                                undefined &&
-                              queuePosition !==
-                                null
-                                ? `#${queuePosition}`
-                                : 'Pending'}
-                            </p>
-                          )}
 
-                          {request.status ===
-                            'ready_for_pickup' && (
-                            <>
-                              <p className="font-semibold text-amber-700">
-                                Ready for
-                                pickup.
-                              </p>
+                {/* =================================================
+                    DETAILS
+                ================================================== */}
 
-                              <p>
-                                Pick up
-                                by:{' '}
-                                {formatDateTime(
-                                  request.pickupDeadline
-                                )}
-                              </p>
+                <td className="p-4 text-xs text-slate-500 space-y-1">
 
-                              <p>
-                                Please
-                                scan
-                                your QR
-                                pass at
-                                the
-                                library.
-                              </p>
-                            </>
-                          )}
+                  {/* ---------------------------------------------
+                      COMMUNITY BOOK DETAILS
+                  ---------------------------------------------- */}
 
-                          {request.status ===
-                            'borrowed' && (
-                            <>
-                              <p>
-                                Due:{' '}
-                                {formatDate(
-                                  request.dueDate
-                                )}
-                              </p>
+                  {isCommunityRequest && (
+                    <>
 
-                              {isOverdue && (
-                                <p className="font-bold text-red-600">
-                                  Overdue
-                                  by{' '}
-                                  {
-                                    overdueDays
-                                  }{' '}
-                                  day
-                                  {overdueDays !==
-                                  1
-                                    ? 's'
-                                    : ''}
-                                </p>
-                              )}
-                            </>
-                          )}
+                      <p className="font-semibold text-violet-700">
+                        Community Book Request
+                      </p>
 
-                          {request.status ===
-                            'returned' && (
-                            <p>
-                              Returned:{' '}
-                              {formatDate(
-                                request.returnDate
-                              )}
-                            </p>
-                          )}
+                      <p>
+                        Requested:{' '}
+                        {request.requestDate
+                          ? formatDateTime(
+                              request.requestDate
+                            )
+                          : '—'}
+                      </p>
 
-                        </td>
+                      {request.ownerName && (
+                        <p>
+                          Owner:{' '}
+                          {request.ownerName}
+                        </p>
+                      )}
 
-                        <td
-                          className={`p-4 font-mono font-bold text-xs ${
-                            currentFine >
-                            0
-                              ? 'text-red-600'
-                              : 'text-slate-500'
-                          }`}
-                        >
-                          ₱
-                          {currentFine.toFixed(
-                            2
-                          )}
-                        </td>
+                      {request.status ===
+                        'pending' && (
+                        <p className="font-semibold text-amber-600">
+                          Waiting for the book owner
+                          to approve your request.
+                        </p>
+                      )}
 
-                        <td className="p-4 text-right">
+                      {request.status ===
+                        'approved' && (
+                        <p className="font-semibold text-green-600">
+                          Your request was approved
+                          by the book owner.
+                        </p>
+                      )}
 
-                          {canCancel && (
-                            <button
-                              type="button"
-                              disabled={Boolean(
-                                cancellingRequestId
-                              )}
-                              onClick={() =>
-                                handleCancel(
-                                  request.id
-                                )
-                              }
-                              className="bg-red-50 text-red-600 text-xs px-3 py-1.5 rounded-lg font-bold hover:bg-red-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {isCancelling
-                                ? 'Cancelling...'
-                                : 'Cancel'}
-                            </button>
-                          )}
+                      {request.status ===
+                        'rejected' && (
+                        <p className="font-semibold text-red-600">
+                          Your request was rejected
+                          by the book owner.
+                        </p>
+                      )}
 
-                        </td>
+                      {request.status ===
+                        'cancelled' && (
+                        <p className="font-semibold text-slate-500">
+                          This community book request
+                          was cancelled.
+                        </p>
+                      )}
 
-                      </tr>
-                    );
-                  }
-                )}
+                      {request.ownerResponse && (
+                        <p>
+                          Owner response:{' '}
+                          {request.ownerResponse}
+                        </p>
+                      )}
 
-              </tbody>
+                    </>
+                  )}
 
-            </table>
-          )}
 
-        </div>
-      )}
+                  {/* ---------------------------------------------
+                      NORMAL LIBRARY REQUEST DETAILS
+                  ---------------------------------------------- */}
 
+                  {!isCommunityRequest &&
+                    request.status ===
+                      'queued' && (
+                    <p>
+                      Queue position:{' '}
+                      {queuePosition !==
+                        undefined &&
+                      queuePosition !==
+                        null
+                        ? `#${queuePosition}`
+                        : 'Pending'}
+                    </p>
+                  )}
+
+
+                  {!isCommunityRequest &&
+                    request.status ===
+                      'ready_for_pickup' && (
+                    <>
+
+                      <p className="font-semibold text-amber-700">
+                        Ready for pickup.
+                      </p>
+
+                      <p>
+                        Pick up by:{' '}
+                        {formatDateTime(
+                          request.pickupDeadline
+                        )}
+                      </p>
+
+                      <p>
+                        Please scan your QR
+                        pass at the library.
+                      </p>
+
+                    </>
+                  )}
+
+
+                  {!isCommunityRequest &&
+                    request.status ===
+                      'borrowed' && (
+                    <>
+
+                      <p>
+                        Due:{' '}
+                        {formatDate(
+                          request.dueDate
+                        )}
+                      </p>
+
+                      {isOverdue && (
+                        <p className="font-bold text-red-600">
+                          Overdue by{' '}
+                          {overdueDays}{' '}
+                          day
+                          {overdueDays !==
+                          1
+                            ? 's'
+                            : ''}
+                        </p>
+                      )}
+
+                    </>
+                  )}
+
+
+                  {!isCommunityRequest &&
+                    request.status ===
+                      'returned' && (
+                    <p>
+                      Returned:{' '}
+                      {formatDate(
+                        request.returnDate
+                      )}
+                    </p>
+                  )}
+
+                </td>
+
+
+                {/* =================================================
+                    FINE
+                ================================================== */}
+
+                <td
+                  className={`p-4 font-mono font-bold text-xs ${
+                    currentFine > 0
+                      ? 'text-red-600'
+                      : 'text-slate-500'
+                  }`}
+                >
+                  ₱
+                  {currentFine.toFixed(
+                    2
+                  )}
+                </td>
+
+
+                {/* =================================================
+                    ACTION
+                ================================================== */}
+
+                <td className="p-4 text-right">
+
+                  {canCancel && (
+                    <button
+                      type="button"
+                      disabled={Boolean(
+                        cancellingRequestId
+                      )}
+                      onClick={() =>
+                        handleCancel(
+                          request.id
+                        )
+                      }
+                      className="bg-red-50 text-red-600 text-xs px-3 py-1.5 rounded-lg font-bold hover:bg-red-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isCancelling
+                        ? 'Cancelling...'
+                        : 'Cancel'}
+                    </button>
+                  )}
+
+                </td>
+
+              </tr>
+            );
+          }
+        )}
+
+      </tbody>
+
+    </table>
+  )}
+
+</div>
       {/* =====================================================
           REJECT COMMUNITY REQUEST MODAL
       ====================================================== */}
