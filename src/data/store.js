@@ -490,24 +490,14 @@ export async function registerVisitor({
     data: authData,
     error: authError,
   } = await supabase.auth.signUp({
-    email:
-      normalizedEmail,
-
-    password:
-      normalizedPassword,
-
+    email: normalizedEmail,
+    password: normalizedPassword,
     options: {
       data: {
         role: 'visitor',
-
-        full_name:
-          normalizedFullName,
-
-        contact_number:
-          normalizedContactNumber,
-
-        address:
-          normalizedAddress,
+        full_name: normalizedFullName,
+        contact_number: normalizedContactNumber,
+        address: normalizedAddress,
       },
     },
   });
@@ -523,23 +513,15 @@ export async function registerVisitor({
     );
 
     const message =
-      String(
-        authError?.message || ''
-      ).toLowerCase();
+      String(authError?.message || '').toLowerCase();
 
     if (
-      message.includes(
-        'already registered'
-      ) ||
-      message.includes(
-        'already exists'
-      ) ||
-      message.includes(
-        'user already registered'
-      )
+      message.includes('already registered') ||
+      message.includes('already exists') ||
+      message.includes('user already registered')
     ) {
       throw new Error(
-        'This email is already registered. Please use another email address.'
+        'This email is already registered. Please log in instead.'
       );
     }
 
@@ -559,32 +541,32 @@ export async function registerVisitor({
     );
   }
 
-  // Supabase can sometimes return an existing account
-  // with no identities instead of a normal duplicate error.
+  const authUserId =
+    String(authData.user.id).trim();
+
+  /*
+   * Supabase may return an existing Auth account from signUp()
+   * without throwing a normal "already registered" error.
+   *
+   * When that happens, identities can be empty.
+   */
   if (
-    Array.isArray(
-      authData.user.identities
-    ) &&
+    Array.isArray(authData.user.identities) &&
     authData.user.identities.length === 0
   ) {
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Ignore cleanup errors.
+    }
+
     throw new Error(
-      'This email is already registered. Please use another email address.'
+      'This email is already registered. Please log in instead.'
     );
   }
 
-  const authUserId =
-    String(
-      authData.user.id
-    ).trim();
-
   // ------------------------------------------------------------
   // 4. CREATE VISITOR PROFILE THROUGH RPC
-  //
-  // IMPORTANT:
-  // Do NOT query public.visitors directly here.
-  //
-  // register_visitor() is SECURITY DEFINER and performs
-  // the duplicate checks and INSERT on the server.
   // ------------------------------------------------------------
 
   const {
@@ -593,20 +575,11 @@ export async function registerVisitor({
   } = await supabase.rpc(
     'register_visitor',
     {
-      p_auth_user_id:
-        authUserId,
-
-      p_full_name:
-        normalizedFullName,
-
-      p_contact_number:
-        normalizedContactNumber,
-
-      p_email:
-        normalizedEmail,
-
-      p_address:
-        normalizedAddress,
+      p_auth_user_id: authUserId,
+      p_full_name: normalizedFullName,
+      p_contact_number: normalizedContactNumber,
+      p_email: normalizedEmail,
+      p_address: normalizedAddress,
     }
   );
 
@@ -616,8 +589,52 @@ export async function registerVisitor({
       registrationError
     );
 
-    // If the visitor profile could not be created,
-    // sign out the newly-created Auth session.
+    const databaseMessage =
+      String(
+        registrationError?.message || ''
+      ).trim();
+
+    /*
+     * IMPORTANT:
+     * Your current deployed PostgreSQL function raises:
+     *
+     * "This authentication account is already registered as a visitor."
+     *
+     * Convert that database exception into a clean application
+     * message instead of exposing P0001/PostgreSQL details.
+     */
+    if (
+      databaseMessage.toLowerCase().includes(
+        'authentication account is already registered as a visitor'
+      )
+    ) {
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // Ignore cleanup errors.
+      }
+
+      throw new Error(
+        'This email is already registered as a SHELF visitor. Please log in instead.'
+      );
+    }
+
+    if (
+      databaseMessage.toLowerCase().includes(
+        'visitor account with this email already exists'
+      )
+    ) {
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // Ignore cleanup errors.
+      }
+
+      throw new Error(
+        'This email is already registered as a SHELF visitor. Please log in instead.'
+      );
+    }
+
     try {
       await supabase.auth.signOut();
     } catch {
@@ -635,9 +652,7 @@ export async function registerVisitor({
   // ------------------------------------------------------------
 
   const row =
-    Array.isArray(
-      registrationData
-    )
+    Array.isArray(registrationData)
       ? registrationData[0]
       : registrationData;
 
@@ -654,9 +669,7 @@ export async function registerVisitor({
   }
 
   const visitorId =
-    String(
-      row.visitor_id
-    ).trim();
+    String(row.visitor_id).trim();
 
   // ------------------------------------------------------------
   // 6. SIGN OUT BEFORE OTP VERIFICATION
@@ -680,8 +693,7 @@ export async function registerVisitor({
       'send-visitor-otp',
       {
         body: {
-          visitorId:
-            visitorId,
+          visitorId,
         },
       }
     );
@@ -713,8 +725,7 @@ export async function registerVisitor({
   // ------------------------------------------------------------
 
   return {
-    visitorId:
-      visitorId,
+    visitorId,
   };
 }
 
@@ -885,9 +896,9 @@ export async function loginVisitor({
     );
   }
 
-  // ==========================================================================
+  // ========================================================================
   // QR LOGIN
-  // ==========================================================================
+  // ========================================================================
 
   const looksLikeQr =
     /^SHELF-QR-\d{6}$/i.test(
@@ -953,9 +964,9 @@ export async function loginVisitor({
     };
   }
 
-  // ==========================================================================
+  // ========================================================================
   // EMAIL + PASSWORD LOGIN
-  // ==========================================================================
+  // ========================================================================
 
   if (!normalizedPassword) {
     throw new Error(
@@ -1021,9 +1032,9 @@ export async function loginVisitor({
       authData.user.id
     ).trim();
 
-  // ==========================================================================
+  // ========================================================================
   // LOAD VISITOR PROFILE
-  // ==========================================================================
+  // ========================================================================
 
   const {
     data: visitor,
