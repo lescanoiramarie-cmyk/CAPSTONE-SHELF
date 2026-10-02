@@ -197,7 +197,8 @@ export default function VisitorLogin() {
 
   const [view, setView] = useState('login');
   const [error, setError] = useState('');
-  const [canResendVisitorOtp, setCanResendVisitorOtp] = useState(false);
+  const [canResendVisitorOtp, setCanResendVisitorOtp] =
+    useState(false);
 
   const [fieldErrors, setFieldErrors] = useState({
     fullName: '',
@@ -210,12 +211,19 @@ export default function VisitorLogin() {
     confirmPassword: '',
   });
 
-  const [showScanner, setShowScanner] =
-    useState(false);
+  const [showScanner, setShowScanner] = useState(false);
 
   const scannerRef = useRef(null);
-
   const fileInputRef = useRef(null);
+
+  // IMPORTANT:
+  // This is a synchronous lock.
+  // It prevents two submit events from entering
+  // registerVisitor before React has rendered again.
+  const registrationLockRef = useRef(false);
+
+  // Prevent repeated QR login attempts while a QR is being processed.
+  const qrLoginLockRef = useRef(false);
 
   const [isUploadingQr, setIsUploadingQr] =
     useState(false);
@@ -245,7 +253,6 @@ export default function VisitorLogin() {
     confirmPassword: '',
   });
 
-  // Structured registration location
   const [selectedProvince, setSelectedProvince] =
     useState('');
 
@@ -315,16 +322,39 @@ export default function VisitorLogin() {
   // CENTRALIZED QR LOGIN
   // =========================================================
 
-  const handleQrLogin = useCallback(async (decodedText) => {
-    const qrCode = String(decodedText || '').trim();
-    if (!qrCode) throw new Error('The QR code does not contain a visitor pass.');
+  const handleQrLogin = useCallback(
+    async (decodedText) => {
+      if (qrLoginLockRef.current) {
+        return;
+      }
 
-    await loginVisitor({ identifier: qrCode, password: '' });
-    navigate('/visitor');
-  }, [loginVisitor, navigate]);
+      const qrCode =
+        String(decodedText || '').trim();
+
+      if (!qrCode) {
+        throw new Error(
+          'The QR code does not contain a visitor pass.'
+        );
+      }
+
+      qrLoginLockRef.current = true;
+
+      try {
+        await loginVisitor({
+          identifier: qrCode,
+          password: '',
+        });
+
+        navigate('/visitor');
+      } finally {
+        qrLoginLockRef.current = false;
+      }
+    },
+    [loginVisitor, navigate]
+  );
 
   // =========================================================
-  // CAMERA QR SCANNER
+  // START CAMERA SCANNER
   // =========================================================
 
   const startScanner = () => {
@@ -332,33 +362,45 @@ export default function VisitorLogin() {
     setShowScanner(true);
   };
 
-  const stopScanner = async () => {
-    const scanner = scannerRef.current;
+  // =========================================================
+  // STOP CAMERA SCANNER
+  // =========================================================
 
-    scannerRef.current = null;
+  const stopScanner = useCallback(
+    async () => {
+      const scanner =
+        scannerRef.current;
 
-    if (scanner) {
-      try {
-        await scanner.stop();
-      } catch (err) {
-        console.warn(
-          'Scanner stop warning:',
-          err
-        );
+      scannerRef.current = null;
+
+      if (scanner) {
+        try {
+          await scanner.stop();
+        } catch (err) {
+          console.warn(
+            'Scanner stop warning:',
+            err
+          );
+        }
+
+        try {
+          await scanner.clear();
+        } catch (err) {
+          console.warn(
+            'Scanner clear warning:',
+            err
+          );
+        }
       }
 
-      try {
-        await scanner.clear();
-      } catch (err) {
-        console.warn(
-          'Scanner clear warning:',
-          err
-        );
-      }
-    }
+      setShowScanner(false);
+    },
+    []
+  );
 
-    setShowScanner(false);
-  };
+  // =========================================================
+  // CAMERA QR SCANNER EFFECT
+  // =========================================================
 
   useEffect(() => {
     if (!showScanner) {
@@ -367,15 +409,23 @@ export default function VisitorLogin() {
 
     let cancelled = false;
     let scanner = null;
+    let qrAlreadyProcessed = false;
 
     const startCameraScanner =
       async () => {
         try {
-          scanner = new Html5Qrcode(
-            'visitor-qr-reader'
-          );
+          scanner =
+            new Html5Qrcode(
+              'visitor-qr-reader'
+            );
 
           if (cancelled) {
+            try {
+              await scanner.clear();
+            } catch {
+              // Ignore cleanup errors.
+            }
+
             return;
           }
 
@@ -384,7 +434,8 @@ export default function VisitorLogin() {
 
           await scanner.start(
             {
-              facingMode: 'environment',
+              facingMode:
+                'environment',
             },
             {
               fps: 10,
@@ -394,18 +445,24 @@ export default function VisitorLogin() {
               },
             },
             async (decodedText) => {
-              if (cancelled) {
+              if (
+                cancelled ||
+                qrAlreadyProcessed
+              ) {
                 return;
               }
 
               const qrValue =
-                decodedText.trim();
+                String(
+                  decodedText || ''
+                ).trim();
 
               if (!qrValue) {
                 return;
               }
 
-              cancelled = true;
+              qrAlreadyProcessed =
+                true;
 
               try {
                 await scanner.stop();
@@ -428,7 +485,9 @@ export default function VisitorLogin() {
               scannerRef.current =
                 null;
 
-              setShowScanner(false);
+              if (!cancelled) {
+                setShowScanner(false);
+              }
 
               try {
                 await handleQrLogin(
@@ -440,14 +499,16 @@ export default function VisitorLogin() {
                   loginError
                 );
 
-                setError(
-                  loginError?.message ||
-                    'QR code was detected, but login failed.'
-                );
+                if (!cancelled) {
+                  setError(
+                    loginError?.message ||
+                      'QR code was detected, but login failed.'
+                  );
+                }
               }
             },
             () => {
-              // Continuous scan errors ignored.
+              // Continuous scanner errors are intentionally ignored.
             }
           );
         } catch (err) {
@@ -645,6 +706,10 @@ export default function VisitorLogin() {
         return;
       }
 
+      if (isUploadingQr) {
+        return;
+      }
+
       setError('');
       setIsUploadingQr(true);
 
@@ -653,7 +718,9 @@ export default function VisitorLogin() {
       try {
         if (
           !file.type ||
-          !file.type.startsWith('image/')
+          !file.type.startsWith(
+            'image/'
+          )
         ) {
           throw new Error(
             'Please upload a valid image containing your QR code.'
@@ -667,6 +734,7 @@ export default function VisitorLogin() {
 
         let decodedText = '';
 
+        // First attempt: original image.
         try {
           decodedText =
             await qrScanner.scanFile(
@@ -674,9 +742,10 @@ export default function VisitorLogin() {
               false
             );
         } catch {
-          // Fallback to enhanced image scan
+          // Continue to enhanced image fallback.
         }
 
+        // Second attempt: enhanced image.
         if (!decodedText) {
           try {
             const enhancedFile =
@@ -706,7 +775,9 @@ export default function VisitorLogin() {
         }
 
         const qrValue =
-          decodedText.trim();
+          String(
+            decodedText || ''
+          ).trim();
 
         if (!qrValue) {
           throw new Error(
@@ -714,17 +785,15 @@ export default function VisitorLogin() {
           );
         }
 
-        try {
-          await handleQrLogin(
-            qrValue
-          );
-        } catch (loginError) {
-          setError(
-            loginError?.message ||
-              'QR code was detected, but login failed.'
-          );
-        }
+        await handleQrLogin(
+          qrValue
+        );
       } catch (err) {
+        console.error(
+          'QR image login error:',
+          err
+        );
+
         setError(
           err?.message ||
             'Unable to read the QR code from the uploaded image.'
@@ -762,15 +831,21 @@ export default function VisitorLogin() {
     const identifier =
       loginData.identifier.trim();
 
+    const password =
+      loginData.password;
+
     if (!identifier) {
       setError(
-        'Please enter your email address.'
+        'Please enter your email address or visitor QR pass.'
       );
 
       return;
     }
 
-    if (identifier.includes('@') && !loginData.password) {
+    const isEmail =
+      identifier.includes('@');
+
+    if (isEmail && !password) {
       setError(
         'Please enter your password.'
       );
@@ -779,22 +854,25 @@ export default function VisitorLogin() {
     }
 
     try {
-      const result = await login({
-        identifier,
-        password:
-          loginData.password,
-      });
+      const result =
+        await login({
+          identifier,
+          password,
+        });
 
       if (
-        result?.role === 'visitor'
+        result?.role ===
+        'visitor'
       ) {
         navigate('/visitor');
       } else if (
-        result?.role === 'subadmin'
+        result?.role ===
+        'subadmin'
       ) {
         navigate('/subadmin');
       } else if (
-        result?.role === 'superadmin'
+        result?.role ===
+        'superadmin'
       ) {
         navigate('/superadmin');
       } else {
@@ -803,32 +881,63 @@ export default function VisitorLogin() {
         );
       }
     } catch (err) {
-      const message = String(err?.message || 'Invalid email/ID or password.');
-      if (message.toLowerCase().includes('email has not been confirmed') ||
-        message.toLowerCase().includes('email not confirmed')) {
-        setCanResendVisitorOtp(true);
-        setError('This visitor account has not confirmed its email. Request a new verification code to continue.');
+      const message = String(
+        err?.message ||
+          'Invalid email/ID or password.'
+      );
+
+      const lowerMessage =
+        message.toLowerCase();
+
+      if (
+        lowerMessage.includes(
+          'email has not been confirmed'
+        ) ||
+        lowerMessage.includes(
+          'email not confirmed'
+        ) ||
+        lowerMessage.includes(
+          'email is not confirmed'
+        )
+      ) {
+        setCanResendVisitorOtp(
+          true
+        );
+
+        setError(
+          'This visitor account has not confirmed its email. Request a new verification code to continue.'
+        );
       } else {
         setError(message);
       }
     }
   };
 
-  const handleResendUnconfirmedVisitorOtp = async () => {
-    const email = loginData.identifier.trim().toLowerCase();
+  // =========================================================
+  // UNCONFIRMED EMAIL MESSAGE
+  // =========================================================
 
-    if (!email.includes('@')) {
-      return;
-    }
+  const handleResendUnconfirmedVisitorOtp =
+    async () => {
+      const email =
+        loginData.identifier
+          .trim()
+          .toLowerCase();
 
-    setError('');
+      if (!email.includes('@')) {
+        return;
+      }
 
-    setCanResendVisitorOtp(false);
+      setError('');
 
-    setError(
-      'Please use the verification code from your visitor registration. If you no longer have the registration session, please register again.'
-    );
-  };
+      setCanResendVisitorOtp(
+        false
+      );
+
+      setError(
+        'Please use the verification code from your visitor registration. If you no longer have the registration session, please register again.'
+      );
+    };
 
   // =========================================================
   // REGISTRATION
@@ -838,6 +947,23 @@ export default function VisitorLogin() {
     event
   ) => {
     event.preventDefault();
+
+    // -------------------------------------------------------
+    // CRITICAL FIX:
+    // Prevent duplicate form submission immediately.
+    // useRef changes synchronously and does not wait for
+    // React's next render.
+    // -------------------------------------------------------
+
+    if (
+      registrationLockRef.current
+    ) {
+      console.warn(
+        'Visitor registration already in progress. Duplicate submission ignored.'
+      );
+
+      return;
+    }
 
     setError('');
 
@@ -854,17 +980,28 @@ export default function VisitorLogin() {
 
     const trimmedFullName =
       formData.fullName.trim();
+
     const trimmedContactNumber =
       formData.contactNumber.trim();
+
     const trimmedEmail =
       formData.email.trim();
+
     const trimmedBarangay =
       barangay.trim();
+
+    // -------------------------------------------------------
+    // FULL NAME
+    // -------------------------------------------------------
 
     if (!trimmedFullName) {
       errors.fullName =
         'Full name is required.';
     }
+
+    // -------------------------------------------------------
+    // CONTACT NUMBER
+    // -------------------------------------------------------
 
     if (!trimmedContactNumber) {
       errors.contactNumber =
@@ -878,6 +1015,10 @@ export default function VisitorLogin() {
         'Contact number must be exactly 11 digits and start with 09.';
     }
 
+    // -------------------------------------------------------
+    // EMAIL
+    // -------------------------------------------------------
+
     if (!trimmedEmail) {
       errors.email =
         'Email address is required.';
@@ -889,6 +1030,10 @@ export default function VisitorLogin() {
       errors.email =
         'Please enter a valid email address.';
     }
+
+    // -------------------------------------------------------
+    // LOCATION
+    // -------------------------------------------------------
 
     if (!selectedProvince) {
       errors.province =
@@ -905,13 +1050,23 @@ export default function VisitorLogin() {
         'Barangay is required.';
     }
 
+    // -------------------------------------------------------
+    // PASSWORD
+    // -------------------------------------------------------
+
     if (!formData.password) {
       errors.password =
         'Password is required.';
-    } else if (!isPasswordValid) {
+    } else if (
+      !isPasswordValid
+    ) {
       errors.password =
         'Password must be at least 12 characters and include uppercase, lowercase, number, and special character.';
     }
+
+    // -------------------------------------------------------
+    // CONFIRM PASSWORD
+    // -------------------------------------------------------
 
     if (!formData.confirmPassword) {
       errors.confirmPassword =
@@ -928,30 +1083,61 @@ export default function VisitorLogin() {
 
     const hasErrors =
       Object.values(errors).some(
-        (message) => message
+        (message) => Boolean(message)
       );
 
     if (hasErrors) {
       return;
     }
 
-    const completeAddress =
-      `${trimmedBarangay}, ${selectedCity}, ${selectedProvince}`;
+    // -------------------------------------------------------
+    // LOCK BEFORE ASYNC REQUEST
+    // -------------------------------------------------------
+
+    registrationLockRef.current =
+      true;
 
     setIsRegistering(true);
 
+    const completeAddress =
+      `${trimmedBarangay}, ${selectedCity}, ${selectedProvince}`;
+
     try {
+      console.log(
+        'VISITOR REGISTRATION STARTED:',
+        trimmedEmail
+      );
+
+      // IMPORTANT:
+      // Do not spread ...formData here.
+      // confirmPassword is frontend-only and should not
+      // be sent to the registration function.
       const result =
         await registerVisitor({
-          ...formData,
-          fullName: trimmedFullName,
+          fullName:
+            trimmedFullName,
+
           contactNumber:
             trimmedContactNumber,
-          email: trimmedEmail,
-          address: completeAddress,
+
+          email:
+            trimmedEmail,
+
+          address:
+            completeAddress,
+
+          password:
+            formData.password,
         });
 
-      if (!result?.visitorId) {
+      console.log(
+        'VISITOR REGISTRATION SUCCESS:',
+        result
+      );
+
+      if (
+        !result?.visitorId
+      ) {
         throw new Error(
           'Registration was created, but no registration session was returned. Please try again.'
         );
@@ -966,6 +1152,7 @@ export default function VisitorLogin() {
       );
 
       setOtpInput('');
+      setError('');
       setView('otp');
     } catch (err) {
       console.error(
@@ -981,10 +1168,23 @@ export default function VisitorLogin() {
         'Registration could not be completed. Please try again.';
 
       setError(
-        String(registrationMessage)
+        String(
+          registrationMessage
+        )
       );
     } finally {
+      // -----------------------------------------------------
+      // Always release the lock.
+      // -----------------------------------------------------
+
+      registrationLockRef.current =
+        false;
+
       setIsRegistering(false);
+
+      console.log(
+        'VISITOR REGISTRATION LOCK RELEASED'
+      );
     }
   };
 
@@ -1002,7 +1202,7 @@ export default function VisitorLogin() {
     const cleanOtp =
       otpInput.trim();
 
-    if (cleanOtp.length !== 6) {
+    if (!/^\d{6}$/.test(cleanOtp)) {
       setError(
         'Please enter the complete 6-digit verification code.'
       );
@@ -1031,6 +1231,11 @@ export default function VisitorLogin() {
 
       setView('success');
     } catch (err) {
+      console.error(
+        'VERIFY OTP ERROR:',
+        err
+      );
+
       setError(
         err?.message ||
           'Invalid or expired verification code.'
@@ -1065,6 +1270,11 @@ export default function VisitorLogin() {
           'A new verification code has been sent to your email.'
         );
       } catch (err) {
+        console.error(
+          'RESEND OTP ERROR:',
+          err
+        );
+
         setError(
           err?.message ||
             'Unable to resend verification code.'
@@ -1077,6 +1287,14 @@ export default function VisitorLogin() {
   // =========================================================
 
   const resetToLogin = () => {
+    // Release registration lock in case the user
+    // navigates away from the registration screen.
+    registrationLockRef.current =
+      false;
+
+    qrLoginLockRef.current =
+      false;
+
     setView('login');
     setError('');
 
@@ -1113,7 +1331,10 @@ export default function VisitorLogin() {
     setPendingVisitorId(null);
     setPendingEmail('');
     setRegisteredVisitor(null);
+
     setShowScanner(false);
+    setIsRegistering(false);
+    setCanResendVisitorOtp(false);
   };
 
   // =========================================================
@@ -1226,15 +1447,18 @@ export default function VisitorLogin() {
             </div>
           )}
 
-          {view === 'login' && canResendVisitorOtp && (
-            <button
-              type="button"
-              onClick={handleResendUnconfirmedVisitorOtp}
-              className="w-full text-xs font-semibold text-[#002046] hover:underline"
-            >
-              Resend Visitor Verification Code
-            </button>
-          )}
+          {view === 'login' &&
+            canResendVisitorOtp && (
+              <button
+                type="button"
+                onClick={
+                  handleResendUnconfirmedVisitorOtp
+                }
+                className="w-full text-xs font-semibold text-[#002046] hover:underline"
+              >
+                Resend Visitor Verification Code
+              </button>
+            )}
 
           {/* =================================================
               SUCCESS VIEW
@@ -1461,7 +1685,9 @@ export default function VisitorLogin() {
 
                 {fieldErrors.contactNumber && (
                   <p className="mt-1 text-[11px] font-medium text-red-600">
-                    {fieldErrors.contactNumber}
+                    {
+                      fieldErrors.contactNumber
+                    }
                   </p>
                 )}
               </div>
@@ -1474,7 +1700,7 @@ export default function VisitorLogin() {
                 </label>
 
                 <input
-                  type="text"
+                  type="email"
                   name="user_email"
                   autoComplete="off"
                   placeholder="visitor@email.com"
@@ -1507,9 +1733,7 @@ export default function VisitorLogin() {
                 )}
               </div>
 
-              {/* =================================================
-                  STRUCTURED LOCATION
-              ================================================= */}
+              {/* STRUCTURED LOCATION */}
 
               <div className="space-y-3">
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -1519,7 +1743,9 @@ export default function VisitorLogin() {
                 {/* PROVINCE */}
 
                 <select
-                  value={selectedProvince}
+                  value={
+                    selectedProvince
+                  }
                   onChange={(event) => {
                     const province =
                       event.target.value;
@@ -1574,7 +1800,9 @@ export default function VisitorLogin() {
                 {/* CITY / MUNICIPALITY */}
 
                 <select
-                  value={selectedCity}
+                  value={
+                    selectedCity
+                  }
                   onChange={(event) => {
                     setSelectedCity(
                       event.target.value
@@ -1816,7 +2044,8 @@ export default function VisitorLogin() {
                       });
                     }}
                     className={`w-full px-3 py-2 pr-12 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20 ${
-                      formData.confirmPassword
+                      formData
+                        .confirmPassword
                         .length > 0
                         ? passwordsMatch
                           ? 'border-green-400'
@@ -1844,7 +2073,9 @@ export default function VisitorLogin() {
 
                 {fieldErrors.confirmPassword && (
                   <p className="mt-1 text-[11px] font-medium text-red-600">
-                    {fieldErrors.confirmPassword}
+                    {
+                      fieldErrors.confirmPassword
+                    }
                   </p>
                 )}
               </div>
@@ -1853,7 +2084,12 @@ export default function VisitorLogin() {
 
               <button
                 type="submit"
-                disabled={isRegistering}
+                disabled={
+                  isRegistering
+                }
+                aria-busy={
+                  isRegistering
+                }
                 className="w-full bg-[#002046] text-white py-2.5 rounded-lg font-bold text-sm transition shadow-sm hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isRegistering
@@ -1935,7 +2171,10 @@ export default function VisitorLogin() {
                         loginData.identifier
                       }
                       onChange={(event) => {
-                        setCanResendVisitorOtp(false);
+                        setCanResendVisitorOtp(
+                          false
+                        );
+
                         setLoginData({
                           ...loginData,
                           identifier:
@@ -2076,6 +2315,9 @@ export default function VisitorLogin() {
                         type="button"
                         onClick={() => {
                           setError('');
+                          setCanResendVisitorOtp(
+                            false
+                          );
                           setView(
                             'register'
                           );
