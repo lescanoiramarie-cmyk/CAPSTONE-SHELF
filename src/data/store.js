@@ -267,10 +267,6 @@ const mapBook = (r) => ({
   coverUrl: r.cover_url,
   createdAt: r.created_at,
 
-  // --------------------------------------------------------------------------
-  // Personal / Community Book fields
-  // --------------------------------------------------------------------------
-
   bookType:
     r.book_type || 'library',
 
@@ -286,15 +282,12 @@ const mapBook = (r) => ({
   lendingPeriodDays:
     r.lending_period_days ?? 7,
 
-  // Community-book handover fields.
-  // These are independent of the library system.
   handoverMethod:
     r.handover_method || null,
 
   handoverDetails:
     r.handover_details || null,
 
-  // Backwards compatibility with older records/code.
   handoverLocation:
     r.handover_location || null,
 });
@@ -501,13 +494,6 @@ export async function fetchPersonalBooks(
 // ============================================================================
 // FETCH COMMUNITY BOOKS
 // ============================================================================
-//
-// Returns visitor-owned books that the owner has made available for lending.
-//
-// NOTE:
-// These books are NOT treated as library inventory.
-// They do not require a library_id or library handover location.
-// ============================================================================
 
 export async function fetchCommunityBooks() {
   const {
@@ -581,15 +567,6 @@ export async function fetchVisitors() {
 // ============================================================================
 // FETCH BORROW REQUESTS
 // ============================================================================
-//
-// Supports:
-//
-// 1. Supabase Auth session
-// 2. SHELF local visitor QR session
-//
-// QR login does not create a Supabase Auth session, so the visitor-specific
-// RPC is used for the local QR session.
-// ============================================================================
 
 export async function fetchBorrowRequests() {
   try {
@@ -604,10 +581,6 @@ export async function fetchBorrowRequests() {
         'Unable to check the current authentication session.'
       );
     }
-
-    // ------------------------------------------------------------------------
-    // SUPABASE AUTH SESSION
-    // ------------------------------------------------------------------------
 
     if (sessionData?.session) {
       const {
@@ -632,10 +605,6 @@ export async function fetchBorrowRequests() {
       );
     }
 
-    // ------------------------------------------------------------------------
-    // LOCAL SHELF VISITOR SESSION
-    // ------------------------------------------------------------------------
-
     let localSession = null;
 
     try {
@@ -654,10 +623,6 @@ export async function fetchBorrowRequests() {
         storageError
       );
     }
-
-    // ------------------------------------------------------------------------
-    // VISITOR-SPECIFIC RPC
-    // ------------------------------------------------------------------------
 
     if (
       localSession?.role === 'visitor' &&
@@ -834,10 +799,6 @@ export async function registerVisitor({
     );
   }
 
-  // --------------------------------------------------------------------------
-  // CREATE SUPABASE AUTH ACCOUNT
-  // --------------------------------------------------------------------------
-
   const {
     data: authData,
     error: authError,
@@ -912,24 +873,6 @@ export async function registerVisitor({
     );
   }
 
-  console.log(
-    'SUPABASE AUTH USER FOR VISITOR REGISTRATION:',
-    {
-      authUserId,
-      email: normalizedEmail,
-      identities:
-        Array.isArray(
-          authData.user.identities
-        )
-          ? authData.user.identities.length
-          : null,
-    }
-  );
-
-  // --------------------------------------------------------------------------
-  // CREATE VISITOR PROFILE
-  // --------------------------------------------------------------------------
-
   const {
     data: registrationData,
     error: registrationError,
@@ -959,29 +902,6 @@ export async function registerVisitor({
       'REGISTER VISITOR PROFILE ERROR:',
       registrationError
     );
-
-    const databaseMessage =
-      normalizeText(
-        registrationError?.message
-      ).toLowerCase();
-
-    if (
-      databaseMessage.includes(
-        'already registered as a shelf visitor'
-      ) ||
-      databaseMessage.includes(
-        'already registered as a visitor'
-      ) ||
-      databaseMessage.includes(
-        'visitor account with this email already exists'
-      )
-    ) {
-      await safeSignOut();
-
-      throw new Error(
-        'This email is already registered as a SHELF visitor. Please log in instead.'
-      );
-    }
 
     await safeSignOut();
 
@@ -1015,19 +935,7 @@ export async function registerVisitor({
     );
   }
 
-  console.log(
-    'SHELF VISITOR REGISTRATION PROFILE READY:',
-    {
-      visitorId,
-      email: normalizedEmail,
-    }
-  );
-
   await safeSignOut();
-
-  // --------------------------------------------------------------------------
-  // SEND OTP
-  // --------------------------------------------------------------------------
 
   const {
     data: emailData,
@@ -1048,59 +956,8 @@ export async function registerVisitor({
       emailError
     );
 
-    let detailedMessage =
-      'Your registration was created, but we could not send the verification email. Please try again.';
-
-    try {
-      const response =
-        emailError?.context;
-
-      if (response) {
-        const responseText =
-          typeof response?.text ===
-          'function'
-            ? await response.text()
-            : null;
-
-        if (responseText) {
-          try {
-            const parsed =
-              JSON.parse(
-                responseText
-              );
-
-            if (parsed?.error) {
-              detailedMessage =
-                String(
-                  parsed.error
-                );
-            } else if (
-              parsed?.message
-            ) {
-              detailedMessage =
-                String(
-                  parsed.message
-                );
-            }
-          } catch {
-            if (
-              responseText.trim()
-            ) {
-              detailedMessage =
-                responseText.trim();
-            }
-          }
-        }
-      }
-    } catch (readError) {
-      console.error(
-        'Could not read Edge Function error response:',
-        readError
-      );
-    }
-
     throw new Error(
-      detailedMessage
+      'Your registration was created, but we could not send the verification email. Please try again.'
     );
   }
 
@@ -1173,11 +1030,6 @@ export async function resendOtp(
     );
 
   if (emailError) {
-    console.error(
-      'RESEND VISITOR OTP ERROR:',
-      emailError
-    );
-
     throw new Error(
       'A new verification code was generated, but we could not send the email. Please try again.'
     );
@@ -1296,10 +1148,6 @@ export async function loginVisitor({
     );
   }
 
-  // --------------------------------------------------------------------------
-  // QR LOGIN
-  // --------------------------------------------------------------------------
-
   if (
     isValidShelfQr(
       normalizedIdentifier
@@ -1368,10 +1216,6 @@ export async function loginVisitor({
         visitor.qr_code,
     };
   }
-
-  // --------------------------------------------------------------------------
-  // EMAIL + PASSWORD LOGIN
-  // --------------------------------------------------------------------------
 
   if (!normalizedPassword) {
     throw new Error(
@@ -2002,67 +1846,48 @@ export async function addBook(
       .from('books')
       .insert({
         title,
-
         author,
-
         category:
           normalizeText(
             book?.category
           ) || 'General',
-
         isbn:
           normalizeText(
             book?.isbn
           ) || null,
-
         shelf_location:
           normalizeText(
             book?.shelfLocation
           ) || null,
-
         library_id:
           libraryId || null,
-
         total_copies:
           totalCopies,
-
         available_copies:
           totalCopies,
-
         summary:
           normalizeText(
             book?.summary
           ) || null,
-
         cover_url:
           normalizeText(
             book?.coverUrl
           ) ||
           DEFAULT_COVER_URL,
-
         book_type:
           'library',
-
         owner_visitor_id:
           null,
-
         lending_enabled:
           false,
-
         condition:
           null,
-
         lending_period_days:
           null,
-
-        // Old field kept null for compatibility.
         handover_location:
           null,
-
-        // New community-book fields.
         handover_method:
           null,
-
         handover_details:
           null,
       })
@@ -2078,12 +1903,6 @@ export async function addBook(
 
 // ============================================================================
 // PERSONAL BOOK — ADD
-// ============================================================================
-//
-// Personal/community books are owned by visitors.
-// They are NOT assigned to a library.
-//
-// Handover is arranged between the owner and borrower.
 // ============================================================================
 
 export async function addPersonalBook({
@@ -2253,22 +2072,7 @@ export async function addPersonalBook({
   if (error) {
     console.error(
       'ADD PERSONAL BOOK RPC ERROR:',
-      {
-        code:
-          error?.code,
-
-        message:
-          error?.message,
-
-        details:
-          error?.details,
-
-        hint:
-          error?.hint,
-
-        visitorId:
-          normalizedVisitorId,
-      }
+      error
     );
 
     throw cleanErr(
@@ -2292,16 +2096,49 @@ export async function addPersonalBook({
 // ============================================================================
 // COMMUNITY BOOK REQUEST
 // ============================================================================
+//
+// Separate from requestBorrow().
+//
+// requestBorrow() is ONLY for normal library books.
+//
+// Community books are visitor-owned books. Their request must first be sent
+// to the owner for approval.
+//
+// PostgreSQL RPC:
+//
+//   request_community_book(
+//      p_requester_visitor_id,
+//      p_book_id
+//   )
+//
+// Expected result:
+//
+//   id
+//   book_id
+//   book_title
+//   owner_visitor_id
+//   owner_name
+//   requester_visitor_id
+//   requester_name
+//   status
+//   request_date
+//   owner_response
+//
+// ============================================================================
 
 export async function requestCommunityBook(
   requesterVisitorId,
   bookId
 ) {
   const normalizedRequesterId =
-    normalizeText(requesterVisitorId);
+    normalizeText(
+      requesterVisitorId
+    );
 
   const normalizedBookId =
-    normalizeText(bookId);
+    normalizeText(
+      bookId
+    );
 
   if (!normalizedRequesterId) {
     throw new Error(
@@ -2309,7 +2146,11 @@ export async function requestCommunityBook(
     );
   }
 
-  if (!isValidUuid(normalizedRequesterId)) {
+  if (
+    !isValidUuid(
+      normalizedRequesterId
+    )
+  ) {
     throw new Error(
       'Invalid visitor ID.'
     );
@@ -2321,7 +2162,11 @@ export async function requestCommunityBook(
     );
   }
 
-  if (!isValidUuid(normalizedBookId)) {
+  if (
+    !isValidUuid(
+      normalizedBookId
+    )
+  ) {
     throw new Error(
       'Invalid book ID.'
     );
@@ -2330,30 +2175,146 @@ export async function requestCommunityBook(
   const {
     data,
     error,
-  } = await supabase.rpc(
-    'request_community_book',
-    {
-      p_requester_visitor_id:
-        normalizedRequesterId,
+  } =
+    await supabase.rpc(
+      'request_community_book',
+      {
+        p_requester_visitor_id:
+          normalizedRequesterId,
 
-      p_book_id:
-        normalizedBookId,
-    }
-  );
+        p_book_id:
+          normalizedBookId,
+      }
+    );
 
   if (error) {
     console.error(
       'COMMUNITY BOOK REQUEST RPC ERROR:',
-      error
+      {
+        code:
+          error?.code,
+
+        message:
+          error?.message,
+
+        details:
+          error?.details,
+
+        hint:
+          error?.hint,
+
+        requesterVisitorId:
+          normalizedRequesterId,
+
+        bookId:
+          normalizedBookId,
+      }
     );
+
+    const message =
+      normalizeText(
+        error?.message
+      );
+
+    const lowerMessage =
+      message.toLowerCase();
+
+    if (
+      lowerMessage.includes(
+        'already have an active request'
+      ) ||
+      lowerMessage.includes(
+        'already requested'
+      ) ||
+      lowerMessage.includes(
+        'duplicate'
+      )
+    ) {
+      throw new Error(
+        'You already have an active request for this community book.'
+      );
+    }
+
+    if (
+      lowerMessage.includes(
+        'cannot request your own'
+      ) ||
+      lowerMessage.includes(
+        'own personal book'
+      )
+    ) {
+      throw new Error(
+        'You cannot request your own personal book.'
+      );
+    }
+
+    if (
+      lowerMessage.includes(
+        'not available for community lending'
+      ) ||
+      lowerMessage.includes(
+        'not available for lending'
+      )
+    ) {
+      throw new Error(
+        'This community book is not currently available for lending.'
+      );
+    }
+
+    if (
+      lowerMessage.includes(
+        'not a community book'
+      )
+    ) {
+      throw new Error(
+        'This book is not a community book.'
+      );
+    }
+
+    if (
+      lowerMessage.includes(
+        'could not be found'
+      ) ||
+      lowerMessage.includes(
+        'book could not be found'
+      )
+    ) {
+      throw new Error(
+        'The selected community book could not be found.'
+      );
+    }
+
+    if (
+      lowerMessage.includes(
+        'visitor account could not be found'
+      ) ||
+      lowerMessage.includes(
+        'not verified'
+      )
+    ) {
+      throw new Error(
+        'Please verify your visitor account before requesting a community book.'
+      );
+    }
+
+    if (
+      lowerMessage.includes(
+        'uuid'
+      )
+    ) {
+      throw new Error(
+        'The visitor or book ID is invalid.'
+      );
+    }
 
     throw cleanErr(
       error,
-      'Unable to request this community book.'
+      'Unable to request this community book. Please try again.'
     );
   }
 
-  const row = firstRow(data);
+  const row =
+    firstRow(data);
 
   if (!row?.id) {
     throw new Error(
@@ -2361,17 +2322,47 @@ export async function requestCommunityBook(
     );
   }
 
+  if (
+    !isValidUuid(
+      row.id
+    )
+  ) {
+    throw new Error(
+      'The database returned an invalid community book request.'
+    );
+  }
+
   return {
-    id: row.id,
-    bookId: row.book_id,
-    bookTitle: row.book_title,
-    ownerVisitorId: row.owner_visitor_id,
-    ownerName: row.owner_name,
-    requesterVisitorId: row.requester_visitor_id,
-    requesterName: row.requester_name,
-    status: row.status,
-    requestDate: row.request_date,
-    ownerResponse: row.owner_response || null,
+    id:
+      row.id,
+
+    bookId:
+      row.book_id,
+
+    bookTitle:
+      row.book_title,
+
+    ownerVisitorId:
+      row.owner_visitor_id,
+
+    ownerName:
+      row.owner_name,
+
+    requesterVisitorId:
+      row.requester_visitor_id,
+
+    requesterName:
+      row.requester_name,
+
+    status:
+      row.status,
+
+    requestDate:
+      row.request_date,
+
+    ownerResponse:
+      row.owner_response ||
+      null,
   };
 }
 
@@ -2574,10 +2565,6 @@ export async function updateBook(
 
   const dbPatch = {};
 
-  // --------------------------------------------------------------------------
-  // STANDARD FIELDS
-  // --------------------------------------------------------------------------
-
   if (
     patch?.title !== undefined
   ) {
@@ -2726,10 +2713,6 @@ export async function updateBook(
       ) || DEFAULT_COVER_URL;
   }
 
-  // --------------------------------------------------------------------------
-  // PERSONAL / COMMUNITY BOOK FIELDS
-  // --------------------------------------------------------------------------
-
   if (
     patch?.bookType !== undefined
   ) {
@@ -2832,10 +2815,6 @@ export async function updateBook(
       lendingPeriodDays;
   }
 
-  // --------------------------------------------------------------------------
-  // NEW HANDOVER METHOD
-  // --------------------------------------------------------------------------
-
   if (
     patch?.handoverMethod !== undefined
   ) {
@@ -2859,10 +2838,6 @@ export async function updateBook(
       handoverMethod || null;
   }
 
-  // --------------------------------------------------------------------------
-  // NEW HANDOVER DETAILS
-  // --------------------------------------------------------------------------
-
   if (
     patch?.handoverDetails !== undefined
   ) {
@@ -2882,16 +2857,6 @@ export async function updateBook(
     dbPatch.handover_details =
       handoverDetails || null;
   }
-
-  // --------------------------------------------------------------------------
-  // LEGACY HANDOVER LOCATION
-  // --------------------------------------------------------------------------
-  //
-  // This is retained only for backwards compatibility.
-  // New personal/community books should use handoverMethod and
-  // handoverDetails instead.
-  //
-  // --------------------------------------------------------------------------
 
   if (
     patch?.handoverLocation !== undefined
@@ -3160,15 +3125,6 @@ export async function loadSampleCatalog(
 
 // ============================================================================
 // BORROW REQUEST — LIBRARY BOOKS
-// ============================================================================
-//
-// Uses:
-//
-//   request_borrow(p_visitor_id, p_book_id)
-//
-// IMPORTANT:
-// Personal/community books should use a separate owner-approval workflow.
-// This function remains for normal library books.
 // ============================================================================
 
 export async function requestBorrow(
