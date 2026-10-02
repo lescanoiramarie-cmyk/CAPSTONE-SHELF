@@ -145,6 +145,9 @@ export default function OPACCatalog({
     cancelBorrowRequest,
     addPersonalBook,
     requestCommunityBook,
+    fetchOwnerCommunityBookRequests,
+    approveCommunityBookRequest,
+    rejectCommunityBookRequest,
     PICKUP_WINDOW_HOURS,
     BORROW_PERIOD_DAYS,
   } = useLibrary();
@@ -212,6 +215,31 @@ export default function OPACCatalog({
     useState('');
 
   const [communityBookError, setCommunityBookError] =
+    useState('');
+
+  // =========================================================
+  // COMMUNITY BOOK OWNER REQUEST STATES
+  // =========================================================
+
+  const [ownerCommunityRequests, setOwnerCommunityRequests] =
+    useState([]);
+
+  const [loadingOwnerCommunityRequests, setLoadingOwnerCommunityRequests] =
+    useState(false);
+
+  const [ownerCommunityRequestError, setOwnerCommunityRequestError] =
+    useState('');
+
+  const [processingCommunityRequestId, setProcessingCommunityRequestId] =
+    useState(null);
+
+  const [showRejectCommunityRequest, setShowRejectCommunityRequest] =
+    useState(null);
+
+  const [communityRequestResponse, setCommunityRequestResponse] =
+    useState('');
+
+  const [communityRequestNotice, setCommunityRequestNotice] =
     useState('');
 
   const [showAddPersonalBook, setShowAddPersonalBook] =
@@ -296,6 +324,70 @@ export default function OPACCatalog({
     setLoadingPersonalBooks(false);
     setLoadingCommunityBooks(false);
   }, [personalBooks, communityBooks]);
+
+  // =========================================================
+  // LOAD COMMUNITY BOOK REQUESTS FOR THE OWNER
+  // =========================================================
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadOwnerCommunityRequests = async () => {
+      if (!user?.id) {
+        setOwnerCommunityRequests([]);
+        setLoadingOwnerCommunityRequests(false);
+        return;
+      }
+
+      if (typeof window !== 'undefined') {
+        // Keep the owner section tied to the currently logged-in visitor.
+        // The actual ownership check is also enforced by the RPC.
+      }
+
+      if (typeof fetchOwnerCommunityBookRequests !== 'function') {
+        if (!cancelled) {
+          setOwnerCommunityRequests([]);
+          setOwnerCommunityRequestError(
+            'Community book request service is not available. Please refresh the page.'
+          );
+        }
+        return;
+      }
+
+      setLoadingOwnerCommunityRequests(true);
+      setOwnerCommunityRequestError('');
+
+      try {
+        const requests = await fetchOwnerCommunityBookRequests(user.id);
+
+        if (!cancelled) {
+          setOwnerCommunityRequests(
+            Array.isArray(requests) ? requests : []
+          );
+        }
+      } catch (error) {
+        console.error('Load owner community requests error:', error);
+
+        if (!cancelled) {
+          setOwnerCommunityRequests([]);
+          setOwnerCommunityRequestError(
+            error?.message ||
+              'Unable to load community book requests.'
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingOwnerCommunityRequests(false);
+        }
+      }
+    };
+
+    loadOwnerCommunityRequests();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   // =========================================================
   // PERSONAL BOOK FORM HELPERS
@@ -1116,6 +1208,134 @@ export default function OPACCatalog({
       );
     } finally {
       setSubmittingCommunityRequest(false);
+    }
+  };
+
+  // =========================================================
+  // OWNER COMMUNITY BOOK REQUEST ACTIONS
+  // =========================================================
+
+  const reloadOwnerCommunityRequests = async () => {
+    if (!user?.id || typeof fetchOwnerCommunityBookRequests !== 'function') {
+      return;
+    }
+
+    try {
+      const requests = await fetchOwnerCommunityBookRequests(user.id);
+      setOwnerCommunityRequests(
+        Array.isArray(requests) ? requests : []
+      );
+    } catch (error) {
+      console.error('Reload owner community requests error:', error);
+    }
+  };
+
+  const handleApproveCommunityRequest = async (request) => {
+    if (!request?.id || !user?.id) {
+      setNotice('Unable to identify this community book request.');
+      return;
+    }
+
+    if (processingCommunityRequestId) {
+      return;
+    }
+
+    if (typeof approveCommunityBookRequest !== 'function') {
+      setNotice(
+        'Community book approval service is not available. Please refresh the page.'
+      );
+      return;
+    }
+
+    setProcessingCommunityRequestId(request.id);
+    setOwnerCommunityRequestError('');
+    setCommunityRequestNotice('');
+
+    try {
+      const result = await approveCommunityBookRequest(
+        request.id,
+        user.id,
+        null
+      );
+
+      if (!result?.id) {
+        throw new Error('The community book request could not be approved.');
+      }
+
+      setCommunityRequestNotice(
+        `Request for "${request.bookTitle}" was approved successfully.`
+      );
+
+      await reloadOwnerCommunityRequests();
+    } catch (error) {
+      console.error('Approve community request error:', error);
+      setOwnerCommunityRequestError(
+        error?.message ||
+          'Unable to approve the community book request. Please try again.'
+      );
+    } finally {
+      setProcessingCommunityRequestId(null);
+    }
+  };
+
+  const openRejectCommunityRequest = (request) => {
+    setShowRejectCommunityRequest(request);
+    setCommunityRequestResponse('');
+    setCommunityRequestNotice('');
+    setOwnerCommunityRequestError('');
+  };
+
+  const handleRejectCommunityRequest = async () => {
+    const request = showRejectCommunityRequest;
+
+    if (!request?.id || !user?.id) {
+      setOwnerCommunityRequestError(
+        'Unable to identify this community book request.'
+      );
+      return;
+    }
+
+    if (processingCommunityRequestId) {
+      return;
+    }
+
+    if (typeof rejectCommunityBookRequest !== 'function') {
+      setOwnerCommunityRequestError(
+        'Community book rejection service is not available. Please refresh the page.'
+      );
+      return;
+    }
+
+    setProcessingCommunityRequestId(request.id);
+    setOwnerCommunityRequestError('');
+    setCommunityRequestNotice('');
+
+    try {
+      const result = await rejectCommunityBookRequest(
+        request.id,
+        user.id,
+        communityRequestResponse.trim() || null
+      );
+
+      if (!result?.id) {
+        throw new Error('The community book request could not be rejected.');
+      }
+
+      setShowRejectCommunityRequest(null);
+      setCommunityRequestResponse('');
+      setCommunityRequestNotice(
+        `Request for "${request.bookTitle}" was rejected.`
+      );
+
+      await reloadOwnerCommunityRequests();
+    } catch (error) {
+      console.error('Reject community request error:', error);
+      setOwnerCommunityRequestError(
+        error?.message ||
+          'Unable to reject the community book request. Please try again.'
+      );
+    } finally {
+      setProcessingCommunityRequestId(null);
     }
   };
 
@@ -2390,6 +2610,143 @@ export default function OPACCatalog({
 
           </div>
 
+          {/* =====================================================
+              COMMUNITY BOOK REQUESTS FOR THIS OWNER
+          ====================================================== */}
+
+          <div className="rounded-xl border border-violet-200 bg-white shadow-sm overflow-hidden">
+
+            <div className="px-5 py-4 border-b border-violet-100 bg-violet-50">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-violet-900">
+                    Community Book Requests
+                  </h3>
+                  <p className="mt-1 text-xs text-violet-700">
+                    Review requests from visitors who want to borrow your personal books.
+                  </p>
+                </div>
+
+                {ownerCommunityRequests.length > 0 && (
+                  <span className="shrink-0 rounded-full bg-violet-600 px-2.5 py-1 text-[11px] font-bold text-white">
+                    {ownerCommunityRequests.length}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {ownerCommunityRequestError && (
+              <div className="mx-5 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
+                {ownerCommunityRequestError}
+              </div>
+            )}
+
+            {communityRequestNotice && (
+              <div className="mx-5 mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700">
+                {communityRequestNotice}
+              </div>
+            )}
+
+            {loadingOwnerCommunityRequests ? (
+              <div className="p-6 text-center">
+                <p className="text-xs text-slate-500">
+                  Loading community book requests...
+                </p>
+              </div>
+            ) : ownerCommunityRequests.length === 0 ? (
+              <div className="p-6 text-center">
+                <Users size={28} className="mx-auto text-slate-300" aria-hidden="true" />
+                <p className="mt-2 text-sm font-semibold text-slate-600">
+                  No community book requests yet.
+                </p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Requests from other visitors will appear here when they ask to borrow one of your books.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {ownerCommunityRequests.map((request) => {
+                  const status = String(request.status || '').toLowerCase();
+                  const isPending = status === 'pending';
+                  const isProcessing = processingCommunityRequestId === request.id;
+
+                  return (
+                    <div key={request.id} className="p-5">
+                      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded bg-violet-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-violet-700">
+                              Community Request
+                            </span>
+                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                              status === 'approved'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : status === 'rejected'
+                                  ? 'bg-red-100 text-red-700'
+                                  : 'bg-amber-100 text-amber-700'
+                            }`}>
+                              {status === 'approved'
+                                ? 'Approved'
+                                : status === 'rejected'
+                                  ? 'Rejected'
+                                  : 'Pending'}
+                            </span>
+                          </div>
+
+                          <h4 className="mt-2 text-sm font-bold text-slate-800">
+                            {request.bookTitle || 'Untitled Book'}
+                          </h4>
+
+                          <p className="mt-1 text-xs text-slate-500">
+                            Requested by <span className="font-semibold text-slate-700">{request.requesterName || 'SHELF Visitor'}</span>
+                          </p>
+
+                          <p className="mt-1 text-[11px] text-slate-400">
+                            Requested: {formatDateTime(request.requestDate)}
+                          </p>
+
+                          {request.ownerResponse && (
+                            <div className="mt-3 rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                Owner response
+                              </p>
+                              <p className="mt-1 text-xs text-slate-600">
+                                {request.ownerResponse}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+
+                        {isPending && (
+                          <div className="flex flex-col sm:flex-row gap-2 lg:min-w-[230px] lg:justify-end">
+                            <button
+                              type="button"
+                              disabled={Boolean(processingCommunityRequestId)}
+                              onClick={() => handleApproveCommunityRequest(request)}
+                              className="rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {isProcessing ? 'Processing...' : 'Approve Request'}
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={Boolean(processingCommunityRequestId)}
+                              onClick={() => openRejectCommunityRequest(request)}
+                              className="rounded-lg bg-red-50 px-4 py-2.5 text-xs font-bold text-red-600 hover:bg-red-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              Reject Request
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+          </div>
+
           {personalBookError && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
               {personalBookError}
@@ -2710,6 +3067,81 @@ export default function OPACCatalog({
             </table>
           )}
 
+        </div>
+      )}
+
+      {/* =====================================================
+          REJECT COMMUNITY REQUEST MODAL
+      ====================================================== */}
+
+      {showRejectCommunityRequest && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-200">
+            <div className="px-6 py-5 border-b border-slate-200 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-bold text-slate-800">
+                  Reject Community Book Request
+                </h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  {showRejectCommunityRequest.bookTitle || 'Community Book'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!processingCommunityRequestId) {
+                    setShowRejectCommunityRequest(null);
+                    setCommunityRequestResponse('');
+                  }
+                }}
+                className="text-slate-400 hover:text-slate-700"
+                aria-label="Close reject request dialog"
+              >
+                <X size={20} aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Reason / Response (Optional)
+                </label>
+                <textarea
+                  value={communityRequestResponse}
+                  onChange={(event) => setCommunityRequestResponse(event.target.value)}
+                  maxLength={500}
+                  rows={4}
+                  placeholder="Add a short message for the requester."
+                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20 resize-none"
+                />
+                <p className="mt-1 text-[10px] text-slate-400 text-right">
+                  {communityRequestResponse.length}/500
+                </p>
+              </div>
+
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={Boolean(processingCommunityRequestId)}
+                  onClick={() => {
+                    setShowRejectCommunityRequest(null);
+                    setCommunityRequestResponse('');
+                  }}
+                  className="px-4 py-2.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={Boolean(processingCommunityRequestId)}
+                  onClick={handleRejectCommunityRequest}
+                  className="px-4 py-2.5 rounded-lg bg-red-600 text-white text-xs font-bold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {processingCommunityRequestId ? 'Rejecting...' : 'Confirm Rejection'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
