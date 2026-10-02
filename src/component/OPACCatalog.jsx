@@ -2766,14 +2766,20 @@ export default function OPACCatalog({
   </label>
 
   <select
-    value={personalBookForm.category}
-    onChange={(event) =>
-      updatePersonalBookForm(
-        'category',
-        event.target.value
-      )
-    }
-    className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+    value={personalBookForm.category || ''}
+    onChange={(event) => {
+      console.log('CATEGORY SELECTED:', event.target.value);
+      updatePersonalBookForm('category', event.target.value);
+    }}
+    style={{
+      width: '100%',
+      padding: '10px 12px',
+      border: '1px solid #cbd5e1',
+      borderRadius: '8px',
+      backgroundColor: '#ffffff',
+      color: '#0f172a',
+      cursor: 'pointer',
+    }}
   >
     <option value="">Select a category</option>
     <option value="Fiction">Fiction</option>
