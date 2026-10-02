@@ -133,12 +133,13 @@ export default function OPACCatalog({
   const { user } = useAuth();
 
   const {
-    books = [],
-    borrowRequests = [],
-    libraries = [],
-    personalBooks = [],
-    communityBooks = [],
-  } = useLibraryData();
+  books = [],
+  borrowRequests = [],
+  libraries = [],
+  personalBooks = [],
+  communityBooks = [],
+  myCommunityBookRequests = [],
+} = useLibraryData();
 
   const {
     requestBorrow,
@@ -926,52 +927,237 @@ export default function OPACCatalog({
 //     visible in the request history.
 //
 
-const myRequests =
-  borrowRequests
-    .filter((request) => {
-      if (!request) {
-        return false;
-      }
+const myRequests = useMemo(() => {
+  // ========================================================================
+  // NORMAL LIBRARY BORROW REQUESTS
+  // ========================================================================
 
-      const isCommunityRequest =
-        request.isCommunityBook === true ||
-        request.requestType === 'community';
+  const normalRequests =
+    Array.isArray(borrowRequests)
+      ? borrowRequests.filter((request) => {
+          if (!request) {
+            return false;
+          }
 
-      // Community-book requests are already scoped to
-      // the current visitor by the fetch RPC.
-      if (isCommunityRequest) {
-        return Boolean(request.id);
-      }
+          const isCommunityRequest =
+            request.isCommunityBook === true ||
+            request.requestType === 'community';
 
-      // Normal library borrow requests still need to
-      // belong to the currently logged-in visitor.
-      const requestVisitorId =
-        request?.visitorId ??
-        request?.visitor_id ??
-        null;
+          // Community requests are handled separately below.
+          if (isCommunityRequest) {
+            return false;
+          }
 
-      const currentVisitorId =
-        user?.id ??
-        user?.visitorId ??
-        user?.visitor_id ??
-        null;
+          const requestVisitorId =
+            request?.visitorId ??
+            request?.visitor_id ??
+            null;
 
-      return (
-        requestVisitorId &&
-        currentVisitorId &&
-        String(requestVisitorId).trim() ===
-          String(currentVisitorId).trim()
-      );
-    })
-    .sort(
-      (a, b) =>
-        new Date(
-          b?.requestDate || 0
-        ) -
-        new Date(
-          a?.requestDate || 0
+          const currentVisitorId =
+            user?.id ??
+            user?.visitorId ??
+            user?.visitor_id ??
+            null;
+
+          if (
+            !requestVisitorId ||
+            !currentVisitorId
+          ) {
+            return false;
+          }
+
+          return (
+            String(requestVisitorId).trim() ===
+            String(currentVisitorId).trim()
+          );
+        })
+      : [];
+
+  // ========================================================================
+  // COMMUNITY BOOK REQUESTS
+  //
+  // Use the dedicated RPC result directly.
+  //
+  // This preserves:
+  //   pending
+  //   approved
+  //   rejected
+  //
+  // Nothing is removed based on status.
+  // ========================================================================
+
+  const communityRequests =
+    Array.isArray(myCommunityBookRequests)
+      ? myCommunityBookRequests
+          .filter(
+            (request) =>
+              request &&
+              request.id
+          )
+          .map((request) => ({
+            ...request,
+
+            id:
+              request.id,
+
+            bookId:
+              request.book_id ??
+              request.bookId ??
+              null,
+
+            bookTitle:
+              request.book_title ??
+              request.bookTitle ??
+              'Untitled Book',
+
+            visitorId:
+              request.requester_visitor_id ??
+              request.requesterVisitorId ??
+              user?.id ??
+              null,
+
+            visitorName:
+              request.requester_name ??
+              request.requesterName ??
+              user?.fullName ??
+              user?.full_name ??
+              'SHELF Visitor',
+
+            status:
+              String(
+                request.status ??
+                  'pending'
+              )
+                .trim()
+                .toLowerCase(),
+
+            requestDate:
+              request.request_date ??
+              request.requestDate ??
+              null,
+
+            ownerVisitorId:
+              request.owner_visitor_id ??
+              request.ownerVisitorId ??
+              null,
+
+            ownerName:
+              request.owner_name ??
+              request.ownerName ??
+              null,
+
+            ownerResponse:
+              request.owner_response ??
+              request.ownerResponse ??
+              null,
+
+            approvedAt:
+              request.approved_at ??
+              request.approvedAt ??
+              null,
+
+            rejectedAt:
+              request.rejected_at ??
+              request.rejectedAt ??
+              null,
+
+            // Mark this explicitly as a community request.
+            requestType:
+              'community',
+
+            isCommunityBook:
+              true,
+          }))
+      : [];
+
+  // ========================================================================
+  // COMBINE BOTH TYPES
+  // ========================================================================
+
+  const combinedRequests = [
+    ...normalRequests,
+    ...communityRequests,
+  ];
+
+  // ========================================================================
+  // REMOVE DUPLICATES
+  //
+  // A community request should appear only once even if it is also present
+  // in borrowRequests because of a realtime refresh or previous mapping.
+  // ========================================================================
+
+  const uniqueRequests = Array.from(
+    new Map(
+      combinedRequests
+        .filter(
+          (request) =>
+            request &&
+            request.id
         )
-    );
+        .map((request) => [
+          String(request.id),
+          request,
+        ])
+    ).values()
+  );
+
+  // ========================================================================
+  // NEWEST FIRST
+  // ========================================================================
+
+  uniqueRequests.sort(
+    (a, b) =>
+      new Date(
+        b?.requestDate ||
+          b?.request_date ||
+          0
+      ).getTime() -
+      new Date(
+        a?.requestDate ||
+          a?.request_date ||
+          0
+      ).getTime()
+  );
+
+  // ========================================================================
+  // DEBUG
+  // ========================================================================
+
+  console.log(
+    'SHELF — REQUESTS & BORROWS:',
+    {
+      normalRequests:
+        normalRequests.length,
+
+      communityRequests:
+        communityRequests.length,
+
+      totalRequests:
+        uniqueRequests.length,
+
+      communityStatuses:
+        communityRequests.map(
+          (request) => ({
+            id: request.id,
+            bookTitle:
+              request.bookTitle,
+            status:
+              request.status,
+          })
+        ),
+    }
+  );
+
+  return uniqueRequests;
+}, [
+  borrowRequests,
+  myCommunityBookRequests,
+  user?.id,
+  user?.visitorId,
+  user?.visitor_id,
+  user?.fullName,
+  user?.full_name,
+]);
   
   // =========================================================
   // PERSONAL BOOK SEARCH
