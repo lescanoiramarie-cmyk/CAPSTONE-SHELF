@@ -6,6 +6,21 @@ import { supabase } from '../lib/supabaseClient.js';
 
 const SESSION_KEY = 'shelf_ilms_session_v1';
 
+const notifyVisitorSessionChanged = () => {
+  try {
+    window.dispatchEvent(
+      new Event(
+        'shelf:visitor-session-changed'
+      )
+    );
+  } catch (error) {
+    console.warn(
+      'SHELF visitor session event failed:',
+      error
+    );
+  }
+};
+
 export const AuthProvider = ({ children }) => {
   // =========================================================
   // RESTORE SHELF SESSION
