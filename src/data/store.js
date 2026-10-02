@@ -488,8 +488,8 @@ export async function registerVisitor({
   // CREATE OR RESOLVE SUPABASE AUTH ACCOUNT
   // ==========================================================================
 
-  let authUser = null;
-  let isExistingAuthAccount = false;
+  let authUserId = '';
+  let existingAuthAccount = false;
 
   const {
     data: authData,
@@ -507,29 +507,9 @@ export async function registerVisitor({
     },
   });
 
-  // --------------------------------------------------------------------------
-  // NEW AUTH ACCOUNT
-  // --------------------------------------------------------------------------
-
-  if (
-    !authError &&
-    authData?.user?.id
-  ) {
-    authUser = authData.user;
-
-    // Supabase can return an existing email as a user with zero identities.
-    // That must be handled as an existing Auth account.
-    if (
-      Array.isArray(authUser.identities) &&
-      authUser.identities.length === 0
-    ) {
-      isExistingAuthAccount = true;
-    }
-  }
-
-  // --------------------------------------------------------------------------
-  // EXISTING AUTH ACCOUNT REPORTED AS AN ERROR
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // HANDLE AUTH SIGN-UP RESULT
+  // ==========================================================================
 
   if (authError) {
     const message =
@@ -537,34 +517,56 @@ export async function registerVisitor({
         authError?.message || ''
       ).toLowerCase();
 
-    const isDuplicateAuthEmail =
+    const duplicateAuthEmail =
       message.includes('already registered') ||
       message.includes('already exists') ||
       message.includes('user already registered');
 
-    if (!isDuplicateAuthEmail) {
+    if (!duplicateAuthEmail) {
       throw cleanErr(
         authError,
         'Unable to create the visitor account.'
       );
     }
 
-    isExistingAuthAccount = true;
+    existingAuthAccount = true;
+  } else if (authData?.user?.id) {
+    authUserId =
+      String(
+        authData.user.id
+      ).trim();
+
+    /*
+     * Supabase may return an existing account
+     * with an empty identities array.
+     *
+     * This means the Auth account already exists.
+     * It does NOT mean a visitors row exists.
+     */
+    if (
+      Array.isArray(
+        authData.user.identities
+      ) &&
+      authData.user.identities.length === 0
+    ) {
+      existingAuthAccount = true;
+    }
+  } else {
+    throw new Error(
+      'Supabase Auth did not return a user account. Please try again.'
+    );
   }
 
   // ==========================================================================
   // EXISTING AUTH ACCOUNT
   // ==========================================================================
-  //
-  // If Supabase Auth already has the email, authenticate using the password
-  // supplied by the user. This lets us safely distinguish:
-  //
-  //   existing Auth + existing visitor
-  //   existing Auth + no visitor
-  //
-  // ==========================================================================
 
-  if (isExistingAuthAccount) {
+  if (existingAuthAccount) {
+    /*
+     * Authenticate the existing Auth account using
+     * the password entered during registration.
+     */
+
     const {
       data: existingAuthData,
       error: existingAuthError,
@@ -574,20 +576,19 @@ export async function registerVisitor({
         password: normalizedPassword,
       });
 
-    if (existingAuthError) {
+    if (
+      existingAuthError ||
+      !existingAuthData?.user?.id
+    ) {
       const message =
         String(
           existingAuthError?.message || ''
         ).toLowerCase();
 
-      if (
-        message.includes(
-          'invalid login credentials'
-        )
-      ) {
-        throw new Error(
-          'An account with this email already exists. Please use the correct password or use another email address.'
-        );
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // Ignore cleanup errors.
       }
 
       if (
@@ -596,7 +597,17 @@ export async function registerVisitor({
         )
       ) {
         throw new Error(
-          'This email account already exists but has not been confirmed. Please verify the email account first.'
+          'This email account already exists but has not been confirmed.'
+        );
+      }
+
+      if (
+        message.includes(
+          'invalid login credentials'
+        )
+      ) {
+        throw new Error(
+          'This email is already registered. Please use the correct password or another email address.'
         );
       }
 
@@ -606,43 +617,15 @@ export async function registerVisitor({
       );
     }
 
-    if (!existingAuthData?.user?.id) {
-      throw new Error(
-        'The existing authentication account could not be loaded.'
-      );
-    }
+    authUserId =
+      String(
+        existingAuthData.user.id
+      ).trim();
 
-    authUser =
-      existingAuthData.user;
-  }
+    // ========================================================================
+    // CHECK WHETHER VISITOR PROFILE ALREADY EXISTS
+    // ========================================================================
 
-  // ==========================================================================
-  // VERIFY AUTH USER ID
-  // ==========================================================================
-
-  if (!authUser?.id) {
-    throw new Error(
-      'Supabase Auth did not return a user account. Please try again.'
-    );
-  }
-
-  const authUserId =
-    String(
-      authUser.id
-    ).trim();
-
-  // ==========================================================================
-  // CHECK EXISTING VISITOR PROFILE
-  // ==========================================================================
-  //
-  // This check is performed only for an existing Auth account.
-  //
-  // For a completely new Auth account, register_visitor() itself performs
-  // duplicate protection atomically.
-  //
-  // ==========================================================================
-
-  if (isExistingAuthAccount) {
     const {
       data: existingVisitor,
       error: existingVisitorError,
@@ -650,7 +633,7 @@ export async function registerVisitor({
       await supabase
         .from('visitors')
         .select(
-          'id, email, auth_user_id, otp_verified, is_active'
+          'id, auth_user_id, email'
         )
         .eq(
           'auth_user_id',
@@ -671,7 +654,11 @@ export async function registerVisitor({
       );
     }
 
-    if (existingVisitor) {
+    /*
+     * ONLY a real visitors row makes this
+     * a duplicate SHELF visitor account.
+     */
+    if (existingVisitor?.id) {
       try {
         await supabase.auth.signOut();
       } catch {
@@ -683,8 +670,20 @@ export async function registerVisitor({
       );
     }
 
-    // No visitor profile exists.
-    // Continue and connect this existing Auth account to SHELF.
+    /*
+     * Auth account exists but no visitor profile exists.
+     * Continue to register_visitor().
+     */
+  }
+
+  // ==========================================================================
+  // VERIFY AUTH USER ID
+  // ==========================================================================
+
+  if (!authUserId) {
+    throw new Error(
+      'Supabase Auth did not return a valid user ID.'
+    );
   }
 
   // ==========================================================================
@@ -733,6 +732,10 @@ export async function registerVisitor({
     );
   }
 
+  // ==========================================================================
+  // GET VISITOR ID
+  // ==========================================================================
+
   const row =
     Array.isArray(
       registrationData
@@ -768,7 +771,7 @@ export async function registerVisitor({
   }
 
   // ==========================================================================
-  // SEND OTP
+  // SEND OTP EMAIL
   // ==========================================================================
 
   const {
