@@ -821,6 +821,24 @@ export async function fetchBorrowRequests() {
   // 4. NORMALIZE COMMUNITY REQUESTS
   // --------------------------------------------------------------------------
 
+   // --------------------------------------------------------------------------
+  // 4. MAP COMMUNITY BOOK REQUESTS
+  // --------------------------------------------------------------------------
+  //
+  // IMPORTANT:
+  // Community requests are request-history records.
+  //
+  // Do NOT filter by status here.
+  //
+  // A request must remain visible after:
+  //   pending   → approved
+  //   pending   → rejected
+  //   pending   → cancelled
+  //
+  // The status is used by the UI to display the current state.
+  // It must NOT determine whether the request is included in the result.
+  // --------------------------------------------------------------------------
+
   const mappedCommunityRequests =
     communityRequests
       .filter(
@@ -854,25 +872,39 @@ export async function fetchBorrowRequests() {
           // ------------------------------------------------------------------
           // Book title
           // ------------------------------------------------------------------
+          //
+          // fetch_my_community_book_requests() already returns book_title.
+          // ------------------------------------------------------------------
 
           const bookTitle =
             request.book_title ||
             request.bookTitle ||
             request.title ||
-            'Community Book';
+            'Untitled Book';
 
           // ------------------------------------------------------------------
           // Request date
           // ------------------------------------------------------------------
+          //
+          // PostgreSQL RPC returns request_date.
+          // Keep it even after approve/reject.
+          // ------------------------------------------------------------------
 
           const requestDate =
             request.request_date ||
+            request.requestDate ||
             request.requested_at ||
+            request.requestedAt ||
             request.created_at ||
+            request.createdAt ||
             null;
 
           // ------------------------------------------------------------------
           // Status
+          // ------------------------------------------------------------------
+          //
+          // IMPORTANT:
+          // Do NOT convert approved/rejected back to pending.
           // ------------------------------------------------------------------
 
           const status =
@@ -884,11 +916,21 @@ export async function fetchBorrowRequests() {
           // ------------------------------------------------------------------
           // Requester
           // ------------------------------------------------------------------
+          //
+          // PostgreSQL RPC returns:
+          //   requester_visitor_id
+          //   requester_name
+          //
+          // These are mapped to the common request structure:
+          //   visitorId
+          //   visitorName
+          // ------------------------------------------------------------------
 
           const requesterVisitorId =
             request.requester_visitor_id ||
             request.requesterVisitorId ||
             request.visitor_id ||
+            request.visitorId ||
             normalizedVisitorId ||
             null;
 
@@ -901,7 +943,7 @@ export async function fetchBorrowRequests() {
             localSession?.user?.full_name ||
             localSession?.visitor?.fullName ||
             localSession?.visitor?.full_name ||
-            'You';
+            'SHELF Visitor';
 
           // ------------------------------------------------------------------
           // Owner
@@ -918,61 +960,94 @@ export async function fetchBorrowRequests() {
             null;
 
           // ------------------------------------------------------------------
+          // Request status timestamps
+          // ------------------------------------------------------------------
+
+          const approvedAt =
+            request.approved_at ||
+            request.approvedAt ||
+            null;
+
+          const rejectedAt =
+            request.rejected_at ||
+            request.rejectedAt ||
+            null;
+
+          // ------------------------------------------------------------------
+          // Owner response
+          // ------------------------------------------------------------------
+
+          const ownerResponse =
+            request.owner_response ||
+            request.ownerResponse ||
+            null;
+
+          // ------------------------------------------------------------------
           // Optional request information
           // ------------------------------------------------------------------
 
           const pickupDeadline =
             request.pickup_deadline ||
+            request.pickupDeadline ||
             null;
 
           const queuePosition =
             request.queue_position ??
+            request.queuePosition ??
             null;
 
           const borrowDate =
             request.borrow_date ||
+            request.borrowDate ||
             null;
 
           const dueDate =
             request.due_date ||
+            request.dueDate ||
             null;
 
           const returnDate =
             request.return_date ||
+            request.returnDate ||
             null;
 
           const fineAmount =
             Number(
               request.fine_amount ??
+              request.fineAmount ??
               0
             ) || 0;
 
           const confirmedBy =
             request.confirmed_by ||
+            request.confirmedBy ||
             null;
 
           const returnConfirmedBy =
             request.return_confirmed_by ||
+            request.returnConfirmedBy ||
             null;
 
           const cancelReason =
             request.cancel_reason ||
+            request.cancelReason ||
             request.reason ||
-            null;
-
-          const ownerResponse =
-            request.owner_response ||
             null;
 
           const lendingPeriodDays =
             request.lending_period_days ??
+            request.lendingPeriodDays ??
             null;
 
           // ------------------------------------------------------------------
-          // Return the same structure used by normal borrow requests.
+          // Return normalized community request.
           // ------------------------------------------------------------------
 
           return {
+            // --------------------------------------------------------------
+            // Common request fields
+            // --------------------------------------------------------------
+
             id:
               requestId,
 
@@ -1022,7 +1097,7 @@ export async function fetchBorrowRequests() {
               cancelReason,
 
             // --------------------------------------------------------------
-            // COMMUNITY REQUEST FLAGS
+            // Community request identification
             // --------------------------------------------------------------
 
             requestType:
@@ -1030,6 +1105,10 @@ export async function fetchBorrowRequests() {
 
             isCommunityBook:
               true,
+
+            // --------------------------------------------------------------
+            // Community-book-specific fields
+            // --------------------------------------------------------------
 
             ownerVisitorId:
               ownerVisitorId,
@@ -1039,6 +1118,12 @@ export async function fetchBorrowRequests() {
 
             ownerResponse:
               ownerResponse,
+
+            approvedAt:
+              approvedAt,
+
+            rejectedAt:
+              rejectedAt,
 
             lendingPeriodDays:
               lendingPeriodDays,
@@ -1082,9 +1167,11 @@ export async function fetchBorrowRequests() {
   // 7. REMOVE DUPLICATES
   // --------------------------------------------------------------------------
   //
-  // Community requests and normal requests should have different UUIDs.
-  // This prevents duplicate rendering if realtime/refresh causes the same
-  // request to appear more than once.
+  // IMPORTANT:
+  // Use the request UUID as the unique key.
+  //
+  // An approved/rejected community request still has the same UUID, so
+  // changing its status will NOT create or remove a different request.
   // --------------------------------------------------------------------------
 
   const uniqueRequests =
@@ -1093,7 +1180,8 @@ export async function fetchBorrowRequests() {
         mergedRequests
           .filter(
             (request) =>
-              request?.id
+              request &&
+              request.id
           )
           .map(
             (request) => [
@@ -1134,8 +1222,7 @@ export async function fetchBorrowRequests() {
   // 9. DEBUG INFORMATION
   // --------------------------------------------------------------------------
   //
-  // This is intentionally kept here while debugging so you can verify that
-  // the community request is actually reaching the frontend.
+  // This lets us verify that approved/rejected requests are still returned.
   // --------------------------------------------------------------------------
 
   console.log(
@@ -1154,12 +1241,43 @@ export async function fetchBorrowRequests() {
         uniqueRequests.length,
 
       communityRequestDetails:
-        mappedCommunityRequests,
+        mappedCommunityRequests.map(
+          (request) => ({
+            id:
+              request.id,
+
+            bookTitle:
+              request.bookTitle,
+
+            requesterName:
+              request.visitorName,
+
+            requesterVisitorId:
+              request.visitorId,
+
+            ownerName:
+              request.ownerName,
+
+            status:
+              request.status,
+
+            requestDate:
+              request.requestDate,
+
+            approvedAt:
+              request.approvedAt,
+
+            rejectedAt:
+              request.rejectedAt,
+
+            ownerResponse:
+              request.ownerResponse,
+          })
+        ),
     }
   );
 
   return uniqueRequests;
-}
 // ============================================================================
 // FETCH ATTENDANCE LOGS
 // ============================================================================
