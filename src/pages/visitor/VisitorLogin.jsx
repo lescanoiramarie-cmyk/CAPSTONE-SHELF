@@ -220,6 +220,9 @@ export default function VisitorLogin() {
   const [isUploadingQr, setIsUploadingQr] =
     useState(false);
 
+  const [isRegistering, setIsRegistering] =
+    useState(false);
+
   const [showLoginPassword, setShowLoginPassword] =
     useState(false);
 
@@ -813,19 +816,18 @@ export default function VisitorLogin() {
 
   const handleResendUnconfirmedVisitorOtp = async () => {
     const email = loginData.identifier.trim().toLowerCase();
-    if (!email.includes('@')) return;
+
+    if (!email.includes('@')) {
+      return;
+    }
 
     setError('');
-    try {
-      await resendVisitorOtp(email);
-      setPendingVisitorId(email);
-      setPendingEmail(email);
-      setOtpInput('');
-      setCanResendVisitorOtp(false);
-      setView('otp');
-    } catch (err) {
-      setError(err?.message || 'Unable to resend the verification code.');
-    }
+
+    setCanResendVisitorOtp(false);
+
+    setError(
+      'Please use the verification code from your visitor registration. If you no longer have the registration session, please register again.'
+    );
   };
 
   // =========================================================
@@ -936,6 +938,8 @@ export default function VisitorLogin() {
     const completeAddress =
       `${trimmedBarangay}, ${selectedCity}, ${selectedProvince}`;
 
+    setIsRegistering(true);
+
     try {
       const result =
         await registerVisitor({
@@ -946,6 +950,12 @@ export default function VisitorLogin() {
           email: trimmedEmail,
           address: completeAddress,
         });
+
+      if (!result?.visitorId) {
+        throw new Error(
+          'Registration was created, but no registration session was returned. Please try again.'
+        );
+      }
 
       setPendingVisitorId(
         result.visitorId
@@ -958,10 +968,23 @@ export default function VisitorLogin() {
       setOtpInput('');
       setView('otp');
     } catch (err) {
-      setError(
-        err?.message ||
-          'Registration failed.'
+      console.error(
+        'VISITOR REGISTRATION ERROR:',
+        err
       );
+
+      const registrationMessage =
+        err?.message ||
+        err?.error_description ||
+        err?.details ||
+        err?.hint ||
+        'Registration could not be completed. Please try again.';
+
+      setError(
+        String(registrationMessage)
+      );
+    } finally {
+      setIsRegistering(false);
     }
   };
 
@@ -1830,9 +1853,12 @@ export default function VisitorLogin() {
 
               <button
                 type="submit"
-                className="w-full bg-[#002046] text-white py-2.5 rounded-lg font-bold text-sm transition shadow-sm hover:opacity-95"
+                disabled={isRegistering}
+                className="w-full bg-[#002046] text-white py-2.5 rounded-lg font-bold text-sm transition shadow-sm hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Send Verification Code
+                {isRegistering
+                  ? 'Creating Account...'
+                  : 'Send Verification Code'}
               </button>
 
               <div className="text-center pt-2">
