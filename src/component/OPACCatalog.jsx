@@ -20,12 +20,6 @@ import {
 
 import LibraryMap from './LibraryMap.jsx';
 
-import {
-  addPersonalBook,
-  fetchCommunityBooks,
-  fetchPersonalBooks,
-} from '../data/store.js';
-
 import { supabase } from '../lib/supabaseClient.js';
 
 // =========================================================
@@ -142,11 +136,14 @@ export default function OPACCatalog({
     books = [],
     borrowRequests = [],
     libraries = [],
+    personalBooks = [],
+    communityBooks = [],
   } = useLibraryData();
 
   const {
     requestBorrow,
     cancelBorrowRequest,
+    addPersonalBook,
     PICKUP_WINDOW_HOURS,
     BORROW_PERIOD_DAYS,
   } = useLibrary();
@@ -201,12 +198,6 @@ export default function OPACCatalog({
   // PERSONAL / COMMUNITY BOOK STATES
   // =========================================================
 
-  const [personalBooks, setPersonalBooks] =
-    useState([]);
-
-  const [communityBooks, setCommunityBooks] =
-    useState([]);
-
   const [loadingPersonalBooks, setLoadingPersonalBooks] =
     useState(false);
 
@@ -238,7 +229,8 @@ export default function OPACCatalog({
       summary: '',
       condition: 'Good',
       lendingPeriodDays: 7,
-      handoverLocation: '',
+      handoverMethod: 'arrange_with_owner',
+      handoverDetails: '',
       lendingEnabled: true,
     });
 
@@ -289,85 +281,17 @@ export default function OPACCatalog({
   }, []);
 
   // =========================================================
-  // LOAD PERSONAL / COMMUNITY BOOKS
+  // PERSONAL / COMMUNITY BOOK DATA
+  // =========================================================
+  //
+  // LibraryProvider already loads these collections centrally.
+  // This component consumes them through useLibraryData().
   // =========================================================
 
-  const loadPersonalAndCommunityBooks = async () => {
-    setPersonalBookError('');
-    setCommunityBookError('');
-
-    // -------------------------------------------------------
-    // PERSONAL BOOKS
-    // -------------------------------------------------------
-
-    if (user?.id) {
-      setLoadingPersonalBooks(true);
-
-      try {
-        const personal = await fetchPersonalBooks(
-          user.id
-        );
-
-        setPersonalBooks(
-          Array.isArray(personal)
-            ? personal
-            : []
-        );
-      } catch (error) {
-        console.error(
-          'Error loading personal books:',
-          error
-        );
-
-        setPersonalBooks([]);
-
-        setPersonalBookError(
-          error?.message ||
-            'Unable to load your personal books.'
-        );
-      } finally {
-        setLoadingPersonalBooks(false);
-      }
-    } else {
-      setPersonalBooks([]);
-      setLoadingPersonalBooks(false);
-    }
-
-    // -------------------------------------------------------
-    // COMMUNITY BOOKS
-    // -------------------------------------------------------
-
-    setLoadingCommunityBooks(true);
-
-    try {
-      const community =
-        await fetchCommunityBooks();
-
-      setCommunityBooks(
-        Array.isArray(community)
-          ? community
-          : []
-      );
-    } catch (error) {
-      console.error(
-        'Error loading community books:',
-        error
-      );
-
-      setCommunityBooks([]);
-
-      setCommunityBookError(
-        error?.message ||
-          'Unable to load community books.'
-      );
-    } finally {
-      setLoadingCommunityBooks(false);
-    }
-  };
-
   useEffect(() => {
-    loadPersonalAndCommunityBooks();
-  }, [user?.id]);
+    setLoadingPersonalBooks(false);
+    setLoadingCommunityBooks(false);
+  }, [personalBooks, communityBooks]);
 
   // =========================================================
   // PERSONAL BOOK FORM HELPERS
@@ -392,7 +316,8 @@ export default function OPACCatalog({
       summary: '',
       condition: 'Good',
       lendingPeriodDays: 7,
-      handoverLocation: '',
+      handoverMethod: 'arrange_with_owner',
+      handoverDetails: '',
       lendingEnabled: true,
     });
   };
@@ -428,8 +353,13 @@ export default function OPACCatalog({
     const summary =
       personalBookForm.summary.trim();
 
-    const handoverLocation =
-      personalBookForm.handoverLocation.trim();
+    const handoverMethod =
+      String(
+        personalBookForm.handoverMethod || ''
+      ).trim();
+
+    const handoverDetails =
+      personalBookForm.handoverDetails.trim();
 
     const lendingPeriodDays =
       Number(
@@ -467,10 +397,17 @@ export default function OPACCatalog({
 
     if (
       personalBookForm.lendingEnabled &&
-      !handoverLocation
+      !handoverMethod
     ) {
       setNotice(
-        'Handover location is required when lending is enabled.'
+        'Please select a handover method when lending is enabled.'
+      );
+      return;
+    }
+
+    if (handoverDetails.length > 500) {
+      setNotice(
+        'Handover details must not exceed 500 characters.'
       );
       return;
     }
@@ -494,8 +431,10 @@ export default function OPACCatalog({
           condition:
             personalBookForm.condition,
           lendingPeriodDays,
-          handoverLocation:
-            handoverLocation || null,
+          handoverMethod:
+            handoverMethod || 'arrange_with_owner',
+          handoverDetails:
+            handoverDetails || null,
           lendingEnabled:
             Boolean(
               personalBookForm.lendingEnabled
@@ -507,11 +446,6 @@ export default function OPACCatalog({
           'The personal book was not created. Please try again.'
         );
       }
-
-      setPersonalBooks((current) => [
-        createdBook,
-        ...current,
-      ]);
 
       setShowAddPersonalBook(false);
       resetPersonalBookForm();
@@ -1326,6 +1260,21 @@ export default function OPACCatalog({
     };
 
   // =========================================================
+  // PERSONAL BOOK HANDOVER LABEL
+  // =========================================================
+
+  const getHandoverMethodLabel = (method) => {
+    const labels = {
+      arrange_with_owner: 'Arrange with Owner',
+      meet_in_person: 'Meet in Person',
+      public_place: 'Public Place',
+      courier: 'Courier / Delivery',
+    };
+
+    return labels[method] || 'Arrange with Owner';
+  };
+
+  // =========================================================
   // PERSONAL BOOK CARD
   // =========================================================
 
@@ -1425,28 +1374,37 @@ export default function OPACCatalog({
 
           </div>
 
-          {book.lendingEnabled &&
-            book.handoverLocation && (
-              <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-100 p-3">
+          {book.lendingEnabled && (
+            <div className="mt-3 rounded-lg bg-amber-50 border border-amber-100 p-3">
 
+              <div className="flex items-start gap-2">
                 <MapPin
                   size={15}
                   className="mt-0.5 shrink-0 text-amber-600"
                   aria-hidden="true"
                 />
 
-                <div>
+                <div className="min-w-0">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">
-                    Handover Location
+                    Handover Arrangement
                   </p>
 
-                  <p className="mt-0.5 text-xs text-slate-700">
-                    {book.handoverLocation}
+                  <p className="mt-0.5 text-xs font-semibold text-slate-700">
+                    {getHandoverMethodLabel(
+                      book.handoverMethod
+                    )}
                   </p>
+
+                  {book.handoverDetails && (
+                    <p className="mt-1 text-xs text-slate-600">
+                      {book.handoverDetails}
+                    </p>
+                  )}
                 </div>
-
               </div>
-            )}
+
+            </div>
+          )}
 
           {book.summary && (
             <div className="mt-3">
@@ -1562,7 +1520,8 @@ export default function OPACCatalog({
 
           </div>
 
-          {book.handoverLocation && (
+          {(book.handoverMethod ||
+            book.handoverDetails) && (
             <div className="mt-4 rounded-lg bg-slate-50 p-3">
 
               <div className="flex items-start gap-2">
@@ -1576,12 +1535,20 @@ export default function OPACCatalog({
                 <div>
 
                   <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
-                    Handover Location
+                    Handover Arrangement
                   </p>
 
                   <p className="text-xs font-semibold text-slate-700 mt-0.5">
-                    {book.handoverLocation}
+                    {getHandoverMethodLabel(
+                      book.handoverMethod
+                    )}
                   </p>
+
+                  {book.handoverDetails && (
+                    <p className="text-xs text-slate-600 mt-1">
+                      {book.handoverDetails}
+                    </p>
+                  )}
 
                 </div>
 
@@ -3025,29 +2992,65 @@ export default function OPACCatalog({
                     <div>
 
                       <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                        Handover Location *
+                        Handover Method *
                       </label>
 
-                      <input
-                        type="text"
+                      <select
                         value={
-                          personalBookForm.handoverLocation
+                          personalBookForm.handoverMethod
                         }
-                        onChange={(
-                          event
-                        ) =>
+                        onChange={(event) =>
                           updatePersonalBookForm(
-                            'handoverLocation',
-                            event.target
-                              .value
+                            'handoverMethod',
+                            event.target.value
                           )
                         }
-                        placeholder="e.g. SHELF Main Library"
-                        className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                        className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
                         required={
                           personalBookForm.lendingEnabled
                         }
+                      >
+                        <option value="arrange_with_owner">
+                          Arrange with Owner
+                        </option>
+                        <option value="meet_in_person">
+                          Meet in Person
+                        </option>
+                        <option value="public_place">
+                          Public Place
+                        </option>
+                        <option value="courier">
+                          Courier / Delivery
+                        </option>
+                      </select>
+
+                    </div>
+
+                    <div className="md:col-span-2">
+
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        Handover Details
+                      </label>
+
+                      <textarea
+                        value={
+                          personalBookForm.handoverDetails
+                        }
+                        onChange={(event) =>
+                          updatePersonalBookForm(
+                            'handoverDetails',
+                            event.target.value
+                          )
+                        }
+                        placeholder="Add instructions or details for arranging the handover."
+                        maxLength={500}
+                        rows={3}
+                        className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20 resize-none"
                       />
+
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Optional, maximum 500 characters. Handover is arranged directly between users, not through a library.
+                      </p>
 
                     </div>
 
@@ -3248,13 +3251,20 @@ export default function OPACCatalog({
                   <div className="sm:col-span-2">
 
                     <p className="text-[10px] text-violet-500 uppercase font-bold">
-                      Handover Location
+                      Handover Arrangement
                     </p>
 
                     <p className="text-xs font-semibold text-slate-700">
-                      {selectedBook.handoverLocation ||
-                        'Not specified'}
+                      {getHandoverMethodLabel(
+                        selectedBook.handoverMethod
+                      )}
                     </p>
+
+                    {selectedBook.handoverDetails && (
+                      <p className="mt-1 text-xs text-slate-600">
+                        {selectedBook.handoverDetails}
+                      </p>
+                    )}
 
                   </div>
 
