@@ -426,38 +426,160 @@ export async function fetchVisitors() {
 // ============================================================================
 // FETCH BORROW REQUESTS
 // ============================================================================
+//
+// Supports both SHELF authentication flows:
+//
+// 1. Supabase Auth session
+//    - Visitor email/password login
+//    - Staff/Admin login
+//
+// 2. SHELF local visitor session
+//    - Visitor QR login
+//
+// QR login does not create a Supabase Auth session.
+// Therefore, QR visitors use the protected
+// get_visitor_borrow_requests() PostgreSQL RPC.
+//
 
 export async function fetchBorrowRequests() {
-  const {
-    data: sessionData,
-    error: sessionError,
-  } = await supabase.auth.getSession();
+  try {
+    // ========================================================================
+    // 1. CHECK SUPABASE AUTH SESSION
+    // ========================================================================
 
-  if (sessionError) {
-    throw cleanErr(
-      sessionError,
-      'Unable to check the current authentication session.'
-    );
-  }
+    const {
+      data: sessionData,
+      error: sessionError,
+    } = await supabase.auth.getSession();
 
-  if (!sessionData?.session) {
+    if (sessionError) {
+      throw cleanErr(
+        sessionError,
+        'Unable to check the current authentication session.'
+      );
+    }
+
+    // ========================================================================
+    // 2. NORMAL SUPABASE AUTH SESSION
+    // ========================================================================
+    //
+    // Email/password visitor login and staff login have a real
+    // Supabase Auth session. Keep using the normal RLS-protected
+    // borrow_requests query for these users.
+    //
+
+    if (sessionData?.session) {
+      const {
+        data,
+        error,
+      } = await supabase
+        .from('borrow_requests')
+        .select('*')
+        .order('request_date', {
+          ascending: false,
+        });
+
+      if (error) {
+        throw cleanErr(
+          error,
+          'Unable to load borrow requests.'
+        );
+      }
+
+      return (data || []).map(
+        mapBorrowRequest
+      );
+    }
+
+    // ========================================================================
+    // 3. SHELF LOCAL VISITOR SESSION
+    // ========================================================================
+    //
+    // QR login creates this local session:
+    //
+    // shelf_ilms_session_v1
+    //
+    // Example:
+    //
+    // {
+    //   role: 'visitor',
+    //   id: 'b8561667-e47b-4519-a782-e95cefb360a7',
+    //   name: 'Kyle Cordero',
+    //   email: '25-63135@g.batstate-u.edu.ph',
+    //   qrCode: 'SHELF-QR-xxxxxx'
+    // }
+    //
+    // We DO NOT query borrow_requests directly as anon because
+    // the table has RLS enabled.
+    //
+    // Instead, the visitor-specific PostgreSQL RPC validates the
+    // visitor and returns only that visitor's requests.
+    //
+
+    let localSession = null;
+
+    try {
+      const rawSession =
+        globalThis.localStorage?.getItem(
+          'shelf_ilms_session_v1'
+        );
+
+      if (rawSession) {
+        localSession =
+          JSON.parse(rawSession);
+      }
+    } catch (storageError) {
+      console.error(
+        'Unable to read SHELF visitor session:',
+        storageError
+      );
+    }
+
+    // ========================================================================
+    // 4. VALIDATE LOCAL VISITOR SESSION
+    // ========================================================================
+
+    if (
+      localSession?.role === 'visitor' &&
+      isValidUuid(localSession?.id)
+    ) {
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'get_visitor_borrow_requests',
+        {
+          p_visitor_id:
+            localSession.id,
+        }
+      );
+
+      if (error) {
+        throw cleanErr(
+          error,
+          'Unable to load your borrow requests.'
+        );
+      }
+
+      return (data || []).map(
+        mapBorrowRequest
+      );
+    }
+
+    // ========================================================================
+    // 5. NO ACTIVE SESSION
+    // ========================================================================
+
     return [];
+  } catch (error) {
+    console.error(
+      'FETCH BORROW REQUESTS ERROR:',
+      error
+    );
+
+    throw error;
   }
-
-  const { data, error } = await supabase
-    .from('borrow_requests')
-    .select('*')
-    .order('request_date', {
-      ascending: false,
-    });
-
-  if (error) {
-    throw cleanErr(error);
-  }
-
-  return (data || []).map(mapBorrowRequest);
 }
-
 // ============================================================================
 // FETCH ATTENDANCE LOGS
 // ============================================================================
