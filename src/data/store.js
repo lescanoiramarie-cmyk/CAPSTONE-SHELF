@@ -29,92 +29,77 @@ export const SUB_ADMIN_CREDENTIALS = [
   {
     email: 'malvar.admin@shelf.edu',
     name: 'Malvar Campus Sub-Admin',
-    libraryId:
-      '277829af-1475-47ae-9e26-4b64c68f54f4',
+    libraryId: '277829af-1475-47ae-9e26-4b64c68f54f4',
   },
   {
     email: 'lipa.admin@shelf.edu',
     name: 'Lipa Campus Sub-Admin',
-    libraryId:
-      '3ccf575d-4573-4ed9-acdb-c8d9cf8a949e',
+    libraryId: '3ccf575d-4573-4ed9-acdb-c8d9cf8a949e',
   },
   {
     email: 'lemery.admin@shelf.edu',
     name: 'Lemery Campus Sub-Admin',
-    libraryId:
-      '41dec6e1-28cd-4057-a046-982269698cdc',
+    libraryId: '41dec6e1-28cd-4057-a046-982269698cdc',
   },
   {
     email: 'sanjuan.admin@shelf.edu',
     name: 'San Juan Campus Sub-Admin',
-    libraryId:
-      '4226ff5c-21f1-48bd-9cf8-a5a272c81e3d',
+    libraryId: '4226ff5c-21f1-48bd-9cf8-a5a272c81e3d',
   },
   {
     email: 'mabini.admin@shelf.edu',
     name: 'Mabini Campus Sub-Admin',
-    libraryId:
-      '66ea1120-0789-410f-bb87-ae22d115ce1e',
+    libraryId: '66ea1120-0789-410f-bb87-ae22d115ce1e',
   },
   {
     email: 'nasugbu.admin@shelf.edu',
     name: 'Nasugbu Campus Sub-Admin',
-    libraryId:
-      '67487fb6-6988-433c-aeef-9b770f59f010',
+    libraryId: '67487fb6-6988-433c-aeef-9b770f59f010',
   },
   {
     email: 'batangascity.admin@shelf.edu',
     name: 'Batangas City Library Staff',
-    libraryId:
-      '78c0a005-06cd-48f5-92d2-daa06fe36e12',
+    libraryId: '78c0a005-06cd-48f5-92d2-daa06fe36e12',
   },
   {
     email: 'lobo.admin@shelf.edu',
     name: 'Lobo Campus Sub-Admin',
-    libraryId:
-      '7c23ab9b-b42d-4420-b5b7-fdc71c49792a',
+    libraryId: '7c23ab9b-b42d-4420-b5b7-fdc71c49792a',
   },
   {
     email: 'alangilan.admin@shelf.edu',
     name: 'Alangilan Campus Sub-Admin',
-    libraryId:
-      '84819f90-5923-4bd8-8aa0-1805e7613e81',
+    libraryId: '84819f90-5923-4bd8-8aa0-1805e7613e81',
   },
   {
     email: 'balayan.admin@shelf.edu',
     name: 'Balayan Campus Sub-Admin',
-    libraryId:
-      '971893c8-5670-46b5-833c-398b2968ad1c',
+    libraryId: '971893c8-5670-46b5-833c-398b2968ad1c',
   },
   {
     email: 'provincial.admin@shelf.edu',
     name: 'Provincial Library Staff',
-    libraryId:
-      '9c82c34b-6059-47e1-983a-d03755cb830b',
+    libraryId: '9c82c34b-6059-47e1-983a-d03755cb830b',
   },
   {
     email: 'pabloborbon.admin@shelf.edu',
     name: 'Pablo Borbon Campus Sub-Admin',
-    libraryId:
-      'bde57b8b-d3b8-4676-823e-7573f80d3a36',
+    libraryId: 'bde57b8b-d3b8-4676-823e-7573f80d3a36',
   },
   {
     email: 'rosario.admin@shelf.edu',
     name: 'Rosario Campus Sub-Admin',
-    libraryId:
-      'c5613110-237e-4e93-b27b-95b41da95f3a',
+    libraryId: 'c5613110-237e-4e93-b27b-95b41da95f3a',
   },
   {
     email: 'librarian@shelf.edu',
     name: 'Maria Santos',
-    libraryId:
-      '78c0a005-06cd-48f5-92d2-daa06fe36e12',
+    libraryId: '78c0a005-06cd-48f5-92d2-daa06fe36e12',
   },
   {
     email: 'circdesk@shelf.edu',
     name: 'Circulation Desk Staff',
-    libraryId:
-      '9c82c34b-6059-47e1-983a-d03755cb830b',
+    libraryId: '9c82c34b-6059-47e1-983a-d03755cb830b',
   },
 ];
 
@@ -140,8 +125,7 @@ export const SAMPLE_BOOKS = [
     category: 'Computer Science',
     isbn: '978-0672324536',
     shelfLocation: 'Shelf A-3 (Technology)',
-    libraryId:
-      '277829af-1475-47ae-9e26-4b64c68f54f4',
+    libraryId: '277829af-1475-47ae-9e26-4b64c68f54f4',
     totalCopies: 5,
     summary:
       'This comprehensive guide serves as an essential roadmap for students and software engineers aiming to master the foundational mechanics of computer science. Designed with clarity and practical implementation in mind, the text thoroughly explores complex topics such as binary search trees, stacks, queues, sorting algorithms, and advanced memory allocation techniques specifically within the Java programming environment. Readers are provided with clear architectural breakdowns and step-by-step code examples that demystify how underlying data structures affect application performance and scalability. Furthermore, the book emphasizes object-oriented design principles, ensuring that developers not only learn how to implement data structures efficiently but also how to write maintainable, modular, and robust codebases. Whether you are preparing for technical interviews, building enterprise-grade applications, or laying down the core academic groundwork required for advanced software engineering, this textbook bridges the crucial gap between abstract theoretical computer science concepts and real-world programming execution, making it an indispensable resource for any modern technical library collection.',
@@ -149,14 +133,12 @@ export const SAMPLE_BOOKS = [
       'https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&q=80&w=400',
   },
   {
-    title:
-      'Clean Code: A Handbook of Agile Software Craftsmanship',
+    title: 'Clean Code: A Handbook of Agile Software Craftsmanship',
     author: 'Robert C. Martin',
     category: 'Software Engineering',
     isbn: '978-0132350884',
     shelfLocation: 'Shelf B-1 (Software)',
-    libraryId:
-      '3ccf575d-4573-4ed9-acdb-c8d9cf8a949e',
+    libraryId: '3ccf575d-4573-4ed9-acdb-c8d9cf8a949e',
     totalCopies: 3,
     summary:
       'Even bad code can function properly, but failing to keep code clean can drastically slow down a development team, stall product lifecycles, and accumulate massive technical debt over time. This seminal handbook introduces programmers to the core values, disciplines, and best practices of agile software craftsmanship. The author breaks down the art of writing readable, reusable, and refactorable code by examining meaningful naming conventions, proper function sizing, object-oriented design boundaries, effective error handling protocols, and comprehensive unit testing strategies. Through extensive comparative code examples, readers learn to distinguish between messy, convoluted implementations and elegant, self-documenting architectures. The text challenges developers to take professional pride in their codebases, arguing that writing clean code is not merely an aesthetic preference but a fundamental ethical and economic necessity for long-term project viability. Packed with invaluable insights, heuristics, and practical refactoring exercises, this textbook transforms casual programmers into disciplined software artisans capable of collaborating seamlessly in high-performance team environments.',
@@ -169,8 +151,7 @@ export const SAMPLE_BOOKS = [
     category: 'Science',
     isbn: '978-1118230749',
     shelfLocation: 'Shelf C-2 (Science)',
-    libraryId:
-      '84819f90-5923-4bd8-8aa0-1805e7613e81',
+    libraryId: '84819f90-5923-4bd8-8aa0-1805e7613e81',
     totalCopies: 4,
     summary:
       'Widely recognized as a cornerstone text for engineering and physical science students, this authoritative volume offers a rigorous and deeply analytical foundation in classical mechanics, thermodynamics, electromagnetism, and modern physics. The curriculum is meticulously structured to cultivate critical analytical thinking and problem-solving skills, taking complex physical phenomena and breaking them down through mathematical rigor, vector calculus applications, and real-world engineering scenarios. Each chapter features conceptual questions, detailed problem sets, and illustrative visual diagrams that connect abstract theoretical equations to tangible physical reality. Students explore the conservation of energy, rotational dynamics, wave motion, electromagnetic induction, and quantum principles with exceptional clarity. Designed to support rigorous academic programs, the book encourages learners to look beyond rote formula memorization and truly grasp the universal laws governing the physical universe. It serves as an enduring reference tool that students will carry with them from their foundational undergraduate coursework into their professional careers.',
@@ -253,7 +234,7 @@ function cleanErr(
   fallback = 'Something went wrong. Please try again.'
 ) {
   return new Error(
-    error?.message || fallback
+    String(error?.message || fallback)
   );
 }
 
@@ -289,25 +270,16 @@ export async function addLibrary(library) {
     .from('libraries')
     .insert({
       id,
-      name: String(
-        library.name || ''
-      ).trim(),
+      name: String(library.name || '').trim(),
       campus:
-        String(
-          library.campus || ''
-        ).trim() || null,
+        String(library.campus || '').trim() || null,
       address:
-        String(
-          library.address || ''
-        ).trim() || null,
+        String(library.address || '').trim() || null,
       lat: Number(library.lat),
       lng: Number(library.lng),
       hours:
-        String(
-          library.hours || ''
-        ).trim() || null,
-      status:
-        library.status || 'Open',
+        String(library.hours || '').trim() || null,
+      status: library.status || 'Open',
     });
 
   if (error) {
@@ -318,13 +290,12 @@ export async function addLibrary(library) {
 }
 
 export async function fetchBooks() {
-  const { data, error } =
-    await supabase
-      .from('books')
-      .select('*')
-      .order('created_at', {
-        ascending: false,
-      });
+  const { data, error } = await supabase
+    .from('books')
+    .select('*')
+    .order('created_at', {
+      ascending: false,
+    });
 
   if (error) {
     throw cleanErr(error);
@@ -334,22 +305,22 @@ export async function fetchBooks() {
 }
 
 export async function fetchVisitors() {
-  const { data: sessionData } =
-    await supabase.auth.getSession();
+  const {
+    data: sessionData,
+  } = await supabase.auth.getSession();
 
-  if (!sessionData.session) {
+  if (!sessionData?.session) {
     return [];
   }
 
-  const { data, error } =
-    await supabase
-      .from('visitors')
-      .select(
-        'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at'
-      )
-      .order('registered_at', {
-        ascending: false,
-      });
+  const { data, error } = await supabase
+    .from('visitors')
+    .select(
+      'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at'
+    )
+    .order('registered_at', {
+      ascending: false,
+    });
 
   if (error) {
     throw cleanErr(error);
@@ -359,80 +330,75 @@ export async function fetchVisitors() {
 }
 
 export async function fetchBorrowRequests() {
-  const { data: sessionData } =
-    await supabase.auth.getSession();
+  const {
+    data: sessionData,
+  } = await supabase.auth.getSession();
 
-  if (!sessionData.session) {
+  if (!sessionData?.session) {
     return [];
   }
 
-  const { data, error } =
-    await supabase
-      .from('borrow_requests')
-      .select('*')
-      .order('request_date', {
-        ascending: false,
-      });
+  const { data, error } = await supabase
+    .from('borrow_requests')
+    .select('*')
+    .order('request_date', {
+      ascending: false,
+    });
 
   if (error) {
     throw cleanErr(error);
   }
 
-  return (data || []).map(
-    mapBorrowRequest
-  );
+  return (data || []).map(mapBorrowRequest);
 }
 
 export async function fetchAttendanceLogs() {
-  const { data: sessionData } =
-    await supabase.auth.getSession();
+  const {
+    data: sessionData,
+  } = await supabase.auth.getSession();
 
-  if (!sessionData.session) {
+  if (!sessionData?.session) {
     return [];
   }
 
-  const { data, error } =
-    await supabase
-      .from('attendance_logs')
-      .select('*')
-      .order('time_in', {
-        ascending: false,
-      });
+  const { data, error } = await supabase
+    .from('attendance_logs')
+    .select('*')
+    .order('time_in', {
+      ascending: false,
+    });
 
   if (error) {
     throw cleanErr(error);
   }
 
-  return (data || []).map(
-    mapAttendance
-  );
+  return (data || []).map(mapAttendance);
 }
 
-export async function getVisitor(
-  visitorId
-) {
-  const { data, error } =
-    await supabase
-      .from('visitors')
-      .select(
-        'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at'
-      )
-      .eq('id', visitorId)
-      .maybeSingle();
+export async function getVisitor(visitorId) {
+  if (!visitorId) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('visitors')
+    .select(
+      'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at'
+    )
+    .eq('id', visitorId)
+    .maybeSingle();
 
   if (error) {
     throw cleanErr(error);
   }
 
-  return data
-    ? mapVisitor(data)
-    : null;
+  return data ? mapVisitor(data) : null;
 }
 
 // ============================================================================
 // VISITOR ACCOUNTS
 // ----------------------------------------------------------------------------
-// Visitors use the existing PostgreSQL RPC authentication architecture.
+// Visitors use PostgreSQL RPC authentication.
 //
 // Registration:
 //   register_visitor()
@@ -448,8 +414,7 @@ export async function getVisitor(
 //   login_visitor()
 //
 // IMPORTANT:
-// Do NOT use supabase.auth.signUp() for visitors here.
-// Staff accounts use Supabase Auth separately.
+// Visitors DO NOT use supabase.auth.signUp().
 // ============================================================================
 
 export async function registerVisitor({
@@ -507,7 +472,7 @@ export async function registerVisitor({
   }
 
   // --------------------------------------------------------------------------
-  // 1. Create visitor through PostgreSQL RPC
+  // CREATE VISITOR
   // --------------------------------------------------------------------------
 
   const {
@@ -516,20 +481,11 @@ export async function registerVisitor({
   } = await supabase.rpc(
     'register_visitor',
     {
-      p_full_name:
-        normalizedFullName,
-
-      p_contact_number:
-        normalizedContactNumber,
-
-      p_email:
-        normalizedEmail,
-
-      p_address:
-        normalizedAddress,
-
-      p_password:
-        normalizedPassword,
+      p_full_name: normalizedFullName,
+      p_contact_number: normalizedContactNumber,
+      p_email: normalizedEmail,
+      p_address: normalizedAddress,
+      p_password: normalizedPassword,
     }
   );
 
@@ -549,13 +505,14 @@ export async function registerVisitor({
   }
 
   const visitorId =
-    row.visitor_id;
+    String(row.visitor_id).trim();
 
   // --------------------------------------------------------------------------
-  // 2. Send OTP email
+  // SEND OTP
   // --------------------------------------------------------------------------
 
   const {
+    data: emailData,
     error: emailError,
   } = await supabase.functions.invoke(
     'send-visitor-otp',
@@ -577,6 +534,17 @@ export async function registerVisitor({
     );
   }
 
+  if (
+    emailData &&
+    typeof emailData === 'object' &&
+    emailData.success === false
+  ) {
+    throw new Error(
+      emailData.message ||
+        'Your registration was created, but we could not send the verification email. Please try again.'
+    );
+  }
+
   return {
     visitorId,
   };
@@ -586,9 +554,7 @@ export async function registerVisitor({
 // RESEND VISITOR OTP
 // ============================================================================
 
-export async function resendOtp(
-  visitorId
-) {
+export async function resendOtp(visitorId) {
   const normalizedVisitorId =
     String(visitorId || '').trim();
 
@@ -597,10 +563,6 @@ export async function resendOtp(
       'Registration session not found. Please register again.'
     );
   }
-
-  // --------------------------------------------------------------------------
-  // 1. Generate a new OTP in PostgreSQL
-  // --------------------------------------------------------------------------
 
   const {
     error,
@@ -616,11 +578,8 @@ export async function resendOtp(
     throw cleanErr(error);
   }
 
-  // --------------------------------------------------------------------------
-  // 2. Send the new OTP
-  // --------------------------------------------------------------------------
-
   const {
+    data: emailData,
     error: emailError,
   } = await supabase.functions.invoke(
     'send-visitor-otp',
@@ -640,6 +599,17 @@ export async function resendOtp(
 
     throw new Error(
       'A new verification code was generated, but we could not send the email. Please try again.'
+    );
+  }
+
+  if (
+    emailData &&
+    typeof emailData === 'object' &&
+    emailData.success === false
+  ) {
+    throw new Error(
+      emailData.message ||
+        'A new verification code was generated, but we could not send the email. Please try again.'
     );
   }
 
@@ -682,7 +652,6 @@ export async function verifyVisitorOtp(
     {
       p_visitor_id:
         normalizedVisitorId,
-
       p_code:
         normalizedCode,
     }
@@ -705,26 +674,15 @@ export async function verifyVisitorOtp(
 
   return {
     id: row.id,
-    fullName:
-      row.full_name,
-    email:
-      row.email,
-    qrCode:
-      row.qr_code,
+    fullName: row.full_name,
+    email: row.email,
+    qrCode: row.qr_code,
     otpVerified: true,
   };
 }
 
 // ============================================================================
 // VISITOR LOGIN
-// ----------------------------------------------------------------------------
-// Email + password:
-//   login_visitor(p_identifier, p_password)
-//
-// QR pass:
-//   login_visitor(p_identifier, '')
-//
-// The current PostgreSQL function handles both email and QR identifiers.
 // ============================================================================
 
 export async function loginVisitor({
@@ -751,7 +709,6 @@ export async function loginVisitor({
     {
       p_identifier:
         normalizedIdentifier,
-
       p_password:
         normalizedPassword,
     }
@@ -774,12 +731,9 @@ export async function loginVisitor({
 
   return {
     id: row.id,
-    fullName:
-      row.full_name,
-    email:
-      row.email,
-    qrCode:
-      row.qr_code,
+    fullName: row.full_name,
+    email: row.email,
+    qrCode: row.qr_code,
   };
 }
 
@@ -798,9 +752,8 @@ export async function findVisitorByQr(
     return null;
   }
 
-  // `libraryId` is intentionally retained in the function signature
-  // for compatibility with existing components.
-  // The current deployed RPC only requires p_qr.
+  // libraryId is retained for compatibility with existing components.
+  // The deployed RPC only requires p_qr.
 
   const {
     data,
@@ -830,34 +783,15 @@ export async function findVisitorByQr(
       : data;
 
   return {
-    id:
-      row.id,
-
-    fullName:
-      row.full_name,
-
-    email:
-      row.email,
-
-    qrCode:
-      row.qr_code,
+    id: row.id,
+    fullName: row.full_name,
+    email: row.email,
+    qrCode: row.qr_code,
   };
 }
 
 // ============================================================================
 // STAFF AUTHENTICATION
-// ============================================================================
-//
-// ALL staff authentication is database-backed:
-//
-//     Supabase Auth
-//          ↓
-//     auth.users
-//          ↓
-//     staff_profiles
-//
-// Passwords are handled by Supabase Auth.
-//
 // ============================================================================
 
 export async function loginStaffAccount(
@@ -888,27 +822,19 @@ export async function loginStaffAccount(
   }
 
   // --------------------------------------------------------------------------
-  // 1. Authenticate with Supabase Auth
+  // SUPABASE AUTH
   // --------------------------------------------------------------------------
 
   const {
     data,
     error,
   } =
-    await supabase.auth.signInWithPassword(
-      {
-        email:
-          normalizedEmail,
-
-        password:
-          normalizedPassword,
-      }
-    );
-
-  // --------------------------------------------------------------------------
-  // IMPORTANT:
-  // Handle disabled/banned staff accounts explicitly.
-  // --------------------------------------------------------------------------
+    await supabase.auth.signInWithPassword({
+      email:
+        normalizedEmail,
+      password:
+        normalizedPassword,
+    });
 
   if (error) {
     console.error(
@@ -923,9 +849,7 @@ export async function loginStaffAccount(
     }
 
     const authErrorMessage =
-      String(
-        error?.message || ''
-      )
+      String(error?.message || '')
         .trim()
         .toLowerCase();
 
@@ -984,7 +908,7 @@ export async function loginStaffAccount(
   }
 
   // --------------------------------------------------------------------------
-  // 2. Load staff profile
+  // LOAD STAFF PROFILE
   // --------------------------------------------------------------------------
 
   const {
@@ -1020,10 +944,6 @@ export async function loginStaffAccount(
     );
   }
 
-  // --------------------------------------------------------------------------
-  // 3. Staff profile must exist
-  // --------------------------------------------------------------------------
-
   if (!profile) {
     try {
       await supabase.auth.signOut();
@@ -1037,12 +957,10 @@ export async function loginStaffAccount(
   }
 
   // --------------------------------------------------------------------------
-  // 4. Staff account must be active
+  // ACTIVE CHECK
   // --------------------------------------------------------------------------
 
-  if (
-    profile.is_active !== true
-  ) {
+  if (profile.is_active !== true) {
     try {
       await supabase.auth.signOut();
     } catch {
@@ -1055,7 +973,7 @@ export async function loginStaffAccount(
   }
 
   // --------------------------------------------------------------------------
-  // 5. Validate role
+  // ROLE CHECK
   // --------------------------------------------------------------------------
 
   const allowedRoles = [
@@ -1079,25 +997,12 @@ export async function loginStaffAccount(
     );
   }
 
-  // --------------------------------------------------------------------------
-  // 6. Return normalized staff object
-  // --------------------------------------------------------------------------
-
   return {
-    id:
-      profile.id,
-
-    email:
-      profile.email,
-
-    name:
-      profile.full_name,
-
-    role:
-      profile.role,
-
-    libraryId:
-      profile.library_id,
+    id: profile.id,
+    email: profile.email,
+    name: profile.full_name,
+    role: profile.role,
+    libraryId: profile.library_id,
   };
 }
 
@@ -1183,7 +1088,6 @@ export async function scanAttendance(
         String(
           qrCode || ''
         ).trim(),
-
       p_library_id:
         libraryId,
     }
@@ -1208,15 +1112,12 @@ export async function scanAttendance(
     visitor: {
       id:
         row.visitor_id,
-
       fullName:
         row.visitor_name,
     },
-
     log: {
       id:
         row.log_id,
-
       action:
         row.action,
     },
@@ -1268,8 +1169,7 @@ export async function addBook(
 
         shelf_location:
           String(
-            book.shelfLocation ||
-              ''
+            book.shelfLocation || ''
           ).trim(),
 
         library_id:
@@ -1370,9 +1270,7 @@ export async function addBooksBulk(
           !author ||
           !isbn ||
           !category ||
-          !Number.isInteger(
-            stock
-          ) ||
+          !Number.isInteger(stock) ||
           stock < 1
         ) {
           throw new Error(
@@ -1435,9 +1333,7 @@ export async function addBooksBulk(
     throw cleanErr(error);
   }
 
-  return (data || []).map(
-    mapBook
-  );
+  return (data || []).map(mapBook);
 }
 
 // ============================================================================
@@ -1724,7 +1620,6 @@ export async function requestBorrow(
       {
         p_visitor_id:
           visitorId,
-
         p_book_id:
           bookId,
       }
@@ -1766,7 +1661,6 @@ export async function cancelBorrowRequest(
       {
         p_request_id:
           requestId,
-
         p_reason:
           reason,
       }
@@ -1793,7 +1687,6 @@ export async function confirmPickup(
       {
         p_request_id:
           requestId,
-
         p_staff_name:
           staffName,
       }
@@ -1820,7 +1713,6 @@ export async function confirmReturn(
       {
         p_request_id:
           requestId,
-
         p_staff_name:
           staffName,
       }
