@@ -241,7 +241,9 @@ export const AuthProvider = ({ children }) => {
 
       setUser(visitorSession);
 
-      return visitor;
+notifyVisitorSessionChanged();
+
+return visitor;
     } catch (error) {
       console.error(
         'Visitor login error:',
@@ -270,7 +272,7 @@ export const AuthProvider = ({ children }) => {
 
     const visitorSession =
       createVisitorSession(visitor);
-
+notifyVisitorSessionChanged();
     setUser(visitorSession);
 
     return visitorSession;
@@ -483,6 +485,7 @@ export const AuthProvider = ({ children }) => {
           createVisitorSession(visitor);
 
         setUser(visitorSession);
+        notifyVisitorSessionChanged();
 
         return {
           success: true,
@@ -532,6 +535,8 @@ export const AuthProvider = ({ children }) => {
           createVisitorSession(visitor);
 
         setUser(visitorSession);
+        notifyVisitorSessionChanged();
+
 
         return {
           success: true,
