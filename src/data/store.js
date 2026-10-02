@@ -129,6 +129,13 @@ export const PERSONAL_BOOK_CONDITIONS = [
 export const PERSONAL_BOOK_MIN_LENDING_DAYS = 1;
 export const PERSONAL_BOOK_MAX_LENDING_DAYS = 30;
 
+export const PERSONAL_BOOK_HANDOVER_METHODS = [
+  'meet_in_person',
+  'public_place',
+  'courier',
+  'arrange_with_owner',
+];
+
 // ============================================================================
 // DEMO / SAMPLE CATALOG
 // ============================================================================
@@ -260,13 +267,37 @@ const mapBook = (r) => ({
   coverUrl: r.cover_url,
   createdAt: r.created_at,
 
+  // --------------------------------------------------------------------------
   // Personal / Community Book fields
-  bookType: r.book_type || 'library',
-  ownerVisitorId: r.owner_visitor_id || null,
-  lendingEnabled: r.lending_enabled ?? false,
-  condition: r.condition || null,
-  lendingPeriodDays: r.lending_period_days ?? 7,
-  handoverLocation: r.handover_location || null,
+  // --------------------------------------------------------------------------
+
+  bookType:
+    r.book_type || 'library',
+
+  ownerVisitorId:
+    r.owner_visitor_id || null,
+
+  lendingEnabled:
+    r.lending_enabled ?? false,
+
+  condition:
+    r.condition || null,
+
+  lendingPeriodDays:
+    r.lending_period_days ?? 7,
+
+  // New community-book handover fields.
+  // These are NOT tied to a library.
+  handoverMethod:
+    r.handover_method || null,
+
+  handoverDetails:
+    r.handover_details || null,
+
+  // Kept only for backwards compatibility with
+  // older database rows/code.
+  handoverLocation:
+    r.handover_location || null,
 });
 
 const mapVisitor = (r) => ({
@@ -473,6 +504,10 @@ export async function fetchPersonalBooks(
 // ============================================================================
 //
 // Returns visitor-owned books that the owner has made available for lending.
+//
+// NOTE:
+// These books are NOT treated as library inventory.
+// They do not require a library_id or library handover location.
 // ============================================================================
 
 export async function fetchCommunityBooks() {
@@ -2021,7 +2056,15 @@ export async function addBook(
         lending_period_days:
           null,
 
+        // Old field kept null for compatibility.
         handover_location:
+          null,
+
+        // New community-book fields.
+        handover_method:
+          null,
+
+        handover_details:
           null,
       })
       .select()
@@ -2037,6 +2080,12 @@ export async function addBook(
 // ============================================================================
 // PERSONAL BOOK — ADD
 // ============================================================================
+//
+// Personal/community books are owned by visitors.
+// They are NOT assigned to a library.
+//
+// Handover is arranged between the owner and borrower.
+// ============================================================================
 
 export async function addPersonalBook({
   visitorId,
@@ -2047,7 +2096,8 @@ export async function addPersonalBook({
   summary = null,
   condition = 'Good',
   lendingPeriodDays = 7,
-  handoverLocation = null,
+  handoverMethod = 'arrange_with_owner',
+  handoverDetails = null,
   lendingEnabled = true,
 }) {
   const normalizedVisitorId =
@@ -2071,9 +2121,15 @@ export async function addPersonalBook({
   const normalizedCondition =
     normalizeText(condition) || 'Good';
 
-  const normalizedHandoverLocation =
+  const normalizedHandoverMethod =
     normalizeText(
-      handoverLocation
+      handoverMethod
+    ).toLowerCase() ||
+    'arrange_with_owner';
+
+  const normalizedHandoverDetails =
+    normalizeText(
+      handoverDetails
     ) || null;
 
   const normalizedLendingPeriod =
@@ -2135,11 +2191,21 @@ export async function addPersonalBook({
   }
 
   if (
-    normalizedLendingEnabled &&
-    !normalizedHandoverLocation
+    !PERSONAL_BOOK_HANDOVER_METHODS.includes(
+      normalizedHandoverMethod
+    )
   ) {
     throw new Error(
-      'Handover location is required when lending is enabled.'
+      'Invalid handover method.'
+    );
+  }
+
+  if (
+    normalizedHandoverDetails &&
+    normalizedHandoverDetails.length > 500
+  ) {
+    throw new Error(
+      'Handover details must not exceed 500 characters.'
     );
   }
 
@@ -2174,8 +2240,11 @@ export async function addPersonalBook({
         p_lending_period_days:
           normalizedLendingPeriod,
 
-        p_handover_location:
-          normalizedHandoverLocation,
+        p_handover_method:
+          normalizedHandoverMethod,
+
+        p_handover_details:
+          normalizedHandoverDetails,
 
         p_lending_enabled:
           normalizedLendingEnabled,
@@ -2186,10 +2255,18 @@ export async function addPersonalBook({
     console.error(
       'ADD PERSONAL BOOK RPC ERROR:',
       {
-        code: error?.code,
-        message: error?.message,
-        details: error?.details,
-        hint: error?.hint,
+        code:
+          error?.code,
+
+        message:
+          error?.message,
+
+        details:
+          error?.details,
+
+        hint:
+          error?.hint,
+
         visitorId:
           normalizedVisitorId,
       }
@@ -2355,6 +2432,12 @@ export async function addBooksBulk(
 
           handover_location:
             null,
+
+          handover_method:
+            null,
+
+          handover_details:
+            null,
         };
       }
     );
@@ -2406,7 +2489,10 @@ export async function updateBook(
 
   const dbPatch = {};
 
-  // Standard fields
+  // --------------------------------------------------------------------------
+  // STANDARD FIELDS
+  // --------------------------------------------------------------------------
+
   if (
     patch?.title !== undefined
   ) {
@@ -2555,7 +2641,10 @@ export async function updateBook(
       ) || DEFAULT_COVER_URL;
   }
 
-  // Personal / community fields
+  // --------------------------------------------------------------------------
+  // PERSONAL / COMMUNITY BOOK FIELDS
+  // --------------------------------------------------------------------------
+
   if (
     patch?.bookType !== undefined
   ) {
@@ -2657,6 +2746,67 @@ export async function updateBook(
     dbPatch.lending_period_days =
       lendingPeriodDays;
   }
+
+  // --------------------------------------------------------------------------
+  // NEW HANDOVER METHOD
+  // --------------------------------------------------------------------------
+
+  if (
+    patch?.handoverMethod !== undefined
+  ) {
+    const handoverMethod =
+      normalizeText(
+        patch.handoverMethod
+      ).toLowerCase();
+
+    if (
+      handoverMethod &&
+      !PERSONAL_BOOK_HANDOVER_METHODS.includes(
+        handoverMethod
+      )
+    ) {
+      throw new Error(
+        'Invalid handover method.'
+      );
+    }
+
+    dbPatch.handover_method =
+      handoverMethod || null;
+  }
+
+  // --------------------------------------------------------------------------
+  // NEW HANDOVER DETAILS
+  // --------------------------------------------------------------------------
+
+  if (
+    patch?.handoverDetails !== undefined
+  ) {
+    const handoverDetails =
+      normalizeText(
+        patch.handoverDetails
+      );
+
+    if (
+      handoverDetails.length > 500
+    ) {
+      throw new Error(
+        'Handover details must not exceed 500 characters.'
+      );
+    }
+
+    dbPatch.handover_details =
+      handoverDetails || null;
+  }
+
+  // --------------------------------------------------------------------------
+  // LEGACY HANDOVER LOCATION
+  // --------------------------------------------------------------------------
+  //
+  // This is retained only for backwards compatibility.
+  // New personal/community books should use handoverMethod and
+  // handoverDetails instead.
+  //
+  // --------------------------------------------------------------------------
 
   if (
     patch?.handoverLocation !== undefined
@@ -2873,6 +3023,12 @@ export async function loadSampleCatalog(
                 null,
 
               handover_location:
+                null,
+
+              handover_method:
+                null,
+
+              handover_details:
                 null,
             };
           }
