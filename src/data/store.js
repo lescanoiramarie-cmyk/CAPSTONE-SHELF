@@ -2904,56 +2904,58 @@ export async function fetchOwnerCommunityBookRequests(
     );
   }
 
-  return Array.isArray(data)
-    ? data.map((request) => ({
-        id:
-          request.id,
+  return (Array.isArray(data)
+    ? data
+    : []
+  ).map((request) => ({
+    id:
+      request.id,
 
-        bookId:
-          request.book_id,
+    bookId:
+      request.book_id,
 
-        bookTitle:
-          request.book_title ||
-          request.title ||
-          'Untitled Book',
+    bookTitle:
+      request.book_title ||
+      'Untitled Book',
 
-        requesterVisitorId:
-          request.requester_visitor_id ||
-          null,
+    ownerVisitorId:
+      request.owner_visitor_id ||
+      null,
 
-        requesterName:
-          request.requester_name ||
-          request.visitor_name ||
-          'SHELF Visitor',
+    ownerName:
+      request.owner_name ||
+      null,
 
-        status:
-          request.status ||
-          'pending',
+    requesterVisitorId:
+      request.requester_visitor_id ||
+      null,
 
-        requestDate:
-          request.request_date ||
-          request.created_at ||
-          request.requested_at ||
-          null,
+    requesterName:
+      request.requester_name ||
+      'SHELF Visitor',
 
-        approvedAt:
-          request.approved_at ||
-          null,
+    status:
+      request.status ||
+      'pending',
 
-        rejectedAt:
-          request.rejected_at ||
-          null,
+    requestDate:
+      request.request_date ||
+      null,
 
-        ownerResponse:
-          request.owner_response ||
-          null,
+    approvedAt:
+      request.approved_at ||
+      null,
 
-        lendingPeriodDays:
-          request.lending_period_days ??
-          null,
-      }))
-    : [];
+    rejectedAt:
+      request.rejected_at ||
+      null,
+
+    ownerResponse:
+      request.owner_response ||
+      null,
+  }));
 }
+
 // ============================================================================
 // FETCH COMMUNITY BOOK REQUESTS — REQUESTER
 // ============================================================================
