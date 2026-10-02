@@ -352,18 +352,22 @@ export const AuthProvider = ({ children }) => {
   // =========================================================
   // UNIFIED LOGIN
   //
-  // EMAIL/PASSWORD:
+  // LOGIN ORDER:
   //
-  // 1. Try staff login.
-  // 2. If credentials are invalid, try visitor login.
-  // 3. If the account is authenticated but has no
-  //    staff_profiles record, try visitor login.
-  // 4. If an actual staff account is inactive, STOP and
-  //    show the inactive-staff error.
+  // 1. Visitor
+  // 2. Staff
+  //
+  // This prevents a normal visitor account from receiving:
+  //
+  // "This account has not been provisioned as a
+  // SHELF staff account."
+  //
+  // EMAIL:
+  // - Try visitor first.
+  // - If visitor fails, try staff.
   //
   // QR:
-  //
-  // Visitor QR login goes directly to visitor login.
+  // - Go directly to visitor login.
   // =========================================================
 
   const login = async ({
@@ -387,40 +391,50 @@ export const AuthProvider = ({ children }) => {
     }
 
     // =======================================================
-    // VISITOR QR LOGIN
+    // QR LOGIN
     //
-    // QR/pass IDs do not contain @.
-    // They should go directly to visitor login.
+    // QR/pass IDs do not contain "@", so they are handled
+    // directly as visitor login.
     // =======================================================
 
     if (!normalizedIdentifier.includes('@')) {
-      const visitor =
-        await store.loginVisitor({
-          identifier: normalizedIdentifier,
-          password: '',
-        });
+      try {
+        const visitor =
+          await store.loginVisitor({
+            identifier:
+              normalizedIdentifier,
+            password: '',
+          });
 
-      if (!visitor) {
-        throw new Error(
-          'Visitor account was not found.'
+        if (!visitor) {
+          throw new Error(
+            'Visitor account was not found.'
+          );
+        }
+
+        const visitorSession = {
+          role: 'visitor',
+          id: visitor.id,
+          name: visitor.fullName,
+          email: visitor.email,
+          qrCode: visitor.qrCode,
+        };
+
+        setUser(visitorSession);
+
+        return {
+          success: true,
+          role: 'visitor',
+          user: visitor,
+        };
+      } catch (error) {
+        console.error(
+          'QR VISITOR LOGIN FAILED:',
+          error
         );
+
+        throw error;
       }
-
-      const visitorSession = {
-        role: 'visitor',
-        id: visitor.id,
-        name: visitor.fullName,
-        email: visitor.email,
-        qrCode: visitor.qrCode,
-      };
-
-      setUser(visitorSession);
-
-      return {
-        success: true,
-        role: 'visitor',
-        user: visitor,
-      };
     }
 
     // =======================================================
@@ -434,10 +448,64 @@ export const AuthProvider = ({ children }) => {
     }
 
     // =======================================================
-    // 1. TRY STAFF LOGIN FIRST
+    // 1. TRY VISITOR LOGIN FIRST
+    //
+    // Normal visitor accounts should succeed here.
+    //
+    // If successful, we immediately return the visitor
+    // session and never attempt staff authorization.
     // =======================================================
 
-    let staffError = null;
+    let visitorError = null;
+
+    try {
+      const visitor =
+        await store.loginVisitor({
+          identifier:
+            normalizedIdentifier,
+          password:
+            normalizedPassword,
+        });
+
+      if (visitor) {
+        const visitorSession = {
+          role: 'visitor',
+          id: visitor.id,
+          name: visitor.fullName,
+          email: visitor.email,
+          qrCode: visitor.qrCode,
+        };
+
+        setUser(visitorSession);
+
+        return {
+          success: true,
+          role: 'visitor',
+          user: visitor,
+        };
+      }
+
+      visitorError = new Error(
+        'Visitor account was not found.'
+      );
+    } catch (error) {
+      visitorError = error;
+
+      console.error(
+        'VISITOR LOGIN ATTEMPT FAILED:',
+        error
+      );
+    }
+
+    // =======================================================
+    // 2. TRY STAFF LOGIN
+    //
+    // If visitor login failed, the account may be:
+    //
+    // - Sub-Admin
+    // - Super Admin
+    //
+    // =======================================================
 
     try {
       const staff =
@@ -457,121 +525,71 @@ export const AuthProvider = ({ children }) => {
         role: staff.role,
         user: staff,
       };
-    } catch (error) {
-      staffError = error;
-
+    } catch (staffError) {
       console.error(
         'STAFF LOGIN ATTEMPT FAILED:',
-        error
+        staffError
       );
-    }
 
-    // =======================================================
-    // 2. CHECK STAFF ERROR
-    // =======================================================
+      // =====================================================
+      // PRESERVE STAFF-SPECIFIC ERRORS
+      // =====================================================
 
-    const staffErrorMessage =
-      String(
-        staffError?.message || ''
-      ).trim();
+      const staffErrorMessage =
+        String(
+          staffError?.message || ''
+        ).trim();
 
-    // =======================================================
-    // INVALID STAFF CREDENTIALS
-    //
-    // This can simply be a normal visitor account, so try
-    // visitor login.
-    // =======================================================
+      // =====================================================
+      // INACTIVE STAFF
+      //
+      // Do not hide this with a visitor error.
+      // =====================================================
 
-    const isInvalidStaffCredentials =
-      staffErrorMessage ===
-      'Invalid login credentials';
-
-    // =======================================================
-    // NOT PROVISIONED AS STAFF
-    //
-    // Supabase Auth accepted the account, but there is no
-    // matching staff_profiles row.
-    //
-    // This is expected for normal visitor accounts.
-    // Therefore try visitor login.
-    // =======================================================
-
-    const isNotProvisionedStaff =
-      staffErrorMessage ===
-      'This account has not been provisioned as a SHELF staff account.';
-
-    // =======================================================
-    // INACTIVE STAFF
-    //
-    // DO NOT fall through to visitor login.
-    //
-    // This preserves the existing disabled-staff behavior.
-    // =======================================================
-
-    const isInactiveStaff =
-      staffErrorMessage ===
-      'This staff account is currently inactive.';
-
-    if (isInactiveStaff) {
-      throw staffError;
-    }
-
-    // =======================================================
-    // ONLY THESE STAFF ERRORS CAN FALL THROUGH:
-    //
-    // 1. Invalid login credentials
-    // 2. Account not provisioned as SHELF staff
-    // =======================================================
-
-    const shouldTryVisitorLogin =
-      isInvalidStaffCredentials ||
-      isNotProvisionedStaff;
-
-    if (!shouldTryVisitorLogin) {
-      throw staffError;
-    }
-
-    // =======================================================
-    // 3. TRY VISITOR LOGIN
-    // =======================================================
-
-    try {
-      const visitor =
-        await store.loginVisitor({
-          identifier:
-            normalizedIdentifier,
-          password:
-            normalizedPassword,
-        });
-
-      if (!visitor) {
-        throw new Error(
-          'Visitor account was not found.'
-        );
+      if (
+        staffErrorMessage ===
+        'This staff account is currently inactive.'
+      ) {
+        throw staffError;
       }
 
-      const visitorSession = {
-        role: 'visitor',
-        id: visitor.id,
-        name: visitor.fullName,
-        email: visitor.email,
-        qrCode: visitor.qrCode,
-      };
+      // =====================================================
+      // INVALID STAFF CREDENTIALS
+      //
+      // Visitor login already failed, so return the visitor
+      // error if one exists.
+      // =====================================================
 
-      setUser(visitorSession);
+      if (
+        staffErrorMessage ===
+        'Invalid login credentials'
+      ) {
+        throw visitorError || staffError;
+      }
 
-      return {
-        success: true,
-        role: 'visitor',
-        user: visitor,
-      };
-    } catch (visitorError) {
-      console.error(
-        'VISITOR LOGIN ATTEMPT FAILED:',
-        visitorError
-      );
+      // =====================================================
+      // NOT PROVISIONED AS STAFF
+      //
+      // This should normally not appear for a visitor anymore
+      // because visitor login was already attempted first.
+      //
+      // If neither visitor nor staff login succeeds, return
+      // the visitor-side error instead of exposing the staff
+      // provisioning message to a normal visitor.
+      // =====================================================
 
-      throw visitorError;
+      if (
+        staffErrorMessage ===
+        'This account has not been provisioned as a SHELF staff account.'
+      ) {
+        throw visitorError || staffError;
+      }
+
+      // =====================================================
+      // OTHER STAFF ERROR
+      // =====================================================
+
+      throw staffError;
     }
   };
 
