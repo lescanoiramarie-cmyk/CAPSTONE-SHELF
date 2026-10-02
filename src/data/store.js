@@ -286,16 +286,15 @@ const mapBook = (r) => ({
   lendingPeriodDays:
     r.lending_period_days ?? 7,
 
-  // New community-book handover fields.
-  // These are NOT tied to a library.
+  // Community-book handover fields.
+  // These are independent of the library system.
   handoverMethod:
     r.handover_method || null,
 
   handoverDetails:
     r.handover_details || null,
 
-  // Kept only for backwards compatibility with
-  // older database rows/code.
+  // Backwards compatibility with older records/code.
   handoverLocation:
     r.handover_location || null,
 });
