@@ -3204,6 +3204,101 @@ export async function rejectCommunityBookRequest(
   return result;
 }
 
+export async function confirmCommunityBookPickup(
+  requestId,
+  ownerVisitorId
+) {
+  const normalizedRequestId = normalizeText(requestId);
+  const normalizedOwnerVisitorId =
+    normalizeText(ownerVisitorId);
+
+  if (!normalizedRequestId) {
+    throw new Error('Community book request ID is required.');
+  }
+
+  if (!isValidUuid(normalizedRequestId)) {
+    throw new Error('Invalid community book request ID.');
+  }
+
+  if (!normalizedOwnerVisitorId) {
+    throw new Error('Owner visitor ID is required.');
+  }
+
+  if (!isValidUuid(normalizedOwnerVisitorId)) {
+    throw new Error('Invalid owner visitor ID.');
+  }
+
+  const { data, error } = await supabase.rpc(
+    'confirm_community_book_pickup',
+    {
+      p_request_id: normalizedRequestId,
+      p_owner_visitor_id: normalizedOwnerVisitorId,
+    }
+  );
+
+  if (error) {
+    console.error(
+      'CONFIRM COMMUNITY BOOK PICKUP RPC ERROR:',
+      error
+    );
+
+    throw cleanErr(
+      error,
+      'Unable to confirm the community book handover.'
+    );
+  }
+
+  return firstRow(data);
+}
+
+
+export async function confirmCommunityBookReturn(
+  requestId,
+  ownerVisitorId
+) {
+  const normalizedRequestId = normalizeText(requestId);
+  const normalizedOwnerVisitorId =
+    normalizeText(ownerVisitorId);
+
+  if (!normalizedRequestId) {
+    throw new Error('Community book request ID is required.');
+  }
+
+  if (!isValidUuid(normalizedRequestId)) {
+    throw new Error('Invalid community book request ID.');
+  }
+
+  if (!normalizedOwnerVisitorId) {
+    throw new Error('Owner visitor ID is required.');
+  }
+
+  if (!isValidUuid(normalizedOwnerVisitorId)) {
+    throw new Error('Invalid owner visitor ID.');
+  }
+
+  const { data, error } = await supabase.rpc(
+    'confirm_community_book_return',
+    {
+      p_request_id: normalizedRequestId,
+      p_owner_visitor_id: normalizedOwnerVisitorId,
+    }
+  );
+
+  if (error) {
+    console.error(
+      'CONFIRM COMMUNITY BOOK RETURN RPC ERROR:',
+      error
+    );
+
+    throw cleanErr(
+      error,
+      'Unable to confirm the community book return.'
+    );
+  }
+
+  return firstRow(data);
+}
+
 // ============================================================================
 // CANCEL COMMUNITY BOOK REQUEST
 // ============================================================================
