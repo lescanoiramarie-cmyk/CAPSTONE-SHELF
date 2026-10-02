@@ -3221,6 +3221,10 @@ const handleConfirmCommunityBookReturn = async (request) => {
                                   : status === 'rejected'
                                     ? 'Rejected'
                                     : 'Pending'}
+
+                            {/* TEMPORARY DEBUG */}
+<span className="rounded bg-red-100 px-2 py-1 text-[10px] font-bold text-red-700">
+  DEBUG: {JSON.stringify(request?.status)}
                           </span>
 
                         </div>
