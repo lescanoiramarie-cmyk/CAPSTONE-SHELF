@@ -1,683 +1,978 @@
-import { useState, useEffect } from 'react';
-import { supabase } from "../lib/supabaseClient.js";
+import { useEffect, useState } from 'react';
+import { BookMarked, Plus, RefreshCw, X } from 'lucide-react';
 
-async function loadBooksForVisitor(userId) {
-  if (!userId) return [];
+import {
+  addPersonalBook,
+  fetchPersonalBooks,
+} from '../data/store.js';
 
-  const { data, error } = await supabase
-    .from('personal_books')
-    .select('*')
-    .eq('owner_id', userId)
-    .order('created_at', { ascending: false });
+const CONDITIONS = [
+  'New',
+  'Like New',
+  'Good',
+  'Fair',
+  'Poor',
+];
 
-  if (error) throw error;
+const INITIAL_FORM = {
+  title: '',
+  author: '',
+  category: '',
+  isbn: '',
+  summary: '',
+  condition: 'Good',
+  lendingPeriodDays: 7,
+  handoverLocation: '',
+  lendingEnabled: true,
+};
 
-  return data || [];
+function formatDate(value) {
+  if (!value) return '';
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return date.toLocaleDateString('en-PH', {
+    dateStyle: 'medium',
+  });
 }
 
-export default function PersonalBooks({ userId: propUserId }) {
+export default function PersonalBooks({ userId }) {
   const [books, setBooks] = useState([]);
-  const [currentUserId, setCurrentUserId] = useState(
-    propUserId || null
-  );
 
-  const [title, setTitle] = useState('');
-  const [author, setAuthor] = useState('');
-  const [privacyStatus, setPrivacyStatus] = useState('private');
-  const [listingType, setListingType] = useState('none');
-  const [price, setPrice] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const [loading, setLoading] = useState(false);
-  const [updatingPrivacyId, setUpdatingPrivacyId] = useState(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+
+  const [form, setForm] = useState(INITIAL_FORM);
 
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
   // ============================================================
-  // 1. Kumuha at mag-check ng Active Authenticated User Session
+  // LOAD MY PERSONAL BOOKS
   // ============================================================
 
-  useEffect(() => {
-    async function resolveUser() {
-      if (propUserId) {
-        setCurrentUserId(propUserId);
-        return;
-      }
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        setCurrentUserId(user.id);
-      } else {
-        setError(
-          'No active user session found. Please log in.'
-        );
-      }
+  const loadBooks = async () => {
+    if (!userId) {
+      setBooks([]);
+      setIsLoading(false);
+      return;
     }
 
-    resolveUser();
-  }, [propUserId]);
+    setIsLoading(true);
+    setError('');
 
-  // ============================================================
-  // 2. Load books tuwing may valid na currentUserId
-  // ============================================================
+    try {
+      const rows = await fetchPersonalBooks(userId);
+
+      setBooks(Array.isArray(rows) ? rows : []);
+    } catch (loadError) {
+      console.error('LOAD PERSONAL BOOKS ERROR:', loadError);
+
+      setError(
+        loadError?.message ||
+          'Unable to load your personal books.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
 
-    if (!currentUserId) {
-      return undefined;
-    }
-
-    loadBooksForVisitor(currentUserId)
-      .then((rows) => {
+    async function initialLoad() {
+      if (!userId) {
         if (active) {
-          setBooks(rows);
+          setBooks([]);
+          setIsLoading(false);
         }
-      })
-      .catch((loadError) => {
+
+        return;
+      }
+
+      if (active) {
+        setIsLoading(true);
+        setError('');
+      }
+
+      try {
+        const rows = await fetchPersonalBooks(userId);
+
+        if (active) {
+          setBooks(Array.isArray(rows) ? rows : []);
+        }
+      } catch (loadError) {
+        console.error(
+          'INITIAL PERSONAL BOOKS LOAD ERROR:',
+          loadError
+        );
+
         if (active) {
           setError(
-            loadError.message ||
-              'Unable to load personal books.'
+            loadError?.message ||
+              'Unable to load your personal books.'
           );
         }
-      });
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    initialLoad();
 
     return () => {
       active = false;
     };
-  }, [currentUserId]);
+  }, [userId]);
 
   // ============================================================
-  // 3. Handle Add Book
+  // FORM HELPERS
   // ============================================================
 
-  const handleAddBook = async (e) => {
-    e.preventDefault();
+  const updateForm = (field, value) => {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const resetForm = () => {
+    setForm(INITIAL_FORM);
+    setError('');
+  };
+
+  const openAddForm = () => {
+    setMessage('');
+    setError('');
+    resetForm();
+    setIsFormOpen(true);
+  };
+
+  const closeAddForm = () => {
+    if (isSaving) return;
+
+    setIsFormOpen(false);
+    resetForm();
+  };
+
+  // ============================================================
+  // ADD PERSONAL BOOK
+  // ============================================================
+
+  const handleAddBook = async (event) => {
+    event.preventDefault();
 
     setError('');
     setMessage('');
 
-    // Verify User Session bago mag-insert
-    let activeUserId = currentUserId;
+    if (!userId) {
+      setError(
+        'Your visitor account could not be identified. Please log in again.'
+      );
 
-    if (!activeUserId) {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        activeUserId = user.id;
-        setCurrentUserId(user.id);
-      } else {
-        setError(
-          'User is not authenticated. Cannot save book.'
-        );
-        return;
-      }
+      return;
     }
 
-    if (
-      !title.trim() ||
-      !author.trim()
-    ) {
-      setError(
-        'Book title and author are required.'
-      );
+    const title = form.title.trim();
+    const author = form.author.trim();
+    const category = form.category.trim();
+    const isbn = form.isbn.trim();
+    const summary = form.summary.trim();
+    const condition = form.condition;
+    const handoverLocation =
+      form.handoverLocation.trim();
+
+    const lendingPeriodDays = Number(
+      form.lendingPeriodDays
+    );
+
+    if (!title) {
+      setError('Book title is required.');
+      return;
+    }
+
+    if (!author) {
+      setError('Book author is required.');
+      return;
+    }
+
+    if (!CONDITIONS.includes(condition)) {
+      setError('Please select a valid book condition.');
       return;
     }
 
     if (
-      privacyStatus === 'public' &&
-      listingType === 'sell' &&
-      (parseFloat(price) <= 0 || !price)
+      !Number.isInteger(lendingPeriodDays) ||
+      lendingPeriodDays < 1 ||
+      lendingPeriodDays > 30
     ) {
       setError(
-        'Please enter a valid selling price greater than 0.'
+        'Lending period must be between 1 and 30 days.'
       );
+
       return;
     }
 
-    setLoading(true);
-
-    // Dynamic Insert Payload
-    const payload = {
-      title: title.trim(),
-      author: author.trim(),
-      privacy_status: privacyStatus,
-      listing_type:
-        privacyStatus === 'public'
-          ? listingType
-          : 'none',
-      price:
-        listingType === 'sell' &&
-        privacyStatus === 'public'
-          ? parseFloat(price)
-          : 0,
-    };
-
-    if (activeUserId) {
-      payload.owner_id = activeUserId;
-    }
-
-    const { error: insertError } = await supabase
-      .from('personal_books')
-      .insert([payload]);
-
-    setLoading(false);
-
-    if (insertError) {
+    if (
+      form.lendingEnabled &&
+      !handoverLocation
+    ) {
       setError(
-        'Error adding book: ' +
-          insertError.message
+        'Handover location is required when community lending is enabled.'
       );
+
       return;
     }
 
-    setMessage('Book added successfully.');
-
-    setTitle('');
-    setAuthor('');
-    setPrivacyStatus('private');
-    setListingType('none');
-    setPrice('');
+    setIsSaving(true);
 
     try {
-      setBooks(
-        await loadBooksForVisitor(activeUserId)
+      const createdBook = await addPersonalBook({
+        visitorId: userId,
+        title,
+        author,
+        category: category || null,
+        isbn: isbn || null,
+        summary: summary || null,
+        condition,
+        lendingPeriodDays,
+        handoverLocation:
+          handoverLocation || null,
+        lendingEnabled:
+          Boolean(form.lendingEnabled),
+      });
+
+      /*
+       * Add the newly created book immediately to the
+       * local collection.
+       *
+       * This avoids requiring a full page refresh.
+       */
+      if (createdBook?.id) {
+        setBooks((current) => [
+          createdBook,
+          ...current.filter(
+            (book) => book.id !== createdBook.id
+          ),
+        ]);
+      } else {
+        await loadBooks();
+      }
+
+      setMessage(
+        `"${title}" was added to your personal books.`
       );
-    } catch (loadError) {
-      setError(
-        loadError.message ||
-          'Book was added, but the collection could not be refreshed.'
-      );
-    }
-  };
 
-  // ============================================================
-  // 4. Toggle Privacy Per Book
-  // ============================================================
-
-  const handleTogglePrivacy = async (book) => {
-    if (!book?.id) {
-      return;
-    }
-
-    if (!currentUserId) {
-      setError(
-        'No active user session found. Please log in again.'
-      );
-      return;
-    }
-
-    setError('');
-    setMessage('');
-    setUpdatingPrivacyId(book.id);
-
-    const newPrivacyStatus =
-      book.privacy_status === 'public'
-        ? 'private'
-        : 'public';
-
-    const { error: updateError } = await supabase
-      .from('personal_books')
-      .update({
-        privacy_status: newPrivacyStatus,
-      })
-      .eq('id', book.id)
-      .eq('owner_id', currentUserId);
-
-    setUpdatingPrivacyId(null);
-
-    if (updateError) {
+      setForm(INITIAL_FORM);
+      setIsFormOpen(false);
+    } catch (saveError) {
       console.error(
-        'Privacy update error:',
-        updateError
+        'ADD PERSONAL BOOK ERROR:',
+        saveError
       );
 
       setError(
-        'Unable to change privacy setting: ' +
-          updateError.message
+        saveError?.message ||
+          'Unable to add your personal book.'
       );
-
-      return;
+    } finally {
+      setIsSaving(false);
     }
-
-    // Update local UI immediately
-    setBooks((currentBooks) =>
-      currentBooks.map((item) =>
-        item.id === book.id
-          ? {
-              ...item,
-              privacy_status: newPrivacyStatus,
-            }
-          : item
-      )
-    );
-
-    setMessage(
-      `"${book.title}" is now ${
-        newPrivacyStatus === 'public'
-          ? 'public'
-          : 'private'
-      }.`
-    );
   };
 
   // ============================================================
-  // 5. Render
+  // NO USER
+  // ============================================================
+
+  if (!userId) {
+    return (
+      <section className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-700">
+        <h2 className="font-bold">
+          Personal Books
+        </h2>
+
+        <p className="mt-2 text-sm">
+          Your visitor account could not be identified.
+          Please log in again.
+        </p>
+      </section>
+    );
+  }
+
+  // ============================================================
+  // RENDER
   // ============================================================
 
   return (
-    <div
-      style={{
-        padding: '20px',
-        maxWidth: '800px',
-        margin: '0 auto',
-      }}
-    >
-      <h2
-        style={{
-          fontSize: '20px',
-          fontWeight: 'bold',
-          marginBottom: '15px',
-        }}
-      >
-        Add Personal Book
-      </h2>
+    <section className="space-y-6">
+      {/* ======================================================
+          HEADER
+      ======================================================= */}
 
-      {error && (
-        <p
-          role="alert"
-          style={{
-            border: '1px solid #fecaca',
-            background: '#fef2f2',
-            color: '#991b1b',
-            padding: '10px',
-            borderRadius: '4px',
-            marginBottom: '12px',
-          }}
-        >
-          {error}
-        </p>
-      )}
-
-      {message && (
-        <p
-          role="status"
-          style={{
-            border: '1px solid #a7f3d0',
-            background: '#ecfdf5',
-            color: '#065f46',
-            padding: '10px',
-            borderRadius: '4px',
-            marginBottom: '12px',
-          }}
-        >
-          {message}
-        </p>
-      )}
-
-      {/* ========================================================
-          ADD PERSONAL BOOK FORM
-          ======================================================== */}
-
-      <form
-        onSubmit={handleAddBook}
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px',
-          marginBottom: '30px',
-        }}
-      >
-        <input
-          type="text"
-          placeholder="Book Title"
-          value={title}
-          onChange={(e) =>
-            setTitle(e.target.value)
-          }
-          required
-          style={{
-            padding: '8px',
-            borderRadius: '4px',
-            border: '1px solid #ccc',
-          }}
-        />
-
-        <input
-          type="text"
-          placeholder="Author"
-          value={author}
-          onChange={(e) =>
-            setAuthor(e.target.value)
-          }
-          required
-          style={{
-            padding: '8px',
-            borderRadius: '4px',
-            border: '1px solid #ccc',
-          }}
-        />
-
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <label
-            style={{
-              display: 'block',
-              fontWeight: '500',
-              marginBottom: '4px',
-            }}
-          >
-            Privacy Setting:
-          </label>
+          <div className="flex items-center gap-2">
+            <BookMarked
+              size={22}
+              className="text-[#002046] dark:text-blue-400"
+              aria-hidden="true"
+            />
 
-          <select
-            value={privacyStatus}
-            onChange={(e) =>
-              setPrivacyStatus(e.target.value)
-            }
-            style={{
-              padding: '8px',
-              width: '100%',
-              borderRadius: '4px',
-              border: '1px solid #ccc',
-            }}
-          >
-            <option value="private">
-              Private (Only Me)
-            </option>
+            <h2 className="text-xl font-extrabold text-slate-900 dark:text-white">
+              My Personal Books
+            </h2>
+          </div>
 
-            <option value="public">
-              Public (Visible to Community)
-            </option>
-          </select>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Add books that you personally own and optionally
+            make them available for community lending.
+          </p>
         </div>
 
-        {privacyStatus === 'public' && (
-          <div>
-            <label
-              style={{
-                display: 'block',
-                fontWeight: '500',
-                marginBottom: '4px',
-              }}
-            >
-              Sharing Option:
-            </label>
-
-            <select
-              value={listingType}
-              onChange={(e) =>
-                setListingType(e.target.value)
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={loadBooks}
+            disabled={isLoading}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          >
+            <RefreshCw
+              size={16}
+              className={
+                isLoading
+                  ? 'animate-spin'
+                  : ''
               }
-              style={{
-                padding: '8px',
-                width: '100%',
-                borderRadius: '4px',
-                border: '1px solid #ccc',
-              }}
-            >
-              <option value="none">
-                Display Only (Public Reading List)
-              </option>
+              aria-hidden="true"
+            />
 
-              <option value="lend">
-                Lend to Other Visitors
-              </option>
+            Refresh
+          </button>
 
-              <option value="sell">
-                Sell to Other Visitors
-              </option>
-            </select>
+          <button
+            type="button"
+            onClick={openAddForm}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#002046] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#003064]"
+          >
+            <Plus
+              size={17}
+              aria-hidden="true"
+            />
 
-            {listingType === 'sell' && (
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="Selling Price (₱)"
-                value={price}
-                onChange={(e) => {
-                  const val = e.target.value;
+            Add Personal Book
+          </button>
+        </div>
+      </div>
 
-                  setPrice(
-                    val === ''
-                      ? ''
-                      : Math.max(
-                          0,
-                          parseFloat(val)
-                        )
-                  );
-                }}
-                required
-                style={{
-                  padding: '8px',
-                  marginTop: '8px',
-                  width: '100%',
-                  borderRadius: '4px',
-                  border: '1px solid #ccc',
-                }}
-              />
-            )}
-          </div>
-        )}
+      {/* ======================================================
+          SUCCESS MESSAGE
+      ======================================================= */}
 
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            padding: '10px',
-            backgroundColor: '#0284c7',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: loading
-              ? 'not-allowed'
-              : 'pointer',
-          }}
-        >
-          {loading
-            ? 'Saving...'
-            : 'Add Book'}
-        </button>
-      </form>
-
-      <hr
-        style={{
-          margin: '20px 0',
-        }}
-      />
-
-      {/* ========================================================
-          MY PERSONAL BOOKS COLLECTION
-          ======================================================== */}
-
-      <h3
-        style={{
-          fontSize: '18px',
-          fontWeight: 'bold',
-          marginBottom: '10px',
-        }}
-      >
-        My Personal Books Collection
-      </h3>
-
-      {books.length === 0 ? (
-        <p>
-          No personal books added yet.
-        </p>
-      ) : (
+      {message && (
         <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '10px',
-          }}
+          role="status"
+          className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
         >
-          {books.map((b) => {
-            const isPublic =
-              b.privacy_status === 'public';
+          {message}
+        </div>
+      )}
 
-            const isUpdating =
-              updatingPrivacyId === b.id;
+      {/* ======================================================
+          ERROR MESSAGE
+      ======================================================= */}
 
-            return (
-              <div
-                key={b.id}
-                style={{
-                  border:
-                    '1px solid #ddd',
-                  padding: '14px',
-                  borderRadius: '6px',
-                  backgroundColor: '#fff',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent:
-                      'space-between',
-                    alignItems:
-                      'flex-start',
-                    gap: '15px',
-                    flexWrap: 'wrap',
-                  }}
+      {error && (
+        <div
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300"
+        >
+          {error}
+        </div>
+      )}
+
+      {/* ======================================================
+          ADD PERSONAL BOOK FORM
+      ======================================================= */}
+
+      {isFormOpen && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-6">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
+                Add Personal Book
+              </h3>
+
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Add a book that you personally own.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={closeAddForm}
+              disabled={isSaving}
+              className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50 dark:hover:bg-slate-700 dark:hover:text-white"
+              aria-label="Close add personal book form"
+            >
+              <X
+                size={18}
+                aria-hidden="true"
+              />
+            </button>
+          </div>
+
+          <form
+            onSubmit={handleAddBook}
+            className="space-y-5"
+          >
+            {/* TITLE + AUTHOR */}
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="personal-book-title"
+                  className="mb-1.5 block text-sm font-bold text-slate-700 dark:text-slate-200"
                 >
-                  {/* BOOK INFORMATION */}
-                  <div
-                    style={{
-                      flex:
-                        '1 1 300px',
-                    }}
-                  >
-                    <h4
-                      style={{
-                        margin:
-                          '0 0 4px 0',
-                        fontSize: '16px',
-                        fontWeight: '600',
-                      }}
-                    >
-                      {b.title}
-                    </h4>
+                  Book Title
+                  <span className="text-red-500">
+                    {' '}
+                    *
+                  </span>
+                </label>
 
-                    <p
-                      style={{
-                        margin:
-                          '0 0 6px 0',
-                        color: '#555',
-                      }}
-                    >
-                      by {b.author}
-                    </p>
+                <input
+                  id="personal-book-title"
+                  type="text"
+                  value={form.title}
+                  onChange={(event) =>
+                    updateForm(
+                      'title',
+                      event.target.value
+                    )
+                  }
+                  placeholder="Enter book title"
+                  maxLength={255}
+                  disabled={isSaving}
+                  required
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-[#002046] focus:ring-2 focus:ring-[#002046]/10 disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:disabled:bg-slate-800"
+                />
+              </div>
 
-                    {/* PRIVACY STATUS */}
-                    <span
-                      style={{
-                        display:
-                          'inline-block',
-                        fontSize: '12px',
-                        fontWeight: '600',
-                        padding:
-                          '3px 8px',
-                        backgroundColor:
-                          isPublic
-                            ? '#dcfce7'
-                            : '#f3f4f6',
-                        color:
-                          isPublic
-                            ? '#166534'
-                            : '#374151',
-                        borderRadius:
-                          '4px',
-                      }}
-                    >
-                      {isPublic
-                        ? 'PUBLIC'
-                        : 'PRIVATE'}
+              <div>
+                <label
+                  htmlFor="personal-book-author"
+                  className="mb-1.5 block text-sm font-bold text-slate-700 dark:text-slate-200"
+                >
+                  Author
+                  <span className="text-red-500">
+                    {' '}
+                    *
+                  </span>
+                </label>
+
+                <input
+                  id="personal-book-author"
+                  type="text"
+                  value={form.author}
+                  onChange={(event) =>
+                    updateForm(
+                      'author',
+                      event.target.value
+                    )
+                  }
+                  placeholder="Enter author name"
+                  maxLength={255}
+                  disabled={isSaving}
+                  required
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-[#002046] focus:ring-2 focus:ring-[#002046]/10 disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:disabled:bg-slate-800"
+                />
+              </div>
+            </div>
+
+            {/* CATEGORY + ISBN */}
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="personal-book-category"
+                  className="mb-1.5 block text-sm font-bold text-slate-700 dark:text-slate-200"
+                >
+                  Category
+                </label>
+
+                <input
+                  id="personal-book-category"
+                  type="text"
+                  value={form.category}
+                  onChange={(event) =>
+                    updateForm(
+                      'category',
+                      event.target.value
+                    )
+                  }
+                  placeholder="e.g. Computer Science"
+                  maxLength={100}
+                  disabled={isSaving}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-[#002046] focus:ring-2 focus:ring-[#002046]/10 disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:disabled:bg-slate-800"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="personal-book-isbn"
+                  className="mb-1.5 block text-sm font-bold text-slate-700 dark:text-slate-200"
+                >
+                  ISBN
+                </label>
+
+                <input
+                  id="personal-book-isbn"
+                  type="text"
+                  value={form.isbn}
+                  onChange={(event) =>
+                    updateForm(
+                      'isbn',
+                      event.target.value
+                    )
+                  }
+                  placeholder="Optional ISBN"
+                  maxLength={50}
+                  disabled={isSaving}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-[#002046] focus:ring-2 focus:ring-[#002046]/10 disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:disabled:bg-slate-800"
+                />
+              </div>
+            </div>
+
+            {/* SUMMARY */}
+
+            <div>
+              <label
+                htmlFor="personal-book-summary"
+                className="mb-1.5 block text-sm font-bold text-slate-700 dark:text-slate-200"
+              >
+                Summary
+              </label>
+
+              <textarea
+                id="personal-book-summary"
+                value={form.summary}
+                onChange={(event) =>
+                  updateForm(
+                    'summary',
+                    event.target.value
+                  )
+                }
+                placeholder="Brief description of the book"
+                rows={4}
+                maxLength={2000}
+                disabled={isSaving}
+                className="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-[#002046] focus:ring-2 focus:ring-[#002046]/10 disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:disabled:bg-slate-800"
+              />
+            </div>
+
+            {/* CONDITION + LENDING PERIOD */}
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="personal-book-condition"
+                  className="mb-1.5 block text-sm font-bold text-slate-700 dark:text-slate-200"
+                >
+                  Book Condition
+                  <span className="text-red-500">
+                    {' '}
+                    *
+                  </span>
+                </label>
+
+                <select
+                  id="personal-book-condition"
+                  value={form.condition}
+                  onChange={(event) =>
+                    updateForm(
+                      'condition',
+                      event.target.value
+                    )
+                  }
+                  disabled={isSaving}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-[#002046] focus:ring-2 focus:ring-[#002046]/10 disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:disabled:bg-slate-800"
+                >
+                  {CONDITIONS.map(
+                    (condition) => (
+                      <option
+                        key={condition}
+                        value={condition}
+                      >
+                        {condition}
+                      </option>
+                    )
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="personal-book-lending-days"
+                  className="mb-1.5 block text-sm font-bold text-slate-700 dark:text-slate-200"
+                >
+                  Lending Period
+                  <span className="text-red-500">
+                    {' '}
+                    *
+                  </span>
+                </label>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    id="personal-book-lending-days"
+                    type="number"
+                    min="1"
+                    max="30"
+                    step="1"
+                    value={form.lendingPeriodDays}
+                    onChange={(event) =>
+                      updateForm(
+                        'lendingPeriodDays',
+                        event.target.value
+                      )
+                    }
+                    disabled={isSaving}
+                    required
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-[#002046] focus:ring-2 focus:ring-[#002046]/10 disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:disabled:bg-slate-800"
+                  />
+
+                  <span className="shrink-0 text-sm text-slate-500 dark:text-slate-400">
+                    days
+                  </span>
+                </div>
+
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  Allowed range: 1–30 days.
+                </p>
+              </div>
+            </div>
+
+            {/* COMMUNITY LENDING */}
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/50">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={form.lendingEnabled}
+                  onChange={(event) =>
+                    updateForm(
+                      'lendingEnabled',
+                      event.target.checked
+                    )
+                  }
+                  disabled={isSaving}
+                  className="mt-1 h-4 w-4 rounded border-slate-300 text-[#002046] focus:ring-[#002046]"
+                />
+
+                <span>
+                  <span className="block text-sm font-bold text-slate-800 dark:text-slate-100">
+                    Allow Community Lending
+                  </span>
+
+                  <span className="mt-1 block text-xs leading-5 text-slate-500 dark:text-slate-400">
+                    Other SHELF visitors will be able to
+                    request this book through the community
+                    lending feature.
+                  </span>
+                </span>
+              </label>
+            </div>
+
+            {/* HANDOVER LOCATION */}
+
+            <div>
+              <label
+                htmlFor="personal-book-handover"
+                className="mb-1.5 block text-sm font-bold text-slate-700 dark:text-slate-200"
+              >
+                Handover Location
+                {form.lendingEnabled && (
+                  <span className="text-red-500">
+                    {' '}
+                    *
+                  </span>
+                )}
+              </label>
+
+              <input
+                id="personal-book-handover"
+                type="text"
+                value={form.handoverLocation}
+                onChange={(event) =>
+                  updateForm(
+                    'handoverLocation',
+                    event.target.value
+                  )
+                }
+                placeholder={
+                  form.lendingEnabled
+                    ? 'e.g. BatStateU JPLPC-Malvar Library'
+                    : 'Optional'
+                }
+                maxLength={500}
+                disabled={isSaving}
+                required={form.lendingEnabled}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-[#002046] focus:ring-2 focus:ring-[#002046]/10 disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:disabled:bg-slate-800"
+              />
+
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Specify where the owner and borrower can
+                arrange the physical handover.
+              </p>
+            </div>
+
+            {/* FORM ACTIONS */}
+
+            <div className="flex flex-col-reverse gap-2 border-t border-slate-200 pt-4 dark:border-slate-700 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={closeAddForm}
+                disabled={isSaving}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="rounded-lg bg-[#002046] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#003064] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isSaving
+                  ? 'Adding Book...'
+                  : 'Add Personal Book'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ======================================================
+          COLLECTION
+      ======================================================= */}
+
+      <div>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
+              My Personal Books Collection
+            </h3>
+
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              {books.length}{' '}
+              {books.length === 1
+                ? 'book'
+                : 'books'}{' '}
+              registered under your account.
+            </p>
+          </div>
+        </div>
+
+        {/* LOADING */}
+
+        {isLoading ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center dark:border-slate-700 dark:bg-slate-800">
+            <RefreshCw
+              size={24}
+              className="mx-auto animate-spin text-[#002046] dark:text-blue-400"
+              aria-hidden="true"
+            />
+
+            <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+              Loading your personal books...
+            </p>
+          </div>
+        ) : books.length === 0 ? (
+          /* EMPTY */
+
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center dark:border-slate-700 dark:bg-slate-800">
+            <BookMarked
+              size={38}
+              className="mx-auto text-slate-400"
+              aria-hidden="true"
+            />
+
+            <h4 className="mt-3 text-base font-bold text-slate-800 dark:text-slate-100">
+              No personal books yet
+            </h4>
+
+            <p className="mx-auto mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">
+              Add a book you personally own to keep track
+              of it in SHELF and optionally make it available
+              for community lending.
+            </p>
+
+            <button
+              type="button"
+              onClick={openAddForm}
+              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#002046] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#003064]"
+            >
+              <Plus
+                size={16}
+                aria-hidden="true"
+              />
+
+              Add Your First Book
+            </button>
+          </div>
+        ) : (
+          /* BOOK LIST */
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {books.map((book) => {
+              const isLendingEnabled =
+                Boolean(book.lendingEnabled);
+
+              return (
+                <article
+                  key={book.id}
+                  className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md dark:border-slate-700 dark:bg-slate-800"
+                >
+                  {/* BOOK HEADER */}
+
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <h4 className="break-words text-base font-extrabold text-slate-900 dark:text-white">
+                        {book.title}
+                      </h4>
+
+                      <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                        by {book.author}
+                      </p>
+                    </div>
+
+                    <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                      Personal
                     </span>
+                  </div>
 
-                    {/* LISTING STATUS */}
-                    {isPublic &&
-                      b.listing_type !==
-                        'none' && (
-                        <span
-                          style={{
-                            display:
-                              'inline-block',
-                            fontSize:
-                              '12px',
-                            marginLeft:
-                              '8px',
-                            padding:
-                              '3px 8px',
-                            backgroundColor:
-                              '#e0f2fe',
-                            color:
-                              '#075985',
-                            borderRadius:
-                              '4px',
-                          }}
-                        >
-                          {b.listing_type ===
-                          'lend'
-                            ? 'Available for Lend'
-                            : `For Sale: ₱${b.price}`}
+                  {/* DETAILS */}
+
+                  <div className="mt-4 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+                    {book.category && (
+                      <div>
+                        <span className="font-bold text-slate-600 dark:text-slate-400">
+                          Category:{' '}
                         </span>
+
+                        <span className="text-slate-500 dark:text-slate-300">
+                          {book.category}
+                        </span>
+                      </div>
+                    )}
+
+                    {book.isbn && (
+                      <div>
+                        <span className="font-bold text-slate-600 dark:text-slate-400">
+                          ISBN:{' '}
+                        </span>
+
+                        <span className="text-slate-500 dark:text-slate-300">
+                          {book.isbn}
+                        </span>
+                      </div>
+                    )}
+
+                    <div>
+                      <span className="font-bold text-slate-600 dark:text-slate-400">
+                        Condition:{' '}
+                      </span>
+
+                      <span className="text-slate-500 dark:text-slate-300">
+                        {book.condition ||
+                          'Not specified'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="font-bold text-slate-600 dark:text-slate-400">
+                        Lending period:{' '}
+                      </span>
+
+                      <span className="text-slate-500 dark:text-slate-300">
+                        {book.lendingPeriodDays ||
+                          7}{' '}
+                        days
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* SUMMARY */}
+
+                  {book.summary && (
+                    <div className="mt-4 rounded-lg bg-slate-50 p-3 dark:bg-slate-900/50">
+                      <p className="text-xs leading-5 text-slate-600 dark:text-slate-300">
+                        {book.summary}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* LENDING STATUS */}
+
+                  <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-700">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                          isLendingEnabled
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                            : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        {isLendingEnabled
+                          ? 'Community Lending Enabled'
+                          : 'Private Book'}
+                      </span>
+
+                      <span className="text-[11px] text-slate-400">
+                        {book.createdAt
+                          ? `Added ${formatDate(
+                              book.createdAt
+                            )}`
+                          : ''}
+                      </span>
+                    </div>
+
+                    {isLendingEnabled &&
+                      book.handoverLocation && (
+                        <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">
+                          <span className="font-bold">
+                            Handover:
+                          </span>{' '}
+                          {book.handoverLocation}
+                        </p>
                       )}
                   </div>
 
-                  {/* ==================================================
-                      PRIVACY TOGGLE BUTTON
-                      ================================================== */}
+                  {/* FUTURE WORKFLOW NOTE */}
 
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleTogglePrivacy(b)
-                    }
-                    disabled={isUpdating}
-                    style={{
-                      minWidth:
-                        '130px',
-                      padding:
-                        '8px 12px',
-                      border:
-                        '1px solid #cbd5e1',
-                      borderRadius:
-                        '5px',
-                      backgroundColor:
-                        isPublic
-                          ? '#f8fafc'
-                          : '#0284c7',
-                      color:
-                        isPublic
-                          ? '#334155'
-                          : '#fff',
-                      fontWeight:
-                        '600',
-                      cursor:
-                        isUpdating
-                          ? 'not-allowed'
-                          : 'pointer',
-                    }}
-                  >
-                    {isUpdating
-                      ? 'Updating...'
-                      : isPublic
-                        ? 'Make Private'
-                        : 'Make Public'}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
+                  {isLendingEnabled && (
+                    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/30">
+                      <p className="text-[11px] leading-5 text-amber-800 dark:text-amber-300">
+                        This book is available for community
+                        lending. Borrow requests will use the
+                        owner-approval workflow.
+                      </p>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
