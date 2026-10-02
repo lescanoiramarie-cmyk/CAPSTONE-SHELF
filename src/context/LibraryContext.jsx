@@ -129,136 +129,466 @@ export function LibraryProvider({ children }) {
     }
   }, []);
 
-  // ==========================================================================
-  // LOAD ALL SHELF DATA
-  // ==========================================================================
+ // ==========================================================================
+// LOAD ALL SHELF DATA
+// ==========================================================================
 
-  const refreshAll = useCallback(async () => {
-    try {
-      // ----------------------------------------------------------------------
-      // Resolve current visitor first.
-      // ----------------------------------------------------------------------
+const refreshAll = useCallback(async () => {
+  try {
+    // ----------------------------------------------------------------------
+    // Resolve current visitor first.
+    // ----------------------------------------------------------------------
 
-      const currentVisitorId =
-        await getCurrentVisitorId();
+    const currentVisitorId =
+      await getCurrentVisitorId();
 
-      // ----------------------------------------------------------------------
-      // Load shared/global data.
-      // ----------------------------------------------------------------------
+    console.log(
+      'SHELF — CURRENT VISITOR ID:',
+      currentVisitorId
+    );
 
-      const [
-        books,
-        libraries,
-        visitors,
-        borrowRequests,
-        attendanceLogs,
-        communityBooks,
-      ] = await Promise.all([
-        store.fetchBooks(),
+    // ----------------------------------------------------------------------
+    // Load shared/global data.
+    // ----------------------------------------------------------------------
 
-        store.fetchLibraries(),
+    const [
+      books,
+      libraries,
+      visitors,
+      normalBorrowRequests,
+      attendanceLogs,
+      communityBooks,
+    ] = await Promise.all([
+      store.fetchBooks(),
 
-        store.fetchVisitors(),
+      store.fetchLibraries(),
 
-        store.fetchBorrowRequests(),
+      store.fetchVisitors(),
 
-        store.fetchAttendanceLogs(),
+      store.fetchBorrowRequests(),
 
-        store.fetchCommunityBooks(),
-      ]);
+      store.fetchAttendanceLogs(),
 
-      // ----------------------------------------------------------------------
-      // Load books owned by the current visitor.
-      // ----------------------------------------------------------------------
+      store.fetchCommunityBooks(),
+    ]);
 
-      let personalBooks = [];
+    // ----------------------------------------------------------------------
+    // Load books owned by the current visitor.
+    // ----------------------------------------------------------------------
 
-      if (currentVisitorId) {
-        try {
-          personalBooks =
-            await store.fetchPersonalBooks(
-              currentVisitorId
-            );
-        } catch (error) {
-          console.error(
-            'SHELF personal books loading failed:',
-            error
+    let personalBooks = [];
+
+    if (currentVisitorId) {
+      try {
+        personalBooks =
+          await store.fetchPersonalBooks(
+            currentVisitorId
+          );
+      } catch (error) {
+        console.error(
+          'SHELF personal books loading failed:',
+          error
+        );
+
+        personalBooks = [];
+      }
+    }
+
+    // ----------------------------------------------------------------------
+    // Load community-book requests made by the current visitor.
+    //
+    // These requests must remain visible in:
+    // MY REQUESTS & BORROWS
+    //
+    // We intentionally do NOT filter by status.
+    // pending / approved / rejected all remain visible.
+    // ----------------------------------------------------------------------
+
+    let myCommunityBookRequests = [];
+
+    if (
+      currentVisitorId &&
+      typeof store.fetchMyCommunityBookRequests ===
+        'function'
+    ) {
+      try {
+        const result =
+          await store.fetchMyCommunityBookRequests(
+            currentVisitorId
           );
 
-          // Do not prevent the rest of the application from loading.
-          personalBooks = [];
-        }
+        myCommunityBookRequests =
+          Array.isArray(result)
+            ? result
+            : [];
+
+        console.log(
+          'SHELF — MY COMMUNITY REQUESTS:',
+          {
+            visitorId:
+              currentVisitorId,
+
+            count:
+              myCommunityBookRequests.length,
+
+            requests:
+              myCommunityBookRequests,
+          }
+        );
+      } catch (error) {
+        console.error(
+          'SHELF my community book requests loading failed:',
+          error
+        );
+
+        myCommunityBookRequests = [];
       }
+    }
 
-      // ----------------------------------------------------------------------
-      // Update centralized application state.
-      // ----------------------------------------------------------------------
+    // ----------------------------------------------------------------------
+    // Load community-book requests for books owned by current visitor.
+    //
+    // These requests are used on the OWNER side.
+    // ----------------------------------------------------------------------
 
-      setData({
-        books: Array.isArray(books)
+    let ownerCommunityBookRequests = [];
+
+    if (
+      currentVisitorId &&
+      typeof store.fetchOwnerCommunityBookRequests ===
+        'function'
+    ) {
+      try {
+        const result =
+          await store.fetchOwnerCommunityBookRequests(
+            currentVisitorId
+          );
+
+        ownerCommunityBookRequests =
+          Array.isArray(result)
+            ? result
+            : [];
+
+        console.log(
+          'SHELF — OWNER COMMUNITY REQUESTS:',
+          {
+            visitorId:
+              currentVisitorId,
+
+            count:
+              ownerCommunityBookRequests.length,
+
+            requests:
+              ownerCommunityBookRequests,
+          }
+        );
+      } catch (error) {
+        console.error(
+          'SHELF owner community book requests loading failed:',
+          error
+        );
+
+        ownerCommunityBookRequests = [];
+      }
+    }
+
+    // ----------------------------------------------------------------------
+    // Map normal library borrow requests.
+    // ----------------------------------------------------------------------
+
+    const mappedNormalBorrowRequests =
+      Array.isArray(normalBorrowRequests)
+        ? normalBorrowRequests.map(
+            (request) => ({
+              ...request,
+
+              requestType:
+                request?.requestType ||
+                'library',
+
+              isCommunityBook:
+                request?.isCommunityBook === true,
+            })
+          )
+        : [];
+
+    // ----------------------------------------------------------------------
+    // Map community requests into the same structure used by
+    // My Requests & Borrows.
+    // ----------------------------------------------------------------------
+
+    const mappedMyCommunityRequests =
+      myCommunityBookRequests
+        .filter(
+          (request) =>
+            request &&
+            request.id
+        )
+        .map(
+          (request) => ({
+            id:
+              request.id,
+
+            bookId:
+              request.book_id ||
+              null,
+
+            bookTitle:
+              request.book_title ||
+              'Untitled Book',
+
+            visitorId:
+              request.requester_visitor_id ||
+              currentVisitorId ||
+              null,
+
+            visitorName:
+              request.requester_name ||
+              'SHELF Visitor',
+
+            status:
+              String(
+                request.status ||
+                  'pending'
+              )
+                .trim()
+                .toLowerCase(),
+
+            requestDate:
+              request.request_date ||
+              null,
+
+            pickupDeadline:
+              request.pickup_deadline ||
+              null,
+
+            queuePosition:
+              request.queue_position ??
+              null,
+
+            borrowDate:
+              request.borrow_date ||
+              null,
+
+            dueDate:
+              request.due_date ||
+              null,
+
+            returnDate:
+              request.return_date ||
+              null,
+
+            fineAmount:
+              Number(
+                request.fine_amount ??
+                  0
+              ) || 0,
+
+            confirmedBy:
+              request.confirmed_by ||
+              null,
+
+            returnConfirmedBy:
+              request.return_confirmed_by ||
+              null,
+
+            cancelReason:
+              request.cancel_reason ||
+              null,
+
+            // --------------------------------------------------------------
+            // Community-book information
+            // --------------------------------------------------------------
+
+            requestType:
+              'community',
+
+            isCommunityBook:
+              true,
+
+            ownerVisitorId:
+              request.owner_visitor_id ||
+              null,
+
+            ownerName:
+              request.owner_name ||
+              null,
+
+            ownerResponse:
+              request.owner_response ||
+              null,
+
+            approvedAt:
+              request.approved_at ||
+              null,
+
+            rejectedAt:
+              request.rejected_at ||
+              null,
+
+            lendingPeriodDays:
+              request.lending_period_days ??
+              null,
+          })
+        );
+
+    // ----------------------------------------------------------------------
+    // Merge normal library requests + community requests.
+    // ----------------------------------------------------------------------
+
+    const mergedBorrowRequests = [
+      ...mappedNormalBorrowRequests,
+      ...mappedMyCommunityRequests,
+    ];
+
+    // ----------------------------------------------------------------------
+    // Remove duplicate request IDs.
+    // ----------------------------------------------------------------------
+
+    const uniqueBorrowRequests =
+      Array.from(
+        new Map(
+          mergedBorrowRequests
+            .filter(
+              (request) =>
+                request &&
+                request.id
+            )
+            .map(
+              (request) => [
+                String(
+                  request.id
+                ),
+                request,
+              ]
+            )
+        ).values()
+      );
+
+    // ----------------------------------------------------------------------
+    // Sort newest request first.
+    // ----------------------------------------------------------------------
+
+    uniqueBorrowRequests.sort(
+      (a, b) =>
+        new Date(
+          b?.requestDate || 0
+        ).getTime() -
+        new Date(
+          a?.requestDate || 0
+        ).getTime()
+    );
+
+    // ----------------------------------------------------------------------
+    // Debug information.
+    // ----------------------------------------------------------------------
+
+    console.log(
+      'SHELF — FINAL BORROW REQUESTS:',
+      {
+        visitorId:
+          currentVisitorId,
+
+        normalCount:
+          mappedNormalBorrowRequests.length,
+
+        communityCount:
+          mappedMyCommunityRequests.length,
+
+        totalCount:
+          uniqueBorrowRequests.length,
+
+        communityRequests:
+          mappedMyCommunityRequests,
+      }
+    );
+
+    // ----------------------------------------------------------------------
+    // Update centralized application state.
+    // ----------------------------------------------------------------------
+
+    setData({
+      books:
+        Array.isArray(books)
           ? books
           : [],
 
-        libraries: Array.isArray(libraries)
+      libraries:
+        Array.isArray(libraries)
           ? libraries
           : [],
 
-        visitors: Array.isArray(visitors)
+      visitors:
+        Array.isArray(visitors)
           ? visitors
           : [],
 
-        borrowRequests: Array.isArray(
-          borrowRequests
-        )
-          ? borrowRequests
-          : [],
+      // Normal + Community requests
+      borrowRequests:
+        uniqueBorrowRequests,
 
-        attendanceLogs: Array.isArray(
-          attendanceLogs
-        )
+      attendanceLogs:
+        Array.isArray(attendanceLogs)
           ? attendanceLogs
           : [],
 
-        personalBooks: Array.isArray(
-          personalBooks
-        )
+      personalBooks:
+        Array.isArray(personalBooks)
           ? personalBooks
           : [],
 
-        communityBooks: Array.isArray(
-          communityBooks
-        )
+      communityBooks:
+        Array.isArray(communityBooks)
           ? communityBooks
           : [],
-      });
 
-      setConnectionError('');
+      // Keep community requests separately available.
+      myCommunityBookRequests:
+        myCommunityBookRequests,
 
-      return {
-        books,
-        libraries,
-        visitors,
-        borrowRequests,
-        attendanceLogs,
-        personalBooks,
-        communityBooks,
-      };
-    } catch (err) {
-      console.error(
-        'SHELF refreshAll error:',
-        err
-      );
+      ownerCommunityBookRequests:
+        ownerCommunityBookRequests,
+    });
 
-      setConnectionError(
-        err?.message ||
-          'Could not connect to the database.'
-      );
+    setConnectionError('');
 
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [getCurrentVisitorId]);
+    return {
+      books,
+      libraries,
+      visitors,
+
+      // Return the merged request list.
+      borrowRequests:
+        uniqueBorrowRequests,
+
+      attendanceLogs,
+
+      personalBooks,
+
+      communityBooks,
+
+      myCommunityBookRequests,
+
+      ownerCommunityBookRequests,
+    };
+
+  } catch (err) {
+    console.error(
+      'SHELF refreshAll error:',
+      err
+    );
+
+    setConnectionError(
+      err?.message ||
+        'Could not connect to the database.'
+    );
+
+    throw err;
+
+  } finally {
+    setLoading(false);
+  }
+}, [getCurrentVisitorId]);
 
   // ==========================================================================
   // INITIAL LOAD + AUTH + REALTIME
