@@ -565,45 +565,21 @@ export async function fetchVisitors() {
 }
 
 // ============================================================================
-// FETCH BORROW REQUESTS
+// FETCH ALL REQUESTS AND BORROWS
+// ----------------------------------------------------------------------------
+// Includes:
+//   1. Normal library borrow requests
+//   2. Community/personal book requests
+//
+// Both are normalized into the same request structure so the OPAC
+// "My Requests & Borrows" section can display them together.
 // ============================================================================
 
 export async function fetchBorrowRequests() {
   try {
-    const {
-      data: sessionData,
-      error: sessionError,
-    } = await supabase.auth.getSession();
-
-    if (sessionError) {
-      throw cleanErr(
-        sessionError,
-        'Unable to check the current authentication session.'
-      );
-    }
-
-    if (sessionData?.session) {
-      const {
-        data,
-        error,
-      } = await supabase
-        .from('borrow_requests')
-        .select('*')
-        .order('request_date', {
-          ascending: false,
-        });
-
-      if (error) {
-        throw cleanErr(
-          error,
-          'Unable to load borrow requests.'
-        );
-      }
-
-      return (data || []).map(
-        mapBorrowRequest
-      );
-    }
+    // ------------------------------------------------------------------------
+    // 1. Get the current local SHELF visitor session.
+    // ------------------------------------------------------------------------
 
     let localSession = null;
 
@@ -614,8 +590,7 @@ export async function fetchBorrowRequests() {
         );
 
       if (rawSession) {
-        localSession =
-          JSON.parse(rawSession);
+        localSession = JSON.parse(rawSession);
       }
     } catch (storageError) {
       console.error(
@@ -624,37 +599,369 @@ export async function fetchBorrowRequests() {
       );
     }
 
-    if (
-      localSession?.role === 'visitor' &&
-      isValidUuid(localSession?.id)
-    ) {
-      const {
-        data,
-        error,
-      } = await supabase.rpc(
-        'get_visitor_borrow_requests',
-        {
-          p_visitor_id:
-            localSession.id,
-        }
-      );
+    const visitorId =
+      localSession?.user?.id ||
+      localSession?.visitor?.id ||
+      localSession?.id ||
+      null;
 
-      if (error) {
-        throw cleanErr(
-          error,
-          'Unable to load your borrow requests.'
+    const normalizedVisitorId =
+      normalizeText(visitorId);
+
+    // ------------------------------------------------------------------------
+    // 2. Normal library borrow requests.
+    // ------------------------------------------------------------------------
+
+    let normalRequests = [];
+
+    try {
+      const {
+        data: sessionData,
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        console.warn(
+          'Unable to check Supabase session:',
+          sessionError
         );
       }
 
-      return (data || []).map(
-        mapBorrowRequest
+      if (sessionData?.session) {
+        const {
+          data,
+          error,
+        } = await supabase
+          .from('borrow_requests')
+          .select('*')
+          .order('request_date', {
+            ascending: false,
+          });
+
+        if (error) {
+          throw cleanErr(
+            error,
+            'Unable to load borrow requests.'
+          );
+        }
+
+        normalRequests =
+          (data || []).map(
+            mapBorrowRequest
+          );
+      } else if (
+        isValidUuid(
+          normalizedVisitorId
+        )
+      ) {
+        // QR/local visitor login does not necessarily have a Supabase Auth
+        // session, so use the existing visitor-specific RPC.
+
+        const {
+          data,
+          error,
+        } = await supabase.rpc(
+          'get_visitor_borrow_requests',
+          {
+            p_visitor_id:
+              normalizedVisitorId,
+          }
+        );
+
+        if (error) {
+          throw cleanErr(
+            error,
+            'Unable to load your borrow requests.'
+          );
+        }
+
+        normalRequests =
+          (data || []).map(
+            mapBorrowRequest
+          );
+      }
+    } catch (normalError) {
+      console.error(
+        'NORMAL BORROW REQUESTS ERROR:',
+        normalError
       );
+
+      // Do not prevent community requests from loading.
+      normalRequests = [];
     }
 
-    return [];
+    // ------------------------------------------------------------------------
+    // 3. Community book requests.
+    // ------------------------------------------------------------------------
+    //
+    // These are NOT stored in borrow_requests.
+    // They are stored in community_book_requests and retrieved through
+    // fetch_my_community_book_requests().
+    //
+    // ------------------------------------------------------------------------
+
+    let communityRequests = [];
+
+    if (
+      isValidUuid(
+        normalizedVisitorId
+      )
+    ) {
+      try {
+        const {
+          data,
+          error,
+        } = await supabase.rpc(
+          'fetch_my_community_book_requests',
+          {
+            p_requester_visitor_id:
+              normalizedVisitorId,
+          }
+        );
+
+        if (error) {
+          throw cleanErr(
+            error,
+            'Unable to load your community book requests.'
+          );
+        }
+
+        communityRequests =
+          Array.isArray(data)
+            ? data
+            : [];
+      } catch (communityError) {
+        console.error(
+          'COMMUNITY BOOK REQUESTS ERROR:',
+          communityError
+        );
+
+        // Keep normal requests working even if community request loading
+        // fails.
+        communityRequests = [];
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // 4. Normalize community requests into the same shape as borrow requests.
+    // ------------------------------------------------------------------------
+
+    const mappedCommunityRequests =
+      communityRequests.map(
+        (request) => {
+          const requestId =
+            request.id ||
+            request.request_id;
+
+          const bookId =
+            request.book_id ||
+            request.bookId;
+
+          const bookTitle =
+            request.book_title ||
+            request.title ||
+            'Community Book';
+
+          const requestDate =
+            request.request_date ||
+            request.created_at ||
+            request.requested_at ||
+            null;
+
+          const status =
+            normalizeText(
+              request.status
+            ).toLowerCase() ||
+            'pending';
+
+          const ownerVisitorId =
+            request.owner_visitor_id ||
+            request.ownerVisitorId ||
+            null;
+
+          const ownerName =
+            request.owner_name ||
+            request.ownerName ||
+            null;
+
+          return {
+            // Same ID field used by the normal borrow list.
+            id:
+              requestId,
+
+            // Book information.
+            bookId:
+              bookId,
+
+            bookTitle:
+              bookTitle,
+
+            // The requester is the current visitor.
+            visitorId:
+              request.requester_visitor_id ||
+              request.requesterVisitorId ||
+              normalizedVisitorId,
+
+            visitorName:
+              request.requester_name ||
+              request.requesterName ||
+              localSession?.user?.fullName ||
+              localSession?.user?.full_name ||
+              localSession?.visitor?.fullName ||
+              localSession?.visitor?.full_name ||
+              'You',
+
+            // Community request status.
+            status:
+              status,
+
+            requestDate:
+              requestDate,
+
+            // Community requests do not initially have normal-library
+            // pickup/borrow/return dates.
+            pickupDeadline:
+              request.pickup_deadline ||
+              null,
+
+            queuePosition:
+              request.queue_position ??
+              null,
+
+            borrowDate:
+              request.borrow_date ||
+              null,
+
+            dueDate:
+              request.due_date ||
+              null,
+
+            returnDate:
+              request.return_date ||
+              null,
+
+            fineAmount:
+              Number(
+                request.fine_amount || 0
+              ),
+
+            confirmedBy:
+              request.confirmed_by ||
+              null,
+
+            returnConfirmedBy:
+              request.return_confirmed_by ||
+              null,
+
+            cancelReason:
+              request.cancel_reason ||
+              null,
+
+            // ----------------------------------------------------------------
+            // Extra community-book fields.
+            // ----------------------------------------------------------------
+
+            requestType:
+              'community',
+
+            isCommunityBook:
+              true,
+
+            ownerVisitorId:
+              ownerVisitorId,
+
+            ownerName:
+              ownerName,
+
+            ownerResponse:
+              request.owner_response ||
+              null,
+
+            lendingPeriodDays:
+              request.lending_period_days ??
+              null,
+          };
+        }
+      );
+
+    // ------------------------------------------------------------------------
+    // 5. Make sure normal requests are marked as normal/library requests.
+    // ------------------------------------------------------------------------
+
+    const mappedNormalRequests =
+      normalRequests.map(
+        (request) => ({
+          ...request,
+
+          requestType:
+            request.requestType ||
+            'library',
+
+          isCommunityBook:
+            request.isCommunityBook === true
+              ? true
+              : false,
+        })
+      );
+
+    // ------------------------------------------------------------------------
+    // 6. Merge both lists.
+    // ------------------------------------------------------------------------
+
+    const mergedRequests = [
+      ...mappedNormalRequests,
+      ...mappedCommunityRequests,
+    ];
+
+    // ------------------------------------------------------------------------
+    // 7. Remove accidental duplicates.
+    // ------------------------------------------------------------------------
+
+    const uniqueRequests =
+      Array.from(
+        new Map(
+          mergedRequests
+            .filter(
+              (request) =>
+                request?.id
+            )
+            .map(
+              (request) => [
+                String(request.id),
+                request,
+              ]
+            )
+        ).values()
+      );
+
+    // ------------------------------------------------------------------------
+    // 8. Sort newest request first.
+    // ------------------------------------------------------------------------
+
+    uniqueRequests.sort(
+      (a, b) => {
+        const dateA =
+          a?.requestDate
+            ? new Date(
+                a.requestDate
+              ).getTime()
+            : 0;
+
+        const dateB =
+          b?.requestDate
+            ? new Date(
+                b.requestDate
+              ).getTime()
+            : 0;
+
+        return dateB - dateA;
+      }
+    );
+
+    return uniqueRequests;
   } catch (error) {
     console.error(
-      'FETCH BORROW REQUESTS ERROR:',
+      'FETCH ALL REQUESTS AND BORROWS ERROR:',
       error
     );
 
@@ -2652,6 +2959,157 @@ export async function rejectCommunityBookRequest(
     firstRow(data);
 
   return row || data;
+}
+
+// ============================================================================
+// CANCEL COMMUNITY BOOK REQUEST
+// ============================================================================
+//
+// Cancels a request submitted by the current visitor for a community book.
+//
+// PostgreSQL RPC:
+//
+//   cancel_community_book_request(
+//      p_request_id,
+//      p_requester_visitor_id,
+//      p_reason
+//   )
+//
+// ============================================================================
+
+export async function cancelCommunityBookRequest(
+  requestId,
+  requesterVisitorId,
+  reason = 'cancelled'
+) {
+  const normalizedRequestId =
+    normalizeText(requestId);
+
+  const normalizedRequesterId =
+    normalizeText(requesterVisitorId);
+
+  const normalizedReason =
+    normalizeText(reason) || 'cancelled';
+
+  if (!normalizedRequestId) {
+    throw new Error(
+      'Community book request ID is required.'
+    );
+  }
+
+  if (!isValidUuid(normalizedRequestId)) {
+    throw new Error(
+      'Invalid community book request ID.'
+    );
+  }
+
+  if (!normalizedRequesterId) {
+    throw new Error(
+      'Visitor ID is required.'
+    );
+  }
+
+  if (!isValidUuid(normalizedRequesterId)) {
+    throw new Error(
+      'Invalid visitor ID.'
+    );
+  }
+
+  if (normalizedReason.length > 500) {
+    throw new Error(
+      'Cancellation reason must not exceed 500 characters.'
+    );
+  }
+
+  const {
+    data,
+    error,
+  } = await supabase.rpc(
+    'cancel_community_book_request',
+    {
+      p_request_id:
+        normalizedRequestId,
+
+      p_requester_visitor_id:
+        normalizedRequesterId,
+
+      p_reason:
+        normalizedReason,
+    }
+  );
+
+  if (error) {
+    console.error(
+      'CANCEL COMMUNITY BOOK REQUEST RPC ERROR:',
+      error
+    );
+
+    const message =
+      normalizeText(error?.message);
+
+    const lowerMessage =
+      message.toLowerCase();
+
+    if (
+      lowerMessage.includes(
+        'request not found'
+      ) ||
+      lowerMessage.includes(
+        'community book request not found'
+      )
+    ) {
+      throw new Error(
+        'The community book request could not be found.'
+      );
+    }
+
+    if (
+      lowerMessage.includes(
+        'not authorized'
+      ) ||
+      lowerMessage.includes(
+        'not your request'
+      ) ||
+      lowerMessage.includes(
+        'unauthorized'
+      )
+    ) {
+      throw new Error(
+        'You are not authorized to cancel this community book request.'
+      );
+    }
+
+    if (
+      lowerMessage.includes(
+        'cannot cancel'
+      )
+    ) {
+      throw new Error(
+        message ||
+        'This community book request can no longer be cancelled.'
+      );
+    }
+
+    if (
+      lowerMessage.includes(
+        'uuid'
+      )
+    ) {
+      throw new Error(
+        'The request or visitor ID is invalid.'
+      );
+    }
+
+    throw cleanErr(
+      error,
+      'Unable to cancel the community book request. Please try again.'
+    );
+  }
+
+  return {
+    success: true,
+    data,
+  };
 }
 
 // ============================================================================
