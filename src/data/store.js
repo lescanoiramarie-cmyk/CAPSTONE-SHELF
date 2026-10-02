@@ -334,7 +334,9 @@ export async function fetchBooks() {
 }
 
 export async function fetchVisitors() {
-  const { data: sessionData } = await supabase.auth.getSession();
+  const { data: sessionData } =
+    await supabase.auth.getSession();
+
   if (!sessionData.session) {
     return [];
   }
@@ -357,8 +359,12 @@ export async function fetchVisitors() {
 }
 
 export async function fetchBorrowRequests() {
-  const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData.session) return [];
+  const { data: sessionData } =
+    await supabase.auth.getSession();
+
+  if (!sessionData.session) {
+    return [];
+  }
 
   const { data, error } =
     await supabase
@@ -378,8 +384,12 @@ export async function fetchBorrowRequests() {
 }
 
 export async function fetchAttendanceLogs() {
-  const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData.session) return [];
+  const { data: sessionData } =
+    await supabase.auth.getSession();
+
+  if (!sessionData.session) {
+    return [];
+  }
 
   const { data, error } =
     await supabase
@@ -421,6 +431,25 @@ export async function getVisitor(
 
 // ============================================================================
 // VISITOR ACCOUNTS
+// ----------------------------------------------------------------------------
+// Visitors use the existing PostgreSQL RPC authentication architecture.
+//
+// Registration:
+//   register_visitor()
+//        ↓
+//   visitors row created with OTP
+//        ↓
+//   send-visitor-otp Edge Function
+//
+// Verification:
+//   verify_visitor_otp()
+//
+// Login:
+//   login_visitor()
+//
+// IMPORTANT:
+// Do NOT use supabase.auth.signUp() for visitors here.
+// Staff accounts use Supabase Auth separately.
 // ============================================================================
 
 export async function registerVisitor({
@@ -430,149 +459,359 @@ export async function registerVisitor({
   address,
   password,
 }) {
-  const { data, error } = await supabase.auth.signUp({
-    email: String(email || '').trim().toLowerCase(),
-    password,
-    options: {
-      data: {
-        role: 'visitor',
-        full_name: String(fullName || '').trim(),
-        contact_number: String(contactNumber || '').trim(),
-        address: String(address || '').trim(),
-      },
-    },
-  });
+  const normalizedFullName =
+    String(fullName || '').trim();
+
+  const normalizedContactNumber =
+    String(contactNumber || '').trim();
+
+  const normalizedEmail =
+    String(email || '')
+      .trim()
+      .toLowerCase();
+
+  const normalizedAddress =
+    String(address || '').trim();
+
+  const normalizedPassword =
+    String(password || '');
+
+  if (!normalizedFullName) {
+    throw new Error(
+      'Full name is required.'
+    );
+  }
+
+  if (!normalizedContactNumber) {
+    throw new Error(
+      'Contact number is required.'
+    );
+  }
+
+  if (!normalizedEmail) {
+    throw new Error(
+      'Email address is required.'
+    );
+  }
+
+  if (!normalizedAddress) {
+    throw new Error(
+      'Address is required.'
+    );
+  }
+
+  if (!normalizedPassword) {
+    throw new Error(
+      'Password is required.'
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 1. Create visitor through PostgreSQL RPC
+  // --------------------------------------------------------------------------
+
+  const {
+    data,
+    error,
+  } = await supabase.rpc(
+    'register_visitor',
+    {
+      p_full_name:
+        normalizedFullName,
+
+      p_contact_number:
+        normalizedContactNumber,
+
+      p_email:
+        normalizedEmail,
+
+      p_address:
+        normalizedAddress,
+
+      p_password:
+        normalizedPassword,
+    }
+  );
 
   if (error) {
     throw cleanErr(error);
   }
 
-  if (!data?.user?.email || data.user.identities?.length === 0) {
-    throw new Error('Registration could not be started. Check the email and try again.');
+  const row =
+    Array.isArray(data)
+      ? data[0]
+      : data;
+
+  if (!row?.visitor_id) {
+    throw new Error(
+      'Registration was unsuccessful. Please try again.'
+    );
+  }
+
+  const visitorId =
+    row.visitor_id;
+
+  // --------------------------------------------------------------------------
+  // 2. Send OTP email
+  // --------------------------------------------------------------------------
+
+  const {
+    error: emailError,
+  } = await supabase.functions.invoke(
+    'send-visitor-otp',
+    {
+      body: {
+        visitorId,
+      },
+    }
+  );
+
+  if (emailError) {
+    console.error(
+      'SEND VISITOR OTP ERROR:',
+      emailError
+    );
+
+    throw new Error(
+      'Your registration was created, but we could not send the verification email. Please try again.'
+    );
   }
 
   return {
-    visitorId: data.user.email,
+    visitorId,
   };
 }
+
+// ============================================================================
+// RESEND VISITOR OTP
+// ============================================================================
 
 export async function resendOtp(
   visitorId
 ) {
-  const { error } = await supabase.auth.resend({
-    type: 'signup',
-    email: String(visitorId || '').trim().toLowerCase(),
-  });
+  const normalizedVisitorId =
+    String(visitorId || '').trim();
 
-  if (error) throw cleanErr(error);
+  if (!normalizedVisitorId) {
+    throw new Error(
+      'Registration session not found. Please register again.'
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 1. Generate a new OTP in PostgreSQL
+  // --------------------------------------------------------------------------
+
+  const {
+    error,
+  } = await supabase.rpc(
+    'resend_otp',
+    {
+      p_visitor_id:
+        normalizedVisitorId,
+    }
+  );
+
+  if (error) {
+    throw cleanErr(error);
+  }
+
+  // --------------------------------------------------------------------------
+  // 2. Send the new OTP
+  // --------------------------------------------------------------------------
+
+  const {
+    error: emailError,
+  } = await supabase.functions.invoke(
+    'send-visitor-otp',
+    {
+      body: {
+        visitorId:
+          normalizedVisitorId,
+      },
+    }
+  );
+
+  if (emailError) {
+    console.error(
+      'RESEND VISITOR OTP ERROR:',
+      emailError
+    );
+
+    throw new Error(
+      'A new verification code was generated, but we could not send the email. Please try again.'
+    );
+  }
 
   return {
     success: true,
   };
 }
 
+// ============================================================================
+// VERIFY VISITOR OTP
+// ============================================================================
+
 export async function verifyVisitorOtp(
   visitorId,
   code
 ) {
-  const { data, error } = await supabase.auth.verifyOtp({
-    email: String(visitorId || '').trim().toLowerCase(),
-    token: String(code || '').trim(),
-    type: 'signup',
-  });
+  const normalizedVisitorId =
+    String(visitorId || '').trim();
+
+  const normalizedCode =
+    String(code || '').trim();
+
+  if (!normalizedVisitorId) {
+    throw new Error(
+      'Registration session not found. Please register again.'
+    );
+  }
+
+  if (!/^\d{6}$/.test(normalizedCode)) {
+    throw new Error(
+      'Please enter the complete 6-digit verification code.'
+    );
+  }
+
+  const {
+    data,
+    error,
+  } = await supabase.rpc(
+    'verify_visitor_otp',
+    {
+      p_visitor_id:
+        normalizedVisitorId,
+
+      p_code:
+        normalizedCode,
+    }
+  );
 
   if (error) {
     throw cleanErr(error);
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from('visitors')
-    .select('id, full_name, email, qr_code, otp_verified, is_active')
-    .eq('auth_user_id', data.user.id)
-    .single();
+  const row =
+    Array.isArray(data)
+      ? data[0]
+      : data;
 
-  if (profileError || !profile || !profile.is_active || !profile.otp_verified || !profile.qr_code) {
-    await supabase.auth.signOut();
-    throw cleanErr(profileError || new Error('Visitor account is unverified or inactive.'));
+  if (!row?.id) {
+    throw new Error(
+      'Verification was unsuccessful. Please request a new code.'
+    );
   }
 
   return {
-    id: profile.id,
-    fullName: profile.full_name,
-    email: profile.email,
-    qrCode: profile.qr_code,
+    id: row.id,
+    fullName:
+      row.full_name,
+    email:
+      row.email,
+    qrCode:
+      row.qr_code,
     otpVerified: true,
   };
 }
+
+// ============================================================================
+// VISITOR LOGIN
+// ----------------------------------------------------------------------------
+// Email + password:
+//   login_visitor(p_identifier, p_password)
+//
+// QR pass:
+//   login_visitor(p_identifier, '')
+//
+// The current PostgreSQL function handles both email and QR identifiers.
+// ============================================================================
 
 export async function loginVisitor({
   identifier,
   password,
 }) {
-  const normalizedIdentifier = String(identifier || '').trim();
-  let authUser;
+  const normalizedIdentifier =
+    String(identifier || '').trim();
 
-  if (normalizedIdentifier.includes('@')) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: normalizedIdentifier.toLowerCase(),
-      password: password || '',
-    });
+  const normalizedPassword =
+    String(password || '');
 
-    if (error) throw cleanErr(error);
-    authUser = data.user;
-  } else {
-    const { data: qrLogin, error: qrLoginError } = await supabase.functions.invoke(
-      'visitor-qr-login',
-      { body: { qrCode: normalizedIdentifier } }
+  if (!normalizedIdentifier) {
+    throw new Error(
+      'Email or visitor QR pass is required.'
     );
-
-    if (qrLoginError) throw cleanErr(qrLoginError);
-    if (!qrLogin?.tokenHash) {
-      throw new Error('This QR pass could not be used to sign in.');
-    }
-
-    const { data, error } = await supabase.auth.verifyOtp({
-      token_hash: qrLogin.tokenHash,
-      type: 'magiclink',
-    });
-
-    if (error) throw cleanErr(error);
-    authUser = data.user;
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from('visitors')
-    .select('id, full_name, email, qr_code, otp_verified, is_active')
-    .eq('auth_user_id', authUser.id)
-    .single();
+  const {
+    data,
+    error,
+  } = await supabase.rpc(
+    'login_visitor',
+    {
+      p_identifier:
+        normalizedIdentifier,
 
-  if (profileError || !profile || !profile.is_active || !profile.otp_verified || !profile.qr_code) {
-    await supabase.auth.signOut();
-    throw cleanErr(profileError || new Error('Visitor account is unverified or inactive.'));
+      p_password:
+        normalizedPassword,
+    }
+  );
+
+  if (error) {
+    throw cleanErr(error);
+  }
+
+  const row =
+    Array.isArray(data)
+      ? data[0]
+      : data;
+
+  if (!row?.id) {
+    throw new Error(
+      'Visitor account was not found.'
+    );
   }
 
   return {
-    id: profile.id,
-    fullName: profile.full_name,
-    email: profile.email,
-    qrCode: profile.qr_code,
+    id: row.id,
+    fullName:
+      row.full_name,
+    email:
+      row.email,
+    qrCode:
+      row.qr_code,
   };
 }
+
+// ============================================================================
+// FIND VISITOR BY QR
+// ============================================================================
 
 export async function findVisitorByQr(
   qrCode,
   libraryId
 ) {
-  const { data, error } =
-    await supabase.rpc(
-      'find_visitor_by_qr',
-      {
-        p_qr: String(
-          qrCode || ''
-        ).trim(),
-        p_library_id: libraryId,
-      }
-    );
+  const normalizedQrCode =
+    String(qrCode || '').trim();
+
+  if (!normalizedQrCode) {
+    return null;
+  }
+
+  // `libraryId` is intentionally retained in the function signature
+  // for compatibility with existing components.
+  // The current deployed RPC only requires p_qr.
+
+  const {
+    data,
+    error,
+  } = await supabase.rpc(
+    'find_visitor_by_qr',
+    {
+      p_qr:
+        normalizedQrCode,
+    }
+  );
 
   if (error) {
     throw cleanErr(error);
@@ -585,14 +824,23 @@ export async function findVisitorByQr(
     return null;
   }
 
-  const row = data[0];
+  const row =
+    Array.isArray(data)
+      ? data[0]
+      : data;
 
   return {
-    id: row.id,
+    id:
+      row.id,
+
     fullName:
       row.full_name,
-    email: row.email,
-    qrCode: row.qr_code,
+
+    email:
+      row.email,
+
+    qrCode:
+      row.qr_code,
   };
 }
 
@@ -651,6 +899,7 @@ export async function loginStaffAccount(
       {
         email:
           normalizedEmail,
+
         password:
           normalizedPassword,
       }
@@ -659,8 +908,6 @@ export async function loginStaffAccount(
   // --------------------------------------------------------------------------
   // IMPORTANT:
   // Handle disabled/banned staff accounts explicitly.
-  // Supabase Auth may return "User is banned" before we can
-  // read staff_profiles.is_active.
   // --------------------------------------------------------------------------
 
   if (error) {
@@ -837,10 +1084,18 @@ export async function loginStaffAccount(
   // --------------------------------------------------------------------------
 
   return {
-    id: profile.id,
-    email: profile.email,
-    name: profile.full_name,
-    role: profile.role,
+    id:
+      profile.id,
+
+    email:
+      profile.email,
+
+    name:
+      profile.full_name,
+
+    role:
+      profile.role,
+
     libraryId:
       profile.library_id,
   };
@@ -918,23 +1173,30 @@ export async function scanAttendance(
   qrCode,
   libraryId
 ) {
-  const { data, error } =
-    await supabase.rpc(
-      'toggle_attendance',
-      {
-        p_qr: String(
+  const {
+    data,
+    error,
+  } = await supabase.rpc(
+    'toggle_attendance',
+    {
+      p_qr:
+        String(
           qrCode || ''
         ).trim(),
-        p_library_id:
-          libraryId,
-      }
-    );
+
+      p_library_id:
+        libraryId,
+    }
+  );
 
   if (error) {
     throw cleanErr(error);
   }
 
-  const row = data?.[0];
+  const row =
+    Array.isArray(data)
+      ? data[0]
+      : data;
 
   if (!row) {
     throw new Error(
@@ -944,13 +1206,19 @@ export async function scanAttendance(
 
   return {
     visitor: {
-      id: row.visitor_id,
+      id:
+        row.visitor_id,
+
       fullName:
         row.visitor_name,
     },
+
     log: {
-      id: row.log_id,
-      action: row.action,
+      id:
+        row.log_id,
+
+      action:
+        row.action,
     },
   };
 }
@@ -970,7 +1238,10 @@ export async function addBook(
       ) || 1
     );
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
       .from('books')
       .insert({
@@ -1031,60 +1302,147 @@ export async function addBook(
   return mapBook(data);
 }
 
-export async function addBooksBulk(books) {
-  if (!Array.isArray(books) || books.length === 0) {
-    throw new Error('Choose a file containing at least one book.');
+// ============================================================================
+// BULK BOOK UPLOAD
+// ============================================================================
+
+export async function addBooksBulk(
+  books
+) {
+  if (
+    !Array.isArray(books) ||
+    books.length === 0
+  ) {
+    throw new Error(
+      'Choose a file containing at least one book.'
+    );
   }
 
-  const rows = books.map((book, index) => {
-    const normalized = Object.fromEntries(
-      Object.entries(book).map(([key, value]) => [
-        String(key).trim().toLowerCase().replace(/[\s-]+/g, '_'),
-        value,
-      ])
+  const rows =
+    books.map(
+      (book, index) => {
+        const normalized =
+          Object.fromEntries(
+            Object.entries(book).map(
+              ([key, value]) => [
+                String(key)
+                  .trim()
+                  .toLowerCase()
+                  .replace(
+                    /[\s-]+/g,
+                    '_'
+                  ),
+                value,
+              ]
+            )
+          );
+
+        const title =
+          String(
+            normalized.title || ''
+          ).trim();
+
+        const author =
+          String(
+            normalized.author || ''
+          ).trim();
+
+        const isbn =
+          String(
+            normalized.isbn || ''
+          ).trim();
+
+        const category =
+          String(
+            normalized.category || ''
+          ).trim();
+
+        const stock =
+          Number(
+            normalized.stock_count ??
+              normalized.stock ??
+              normalized.total_copies ??
+              normalized.copies
+          );
+
+        if (
+          !title ||
+          !author ||
+          !isbn ||
+          !category ||
+          !Number.isInteger(
+            stock
+          ) ||
+          stock < 1
+        ) {
+          throw new Error(
+            `Row ${index + 1} requires title, author, ISBN, category, and a positive whole-number stock count.`
+          );
+        }
+
+        return {
+          library_id:
+            String(
+              normalized.library_id ||
+                ''
+            ).trim() || null,
+
+          title,
+
+          author,
+
+          isbn,
+
+          category,
+
+          total_copies:
+            stock,
+
+          available_copies:
+            stock,
+
+          shelf_location:
+            String(
+              normalized.shelf_location ||
+                ''
+            ).trim() || null,
+
+          summary:
+            String(
+              normalized.summary ||
+                ''
+            ).trim() || null,
+
+          cover_url:
+            String(
+              normalized.cover_url ||
+                ''
+            ).trim() || null,
+        };
+      }
     );
-    const title = String(normalized.title || '').trim();
-    const author = String(normalized.author || '').trim();
-    const isbn = String(normalized.isbn || '').trim();
-    const category = String(normalized.category || '').trim();
-    const stock = Number(
-      normalized.stock_count ??
-      normalized.stock ??
-      normalized.total_copies ??
-      normalized.copies
-    );
 
-    if (!title || !author || !isbn || !category || !Number.isInteger(stock) || stock < 1) {
-      throw new Error(
-        `Row ${index + 1} requires title, author, ISBN, category, and a positive whole-number stock count.`
-      );
-    }
-
-    return {
-      library_id: String(normalized.library_id || '').trim() || null,
-      title,
-      author,
-      isbn,
-      category,
-      total_copies: stock,
-      available_copies: stock,
-      shelf_location: String(normalized.shelf_location || '').trim() || null,
-      summary: String(normalized.summary || '').trim() || null,
-      cover_url: String(normalized.cover_url || '').trim() || null,
-    };
-  });
-
-  const { data, error } = await supabase
-    .from('books')
-    .insert(rows)
-    .select();
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from('books')
+      .insert(rows)
+      .select();
 
   if (error) {
     throw cleanErr(error);
   }
 
-  return (data || []).map(mapBook);
+  return (data || []).map(
+    mapBook
+  );
 }
+
+// ============================================================================
+// UPDATE BOOK
+// ============================================================================
 
 export async function updateBook(
   bookId,
@@ -1172,30 +1530,48 @@ export async function updateBook(
       patch.coverUrl;
   }
 
-  const { error } =
+  const {
+    error,
+  } =
     await supabase
       .from('books')
       .update(dbPatch)
-      .eq('id', bookId);
+      .eq(
+        'id',
+        bookId
+      );
 
   if (error) {
     throw cleanErr(error);
   }
 }
+
+// ============================================================================
+// DELETE BOOK
+// ============================================================================
 
 export async function deleteBook(
   bookId
 ) {
-  const { error } =
+  const {
+    error,
+  } =
     await supabase
       .from('books')
       .delete()
-      .eq('id', bookId);
+      .eq(
+        'id',
+        bookId
+      );
 
   if (error) {
     throw cleanErr(error);
   }
 }
+
+// ============================================================================
+// LOAD SAMPLE / API CATALOG
+// ============================================================================
 
 export async function loadSampleCatalog(
   libraryId
@@ -1216,7 +1592,9 @@ export async function loadSampleCatalog(
 
   let allBooks = [];
 
-  for (const cat of categories) {
+  for (
+    const cat of categories
+  ) {
     try {
       const response =
         await fetch(
@@ -1234,7 +1612,10 @@ export async function loadSampleCatalog(
 
       const mapped =
         (data.docs || []).map(
-          (doc, index) => {
+          (
+            doc,
+            index
+          ) => {
             const copies =
               Math.floor(
                 Math.random() * 5
@@ -1246,16 +1627,16 @@ export async function loadSampleCatalog(
                 'Untitled',
 
               author:
-                doc
-                  .author_name?.[0] ||
+                doc.author_name?.[0] ||
                 'Unknown Author',
 
-              category: cat
-                .replace(
-                  '+',
-                  ' '
-                )
-                .toUpperCase(),
+              category:
+                cat
+                  .replace(
+                    '+',
+                    ' '
+                  )
+                  .toUpperCase(),
 
               isbn:
                 doc.isbn?.[0] ||
@@ -1270,11 +1651,8 @@ export async function loadSampleCatalog(
               shelf_location:
                 `Shelf ${String.fromCharCode(
                   65 +
-                    (index %
-                      5)
-                )}-${(index %
-                  10) +
-                  1}`,
+                    (index % 5)
+                )}-${(index % 10) + 1}`,
 
               library_id:
                 libraryId,
@@ -1286,8 +1664,7 @@ export async function loadSampleCatalog(
                 copies,
 
               summary:
-                doc
-                  .first_sentence?.[0] ||
+                doc.first_sentence?.[0] ||
                 `An authoritative academic resource focusing on ${cat.replace(
                   '+',
                   ' '
@@ -1315,7 +1692,9 @@ export async function loadSampleCatalog(
   if (
     allBooks.length > 0
   ) {
-    const { error } =
+    const {
+      error,
+    } =
       await supabase
         .from('books')
         .insert(
@@ -1336,12 +1715,16 @@ export async function requestBorrow(
   visitorId,
   bookId
 ) {
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase.rpc(
       'request_borrow',
       {
         p_visitor_id:
           visitorId,
+
         p_book_id:
           bookId,
       }
@@ -1367,16 +1750,23 @@ export async function requestBorrow(
   );
 }
 
+// ============================================================================
+// CANCEL BORROW REQUEST
+// ============================================================================
+
 export async function cancelBorrowRequest(
   requestId,
   reason = 'cancelled'
 ) {
-  const { error } =
+  const {
+    error,
+  } =
     await supabase.rpc(
       'cancel_borrow_request',
       {
         p_request_id:
           requestId,
+
         p_reason:
           reason,
       }
@@ -1395,12 +1785,15 @@ export async function confirmPickup(
   requestId,
   staffName
 ) {
-  const { error } =
+  const {
+    error,
+  } =
     await supabase.rpc(
       'confirm_pickup',
       {
         p_request_id:
           requestId,
+
         p_staff_name:
           staffName,
       }
@@ -1419,12 +1812,15 @@ export async function confirmReturn(
   requestId,
   staffName
 ) {
-  const { error } =
+  const {
+    error,
+  } =
     await supabase.rpc(
       'confirm_return',
       {
         p_request_id:
           requestId,
+
         p_staff_name:
           staffName,
       }
