@@ -2111,19 +2111,6 @@ export async function addPersonalBook({
 //      p_book_id
 //   )
 //
-// Expected result:
-//
-//   id
-//   book_id
-//   book_title
-//   owner_visitor_id
-//   owner_name
-//   requester_visitor_id
-//   requester_name
-//   status
-//   request_date
-//   owner_response
-//
 // ============================================================================
 
 export async function requestCommunityBook(
@@ -2364,6 +2351,307 @@ export async function requestCommunityBook(
       row.owner_response ||
       null,
   };
+}
+
+// ============================================================================
+// FETCH COMMUNITY BOOK REQUESTS — OWNER
+// ============================================================================
+//
+// Loads requests made by other visitors for books owned by this visitor.
+//
+// PostgreSQL RPC:
+//
+//   fetch_owner_community_book_requests(
+//      p_owner_visitor_id
+//   )
+//
+// ============================================================================
+
+export async function fetchOwnerCommunityBookRequests(
+  ownerVisitorId
+) {
+  const normalizedOwnerId =
+    normalizeText(ownerVisitorId);
+
+  if (!normalizedOwnerId) {
+    return [];
+  }
+
+  if (!isValidUuid(normalizedOwnerId)) {
+    throw new Error(
+      'Invalid owner visitor ID.'
+    );
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await supabase.rpc(
+      'fetch_owner_community_book_requests',
+      {
+        p_owner_visitor_id:
+          normalizedOwnerId,
+      }
+    );
+
+  if (error) {
+    console.error(
+      'FETCH OWNER COMMUNITY BOOK REQUESTS RPC ERROR:',
+      error
+    );
+
+    throw cleanErr(
+      error,
+      'Unable to load community book requests.'
+    );
+  }
+
+  return Array.isArray(data)
+    ? data
+    : [];
+}
+
+// ============================================================================
+// FETCH COMMUNITY BOOK REQUESTS — REQUESTER
+// ============================================================================
+//
+// Loads requests submitted by the current visitor.
+//
+// PostgreSQL RPC:
+//
+//   fetch_my_community_book_requests(
+//      p_requester_visitor_id
+//   )
+//
+// ============================================================================
+
+export async function fetchMyCommunityBookRequests(
+  requesterVisitorId
+) {
+  const normalizedRequesterId =
+    normalizeText(
+      requesterVisitorId
+    );
+
+  if (!normalizedRequesterId) {
+    return [];
+  }
+
+  if (!isValidUuid(normalizedRequesterId)) {
+    throw new Error(
+      'Invalid visitor ID.'
+    );
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await supabase.rpc(
+      'fetch_my_community_book_requests',
+      {
+        p_requester_visitor_id:
+          normalizedRequesterId,
+      }
+    );
+
+  if (error) {
+    console.error(
+      'FETCH MY COMMUNITY BOOK REQUESTS RPC ERROR:',
+      error
+    );
+
+    throw cleanErr(
+      error,
+      'Unable to load your community book requests.'
+    );
+  }
+
+  return Array.isArray(data)
+    ? data
+    : [];
+}
+
+// ============================================================================
+// APPROVE COMMUNITY BOOK REQUEST
+// ============================================================================
+//
+// The owner approves a visitor's request.
+//
+// PostgreSQL RPC:
+//
+//   approve_community_book_request(
+//      p_request_id,
+//      p_owner_visitor_id
+//   )
+//
+// ============================================================================
+
+export async function approveCommunityBookRequest(
+  requestId,
+  ownerVisitorId
+) {
+  const normalizedRequestId =
+    normalizeText(requestId);
+
+  const normalizedOwnerId =
+    normalizeText(ownerVisitorId);
+
+  if (!normalizedRequestId) {
+    throw new Error(
+      'Community book request ID is required.'
+    );
+  }
+
+  if (!isValidUuid(normalizedRequestId)) {
+    throw new Error(
+      'Invalid community book request ID.'
+    );
+  }
+
+  if (!normalizedOwnerId) {
+    throw new Error(
+      'Owner visitor ID is required.'
+    );
+  }
+
+  if (!isValidUuid(normalizedOwnerId)) {
+    throw new Error(
+      'Invalid owner visitor ID.'
+    );
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await supabase.rpc(
+      'approve_community_book_request',
+      {
+        p_request_id:
+          normalizedRequestId,
+
+        p_owner_visitor_id:
+          normalizedOwnerId,
+      }
+    );
+
+  if (error) {
+    console.error(
+      'APPROVE COMMUNITY BOOK REQUEST RPC ERROR:',
+      error
+    );
+
+    throw cleanErr(
+      error,
+      'Unable to approve the community book request.'
+    );
+  }
+
+  const row =
+    firstRow(data);
+
+  return row || data;
+}
+
+// ============================================================================
+// REJECT COMMUNITY BOOK REQUEST
+// ============================================================================
+//
+// The owner rejects a visitor's request.
+//
+// PostgreSQL RPC:
+//
+//   reject_community_book_request(
+//      p_request_id,
+//      p_owner_visitor_id,
+//      p_reason
+//   )
+//
+// ============================================================================
+
+export async function rejectCommunityBookRequest(
+  requestId,
+  ownerVisitorId,
+  reason = null
+) {
+  const normalizedRequestId =
+    normalizeText(requestId);
+
+  const normalizedOwnerId =
+    normalizeText(ownerVisitorId);
+
+  const normalizedReason =
+    normalizeText(reason) || null;
+
+  if (!normalizedRequestId) {
+    throw new Error(
+      'Community book request ID is required.'
+    );
+  }
+
+  if (!isValidUuid(normalizedRequestId)) {
+    throw new Error(
+      'Invalid community book request ID.'
+    );
+  }
+
+  if (!normalizedOwnerId) {
+    throw new Error(
+      'Owner visitor ID is required.'
+    );
+  }
+
+  if (!isValidUuid(normalizedOwnerId)) {
+    throw new Error(
+      'Invalid owner visitor ID.'
+    );
+  }
+
+  if (
+    normalizedReason &&
+    normalizedReason.length > 500
+  ) {
+    throw new Error(
+      'Rejection reason must not exceed 500 characters.'
+    );
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await supabase.rpc(
+      'reject_community_book_request',
+      {
+        p_request_id:
+          normalizedRequestId,
+
+        p_owner_visitor_id:
+          normalizedOwnerId,
+
+        p_reason:
+          normalizedReason,
+      }
+    );
+
+  if (error) {
+    console.error(
+      'REJECT COMMUNITY BOOK REQUEST RPC ERROR:',
+      error
+    );
+
+    throw cleanErr(
+      error,
+      'Unable to reject the community book request.'
+    );
+  }
+
+  const row =
+    firstRow(data);
+
+  return row || data;
 }
 
 // ============================================================================
