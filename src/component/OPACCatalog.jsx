@@ -1,11 +1,31 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/useAuth.js';
-import { BookOpen, MapPinned, Search, X } from 'lucide-react';
+import {
+  BookOpen,
+  MapPinned,
+  Search,
+  X,
+  Plus,
+  Library,
+  UserRound,
+  Users,
+  Clock3,
+  MapPin,
+} from 'lucide-react';
+
 import {
   useLibrary,
   useLibraryData,
 } from '../context/useLibrary.js';
+
 import LibraryMap from './LibraryMap.jsx';
+
+import {
+  addPersonalBook,
+  fetchCommunityBooks,
+  fetchPersonalBooks,
+} from '../data/store.js';
+
 import { supabase } from '../lib/supabaseClient.js';
 
 // =========================================================
@@ -92,6 +112,21 @@ const STATUS_LABELS = {
 };
 
 // =========================================================
+// PERSONAL BOOK CONSTANTS
+// =========================================================
+
+const PERSONAL_BOOK_CONDITIONS = [
+  'New',
+  'Like New',
+  'Good',
+  'Fair',
+  'Poor',
+];
+
+const PERSONAL_BOOK_MIN_LENDING_DAYS = 1;
+const PERSONAL_BOOK_MAX_LENDING_DAYS = 30;
+
+// =========================================================
 // OPAC CATALOG
 // =========================================================
 
@@ -163,6 +198,51 @@ export default function OPACCatalog({
     useState(false);
 
   // =========================================================
+  // PERSONAL / COMMUNITY BOOK STATES
+  // =========================================================
+
+  const [personalBooks, setPersonalBooks] =
+    useState([]);
+
+  const [communityBooks, setCommunityBooks] =
+    useState([]);
+
+  const [loadingPersonalBooks, setLoadingPersonalBooks] =
+    useState(false);
+
+  const [loadingCommunityBooks, setLoadingCommunityBooks] =
+    useState(false);
+
+  const [personalBookError, setPersonalBookError] =
+    useState('');
+
+  const [communityBookError, setCommunityBookError] =
+    useState('');
+
+  const [showAddPersonalBook, setShowAddPersonalBook] =
+    useState(false);
+
+  const [addingPersonalBook, setAddingPersonalBook] =
+    useState(false);
+
+  // =========================================================
+  // ADD PERSONAL BOOK FORM
+  // =========================================================
+
+  const [personalBookForm, setPersonalBookForm] =
+    useState({
+      title: '',
+      author: '',
+      category: '',
+      isbn: '',
+      summary: '',
+      condition: 'Good',
+      lendingPeriodDays: 7,
+      handoverLocation: '',
+      lendingEnabled: true,
+    });
+
+  // =========================================================
   // MAP STATES
   // =========================================================
 
@@ -209,6 +289,252 @@ export default function OPACCatalog({
   }, []);
 
   // =========================================================
+  // LOAD PERSONAL / COMMUNITY BOOKS
+  // =========================================================
+
+  const loadPersonalAndCommunityBooks = async () => {
+    setPersonalBookError('');
+    setCommunityBookError('');
+
+    // -------------------------------------------------------
+    // PERSONAL BOOKS
+    // -------------------------------------------------------
+
+    if (user?.id) {
+      setLoadingPersonalBooks(true);
+
+      try {
+        const personal = await fetchPersonalBooks(
+          user.id
+        );
+
+        setPersonalBooks(
+          Array.isArray(personal)
+            ? personal
+            : []
+        );
+      } catch (error) {
+        console.error(
+          'Error loading personal books:',
+          error
+        );
+
+        setPersonalBooks([]);
+
+        setPersonalBookError(
+          error?.message ||
+            'Unable to load your personal books.'
+        );
+      } finally {
+        setLoadingPersonalBooks(false);
+      }
+    } else {
+      setPersonalBooks([]);
+      setLoadingPersonalBooks(false);
+    }
+
+    // -------------------------------------------------------
+    // COMMUNITY BOOKS
+    // -------------------------------------------------------
+
+    setLoadingCommunityBooks(true);
+
+    try {
+      const community =
+        await fetchCommunityBooks();
+
+      setCommunityBooks(
+        Array.isArray(community)
+          ? community
+          : []
+      );
+    } catch (error) {
+      console.error(
+        'Error loading community books:',
+        error
+      );
+
+      setCommunityBooks([]);
+
+      setCommunityBookError(
+        error?.message ||
+          'Unable to load community books.'
+      );
+    } finally {
+      setLoadingCommunityBooks(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPersonalAndCommunityBooks();
+  }, [user?.id]);
+
+  // =========================================================
+  // PERSONAL BOOK FORM HELPERS
+  // =========================================================
+
+  const updatePersonalBookForm = (
+    field,
+    value
+  ) => {
+    setPersonalBookForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const resetPersonalBookForm = () => {
+    setPersonalBookForm({
+      title: '',
+      author: '',
+      category: '',
+      isbn: '',
+      summary: '',
+      condition: 'Good',
+      lendingPeriodDays: 7,
+      handoverLocation: '',
+      lendingEnabled: true,
+    });
+  };
+
+  // =========================================================
+  // ADD PERSONAL BOOK
+  // =========================================================
+
+  const handleAddPersonalBook = async (
+    event
+  ) => {
+    event.preventDefault();
+
+    if (!user?.id) {
+      setNotice(
+        'Please log in before adding a personal book.'
+      );
+      return;
+    }
+
+    const title =
+      personalBookForm.title.trim();
+
+    const author =
+      personalBookForm.author.trim();
+
+    const category =
+      personalBookForm.category.trim();
+
+    const isbn =
+      personalBookForm.isbn.trim();
+
+    const summary =
+      personalBookForm.summary.trim();
+
+    const handoverLocation =
+      personalBookForm.handoverLocation.trim();
+
+    const lendingPeriodDays =
+      Number(
+        personalBookForm.lendingPeriodDays
+      );
+
+    if (!title) {
+      setNotice(
+        'Book title is required.'
+      );
+      return;
+    }
+
+    if (!author) {
+      setNotice(
+        'Book author is required.'
+      );
+      return;
+    }
+
+    if (
+      !Number.isInteger(
+        lendingPeriodDays
+      ) ||
+      lendingPeriodDays <
+        PERSONAL_BOOK_MIN_LENDING_DAYS ||
+      lendingPeriodDays >
+        PERSONAL_BOOK_MAX_LENDING_DAYS
+    ) {
+      setNotice(
+        `Lending period must be between ${PERSONAL_BOOK_MIN_LENDING_DAYS} and ${PERSONAL_BOOK_MAX_LENDING_DAYS} days.`
+      );
+      return;
+    }
+
+    if (
+      personalBookForm.lendingEnabled &&
+      !handoverLocation
+    ) {
+      setNotice(
+        'Handover location is required when lending is enabled.'
+      );
+      return;
+    }
+
+    if (addingPersonalBook) {
+      return;
+    }
+
+    setAddingPersonalBook(true);
+    setNotice('');
+
+    try {
+      const createdBook =
+        await addPersonalBook({
+          visitorId: user.id,
+          title,
+          author,
+          category: category || null,
+          isbn: isbn || null,
+          summary: summary || null,
+          condition:
+            personalBookForm.condition,
+          lendingPeriodDays,
+          handoverLocation:
+            handoverLocation || null,
+          lendingEnabled:
+            Boolean(
+              personalBookForm.lendingEnabled
+            ),
+        });
+
+      if (!createdBook) {
+        throw new Error(
+          'The personal book was not created. Please try again.'
+        );
+      }
+
+      setPersonalBooks((current) => [
+        createdBook,
+        ...current,
+      ]);
+
+      setShowAddPersonalBook(false);
+      resetPersonalBookForm();
+
+      setNotice(
+        `"${title}" was added to your personal books successfully.`
+      );
+    } catch (error) {
+      console.error(
+        'Add personal book error:',
+        error
+      );
+
+      setNotice(
+        error?.message ||
+          'Unable to add the personal book. Please try again.'
+      );
+    } finally {
+      setAddingPersonalBook(false);
+    }
+  };
+
+  // =========================================================
   // DYNAMIC FILTER OPTIONS
   // =========================================================
 
@@ -216,36 +542,48 @@ export default function OPACCatalog({
 
   books.forEach((book) => {
     const category =
-      book.category?.trim() || 'Uncategorized';
+      book.category?.trim() ||
+      'Uncategorized';
 
     const categoryKey =
       category.toLocaleLowerCase();
 
-    const normalizedIsbn = String(book.isbn || '')
-      .replace(/[^a-z0-9]/gi, '')
-      .toLocaleLowerCase();
+    const normalizedIsbn =
+      String(book.isbn || '')
+        .replace(/[^a-z0-9]/gi, '')
+        .toLocaleLowerCase();
 
-    const normalizedTitle = String(book.title || '')
-      .trim()
-      .replace(/\s+/g, ' ')
-      .toLocaleLowerCase();
+    const normalizedTitle =
+      String(book.title || '')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .toLocaleLowerCase();
 
-    const normalizedAuthor = String(book.author || '')
-      .trim()
-      .replace(/\s+/g, ' ')
-      .toLocaleLowerCase();
+    const normalizedAuthor =
+      String(book.author || '')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .toLocaleLowerCase();
 
     const bookKey = normalizedIsbn
       ? `isbn:${normalizedIsbn}`
-      : normalizedTitle || normalizedAuthor
+      : normalizedTitle ||
+          normalizedAuthor
         ? `title-author:${normalizedTitle}|${normalizedAuthor}`
         : `id:${book.id}`;
 
-    if (!uniqueBooksByCategory.has(categoryKey)) {
-      uniqueBooksByCategory.set(categoryKey, {
-        label: category,
-        books: new Set(),
-      });
+    if (
+      !uniqueBooksByCategory.has(
+        categoryKey
+      )
+    ) {
+      uniqueBooksByCategory.set(
+        categoryKey,
+        {
+          label: category,
+          books: new Set(),
+        }
+      );
     }
 
     uniqueBooksByCategory
@@ -254,11 +592,18 @@ export default function OPACCatalog({
   });
 
   const categorySummaries =
-    [...uniqueBooksByCategory.values()]
-      .map(({ label, books: uniqueBooks }) => ({
-        label,
-        count: uniqueBooks.size,
-      }))
+    [
+      ...uniqueBooksByCategory.values(),
+    ]
+      .map(
+        ({
+          label,
+          books: uniqueBooks,
+        }) => ({
+          label,
+          count: uniqueBooks.size,
+        })
+      )
       .sort((a, b) =>
         a.label.localeCompare(b.label)
       );
@@ -267,18 +612,22 @@ export default function OPACCatalog({
     'All',
     ...new Set(
       books
-        .map((book) => book.libraryId)
+        .map(
+          (book) =>
+            book.libraryId
+        )
         .filter(Boolean)
     ),
   ];
 
   const libraryName = (id) =>
     libraries.find(
-      (library) => library.id === id
+      (library) =>
+        library.id === id
     )?.name || id;
 
   // =========================================================
-  // SEARCH HANDLER
+  // SEARCH HANDLERS
   // =========================================================
 
   const handleSearch = (event) => {
@@ -286,15 +635,22 @@ export default function OPACCatalog({
       event.preventDefault();
     }
 
-    setSearchTerm(searchInput.trim());
+    setSearchTerm(
+      searchInput.trim()
+    );
   };
 
-  const handleSearchInputChange = (event) => {
-    const value = event.target.value;
+  const handleSearchInputChange = (
+    event
+  ) => {
+    const value =
+      event.target.value;
 
     setSearchInput(value);
 
-    if (value.trim() === '') {
+    if (
+      value.trim() === ''
+    ) {
       setSearchTerm('');
     }
   };
@@ -316,25 +672,36 @@ export default function OPACCatalog({
     const fetchReviews = async () => {
       setLoadingReviews(true);
 
-      const { data, error } = await supabase
+      const {
+        data,
+        error,
+      } = await supabase
         .from('book_reviews')
         .select('*')
         .eq(
           'book_id',
-          String(selectedBook.id)
+          String(
+            selectedBook.id
+          )
         )
-        .order('created_at', {
-          ascending: false,
-        });
+        .order(
+          'created_at',
+          {
+            ascending: false,
+          }
+        );
 
       if (error) {
         console.error(
           'Error fetching reviews:',
           error.message
         );
+
         setReviews([]);
       } else {
-        setReviews(data || []);
+        setReviews(
+          data || []
+        );
       }
 
       setLoadingReviews(false);
@@ -347,7 +714,9 @@ export default function OPACCatalog({
   // SUBMIT REVIEW
   // =========================================================
 
-  const handleSubmitReview = async (event) => {
+  const handleSubmitReview = async (
+    event
+  ) => {
     event.preventDefault();
 
     if (
@@ -360,20 +729,32 @@ export default function OPACCatalog({
     setIsSubmitting(true);
 
     const newReview = {
-      book_id: String(selectedBook.id),
+      book_id: String(
+        selectedBook.id
+      ),
+
       visitor_id: user?.id
         ? String(user.id)
         : null,
+
       visitor_name:
         user?.full_name ||
         user?.name ||
         user?.email ||
         'Anonymous Visitor',
-      rating: Number(userRating),
-      comment: userComment.trim(),
+
+      rating: Number(
+        userRating
+      ),
+
+      comment:
+        userComment.trim(),
     };
 
-    const { data, error } = await supabase
+    const {
+      data,
+      error,
+    } = await supabase
       .from('book_reviews')
       .insert([newReview])
       .select();
@@ -388,11 +769,16 @@ export default function OPACCatalog({
       return;
     }
 
-    if (data && data.length > 0) {
-      setReviews((currentReviews) => [
-        data[0],
-        ...currentReviews,
-      ]);
+    if (
+      data &&
+      data.length > 0
+    ) {
+      setReviews(
+        (currentReviews) => [
+          data[0],
+          ...currentReviews,
+        ]
+      );
 
       setUserComment('');
       setUserRating(5);
@@ -408,183 +794,323 @@ export default function OPACCatalog({
   // =========================================================
 
   const normalizedSearch =
-    searchTerm.trim().toLowerCase();
+    searchTerm
+      .trim()
+      .toLowerCase();
 
-  const filteredBooks = books.filter(
-    (book) => {
-      const title =
-        String(book.title || '')
-          .toLowerCase();
+  const filteredBooks =
+    books.filter(
+      (book) => {
+        const title =
+          String(
+            book.title || ''
+          ).toLowerCase();
 
-      const author =
-        String(book.author || '')
-          .toLowerCase();
+        const author =
+          String(
+            book.author || ''
+          ).toLowerCase();
 
-      const isbn =
-        String(book.isbn || '')
-          .toLowerCase();
+        const isbn =
+          String(
+            book.isbn || ''
+          ).toLowerCase();
 
-      const category =
-        String(book.category || '')
-          .toLowerCase();
+        const category =
+          String(
+            book.category || ''
+          ).toLowerCase();
 
-      const matchesSearch =
-        normalizedSearch === '' ||
-        title.includes(normalizedSearch) ||
-        author.includes(normalizedSearch) ||
-        isbn.includes(normalizedSearch) ||
-        category.includes(normalizedSearch);
+        const matchesSearch =
+          normalizedSearch === '' ||
+          title.includes(
+            normalizedSearch
+          ) ||
+          author.includes(
+            normalizedSearch
+          ) ||
+          isbn.includes(
+            normalizedSearch
+          ) ||
+          category.includes(
+            normalizedSearch
+          );
 
-      const matchesCategory =
-        selectedCategory === 'All' ||
-        String(
-          book.category || 'Uncategorized'
-        )
-          .trim()
-          .toLocaleLowerCase() ===
-          selectedCategory.toLocaleLowerCase();
+        const matchesCategory =
+          selectedCategory ===
+            'All' ||
+          String(
+            book.category ||
+              'Uncategorized'
+          )
+            .trim()
+            .toLocaleLowerCase() ===
+            selectedCategory.toLocaleLowerCase();
 
-      const matchesLibrary =
-        libraryFilter
-          ? book.libraryId === libraryFilter
-          : selectedLibrary === 'All' ||
-            book.libraryId === selectedLibrary;
+        const matchesLibrary =
+          libraryFilter
+            ? book.libraryId ===
+              libraryFilter
+            : selectedLibrary ===
+                'All' ||
+              book.libraryId ===
+                selectedLibrary;
 
-      const isAvailable =
-        Number(book.availableCopies || 0) > 0;
+        const isAvailable =
+          Number(
+            book.availableCopies ||
+              0
+          ) > 0;
 
-      const matchesAvailability =
-        selectedAvailability === 'All' ||
-        (
-          selectedAvailability === 'Available' &&
-          isAvailable
-        ) ||
-        (
-          selectedAvailability === 'Unavailable' &&
-          !isAvailable
+        const matchesAvailability =
+          selectedAvailability ===
+            'All' ||
+          (selectedAvailability ===
+            'Available' &&
+            isAvailable) ||
+          (selectedAvailability ===
+            'Unavailable' &&
+            !isAvailable);
+
+        return (
+          matchesSearch &&
+          matchesCategory &&
+          matchesLibrary &&
+          matchesAvailability
         );
-
-      return (
-        matchesSearch &&
-        matchesCategory &&
-        matchesLibrary &&
-        matchesAvailability
-      );
-    }
-  );
+      }
+    );
 
   // =========================================================
   // MY REQUESTS
   // =========================================================
 
-  const myRequests = borrowRequests
-    .filter(
-      (request) =>
-        String(request.visitorId) ===
-        String(user?.id)
-    )
-    .sort(
-      (a, b) =>
-        new Date(b.requestDate || 0) -
-        new Date(a.requestDate || 0)
-    );
+  const myRequests =
+    borrowRequests
+      .filter(
+        (request) =>
+          String(
+            request.visitorId
+          ) ===
+          String(
+            user?.id
+          )
+      )
+      .sort(
+        (a, b) =>
+          new Date(
+            b.requestDate || 0
+          ) -
+          new Date(
+            a.requestDate || 0
+          )
+      );
+
+  // =========================================================
+  // PERSONAL BOOK SEARCH
+  // =========================================================
+
+  const filteredPersonalBooks =
+    useMemo(() => {
+      const term =
+        normalizedSearch;
+
+      if (!term) {
+        return personalBooks;
+      }
+
+      return personalBooks.filter(
+        (book) =>
+          String(
+            book.title || ''
+          )
+            .toLowerCase()
+            .includes(term) ||
+          String(
+            book.author || ''
+          )
+            .toLowerCase()
+            .includes(term) ||
+          String(
+            book.category || ''
+          )
+            .toLowerCase()
+            .includes(term) ||
+          String(
+            book.isbn || ''
+          )
+            .toLowerCase()
+            .includes(term)
+      );
+    }, [
+      personalBooks,
+      normalizedSearch,
+    ]);
+
+  // =========================================================
+  // COMMUNITY BOOK SEARCH
+  // =========================================================
+
+  const filteredCommunityBooks =
+    useMemo(() => {
+      const term =
+        normalizedSearch;
+
+      if (!term) {
+        return communityBooks;
+      }
+
+      return communityBooks.filter(
+        (book) =>
+          String(
+            book.title || ''
+          )
+            .toLowerCase()
+            .includes(term) ||
+          String(
+            book.author || ''
+          )
+            .toLowerCase()
+            .includes(term) ||
+          String(
+            book.category || ''
+          )
+            .toLowerCase()
+            .includes(term) ||
+          String(
+            book.isbn || ''
+          )
+            .toLowerCase()
+            .includes(term)
+      );
+    }, [
+      communityBooks,
+      normalizedSearch,
+    ]);
 
   // =========================================================
   // BORROW / RESERVE
   // =========================================================
 
-  const handleBorrowOrReserve = async (
-    bookEntry
-  ) => {
-    if (!user?.id) {
-      setNotice(
-        'Please log in before requesting a book.'
-      );
-      return;
-    }
-
-    if (!bookEntry?.id) {
-      setNotice(
-        'Unable to identify the selected book.'
-      );
-      return;
-    }
-
-    if (submittingBorrow) {
-      return;
-    }
-
-    setSubmittingBorrow(true);
-    setNotice('');
-
-    try {
-      const request = await requestBorrow(
-        user.id,
-        bookEntry.id
-      );
-
-      if (!request) {
-        throw new Error(
-          'The borrow request was not created. Please try again.'
+  const handleBorrowOrReserve =
+    async (bookEntry) => {
+      if (!user?.id) {
+        setNotice(
+          'Please log in before requesting a book.'
         );
+        return;
       }
 
-      const status =
-        request.status ||
-        request.requestStatus;
-
-      const rawQueuePosition =
-        request.queuePosition ??
-        request.queue_position ??
-        request.position;
-
-      const queuePosition =
-        rawQueuePosition !== null &&
-        rawQueuePosition !== undefined &&
-        rawQueuePosition !== ''
-          ? Number(rawQueuePosition)
-          : null;
-
-      if (status === 'ready_for_pickup') {
+      if (!bookEntry?.id) {
         setNotice(
-          `"${bookEntry.title}" is ready for pickup at ${libraryName(
-            bookEntry.libraryId
-          )}. Please visit within ${PICKUP_WINDOW_HOURS} hours to scan your QR pass.`
+          'Unable to identify the selected book.'
         );
-      } else if (status === 'queued') {
-        if (
-          Number.isFinite(queuePosition)
-        ) {
-          setNotice(
-            `"${bookEntry.title}" is currently unavailable at this branch — you are #${queuePosition} in the reservation queue.`
+        return;
+      }
+
+      // Personal books are intentionally not processed
+      // by the normal library borrow RPC yet.
+      if (
+        bookEntry.bookType ===
+        'personal'
+      ) {
+        setNotice(
+          'Community book borrowing will be available after the owner approval workflow is enabled.'
+        );
+        return;
+      }
+
+      if (submittingBorrow) {
+        return;
+      }
+
+      setSubmittingBorrow(true);
+      setNotice('');
+
+      try {
+        const request =
+          await requestBorrow(
+            user.id,
+            bookEntry.id
           );
-        } else {
-          setNotice(
-            `"${bookEntry.title}" is currently unavailable at this branch. Your reservation has been added to the queue.`
+
+        if (!request) {
+          throw new Error(
+            'The borrow request was not created. Please try again.'
           );
         }
-      } else {
+
+        const status =
+          request.status ||
+          request.requestStatus;
+
+        const rawQueuePosition =
+          request.queuePosition ??
+          request.queue_position ??
+          request.position;
+
+        const queuePosition =
+          rawQueuePosition !==
+            null &&
+          rawQueuePosition !==
+            undefined &&
+          rawQueuePosition !== ''
+            ? Number(
+                rawQueuePosition
+              )
+            : null;
+
+        if (
+          status ===
+          'ready_for_pickup'
+        ) {
+          setNotice(
+            `"${bookEntry.title}" is ready for pickup at ${libraryName(
+              bookEntry.libraryId
+            )}. Please visit within ${PICKUP_WINDOW_HOURS} hours to scan your QR pass.`
+          );
+        } else if (
+          status === 'queued'
+        ) {
+          if (
+            Number.isFinite(
+              queuePosition
+            )
+          ) {
+            setNotice(
+              `"${bookEntry.title}" is currently unavailable at this branch — you are #${queuePosition} in the reservation queue.`
+            );
+          } else {
+            setNotice(
+              `"${bookEntry.title}" is currently unavailable at this branch. Your reservation has been added to the queue.`
+            );
+          }
+        } else {
+          setNotice(
+            `"${bookEntry.title}" borrow request was created successfully.`
+          );
+        }
+
+        setSelectedBook(null);
+        onViewChange(
+          'myBorrows'
+        );
+      } catch (error) {
+        console.error(
+          'Borrow request error:',
+          error
+        );
+
         setNotice(
-          `"${bookEntry.title}" borrow request was created successfully.`
+          error?.message ||
+            'Unable to process the borrow request. Please try again.'
+        );
+      } finally {
+        setSubmittingBorrow(
+          false
         );
       }
-
-      setSelectedBook(null);
-      onViewChange('myBorrows');
-    } catch (error) {
-      console.error(
-        'Borrow request error:',
-        error
-      );
-
-      setNotice(
-        error?.message ||
-          'Unable to process the borrow request. Please try again.'
-      );
-    } finally {
-      setSubmittingBorrow(false);
-    }
-  };
+    };
 
   // =========================================================
   // CANCEL REQUEST
@@ -604,7 +1130,10 @@ export default function OPACCatalog({
       return;
     }
 
-    setCancellingRequestId(requestId);
+    setCancellingRequestId(
+      requestId
+    );
+
     setNotice('');
 
     try {
@@ -627,7 +1156,9 @@ export default function OPACCatalog({
           'Unable to cancel request. Please try again.'
       );
     } finally {
-      setCancellingRequestId(null);
+      setCancellingRequestId(
+        null
+      );
     }
   };
 
@@ -635,10 +1166,15 @@ export default function OPACCatalog({
   // VIEW LIBRARY MAP
   // =========================================================
 
-  const handleViewMap = (libraryId) => {
-    const library = libraries.find(
-      (item) => item.id === libraryId
-    );
+  const handleViewMap = (
+    libraryId
+  ) => {
+    const library =
+      libraries.find(
+        (item) =>
+          item.id ===
+          libraryId
+      );
 
     if (!library) {
       setNotice(
@@ -649,9 +1185,11 @@ export default function OPACCatalog({
 
     if (
       library.lat === null ||
-      library.lat === undefined ||
+      library.lat ===
+        undefined ||
       library.lng === null ||
-      library.lng === undefined
+      library.lng ===
+        undefined
     ) {
       setNotice(
         'GPS coordinates are not available for this library yet.'
@@ -660,7 +1198,9 @@ export default function OPACCatalog({
     }
 
     if (selectedBook) {
-      setMapReturnBook(selectedBook);
+      setMapReturnBook(
+        selectedBook
+      );
     }
 
     setMapLibrary(library);
@@ -680,7 +1220,9 @@ export default function OPACCatalog({
     setMapLibrary(null);
 
     if (mapReturnBook) {
-      setSelectedBook(mapReturnBook);
+      setSelectedBook(
+        mapReturnBook
+      );
     }
 
     setMapReturnBook(null);
@@ -690,57 +1232,376 @@ export default function OPACCatalog({
   // FIND PARTNER LIBRARY ENTRIES
   // =========================================================
 
-  const getPartnerLibraryEntries = (
-    book
-  ) => {
-    if (!book) {
-      return [];
-    }
+  const getPartnerLibraryEntries =
+    (book) => {
+      if (!book) {
+        return [];
+      }
 
-    const normalizedIsbn =
-      String(book.isbn || '')
-        .replace(/[^a-z0-9]/gi, '')
-        .toLowerCase();
-
-    const normalizedTitle =
-      String(book.title || '')
-        .trim()
-        .replace(/\s+/g, ' ')
-        .toLowerCase();
-
-    const normalizedAuthor =
-      String(book.author || '')
-        .trim()
-        .replace(/\s+/g, ' ')
-        .toLowerCase();
-
-    return books.filter((entry) => {
-      const hasInventory =
-        Number(entry.totalCopies || 0) > 0 &&
-        entry.libraryId;
-
-      const entryIsbn =
-        String(entry.isbn || '')
-          .replace(/[^a-z0-9]/gi, '')
+      const normalizedIsbn =
+        String(
+          book.isbn || ''
+        )
+          .replace(
+            /[^a-z0-9]/gi,
+            ''
+          )
           .toLowerCase();
 
-      const sameBook =
-        normalizedIsbn && entryIsbn
-          ? normalizedIsbn === entryIsbn
-          : normalizedTitle ===
-              String(entry.title || '')
-                .trim()
-                .replace(/\s+/g, ' ')
-                .toLowerCase() &&
-            normalizedAuthor ===
-              String(entry.author || '')
-                .trim()
-                .replace(/\s+/g, ' ')
-                .toLowerCase();
+      const normalizedTitle =
+        String(
+          book.title || ''
+        )
+          .trim()
+          .replace(
+            /\s+/g,
+            ' '
+          )
+          .toLowerCase();
 
-      return hasInventory && sameBook;
-    });
-  };
+      const normalizedAuthor =
+        String(
+          book.author || ''
+        )
+          .trim()
+          .replace(
+            /\s+/g,
+            ' '
+          )
+          .toLowerCase();
+
+      return books.filter(
+        (entry) => {
+          const hasInventory =
+            Number(
+              entry.totalCopies ||
+                0
+            ) > 0 &&
+            entry.libraryId;
+
+          const entryIsbn =
+            String(
+              entry.isbn || ''
+            )
+              .replace(
+                /[^a-z0-9]/gi,
+                ''
+              )
+              .toLowerCase();
+
+          const sameBook =
+            normalizedIsbn &&
+            entryIsbn
+              ? normalizedIsbn ===
+                entryIsbn
+              : normalizedTitle ===
+                  String(
+                    entry.title ||
+                      ''
+                  )
+                    .trim()
+                    .replace(
+                      /\s+/g,
+                      ' '
+                    )
+                    .toLowerCase() &&
+                normalizedAuthor ===
+                  String(
+                    entry.author ||
+                      ''
+                  )
+                    .trim()
+                    .replace(
+                      /\s+/g,
+                      ' '
+                    )
+                    .toLowerCase();
+
+          return (
+            hasInventory &&
+            sameBook
+          );
+        }
+      );
+    };
+
+  // =========================================================
+  // PERSONAL BOOK CARD
+  // =========================================================
+
+  const renderPersonalBookCard =
+    (book) => (
+      <div
+        key={book.id}
+        className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"
+      >
+        <div className="p-5">
+
+          <div className="flex items-start justify-between gap-3">
+
+            <div className="min-w-0">
+
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+
+                <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                  Personal Book
+                </span>
+
+                {book.lendingEnabled ? (
+                  <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 px-2 py-1 rounded">
+                    Available for Lending
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-1 rounded">
+                    Not for Lending
+                  </span>
+                )}
+
+              </div>
+
+              <h3 className="text-base font-bold text-slate-800">
+                {book.title ||
+                  'Untitled Book'}
+              </h3>
+
+              <p className="mt-1 text-xs text-slate-500">
+                By{' '}
+                {book.author ||
+                  'Unknown Author'}
+              </p>
+
+            </div>
+
+            <BookOpen
+              size={22}
+              className="shrink-0 text-slate-400"
+              aria-hidden="true"
+            />
+
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+
+            <div className="bg-slate-50 rounded-lg p-3">
+              <p className="text-slate-400">
+                Category
+              </p>
+              <p className="font-semibold text-slate-700">
+                {book.category ||
+                  'Uncategorized'}
+              </p>
+            </div>
+
+            <div className="bg-slate-50 rounded-lg p-3">
+              <p className="text-slate-400">
+                Condition
+              </p>
+              <p className="font-semibold text-slate-700">
+                {book.condition ||
+                  'Not specified'}
+              </p>
+            </div>
+
+            <div className="bg-slate-50 rounded-lg p-3">
+              <p className="text-slate-400">
+                Lending Period
+              </p>
+              <p className="font-semibold text-slate-700">
+                {book.lendingEnabled
+                  ? `${book.lendingPeriodDays || 7} days`
+                  : 'Not applicable'}
+              </p>
+            </div>
+
+            <div className="bg-slate-50 rounded-lg p-3">
+              <p className="text-slate-400">
+                ISBN
+              </p>
+              <p className="font-semibold text-slate-700 font-mono">
+                {book.isbn ||
+                  'N/A'}
+              </p>
+            </div>
+
+          </div>
+
+          {book.lendingEnabled &&
+            book.handoverLocation && (
+              <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-100 p-3">
+
+                <MapPin
+                  size={15}
+                  className="mt-0.5 shrink-0 text-amber-600"
+                  aria-hidden="true"
+                />
+
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                    Handover Location
+                  </p>
+
+                  <p className="mt-0.5 text-xs text-slate-700">
+                    {book.handoverLocation}
+                  </p>
+                </div>
+
+              </div>
+            )}
+
+          {book.summary && (
+            <div className="mt-3">
+              <p className="text-xs text-slate-500 line-clamp-3">
+                {book.summary}
+              </p>
+            </div>
+          )}
+
+        </div>
+      </div>
+    );
+
+  // =========================================================
+  // COMMUNITY BOOK CARD
+  // =========================================================
+
+  const renderCommunityBookCard =
+    (book) => (
+      <button
+        key={book.id}
+        type="button"
+        onClick={() =>
+          setSelectedBook(book)
+        }
+        className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden text-left transition hover:-translate-y-0.5 hover:shadow-md"
+      >
+
+        <div className="p-5">
+
+          <div className="flex items-start justify-between gap-3">
+
+            <div className="min-w-0">
+
+              <div className="flex flex-wrap gap-2 mb-2">
+
+                <span className="text-[10px] font-bold uppercase tracking-wider bg-violet-100 text-violet-700 px-2 py-1 rounded">
+                  Community Book
+                </span>
+
+                <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 px-2 py-1 rounded">
+                  Lending Enabled
+                </span>
+
+              </div>
+
+              <h3 className="font-bold text-slate-800 text-sm line-clamp-2">
+                {book.title ||
+                  'Untitled Book'}
+              </h3>
+
+              <p className="mt-1 text-xs text-slate-500">
+                By{' '}
+                {book.author ||
+                  'Unknown Author'}
+              </p>
+
+            </div>
+
+            <Users
+              size={22}
+              className="shrink-0 text-violet-500"
+              aria-hidden="true"
+            />
+
+          </div>
+
+          <div className="mt-4 space-y-2">
+
+            <div className="flex items-center justify-between text-xs">
+
+              <span className="text-slate-400">
+                Category
+              </span>
+
+              <span className="font-semibold text-slate-700">
+                {book.category ||
+                  'Uncategorized'}
+              </span>
+
+            </div>
+
+            <div className="flex items-center justify-between text-xs">
+
+              <span className="text-slate-400">
+                Condition
+              </span>
+
+              <span className="font-semibold text-slate-700">
+                {book.condition ||
+                  'Good'}
+              </span>
+
+            </div>
+
+            <div className="flex items-center justify-between text-xs">
+
+              <span className="text-slate-400 flex items-center gap-1">
+                <Clock3
+                  size={12}
+                  aria-hidden="true"
+                />
+                Lending period
+              </span>
+
+              <span className="font-semibold text-slate-700">
+                {book.lendingPeriodDays ||
+                  7}{' '}
+                days
+              </span>
+
+            </div>
+
+          </div>
+
+          {book.handoverLocation && (
+            <div className="mt-4 rounded-lg bg-slate-50 p-3">
+
+              <div className="flex items-start gap-2">
+
+                <MapPin
+                  size={14}
+                  className="mt-0.5 shrink-0 text-slate-400"
+                  aria-hidden="true"
+                />
+
+                <div>
+
+                  <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                    Handover Location
+                  </p>
+
+                  <p className="text-xs font-semibold text-slate-700 mt-0.5">
+                    {book.handoverLocation}
+                  </p>
+
+                </div>
+
+              </div>
+
+            </div>
+          )}
+
+          <div className="mt-4 rounded-lg bg-violet-50 border border-violet-100 px-3 py-2">
+
+            <p className="text-[11px] text-violet-700 font-semibold">
+              Borrowing requires owner approval.
+            </p>
+
+          </div>
+
+        </div>
+
+      </button>
+    );
 
   // =========================================================
   // RENDER
@@ -755,16 +1616,79 @@ export default function OPACCatalog({
 
       {notice && (
         <div className="bg-blue-50 border border-blue-200 text-blue-800 text-xs px-4 py-3 rounded-lg flex justify-between items-start gap-3">
+
           <span>{notice}</span>
 
           <button
             type="button"
-            onClick={() => setNotice('')}
+            onClick={() =>
+              setNotice('')
+            }
             className="font-bold text-blue-400 hover:text-blue-700"
             aria-label="Close notification"
           >
-            <X size={16} aria-hidden="true" />
+            <X
+              size={16}
+              aria-hidden="true"
+            />
           </button>
+
+        </div>
+      )}
+
+      {/* =====================================================
+          COMMON SEARCH
+      ====================================================== */}
+
+      {(
+        activeView ===
+          'communityBooks' ||
+        activeView ===
+          'personalBooks'
+      ) && (
+        <div className="flex flex-col sm:flex-row gap-3">
+
+          <form
+            onSubmit={handleSearch}
+            className="flex flex-1 gap-2"
+          >
+
+            <input
+              type="text"
+              placeholder={
+                activeView ===
+                'communityBooks'
+                  ? 'Search community books...'
+                  : 'Search your personal books...'
+              }
+              value={searchInput}
+              onChange={
+                handleSearchInputChange
+              }
+              className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+            />
+
+            <button
+              type="submit"
+              className="px-5 py-2.5 bg-[#002046] text-white rounded-lg text-sm font-bold hover:opacity-90"
+            >
+              Search
+            </button>
+
+          </form>
+
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={
+                handleClearSearch
+              }
+              className="px-4 py-2.5 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-200"
+            >
+              Clear
+            </button>
+          )}
+
         </div>
       )}
 
@@ -772,21 +1696,22 @@ export default function OPACCatalog({
           CATALOG
       ====================================================== */}
 
-      {activeView === 'catalog' ? (
+      {activeView ===
+      'catalog' ? (
         <div className="space-y-6">
 
-          {/* =================================================
-              MAP DISPLAY
-          ================================================= */}
+          {/* MAP DISPLAY */}
 
           {mapLibrary && (
             <div
               className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm relative"
               id="library-map-section"
             >
+
               <div className="flex justify-between items-center mb-4">
 
                 <div>
+
                   <h2 className="text-lg font-bold text-slate-800">
                     {mapLibrary.name}
                   </h2>
@@ -795,11 +1720,14 @@ export default function OPACCatalog({
                     {mapLibrary.address ||
                       'Location Map'}
                   </p>
+
                 </div>
 
                 <button
                   type="button"
-                  onClick={handleCloseMap}
+                  onClick={
+                    handleCloseMap
+                  }
                   className="px-3 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-xs font-bold"
                 >
                   Close Map
@@ -812,24 +1740,28 @@ export default function OPACCatalog({
                 lng={mapLibrary.lng}
                 name={mapLibrary.name}
               />
+
             </div>
           )}
 
-          {/* =================================================
-              SEARCH & FILTERS
-          ================================================== */}
+          {/* SEARCH & FILTERS */}
 
           <div className="flex flex-col md:flex-row gap-3 flex-wrap">
 
             <form
-              onSubmit={handleSearch}
+              onSubmit={
+                handleSearch
+              }
               className="flex flex-1 min-w-[280px] gap-2"
             >
+
               <input
                 type="text"
                 placeholder="Search by Title, Author, ISBN, or Category..."
                 value={searchInput}
-                onChange={handleSearchInputChange}
+                onChange={
+                  handleSearchInputChange
+                }
                 className="flex-1 min-w-0 px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
                 aria-label="Search catalog"
               />
@@ -840,12 +1772,15 @@ export default function OPACCatalog({
               >
                 Search
               </button>
+
             </form>
 
             {searchTerm && (
               <button
                 type="button"
-                onClick={handleClearSearch}
+                onClick={
+                  handleClearSearch
+                }
                 className="px-4 py-2.5 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-200 transition"
               >
                 Clear
@@ -854,45 +1789,67 @@ export default function OPACCatalog({
 
             {!libraryFilter && (
               <select
-                value={selectedLibrary}
-                onChange={(event) =>
+                value={
+                  selectedLibrary
+                }
+                onChange={(
+                  event
+                ) =>
                   setSelectedLibrary(
                     event.target.value
                   )
                 }
                 className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none"
               >
+
                 <option value="All">
                   All Libraries
                 </option>
 
                 {libraryOptions
                   .filter(
-                    (libraryId) =>
-                      libraryId !== 'All'
+                    (
+                      libraryId
+                    ) =>
+                      libraryId !==
+                      'All'
                   )
-                  .map((libraryId) => (
-                    <option
-                      key={libraryId}
-                      value={libraryId}
-                    >
-                      {libraryName(
-                        libraryId
-                      )}
-                    </option>
-                  ))}
+                  .map(
+                    (
+                      libraryId
+                    ) => (
+                      <option
+                        key={
+                          libraryId
+                        }
+                        value={
+                          libraryId
+                        }
+                      >
+                        {libraryName(
+                          libraryId
+                        )}
+                      </option>
+                    )
+                  )}
+
               </select>
             )}
 
             <select
-              value={selectedAvailability}
-              onChange={(event) =>
+              value={
+                selectedAvailability
+              }
+              onChange={(
+                event
+              ) =>
                 setSelectedAvailability(
                   event.target.value
                 )
               }
               className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none"
             >
+
               <option value="All">
                 All Statuses
               </option>
@@ -904,16 +1861,16 @@ export default function OPACCatalog({
               <option value="Unavailable">
                 Unavailable Only
               </option>
+
             </select>
 
           </div>
 
-          {/* =================================================
-              SEARCH RESULT INFORMATION
-          ================================================== */}
+          {/* SEARCH INFO */}
 
           {searchTerm && (
             <div className="flex items-center justify-between text-xs text-slate-500">
+
               <span>
                 Search results for:{' '}
                 <strong className="text-slate-800">
@@ -923,53 +1880,68 @@ export default function OPACCatalog({
 
               <span>
                 {filteredBooks.length}{' '}
-                {filteredBooks.length === 1
+                {filteredBooks.length ===
+                1
                   ? 'book'
-                  : 'books'} found
+                  : 'books'}{' '}
+                found
               </span>
+
             </div>
           )}
 
-          {selectedCategory !== 'All' && (
+          {/* CATEGORY HEADER */}
+
+          {selectedCategory !==
+            'All' && (
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
+
               <div>
+
                 <h2 className="text-base font-bold text-slate-800">
-                  Books in {selectedCategory}
+                  Books in{' '}
+                  {selectedCategory}
                 </h2>
 
                 <p className="mt-1 text-xs text-slate-500">
                   {filteredBooks.length}{' '}
                   catalog{' '}
-                  {filteredBooks.length === 1
+                  {filteredBooks.length ===
+                  1
                     ? 'entry'
                     : 'entries'}
                 </p>
+
               </div>
 
               <button
                 type="button"
                 onClick={() =>
-                  setSelectedCategory('All')
+                  setSelectedCategory(
+                    'All'
+                  )
                 }
                 className="text-xs font-semibold text-[#002046] hover:underline"
               >
                 Clear category
               </button>
+
             </div>
           )}
 
-          {/* =================================================
-              BOOK RESULTS
-          ================================================== */}
+          {/* BOOK RESULTS */}
 
-          {books.length === 0 ? (
+          {books.length ===
+          0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center">
 
               <span className="mx-auto grid size-14 place-items-center rounded-full bg-amber-50 text-amber-700">
+
                 <BookOpen
                   size={26}
                   aria-hidden="true"
                 />
+
               </span>
 
               <h3 className="mt-4 text-lg font-bold text-slate-800">
@@ -977,27 +1949,37 @@ export default function OPACCatalog({
               </h3>
 
               <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
-                This catalog is being prepared.
-                Explore nearby branches while new
-                titles are added.
+                This catalog is
+                being prepared.
+                Explore nearby
+                branches while
+                new titles are
+                added.
               </p>
 
               <button
                 type="button"
                 onClick={() =>
-                  onViewChange?.('map')
+                  onViewChange?.(
+                    'map'
+                  )
                 }
                 className="mt-5 inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-bold text-slate-950 transition hover:bg-amber-400"
               >
+
                 <MapPinned
                   size={16}
                   aria-hidden="true"
                 />
-                Explore library locations
+
+                Explore library
+                locations
+
               </button>
 
             </div>
-          ) : filteredBooks.length === 0 ? (
+          ) : filteredBooks.length ===
+            0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-10 text-center">
 
               <Search
@@ -1007,33 +1989,36 @@ export default function OPACCatalog({
               />
 
               <h3 className="mt-3 text-base font-bold text-slate-800">
-                Nothing on the shelf matched that search.
+                Nothing on the
+                shelf matched
+                that search.
               </h3>
 
               <p className="mt-1 text-sm text-slate-500">
-                Try another title or clear your
-                filters to see more books.
+                Try another title
+                or clear your
+                filters to see
+                more books.
               </p>
 
-              {(
-                searchTerm ||
-                selectedCategory !== 'All' ||
-                selectedLibrary !== 'All' ||
-                selectedAvailability !== 'All'
-              ) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleClearSearch();
-                    setSelectedCategory('All');
-                    setSelectedLibrary('All');
-                    setSelectedAvailability('All');
-                  }}
-                  className="mt-4 rounded-lg bg-amber-500 px-4 py-2 text-xs font-bold text-slate-950 transition hover:bg-amber-400"
-                >
-                  Clear All Filters
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => {
+                  handleClearSearch();
+                  setSelectedCategory(
+                    'All'
+                  );
+                  setSelectedLibrary(
+                    'All'
+                  );
+                  setSelectedAvailability(
+                    'All'
+                  );
+                }}
+                className="mt-4 rounded-lg bg-amber-500 px-4 py-2 text-xs font-bold text-slate-950 transition hover:bg-amber-400"
+              >
+                Clear All Filters
+              </button>
 
             </div>
           ) : (
@@ -1043,9 +2028,13 @@ export default function OPACCatalog({
                 (book) => (
                   <button
                     type="button"
-                    key={book.id}
+                    key={
+                      book.id
+                    }
                     onClick={() =>
-                      setSelectedBook(book)
+                      setSelectedBook(
+                        book
+                      )
                     }
                     aria-label={`View details for ${
                       book.title ||
@@ -1066,7 +2055,9 @@ export default function OPACCatalog({
                           'Book cover'
                         }
                         className="w-24 h-32 object-cover rounded-md border border-slate-200 bg-slate-50"
-                        onError={(event) => {
+                        onError={(
+                          event
+                        ) => {
                           event.currentTarget.src =
                             'https://placehold.co/96x128?text=No+Cover';
                         }}
@@ -1100,15 +2091,19 @@ export default function OPACCatalog({
                           <span
                             className={`text-xs px-2 py-0.5 rounded-full font-bold ${
                               Number(
-                                book.availableCopies || 0
-                              ) > 0
+                                book.availableCopies ||
+                                  0
+                              ) >
+                              0
                                 ? 'bg-emerald-100 text-emerald-700'
                                 : 'bg-amber-100 text-amber-700'
                             }`}
                           >
                             {Number(
-                              book.availableCopies || 0
-                            ) > 0
+                              book.availableCopies ||
+                                0
+                            ) >
+                            0
                               ? `${book.availableCopies} Copies Available`
                               : 'Unavailable'}
                           </span>
@@ -1127,13 +2122,19 @@ export default function OPACCatalog({
           )}
 
         </div>
-      ) : activeView === 'categories' ? (
+      ) : activeView ===
+        'categories' ? (
+        /* =====================================================
+           CATEGORIES
+        ====================================================== */
+
         <section
           aria-labelledby="opac-category-heading"
           className="space-y-5"
         >
 
           <div>
+
             <h2
               id="opac-category-heading"
               className="text-lg font-bold text-slate-800"
@@ -1142,15 +2143,20 @@ export default function OPACCatalog({
             </h2>
 
             <p className="mt-1 text-xs text-slate-500">
-              Unique titles across participating libraries
+              Unique titles across
+              participating libraries
             </p>
+
           </div>
 
           {categorySummaries.length ? (
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
 
               {categorySummaries.map(
-                ({ label, count }) => (
+                ({
+                  label,
+                  count,
+                }) => (
                   <button
                     key={label}
                     type="button"
@@ -1158,13 +2164,21 @@ export default function OPACCatalog({
                       setSelectedCategory(
                         label
                       );
-                      setSearchInput('');
-                      setSearchTerm('');
-                      setSelectedLibrary('All');
+                      setSearchInput(
+                        ''
+                      );
+                      setSearchTerm(
+                        ''
+                      );
+                      setSelectedLibrary(
+                        'All'
+                      );
                       setSelectedAvailability(
                         'All'
                       );
-                      onViewChange('catalog');
+                      onViewChange(
+                        'catalog'
+                      );
                     }}
                     className="flex min-h-16 items-center justify-between gap-3 border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-[#002046] hover:bg-blue-50"
                   >
@@ -1175,7 +2189,8 @@ export default function OPACCatalog({
 
                     <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
                       {count}{' '}
-                      {count === 1
+                      {count ===
+                      1
                         ? 'book'
                         : 'books'}
                     </span>
@@ -1187,26 +2202,239 @@ export default function OPACCatalog({
             </div>
           ) : (
             <p className="border border-dashed border-slate-300 px-4 py-5 text-center text-sm text-slate-500">
-              No book categories are available yet.
+              No book categories are
+              available yet.
             </p>
           )}
 
         </section>
-      ) : (
+      ) : activeView ===
+        'communityBooks' ? (
+        /* =====================================================
+           COMMUNITY BOOKS
+        ====================================================== */
 
+        <section className="space-y-5">
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+
+            <div>
+
+              <div className="flex items-center gap-2">
+
+                <Users
+                  size={20}
+                  className="text-violet-600"
+                  aria-hidden="true"
+                />
+
+                <h2 className="text-lg font-bold text-slate-800">
+                  Community Books
+                </h2>
+
+              </div>
+
+              <p className="mt-1 text-xs text-slate-500">
+                Books shared by SHELF
+                visitors for community
+                lending.
+              </p>
+
+            </div>
+
+          </div>
+
+          {communityBookError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
+              {communityBookError}
+            </div>
+          )}
+
+          {loadingCommunityBooks ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-10 text-center">
+
+              <p className="text-sm text-slate-500">
+                Loading community
+                books...
+              </p>
+
+            </div>
+          ) : filteredCommunityBooks.length ===
+            0 ? (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
+
+              <Users
+                size={32}
+                className="mx-auto text-slate-300"
+                aria-hidden="true"
+              />
+
+              <h3 className="mt-3 text-base font-bold text-slate-700">
+                No community books
+                available yet.
+              </h3>
+
+              <p className="mt-1 text-xs text-slate-500">
+                When visitors share
+                books for lending,
+                they will appear
+                here.
+              </p>
+
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+
+              {filteredCommunityBooks.map(
+                renderCommunityBookCard
+              )}
+
+            </div>
+          )}
+
+        </section>
+      ) : activeView ===
+        'personalBooks' ? (
+        /* =====================================================
+           MY PERSONAL BOOKS
+        ====================================================== */
+
+        <section className="space-y-5">
+
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+
+            <div>
+
+              <div className="flex items-center gap-2">
+
+                <UserRound
+                  size={20}
+                  className="text-blue-600"
+                  aria-hidden="true"
+                />
+
+                <h2 className="text-lg font-bold text-slate-800">
+                  My Personal Books
+                </h2>
+
+              </div>
+
+              <p className="mt-1 text-xs text-slate-500">
+                Manage books that you
+                personally own and
+                optionally share with
+                the SHELF community.
+              </p>
+
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                resetPersonalBookForm();
+                setShowAddPersonalBook(
+                  true
+                );
+              }}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#002046] px-4 py-2.5 text-sm font-bold text-white hover:opacity-90"
+            >
+
+              <Plus
+                size={16}
+                aria-hidden="true"
+              />
+
+              Add Personal Book
+
+            </button>
+
+          </div>
+
+          {personalBookError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
+              {personalBookError}
+            </div>
+          )}
+
+          {loadingPersonalBooks ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-10 text-center">
+
+              <p className="text-sm text-slate-500">
+                Loading your personal
+                books...
+              </p>
+
+            </div>
+          ) : filteredPersonalBooks.length ===
+            0 ? (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
+
+              <UserRound
+                size={32}
+                className="mx-auto text-slate-300"
+                aria-hidden="true"
+              />
+
+              <h3 className="mt-3 text-base font-bold text-slate-700">
+                You have no personal
+                books yet.
+              </h3>
+
+              <p className="mt-1 text-xs text-slate-500">
+                Add a book that you
+                personally own to keep
+                it in your SHELF
+                collection.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => {
+                  resetPersonalBookForm();
+                  setShowAddPersonalBook(
+                    true
+                  );
+                }}
+                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2.5 text-xs font-bold text-slate-950 hover:bg-amber-400"
+              >
+
+                <Plus
+                  size={15}
+                  aria-hidden="true"
+                />
+
+                Add Your First Book
+
+              </button>
+
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+              {filteredPersonalBooks.map(
+                renderPersonalBookCard
+              )}
+
+            </div>
+          )}
+
+        </section>
+      ) : (
         /* =====================================================
            MY REQUESTS
         ====================================================== */
 
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
 
-          {myRequests.length === 0 ? (
+          {myRequests.length ===
+          0 ? (
             <p className="p-6 text-sm text-slate-500">
-              You have no borrow requests yet.
-              Browse the catalog to get started.
+              You have no borrow
+              requests yet. Browse
+              the catalog to get
+              started.
             </p>
           ) : (
-
             <table className="w-full text-left text-sm">
 
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase tracking-wider">
@@ -1241,7 +2469,6 @@ export default function OPACCatalog({
 
                 {myRequests.map(
                   (request) => {
-
                     const currentFine =
                       calculateCurrentFine(
                         request
@@ -1250,7 +2477,8 @@ export default function OPACCatalog({
                     const isOverdue =
                       request.status ===
                         'borrowed' &&
-                      currentFine > 0;
+                      currentFine >
+                        0;
 
                     const overdueDays =
                       request.dueDate &&
@@ -1260,12 +2488,13 @@ export default function OPACCatalog({
                           )
                         : 0;
 
-                    const canCancel = [
-                      'queued',
-                      'ready_for_pickup',
-                    ].includes(
-                      request.status
-                    );
+                    const canCancel =
+                      [
+                        'queued',
+                        'ready_for_pickup',
+                      ].includes(
+                        request.status
+                      );
 
                     const isCancelling =
                       cancellingRequestId ===
@@ -1278,37 +2507,37 @@ export default function OPACCatalog({
 
                     return (
                       <tr
-                        key={request.id}
+                        key={
+                          request.id
+                        }
                         className="hover:bg-slate-50"
                       >
 
                         <td className="p-4 font-bold text-slate-800">
-                          {request.bookTitle}
+                          {
+                            request.bookTitle
+                          }
                         </td>
 
                         <td className="p-4">
 
-                          <div className="flex flex-col items-start gap-1">
-
-                            <span
-                              className={`text-xs px-2.5 py-1 rounded-full font-bold ${
-                                isOverdue
-                                  ? 'bg-red-100 text-red-700'
-                                  : STATUS_STYLES[
-                                      request.status
-                                    ] ||
-                                    'bg-slate-100 text-slate-600'
-                              }`}
-                            >
-                              {isOverdue
-                                ? 'Overdue'
-                                : STATUS_LABELS[
+                          <span
+                            className={`text-xs px-2.5 py-1 rounded-full font-bold ${
+                              isOverdue
+                                ? 'bg-red-100 text-red-700'
+                                : STATUS_STYLES[
                                     request.status
                                   ] ||
-                                  request.status}
-                            </span>
-
-                          </div>
+                                  'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            {isOverdue
+                              ? 'Overdue'
+                              : STATUS_LABELS[
+                                  request.status
+                                ] ||
+                                request.status}
+                          </span>
 
                         </td>
 
@@ -1317,7 +2546,8 @@ export default function OPACCatalog({
                           {request.status ===
                             'queued' && (
                             <p>
-                              Queue position:{' '}
+                              Queue
+                              position:{' '}
                               {queuePosition !==
                                 undefined &&
                               queuePosition !==
@@ -1331,18 +2561,25 @@ export default function OPACCatalog({
                             'ready_for_pickup' && (
                             <>
                               <p className="font-semibold text-amber-700">
-                                Ready for pickup.
+                                Ready for
+                                pickup.
                               </p>
 
                               <p>
-                                Pick up by:{' '}
+                                Pick up
+                                by:{' '}
                                 {formatDateTime(
                                   request.pickupDeadline
                                 )}
                               </p>
 
                               <p>
-                                Please scan your QR pass at the library.
+                                Please
+                                scan
+                                your QR
+                                pass at
+                                the
+                                library.
                               </p>
                             </>
                           )}
@@ -1359,10 +2596,14 @@ export default function OPACCatalog({
 
                               {isOverdue && (
                                 <p className="font-bold text-red-600">
-                                  Overdue by{' '}
-                                  {overdueDays}{' '}
+                                  Overdue
+                                  by{' '}
+                                  {
+                                    overdueDays
+                                  }{' '}
                                   day
-                                  {overdueDays !== 1
+                                  {overdueDays !==
+                                  1
                                     ? 's'
                                     : ''}
                                 </p>
@@ -1384,12 +2625,16 @@ export default function OPACCatalog({
 
                         <td
                           className={`p-4 font-mono font-bold text-xs ${
-                            currentFine > 0
+                            currentFine >
+                            0
                               ? 'text-red-600'
                               : 'text-slate-500'
                           }`}
                         >
-                          ₱{currentFine.toFixed(2)}
+                          ₱
+                          {currentFine.toFixed(
+                            2
+                          )}
                         </td>
 
                         <td className="p-4 text-right">
@@ -1397,11 +2642,9 @@ export default function OPACCatalog({
                           {canCancel && (
                             <button
                               type="button"
-                              disabled={
-                                Boolean(
-                                  cancellingRequestId
-                                )
-                              }
+                              disabled={Boolean(
+                                cancellingRequestId
+                              )}
                               onClick={() =>
                                 handleCancel(
                                   request.id
@@ -1425,8 +2668,451 @@ export default function OPACCatalog({
               </tbody>
 
             </table>
-
           )}
+
+        </div>
+      )}
+
+      {/* =====================================================
+          ADD PERSONAL BOOK MODAL
+      ====================================================== */}
+
+      {showAddPersonalBook && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-200">
+
+            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between z-10">
+
+              <div>
+
+                <h2 className="text-lg font-bold text-slate-800">
+                  Add Personal Book
+                </h2>
+
+                <p className="text-xs text-slate-500 mt-1">
+                  Add a book that you
+                  personally own.
+                </p>
+
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    addingPersonalBook
+                  ) {
+                    return;
+                  }
+
+                  setShowAddPersonalBook(
+                    false
+                  );
+                  resetPersonalBookForm();
+                }}
+                className="text-slate-400 hover:text-slate-700"
+                aria-label="Close add personal book form"
+              >
+                <X
+                  size={20}
+                  aria-hidden="true"
+                />
+              </button>
+
+            </div>
+
+            <form
+              onSubmit={
+                handleAddPersonalBook
+              }
+              className="p-6 space-y-5"
+            >
+
+              {/* BASIC INFORMATION */}
+
+              <div className="space-y-4">
+
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                  Book Information
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                  <div className="md:col-span-2">
+
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Book Title *
+                    </label>
+
+                    <input
+                      type="text"
+                      value={
+                        personalBookForm.title
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        updatePersonalBookForm(
+                          'title',
+                          event.target
+                            .value
+                        )
+                      }
+                      placeholder="Enter book title"
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                      required
+                    />
+
+                  </div>
+
+                  <div>
+
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Author *
+                    </label>
+
+                    <input
+                      type="text"
+                      value={
+                        personalBookForm.author
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        updatePersonalBookForm(
+                          'author',
+                          event.target
+                            .value
+                        )
+                      }
+                      placeholder="Author name"
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                      required
+                    />
+
+                  </div>
+
+                  <div>
+
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Category
+                    </label>
+
+                    <input
+                      type="text"
+                      value={
+                        personalBookForm.category
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        updatePersonalBookForm(
+                          'category',
+                          event.target
+                            .value
+                        )
+                      }
+                      placeholder="e.g. Computer Science"
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                    />
+
+                  </div>
+
+                  <div>
+
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      ISBN
+                    </label>
+
+                    <input
+                      type="text"
+                      value={
+                        personalBookForm.isbn
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        updatePersonalBookForm(
+                          'isbn',
+                          event.target
+                            .value
+                        )
+                      }
+                      placeholder="Optional ISBN"
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                    />
+
+                  </div>
+
+                  <div>
+
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Condition *
+                    </label>
+
+                    <select
+                      value={
+                        personalBookForm.condition
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        updatePersonalBookForm(
+                          'condition',
+                          event.target
+                            .value
+                        )
+                      }
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                      required
+                    >
+
+                      {PERSONAL_BOOK_CONDITIONS.map(
+                        (
+                          condition
+                        ) => (
+                          <option
+                            key={
+                              condition
+                            }
+                            value={
+                              condition
+                            }
+                          >
+                            {condition}
+                          </option>
+                        )
+                      )}
+
+                    </select>
+
+                  </div>
+
+                  <div className="md:col-span-2">
+
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Summary
+                    </label>
+
+                    <textarea
+                      value={
+                        personalBookForm.summary
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        updatePersonalBookForm(
+                          'summary',
+                          event.target
+                            .value
+                        )
+                      }
+                      placeholder="Brief description of the book"
+                      rows={3}
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20 resize-none"
+                    />
+
+                  </div>
+
+                </div>
+
+              </div>
+
+              {/* LENDING */}
+
+              <div className="border-t border-slate-200 pt-5 space-y-4">
+
+                <div>
+
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                    Community Lending
+                  </h3>
+
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Choose whether other SHELF
+                    visitors may request this
+                    book.
+                  </p>
+
+                </div>
+
+                <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 cursor-pointer">
+
+                  <input
+                    type="checkbox"
+                    checked={
+                      personalBookForm.lendingEnabled
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      updatePersonalBookForm(
+                        'lendingEnabled',
+                        event.target
+                          .checked
+                      )
+                    }
+                    className="mt-0.5"
+                  />
+
+                  <div>
+
+                    <p className="text-sm font-bold text-slate-700">
+                      Make this book available
+                      for community lending
+                    </p>
+
+                    <p className="text-xs text-slate-500 mt-1">
+                      Other visitors may see
+                      this book in Community
+                      Books. Actual borrowing
+                      will require owner
+                      approval.
+                    </p>
+
+                  </div>
+
+                </label>
+
+                {personalBookForm.lendingEnabled && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                    <div>
+
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        Lending Period *
+                      </label>
+
+                      <div className="relative">
+
+                        <input
+                          type="number"
+                          min={
+                            PERSONAL_BOOK_MIN_LENDING_DAYS
+                          }
+                          max={
+                            PERSONAL_BOOK_MAX_LENDING_DAYS
+                          }
+                          value={
+                            personalBookForm.lendingPeriodDays
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            updatePersonalBookForm(
+                              'lendingPeriodDays',
+                              event.target
+                                .value
+                            )
+                          }
+                          className="w-full px-3 py-2.5 pr-16 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                          required
+                        />
+
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                          days
+                        </span>
+
+                      </div>
+
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Allowed: 1–30 days
+                      </p>
+
+                    </div>
+
+                    <div>
+
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        Handover Location *
+                      </label>
+
+                      <input
+                        type="text"
+                        value={
+                          personalBookForm.handoverLocation
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          updatePersonalBookForm(
+                            'handoverLocation',
+                            event.target
+                              .value
+                          )
+                        }
+                        placeholder="e.g. SHELF Main Library"
+                        className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                        required={
+                          personalBookForm.lendingEnabled
+                        }
+                      />
+
+                    </div>
+
+                  </div>
+                )}
+
+              </div>
+
+              {/* INFORMATION NOTICE */}
+
+              <div className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-3">
+
+                <p className="text-xs font-bold text-violet-800">
+                  Community lending note
+                </p>
+
+                <p className="mt-1 text-[11px] leading-relaxed text-violet-700">
+                  Your personal book will remain
+                  owned by you. If you enable
+                  lending, other visitors can see
+                  the book in Community Books.
+                  Borrowing will use an owner
+                  approval workflow once that
+                  feature is enabled.
+                </p>
+
+              </div>
+
+              {/* ACTIONS */}
+
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
+
+                <button
+                  type="button"
+                  disabled={
+                    addingPersonalBook
+                  }
+                  onClick={() => {
+                    setShowAddPersonalBook(
+                      false
+                    );
+                    resetPersonalBookForm();
+                  }}
+                  className="px-4 py-2.5 rounded-lg bg-slate-100 text-slate-600 text-sm font-bold hover:bg-slate-200 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={
+                    addingPersonalBook
+                  }
+                  className="px-5 py-2.5 rounded-lg bg-[#002046] text-white text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {addingPersonalBook
+                    ? 'Adding Book...'
+                    : 'Add Personal Book'}
+                </button>
+
+              </div>
+
+            </form>
+
+          </div>
 
         </div>
       )}
@@ -1443,12 +3129,17 @@ export default function OPACCatalog({
             <button
               type="button"
               onClick={() =>
-                setSelectedBook(null)
+                setSelectedBook(
+                  null
+                )
               }
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 font-bold"
               aria-label="Close book information"
             >
-              <X size={18} aria-hidden="true" />
+              <X
+                size={18}
+                aria-hidden="true"
+              />
             </button>
 
             <div className="flex gap-4 pr-8">
@@ -1463,7 +3154,9 @@ export default function OPACCatalog({
                   'Book cover'
                 }
                 className="w-24 h-32 object-cover rounded-lg border border-slate-200 bg-slate-50"
-                onError={(event) => {
+                onError={(
+                  event
+                ) => {
                   event.currentTarget.src =
                     'https://placehold.co/96x128?text=No+Cover';
                 }}
@@ -1471,10 +3164,26 @@ export default function OPACCatalog({
 
               <div className="space-y-1">
 
-                <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
-                  {selectedBook.category ||
-                    'Uncategorized'}
-                </span>
+                <div className="flex flex-wrap gap-2">
+
+                  {selectedBook.bookType ===
+                  'personal' ? (
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-violet-100 text-violet-700 px-2 py-0.5 rounded">
+                      Community Book
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                      Library Book
+                    </span>
+                  )}
+
+                  {selectedBook.condition && (
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                      {selectedBook.condition}
+                    </span>
+                  )}
+
+                </div>
 
                 <h3 className="text-lg font-bold text-slate-800">
                   {selectedBook.title ||
@@ -1497,6 +3206,75 @@ export default function OPACCatalog({
 
             </div>
 
+            {/* PERSONAL BOOK DETAILS */}
+
+            {selectedBook.bookType ===
+              'personal' && (
+              <div className="rounded-lg border border-violet-100 bg-violet-50 p-4 space-y-3">
+
+                <h4 className="text-xs font-bold uppercase tracking-wider text-violet-800">
+                  Community Lending
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                  <div>
+
+                    <p className="text-[10px] text-violet-500 uppercase font-bold">
+                      Condition
+                    </p>
+
+                    <p className="text-xs font-semibold text-slate-700">
+                      {selectedBook.condition ||
+                        'Good'}
+                    </p>
+
+                  </div>
+
+                  <div>
+
+                    <p className="text-[10px] text-violet-500 uppercase font-bold">
+                      Lending Period
+                    </p>
+
+                    <p className="text-xs font-semibold text-slate-700">
+                      {selectedBook.lendingPeriodDays ||
+                        7}{' '}
+                      days
+                    </p>
+
+                  </div>
+
+                  <div className="sm:col-span-2">
+
+                    <p className="text-[10px] text-violet-500 uppercase font-bold">
+                      Handover Location
+                    </p>
+
+                    <p className="text-xs font-semibold text-slate-700">
+                      {selectedBook.handoverLocation ||
+                        'Not specified'}
+                    </p>
+
+                  </div>
+
+                </div>
+
+                <div className="rounded-lg bg-white border border-violet-100 px-3 py-2">
+
+                  <p className="text-[11px] font-semibold text-violet-700">
+                    Owner approval is required
+                    before this personal book can
+                    be borrowed.
+                  </p>
+
+                </div>
+
+              </div>
+            )}
+
+            {/* SUMMARY */}
+
             <div className="space-y-1 bg-slate-50 p-3 rounded-lg border border-slate-100">
 
               <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
@@ -1510,95 +3288,139 @@ export default function OPACCatalog({
 
             </div>
 
-            <div className="space-y-3 pt-2">
+            {/* LIBRARY LOCATIONS FOR REGULAR BOOKS */}
 
-              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Available Library Locations:
-              </h4>
+            {selectedBook.bookType !==
+              'personal' && (
+              <div className="space-y-3 pt-2">
 
-              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Available Library Locations:
+                </h4>
 
-                {getPartnerLibraryEntries(
-                  selectedBook
-                ).length === 0 ? (
-                  <p className="text-xs text-slate-500">
-                    No libraries currently have
-                    this book in inventory.
-                  </p>
-                ) : (
-                  getPartnerLibraryEntries(
+                <div className="space-y-2">
+
+                  {getPartnerLibraryEntries(
                     selectedBook
-                  ).map((entry) => (
-
-                    <div
-                      key={entry.id}
-                      className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs gap-3"
-                    >
-
-                      <div>
-
-                        <p className="font-bold text-slate-800 text-sm">
-                          {libraryName(
-                            entry.libraryId
-                          )}
-                        </p>
-
-                        <p className="text-slate-500">
-                          {Number(
-                            entry.availableCopies || 0
-                          ) > 0
-                            ? `${entry.availableCopies} available`
-                            : 'Out of stock (Queue available)'}
-                        </p>
-
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleViewMap(
-                              entry.libraryId
-                            )
+                  ).length ===
+                  0 ? (
+                    <p className="text-xs text-slate-500">
+                      No libraries currently
+                      have this book in
+                      inventory.
+                    </p>
+                  ) : (
+                    getPartnerLibraryEntries(
+                      selectedBook
+                    ).map(
+                      (
+                        entry
+                      ) => (
+                        <div
+                          key={
+                            entry.id
                           }
-                          className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-300 transition"
+                          className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs gap-3"
                         >
-                          View Map
-                        </button>
 
-                        <button
-                          type="button"
-                          disabled={
-                            submittingBorrow
-                          }
-                          onClick={() =>
-                            handleBorrowOrReserve(
-                              entry
-                            )
-                          }
-                          className="px-3 py-1.5 bg-[#002046] text-white rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {submittingBorrow
-                            ? 'Processing...'
-                            : Number(
-                                  entry.availableCopies ||
+                          <div>
+
+                            <p className="font-bold text-slate-800 text-sm">
+                              {libraryName(
+                                entry.libraryId
+                              )}
+                            </p>
+
+                            <p className="text-slate-500">
+                              {Number(
+                                entry.availableCopies ||
+                                  0
+                              ) >
+                              0
+                                ? `${entry.availableCopies} available`
+                                : 'Out of stock (Queue available)'}
+                            </p>
+
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleViewMap(
+                                  entry.libraryId
+                                )
+                              }
+                              className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-300 transition"
+                            >
+                              View Map
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={
+                                submittingBorrow
+                              }
+                              onClick={() =>
+                                handleBorrowOrReserve(
+                                  entry
+                                )
+                              }
+                              className="px-3 py-1.5 bg-[#002046] text-white rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {submittingBorrow
+                                ? 'Processing...'
+                                : Number(
+                                      entry.availableCopies ||
+                                        0
+                                    ) >
                                     0
-                                ) > 0
-                              ? 'Borrow'
-                              : 'Reserve'}
-                        </button>
+                                  ? 'Borrow'
+                                  : 'Reserve'}
+                            </button>
 
-                      </div>
+                          </div>
 
-                    </div>
+                        </div>
+                      )
+                    )
+                  )}
 
-                  ))
-                )}
+                </div>
 
               </div>
+            )}
 
-            </div>
+            {/* COMMUNITY BOOK ACTION */}
+
+            {selectedBook.bookType ===
+              'personal' && (
+              <div className="border-t border-slate-200 pt-4">
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setNotice(
+                      'Community book borrowing will be available after the owner approval workflow is enabled.'
+                    )
+                  }
+                  className="w-full rounded-lg bg-violet-600 text-white py-2.5 text-sm font-bold hover:bg-violet-700"
+                >
+                  Request Community Book
+                </button>
+
+                <p className="text-[10px] text-slate-400 text-center mt-2">
+                  This button is currently
+                  informational. The owner approval
+                  workflow must be implemented before
+                  the request is submitted.
+                </p>
+
+              </div>
+            )}
+
+            {/* RATINGS & REVIEWS */}
 
             <div className="pt-4 border-t border-slate-200 space-y-4">
 
@@ -1610,7 +3432,8 @@ export default function OPACCatalog({
 
                 <span className="text-slate-400 normal-case font-normal">
                   ({reviews.length}{' '}
-                  {reviews.length === 1
+                  {reviews.length ===
+                  1
                     ? 'review'
                     : 'reviews'}
                   )
@@ -1638,26 +3461,39 @@ export default function OPACCatalog({
                     </span>
 
                     <select
-                      value={userRating}
-                      onChange={(event) =>
+                      value={
+                        userRating
+                      }
+                      onChange={(
+                        event
+                      ) =>
                         setUserRating(
                           Number(
-                            event.target.value
+                            event
+                              .target
+                              .value
                           )
                         )
                       }
                       className="text-xs bg-white border border-slate-300 rounded px-2 py-1 font-bold text-amber-600 focus:outline-none"
                     >
+
                       <option value="5">
-                        ⭐⭐⭐⭐⭐ (5/5)
+                        ⭐⭐⭐⭐⭐
+                        {' '}
+                        (5/5)
                       </option>
 
                       <option value="4">
-                        ⭐⭐⭐⭐ (4/5)
+                        ⭐⭐⭐⭐
+                        {' '}
+                        (4/5)
                       </option>
 
                       <option value="3">
-                        ⭐⭐⭐ (3/5)
+                        ⭐⭐⭐
+                        {' '}
+                        (3/5)
                       </option>
 
                       <option value="2">
@@ -1667,6 +3503,7 @@ export default function OPACCatalog({
                       <option value="1">
                         ⭐ (1/5)
                       </option>
+
                     </select>
 
                   </div>
@@ -1674,10 +3511,15 @@ export default function OPACCatalog({
                 </div>
 
                 <textarea
-                  value={userComment}
-                  onChange={(event) =>
+                  value={
+                    userComment
+                  }
+                  onChange={(
+                    event
+                  ) =>
                     setUserComment(
-                      event.target.value
+                      event.target
+                        .value
                     )
                   }
                   placeholder="Write your review or thoughts about this book..."
@@ -1690,7 +3532,9 @@ export default function OPACCatalog({
 
                   <button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={
+                      isSubmitting
+                    }
                     className="bg-[#002046] text-white text-xs px-4 py-2 rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50"
                   >
                     {isSubmitting
@@ -1705,77 +3549,105 @@ export default function OPACCatalog({
               <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
 
                 {loadingReviews ? (
-
                   <p className="text-xs text-slate-400 italic">
                     Loading reviews...
                   </p>
-
-                ) : reviews.length === 0 ? (
-
+                ) : reviews.length ===
+                  0 ? (
                   <p className="text-xs text-slate-400 italic">
-                    No reviews yet for this book.
-                    Be the first to leave a
+                    No reviews yet for
+                    this book. Be the
+                    first to leave a
                     review!
                   </p>
-
                 ) : (
+                  reviews.map(
+                    (
+                      review
+                    ) => (
+                      <div
+                        key={
+                          review.id
+                        }
+                        className="p-3 bg-white rounded-lg border border-slate-100 shadow-sm text-xs space-y-1"
+                      >
 
-                  reviews.map((review) => (
+                        <div className="flex justify-between items-center gap-3">
 
-                    <div
-                      key={review.id}
-                      className="p-3 bg-white rounded-lg border border-slate-100 shadow-sm text-xs space-y-1"
-                    >
+                          <span className="font-bold text-slate-800">
+                            {
+                              review.visitor_name
+                            }
+                          </span>
 
-                      <div className="flex justify-between items-center gap-3">
-
-                        <span className="font-bold text-slate-800">
-                          {review.visitor_name}
-                        </span>
-
-                        <span className="text-amber-500 font-bold">
-                          {'⭐'.repeat(
-                            Math.max(
-                              0,
-                              Math.min(
-                                5,
-                                Number(
-                                  review.rating
-                                ) || 0
+                          <span className="text-amber-500 font-bold">
+                            {'⭐'.repeat(
+                              Math.max(
+                                0,
+                                Math.min(
+                                  5,
+                                  Number(
+                                    review.rating
+                                  ) ||
+                                    0
+                                )
                               )
-                            )
+                            )}
+                          </span>
+
+                        </div>
+
+                        <p className="text-slate-600">
+                          {
+                            review.comment
+                          }
+                        </p>
+
+                        <p className="text-[10px] text-slate-400">
+                          {formatDate(
+                            review.created_at
                           )}
-                        </span>
+                        </p>
 
                       </div>
-
-                      <p className="text-slate-600">
-                        {review.comment}
-                      </p>
-
-                      <p className="text-[10px] text-slate-400">
-                        {formatDate(
-                          review.created_at
-                        )}
-                      </p>
-
-                    </div>
-
-                  ))
+                    )
+                  )
                 )}
 
               </div>
 
             </div>
 
+            {/* FOOTER */}
+
             <p className="text-[11px] text-slate-400 pt-2 border-t border-slate-100">
-              Borrowed items are due{' '}
-              {BORROW_PERIOD_DAYS} days after
-              pickup. Holds must be picked up
-              within {PICKUP_WINDOW_HOURS} hours
-              or they're released automatically.
-              Overdue books are charged ₱10 per
-              overdue day.
+
+              {selectedBook.bookType ===
+              'personal' ? (
+                <>
+                  This is a community-owned
+                  book. Borrowing requires
+                  owner approval.
+                </>
+              ) : (
+                <>
+                  Borrowed items are due{' '}
+                  {
+                    BORROW_PERIOD_DAYS
+                  }{' '}
+                  days after pickup.
+                  Holds must be picked up
+                  within{' '}
+                  {
+                    PICKUP_WINDOW_HOURS
+                  }{' '}
+                  hours or they're released
+                  automatically. Overdue
+                  books are charged ₱10 per
+                  overdue day.
+                </>
+              )}
+
             </p>
 
           </div>
