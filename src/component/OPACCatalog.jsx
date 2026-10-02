@@ -3415,33 +3415,39 @@ export default function OPACCatalog({
               </div>
             )}
 
-            {/* COMMUNITY BOOK ACTION */}
+            {/* =====================================================
+    COMMUNITY BOOK ACTION
+====================================================== */}
 
-            {selectedBook.bookType ===
-              'personal' && (
-              <div className="border-t border-slate-200 pt-4">
+{selectedBook.bookType === 'personal' && (
+  <div className="border-t border-slate-200 pt-4 space-y-3">
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    setNotice(
-                      'Community book borrowing will be available after the owner approval workflow is enabled.'
-                    )
-                  }
-                  className="w-full rounded-lg bg-violet-600 text-white py-2.5 text-sm font-bold hover:bg-violet-700"
-                >
-                  Request Community Book
-                </button>
+    <button
+      type="button"
+      onClick={() => {
+        setNotice(
+          'Community book borrowing will be available after the owner approval workflow is enabled.'
+        );
+      }}
+      className="w-full rounded-lg bg-violet-600 text-white py-2.5 text-sm font-bold hover:bg-violet-700 transition"
+    >
+      Request Community Book
+    </button>
 
-                <p className="text-[10px] text-slate-400 text-center mt-2">
-                  This button is currently
-                  informational. The owner approval
-                  workflow must be implemented before
-                  the request is submitted.
-                </p>
+    <div className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-3">
+      <p className="text-xs font-bold text-violet-800">
+        Community Book Request
+      </p>
 
-              </div>
-            )}
+      <p className="mt-1 text-[11px] leading-relaxed text-violet-700">
+        Community book borrowing is not yet available.
+        The owner approval workflow must be implemented
+        before a request can be submitted.
+      </p>
+    </div>
+
+  </div>
+)}
 
             {/* RATINGS & REVIEWS */}
 
