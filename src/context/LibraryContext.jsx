@@ -1,4 +1,3 @@
-jsx
 import {
   useEffect,
   useState,
@@ -63,580 +62,582 @@ export function LibraryProvider({ children }) {
   // remains an important fallback.
   // ==========================================================================
 
-  const getCurrentVisitorId = useCallback(async () => {
-    // ------------------------------------------------------------------------
-    // 1. Try the SHELF local visitor session first.
-    // ------------------------------------------------------------------------
-
-    try {
-      const rawSession =
-        localStorage.getItem('shelf_ilms_session_v1');
-
-      if (rawSession) {
-        const parsedSession =
-          JSON.parse(rawSession);
-
-        const localVisitorId =
-          parsedSession?.user?.id ||
-          parsedSession?.user?.visitorId ||
-          parsedSession?.user?.visitor_id ||
-          parsedSession?.visitor?.id ||
-          parsedSession?.visitor?.visitorId ||
-          parsedSession?.visitor?.visitor_id ||
-          parsedSession?.id ||
-          parsedSession?.visitorId ||
-          parsedSession?.visitor_id ||
-          null;
-
-        if (localVisitorId) {
-          console.log(
-            'SHELF — VISITOR ID FROM LOCAL SESSION:',
-            localVisitorId
-          );
-
-          return localVisitorId;
-        }
-      }
-    } catch (error) {
-      console.warn(
-        'SHELF local visitor session lookup failed:',
-        error
-      );
-    }
-
-    // ------------------------------------------------------------------------
-    // 2. Fallback to Supabase Auth.
-    // ------------------------------------------------------------------------
-
-    try {
-      const {
-        data: authData,
-      } = await supabase.auth.getSession();
-
-      const authUserId =
-        authData?.session?.user?.id || null;
-
-      if (authUserId) {
-        try {
-          const visitor =
-            await store.getVisitor(authUserId);
-
-          if (visitor?.id) {
-            console.log(
-              'SHELF — VISITOR ID FROM SUPABASE AUTH:',
-              visitor.id
-            );
-
-            return visitor.id;
-          }
-        } catch (error) {
-          console.warn(
-            'SHELF could not resolve visitor from Supabase Auth:',
-            error
-          );
-        }
-      }
-    } catch (error) {
-      console.warn(
-        'SHELF Supabase session lookup failed:',
-        error
-      );
-    }
-
-    // ------------------------------------------------------------------------
-    // 3. No visitor identity available.
-    // ------------------------------------------------------------------------
-
-    console.warn(
-      'SHELF — NO CURRENT VISITOR ID FOUND.'
-    );
-
-    return null;
-  }, []);
-
-  // ==========================================================================
-  // LOAD ALL SHELF DATA
-  // ==========================================================================
-
-  const refreshAll = useCallback(async () => {
-    try {
-      // ----------------------------------------------------------------------
-      // Resolve current visitor first.
-      // ----------------------------------------------------------------------
-
-      const currentVisitorId =
-        await getCurrentVisitorId();
-
-      console.log(
-        'SHELF — CURRENT VISITOR ID:',
-        currentVisitorId
-      );
-
-      // ----------------------------------------------------------------------
-      // Load shared/global data.
-      // ----------------------------------------------------------------------
-
-      const [
-        books,
-        libraries,
-        visitors,
-        normalBorrowRequests,
-        attendanceLogs,
-        communityBooks,
-      ] = await Promise.all([
-        store.fetchBooks(),
-
-        store.fetchLibraries(),
-
-        store.fetchVisitors(),
-
-        store.fetchBorrowRequests(),
-
-        store.fetchAttendanceLogs(),
-
-        store.fetchCommunityBooks(),
-      ]);
-
-      // ----------------------------------------------------------------------
-      // Load books owned by the current visitor.
-      // ----------------------------------------------------------------------
-
-      let personalBooks = [];
-
-      if (currentVisitorId) {
-        try {
-          personalBooks =
-            await store.fetchPersonalBooks(
-              currentVisitorId
-            );
-        } catch (error) {
-          console.error(
-            'SHELF personal books loading failed:',
-            error
-          );
-
-          personalBooks = [];
-        }
-      }
-
-      // ----------------------------------------------------------------------
-      // Load community-book requests made by the current visitor.
-      //
-      // These remain visible in MY REQUESTS & BORROWS regardless of status.
-      // ----------------------------------------------------------------------
-
-      let myCommunityBookRequests = [];
-
-      if (
-        currentVisitorId &&
-        typeof store.fetchMyCommunityBookRequests ===
-          'function'
-      ) {
-        try {
-          const result =
-            await store.fetchMyCommunityBookRequests(
-              currentVisitorId
-            );
-
-          myCommunityBookRequests =
-            Array.isArray(result)
-              ? result
-              : [];
-
-          console.log(
-            'SHELF — MY COMMUNITY REQUESTS:',
-            {
-              visitorId:
-                currentVisitorId,
-
-              count:
-                myCommunityBookRequests.length,
-
-              requests:
-                myCommunityBookRequests,
-            }
-          );
-        } catch (error) {
-          console.error(
-            'SHELF my community book requests loading failed:',
-            error
-          );
-
-          myCommunityBookRequests = [];
-        }
-      }
-
-      // ----------------------------------------------------------------------
-      // Load community-book requests for books owned by current visitor.
-      // ----------------------------------------------------------------------
-
-      let ownerCommunityBookRequests = [];
-
-      if (
-        currentVisitorId &&
-        typeof store.fetchOwnerCommunityBookRequests ===
-          'function'
-      ) {
-        try {
-          const result =
-            await store.fetchOwnerCommunityBookRequests(
-              currentVisitorId
-            );
-
-          ownerCommunityBookRequests =
-            Array.isArray(result)
-              ? result
-              : [];
-
-          console.log(
-            'SHELF — OWNER COMMUNITY REQUESTS:',
-            {
-              visitorId:
-                currentVisitorId,
-
-              count:
-                ownerCommunityBookRequests.length,
-
-              requests:
-                ownerCommunityBookRequests,
-            }
-          );
-        } catch (error) {
-          console.error(
-            'SHELF owner community book requests loading failed:',
-            error
-          );
-
-          ownerCommunityBookRequests = [];
-        }
-      }
-
-      // ----------------------------------------------------------------------
-      // Map normal library borrow requests.
-      // ----------------------------------------------------------------------
-
-      const mappedNormalBorrowRequests =
-        Array.isArray(normalBorrowRequests)
-          ? normalBorrowRequests.map(
-              (request) => ({
-                ...request,
-
-                requestType:
-                  request?.requestType ||
-                  'library',
-
-                isCommunityBook:
-                  request?.isCommunityBook === true,
-              })
-            )
-          : [];
-
-      // ----------------------------------------------------------------------
-      // Map community requests into the same structure used by
-      // My Requests & Borrows.
-      // ----------------------------------------------------------------------
-
-      const mappedMyCommunityRequests =
-        myCommunityBookRequests
-          .filter(
-            (request) =>
-              request &&
-              request.id
-          )
-          .map(
-            (request) => ({
-              id:
-                request.id,
-
-              bookId:
-                request.book_id ||
-                null,
-
-              bookTitle:
-                request.book_title ||
-                'Untitled Book',
-
-              visitorId:
-                request.requester_visitor_id ||
-                currentVisitorId ||
-                null,
-
-              visitorName:
-                request.requester_name ||
-                'SHELF Visitor',
-
-              status:
-                String(
-                  request.status ||
-                    'pending'
-                )
-                  .trim()
-                  .toLowerCase(),
-
-              requestDate:
-                request.request_date ||
-                null,
-
-              pickupDeadline:
-                request.pickup_deadline ||
-                null,
-
-              queuePosition:
-                request.queue_position ??
-                null,
-
-              borrowDate:
-                request.borrow_date ||
-                null,
-
-              dueDate:
-                request.due_date ||
-                null,
-
-              returnDate:
-                request.return_date ||
-                null,
-
-              fineAmount:
-                Number(
-                  request.fine_amount ??
-                    0
-                ) || 0,
-
-              confirmedBy:
-                request.confirmed_by ||
-                null,
-
-              returnConfirmedBy:
-                request.return_confirmed_by ||
-                null,
-
-              cancelReason:
-                request.cancel_reason ||
-                null,
-
-              // Community-book information
-              requestType:
-                'community',
-
-              isCommunityBook:
-                true,
-
-              ownerVisitorId:
-                request.owner_visitor_id ||
-                null,
-
-              ownerName:
-                request.owner_name ||
-                null,
-
-              ownerResponse:
-                request.owner_response ||
-                null,
-
-              approvedAt:
-                request.approved_at ||
-                null,
-
-              rejectedAt:
-                request.rejected_at ||
-                null,
-
-              lendingPeriodDays:
-                request.lending_period_days ??
-                null,
-            })
-          );
-
-      // ----------------------------------------------------------------------
-      // Merge normal library requests + community requests.
-      // ----------------------------------------------------------------------
-
-      const mergedBorrowRequests = [
-        ...mappedNormalBorrowRequests,
-        ...mappedMyCommunityRequests,
-      ];
-
-      // ----------------------------------------------------------------------
-      // Remove duplicate request IDs.
-      // ----------------------------------------------------------------------
-
-      const uniqueBorrowRequests =
-        Array.from(
-          new Map(
-            mergedBorrowRequests
-              .filter(
-                (request) =>
-                  request &&
-                  request.id
-              )
-              .map(
-                (request) => [
-                  String(
-                    request.id
-                  ),
-                  request,
-                ]
-              )
-          ).values()
+ const getCurrentVisitorId = useCallback(async () => {
+  // ------------------------------------------------------------------------
+  // 1. Try the SHELF local visitor session first.
+  //    QR/local visitor login stores the visitor identity here.
+  // ------------------------------------------------------------------------
+  try {
+    const rawSession =
+      localStorage.getItem('shelf_ilms_session_v1');
+
+    if (rawSession) {
+      const parsedSession =
+        JSON.parse(rawSession);
+
+      const localVisitorId =
+        parsedSession?.user?.id ||
+        parsedSession?.user?.visitorId ||
+        parsedSession?.user?.visitor_id ||
+        parsedSession?.visitor?.id ||
+        parsedSession?.visitor?.visitorId ||
+        parsedSession?.visitor?.visitor_id ||
+        parsedSession?.id ||
+        parsedSession?.visitorId ||
+        parsedSession?.visitor_id ||
+        null;
+
+      if (localVisitorId) {
+        console.log(
+          'SHELF — VISITOR ID FROM LOCAL SESSION:',
+          localVisitorId
         );
 
-      // ----------------------------------------------------------------------
-      // Sort newest request first.
-      // ----------------------------------------------------------------------
-
-      uniqueBorrowRequests.sort(
-        (a, b) =>
-          new Date(
-            b?.requestDate || 0
-          ).getTime() -
-          new Date(
-            a?.requestDate || 0
-          ).getTime()
-      );
-
-      // ----------------------------------------------------------------------
-      // Debug information.
-      // ----------------------------------------------------------------------
-
-      console.log(
-        'SHELF — FINAL BORROW REQUESTS:',
-        {
-          visitorId:
-            currentVisitorId,
-
-          normalCount:
-            mappedNormalBorrowRequests.length,
-
-          communityCount:
-            mappedMyCommunityRequests.length,
-
-          totalCount:
-            uniqueBorrowRequests.length,
-
-          communityRequests:
-            mappedMyCommunityRequests,
-        }
-      );
-
-      // ----------------------------------------------------------------------
-      // Update centralized application state.
-      // ----------------------------------------------------------------------
-
-      setData({
-        books:
-          Array.isArray(books)
-            ? books
-            : [],
-
-        libraries:
-          Array.isArray(libraries)
-            ? libraries
-            : [],
-
-        visitors:
-          Array.isArray(visitors)
-            ? visitors
-            : [],
-
-        borrowRequests:
-          uniqueBorrowRequests,
-
-        attendanceLogs:
-          Array.isArray(attendanceLogs)
-            ? attendanceLogs
-            : [],
-
-        personalBooks:
-          Array.isArray(personalBooks)
-            ? personalBooks
-            : [],
-
-        communityBooks:
-          Array.isArray(communityBooks)
-            ? communityBooks
-            : [],
-
-        myCommunityBookRequests:
-          myCommunityBookRequests,
-
-        ownerCommunityBookRequests:
-          ownerCommunityBookRequests,
-      });
-
-      setConnectionError('');
-
-      return {
-        books,
-        libraries,
-        visitors,
-
-        borrowRequests:
-          uniqueBorrowRequests,
-
-        attendanceLogs,
-
-        personalBooks,
-
-        communityBooks,
-
-        myCommunityBookRequests,
-
-        ownerCommunityBookRequests,
-      };
-
-    } catch (err) {
-      console.error(
-        'SHELF refreshAll error:',
-        err
-      );
-
-      setConnectionError(
-        err?.message ||
-          'Could not connect to the database.'
-      );
-
-      throw err;
-
-    } finally {
-      setLoading(false);
+        return localVisitorId;
+      }
     }
-  }, [getCurrentVisitorId]);
+  } catch (error) {
+    console.warn(
+      'SHELF local visitor session lookup failed:',
+      error
+    );
+  }
 
-  // ==========================================================================
-  // VISITOR SESSION CHANGE
-  // ----------------------------------------------------------------------------
-  // IMPORTANT:
-  // This useEffect must remain at the top level of LibraryProvider.
-  // It must NOT be placed inside refreshAll().
-  // ==========================================================================
+  // ------------------------------------------------------------------------
+  // 2. Fallback to Supabase Auth.
+  // ------------------------------------------------------------------------
+  try {
+    const {
+      data: authData,
+    } = await supabase.auth.getSession();
 
-  useEffect(() => {
-    const handleVisitorSessionChanged = () => {
-      console.log(
-        'SHELF — VISITOR SESSION CHANGED. REFRESHING DATA...'
-      );
+    const authUserId =
+      authData?.session?.user?.id || null;
 
-      void refreshAll().catch((error) => {
-        console.error(
-          'SHELF visitor session refresh failed:',
+    if (authUserId) {
+      try {
+        const visitor =
+          await store.getVisitor(authUserId);
+
+        if (visitor?.id) {
+          console.log(
+            'SHELF — VISITOR ID FROM SUPABASE AUTH:',
+            visitor.id
+          );
+
+          return visitor.id;
+        }
+      } catch (error) {
+        console.warn(
+          'SHELF could not resolve visitor from Supabase Auth:',
           error
         );
-      });
-    };
+      }
+    }
+  } catch (error) {
+    console.warn(
+      'SHELF Supabase session lookup failed:',
+      error
+    );
+  }
 
-    window.addEventListener(
+  // ------------------------------------------------------------------------
+  // 3. No visitor identity available.
+  // ------------------------------------------------------------------------
+  console.warn(
+    'SHELF — NO CURRENT VISITOR ID FOUND.'
+  );
+
+  return null;
+}, []);
+  
+ // ==========================================================================
+// LOAD ALL SHELF DATA
+// ==========================================================================
+
+const refreshAll = useCallback(async () => {
+  try {
+    // ----------------------------------------------------------------------
+    // Resolve current visitor first.
+    // ----------------------------------------------------------------------
+
+    const currentVisitorId =
+      await getCurrentVisitorId();
+
+    console.log(
+      'SHELF — CURRENT VISITOR ID:',
+      currentVisitorId
+    );
+
+    useEffect(() => {
+  const handleVisitorSessionChanged = () => {
+    console.log(
+      'SHELF — VISITOR SESSION CHANGED. REFRESHING DATA...'
+    );
+
+    refreshAll().catch((error) => {
+      console.error(
+        'SHELF visitor session refresh failed:',
+        error
+      );
+    });
+  };
+
+  window.addEventListener(
+    'shelf:visitor-session-changed',
+    handleVisitorSessionChanged
+  );
+
+  return () => {
+    window.removeEventListener(
       'shelf:visitor-session-changed',
       handleVisitorSessionChanged
     );
+  };
+}, [refreshAll]);
 
-    return () => {
-      window.removeEventListener(
-        'shelf:visitor-session-changed',
-        handleVisitorSessionChanged
+    // ----------------------------------------------------------------------
+    // Load shared/global data.
+    // ----------------------------------------------------------------------
+
+    const [
+      books,
+      libraries,
+      visitors,
+      normalBorrowRequests,
+      attendanceLogs,
+      communityBooks,
+    ] = await Promise.all([
+      store.fetchBooks(),
+
+      store.fetchLibraries(),
+
+      store.fetchVisitors(),
+
+      store.fetchBorrowRequests(),
+
+      store.fetchAttendanceLogs(),
+
+      store.fetchCommunityBooks(),
+    ]);
+
+    // ----------------------------------------------------------------------
+    // Load books owned by the current visitor.
+    // ----------------------------------------------------------------------
+
+    let personalBooks = [];
+
+    if (currentVisitorId) {
+      try {
+        personalBooks =
+          await store.fetchPersonalBooks(
+            currentVisitorId
+          );
+      } catch (error) {
+        console.error(
+          'SHELF personal books loading failed:',
+          error
+        );
+
+        personalBooks = [];
+      }
+    }
+
+    // ----------------------------------------------------------------------
+    // Load community-book requests made by the current visitor.
+    //
+    // These requests must remain visible in:
+    // MY REQUESTS & BORROWS
+    //
+    // We intentionally do NOT filter by status.
+    // pending / approved / rejected all remain visible.
+    // ----------------------------------------------------------------------
+
+    let myCommunityBookRequests = [];
+
+    if (
+      currentVisitorId &&
+      typeof store.fetchMyCommunityBookRequests ===
+        'function'
+    ) {
+      try {
+        const result =
+          await store.fetchMyCommunityBookRequests(
+            currentVisitorId
+          );
+
+        myCommunityBookRequests =
+          Array.isArray(result)
+            ? result
+            : [];
+
+        console.log(
+          'SHELF — MY COMMUNITY REQUESTS:',
+          {
+            visitorId:
+              currentVisitorId,
+
+            count:
+              myCommunityBookRequests.length,
+
+            requests:
+              myCommunityBookRequests,
+          }
+        );
+      } catch (error) {
+        console.error(
+          'SHELF my community book requests loading failed:',
+          error
+        );
+
+        myCommunityBookRequests = [];
+      }
+    }
+
+    // ----------------------------------------------------------------------
+    // Load community-book requests for books owned by current visitor.
+    //
+    // These requests are used on the OWNER side.
+    // ----------------------------------------------------------------------
+
+    let ownerCommunityBookRequests = [];
+
+    if (
+      currentVisitorId &&
+      typeof store.fetchOwnerCommunityBookRequests ===
+        'function'
+    ) {
+      try {
+        const result =
+          await store.fetchOwnerCommunityBookRequests(
+            currentVisitorId
+          );
+
+        ownerCommunityBookRequests =
+          Array.isArray(result)
+            ? result
+            : [];
+
+        console.log(
+          'SHELF — OWNER COMMUNITY REQUESTS:',
+          {
+            visitorId:
+              currentVisitorId,
+
+            count:
+              ownerCommunityBookRequests.length,
+
+            requests:
+              ownerCommunityBookRequests,
+          }
+        );
+      } catch (error) {
+        console.error(
+          'SHELF owner community book requests loading failed:',
+          error
+        );
+
+        ownerCommunityBookRequests = [];
+      }
+    }
+
+    // ----------------------------------------------------------------------
+    // Map normal library borrow requests.
+    // ----------------------------------------------------------------------
+
+    const mappedNormalBorrowRequests =
+      Array.isArray(normalBorrowRequests)
+        ? normalBorrowRequests.map(
+            (request) => ({
+              ...request,
+
+              requestType:
+                request?.requestType ||
+                'library',
+
+              isCommunityBook:
+                request?.isCommunityBook === true,
+            })
+          )
+        : [];
+
+    // ----------------------------------------------------------------------
+    // Map community requests into the same structure used by
+    // My Requests & Borrows.
+    // ----------------------------------------------------------------------
+
+    const mappedMyCommunityRequests =
+      myCommunityBookRequests
+        .filter(
+          (request) =>
+            request &&
+            request.id
+        )
+        .map(
+          (request) => ({
+            id:
+              request.id,
+
+            bookId:
+              request.book_id ||
+              null,
+
+            bookTitle:
+              request.book_title ||
+              'Untitled Book',
+
+            visitorId:
+              request.requester_visitor_id ||
+              currentVisitorId ||
+              null,
+
+            visitorName:
+              request.requester_name ||
+              'SHELF Visitor',
+
+            status:
+              String(
+                request.status ||
+                  'pending'
+              )
+                .trim()
+                .toLowerCase(),
+
+            requestDate:
+              request.request_date ||
+              null,
+
+            pickupDeadline:
+              request.pickup_deadline ||
+              null,
+
+            queuePosition:
+              request.queue_position ??
+              null,
+
+            borrowDate:
+              request.borrow_date ||
+              null,
+
+            dueDate:
+              request.due_date ||
+              null,
+
+            returnDate:
+              request.return_date ||
+              null,
+
+            fineAmount:
+              Number(
+                request.fine_amount ??
+                  0
+              ) || 0,
+
+            confirmedBy:
+              request.confirmed_by ||
+              null,
+
+            returnConfirmedBy:
+              request.return_confirmed_by ||
+              null,
+
+            cancelReason:
+              request.cancel_reason ||
+              null,
+
+            // --------------------------------------------------------------
+            // Community-book information
+            // --------------------------------------------------------------
+
+            requestType:
+              'community',
+
+            isCommunityBook:
+              true,
+
+            ownerVisitorId:
+              request.owner_visitor_id ||
+              null,
+
+            ownerName:
+              request.owner_name ||
+              null,
+
+            ownerResponse:
+              request.owner_response ||
+              null,
+
+            approvedAt:
+              request.approved_at ||
+              null,
+
+            rejectedAt:
+              request.rejected_at ||
+              null,
+
+            lendingPeriodDays:
+              request.lending_period_days ??
+              null,
+          })
+        );
+
+    // ----------------------------------------------------------------------
+    // Merge normal library requests + community requests.
+    // ----------------------------------------------------------------------
+
+    const mergedBorrowRequests = [
+      ...mappedNormalBorrowRequests,
+      ...mappedMyCommunityRequests,
+    ];
+
+    // ----------------------------------------------------------------------
+    // Remove duplicate request IDs.
+    // ----------------------------------------------------------------------
+
+    const uniqueBorrowRequests =
+      Array.from(
+        new Map(
+          mergedBorrowRequests
+            .filter(
+              (request) =>
+                request &&
+                request.id
+            )
+            .map(
+              (request) => [
+                String(
+                  request.id
+                ),
+                request,
+              ]
+            )
+        ).values()
       );
+
+    // ----------------------------------------------------------------------
+    // Sort newest request first.
+    // ----------------------------------------------------------------------
+
+    uniqueBorrowRequests.sort(
+      (a, b) =>
+        new Date(
+          b?.requestDate || 0
+        ).getTime() -
+        new Date(
+          a?.requestDate || 0
+        ).getTime()
+    );
+
+    // ----------------------------------------------------------------------
+    // Debug information.
+    // ----------------------------------------------------------------------
+
+    console.log(
+      'SHELF — FINAL BORROW REQUESTS:',
+      {
+        visitorId:
+          currentVisitorId,
+
+        normalCount:
+          mappedNormalBorrowRequests.length,
+
+        communityCount:
+          mappedMyCommunityRequests.length,
+
+        totalCount:
+          uniqueBorrowRequests.length,
+
+        communityRequests:
+          mappedMyCommunityRequests,
+      }
+    );
+
+    // ----------------------------------------------------------------------
+    // Update centralized application state.
+    // ----------------------------------------------------------------------
+
+    setData({
+      books:
+        Array.isArray(books)
+          ? books
+          : [],
+
+      libraries:
+        Array.isArray(libraries)
+          ? libraries
+          : [],
+
+      visitors:
+        Array.isArray(visitors)
+          ? visitors
+          : [],
+
+      // Normal + Community requests
+      borrowRequests:
+        uniqueBorrowRequests,
+
+      attendanceLogs:
+        Array.isArray(attendanceLogs)
+          ? attendanceLogs
+          : [],
+
+      personalBooks:
+        Array.isArray(personalBooks)
+          ? personalBooks
+          : [],
+
+      communityBooks:
+        Array.isArray(communityBooks)
+          ? communityBooks
+          : [],
+
+      // Keep community requests separately available.
+      myCommunityBookRequests:
+        myCommunityBookRequests,
+
+      ownerCommunityBookRequests:
+        ownerCommunityBookRequests,
+    });
+
+    setConnectionError('');
+
+    return {
+      books,
+      libraries,
+      visitors,
+
+      // Return the merged request list.
+      borrowRequests:
+        uniqueBorrowRequests,
+
+      attendanceLogs,
+
+      personalBooks,
+
+      communityBooks,
+
+      myCommunityBookRequests,
+
+      ownerCommunityBookRequests,
     };
-  }, [refreshAll]);
+
+  } catch (err) {
+    console.error(
+      'SHELF refreshAll error:',
+      err
+    );
+
+    setConnectionError(
+      err?.message ||
+        'Could not connect to the database.'
+    );
+
+    throw err;
+
+  } finally {
+    setLoading(false);
+  }
+}, [getCurrentVisitorId]);
 
   // ==========================================================================
   // INITIAL LOAD + AUTH + REALTIME
@@ -1022,52 +1023,44 @@ export function LibraryProvider({ children }) {
   // --------------------------------------------------------------------------
 
   const approveCommunityBookRequest = useMemo(
-    () =>
-      withRefresh(
-        store.approveCommunityBookRequest,
-        'approveCommunityBookRequest'
-      ),
-    [withRefresh]
-  );
+  () =>
+    withRefresh(
+      store.approveCommunityBookRequest,
+      'approveCommunityBookRequest'
+    ),
+  [withRefresh]
+);
 
   // --------------------------------------------------------------------------
   // Reject community book request
   // --------------------------------------------------------------------------
 
-  const rejectCommunityBookRequest = useMemo(
-    () =>
-      withRefresh(
-        store.rejectCommunityBookRequest,
-        'rejectCommunityBookRequest'
-      ),
-    [withRefresh]
-  );
+const rejectCommunityBookRequest = useMemo(
+  () =>
+    withRefresh(
+      store.rejectCommunityBookRequest,
+      'rejectCommunityBookRequest'
+    ),
+  [withRefresh]
+);
 
-  // --------------------------------------------------------------------------
-  // Confirm community book handover
-  // --------------------------------------------------------------------------
+const confirmCommunityBookPickup = useMemo(
+  () =>
+    withRefresh(
+      store.confirmCommunityBookPickup,
+      'confirmCommunityBookPickup'
+    ),
+  [withRefresh]
+);
 
-  const confirmCommunityBookPickup = useMemo(
-    () =>
-      withRefresh(
-        store.confirmCommunityBookPickup,
-        'confirmCommunityBookPickup'
-      ),
-    [withRefresh]
-  );
-
-  // --------------------------------------------------------------------------
-  // Confirm community book return
-  // --------------------------------------------------------------------------
-
-  const confirmCommunityBookReturn = useMemo(
-    () =>
-      withRefresh(
-        store.confirmCommunityBookReturn,
-        'confirmCommunityBookReturn'
-      ),
-    [withRefresh]
-  );
+const confirmCommunityBookReturn = useMemo(
+  () =>
+    withRefresh(
+      store.confirmCommunityBookReturn,
+      'confirmCommunityBookReturn'
+    ),
+  [withRefresh]
+);
 
   // ==========================================================================
   // BORROW / RESERVATION
@@ -1135,6 +1128,9 @@ export function LibraryProvider({ children }) {
       data,
 
       // Expose individual collections too.
+      // This preserves compatibility with components that use:
+      // const { books } = useLibraryData();
+
       books:
         Array.isArray(data.books)
           ? data.books
@@ -1168,20 +1164,6 @@ export function LibraryProvider({ children }) {
       communityBooks:
         Array.isArray(data.communityBooks)
           ? data.communityBooks
-          : [],
-
-      myCommunityBookRequests:
-        Array.isArray(
-          data.myCommunityBookRequests
-        )
-          ? data.myCommunityBookRequests
-          : [],
-
-      ownerCommunityBookRequests:
-        Array.isArray(
-          data.ownerCommunityBookRequests
-        )
-          ? data.ownerCommunityBookRequests
           : [],
 
       loading,
@@ -1223,7 +1205,7 @@ export function LibraryProvider({ children }) {
       rejectCommunityBookRequest,
 
       confirmCommunityBookPickup,
-
+      
       confirmCommunityBookReturn,
 
       // ----------------------------------------------------------------------
@@ -1299,10 +1281,6 @@ export function LibraryProvider({ children }) {
       approveCommunityBookRequest,
 
       rejectCommunityBookRequest,
-
-      confirmCommunityBookPickup,
-
-      confirmCommunityBookReturn,
 
       requestBorrow,
 
