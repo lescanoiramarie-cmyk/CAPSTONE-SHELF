@@ -260,18 +260,13 @@ const mapBook = (r) => ({
   coverUrl: r.cover_url,
   createdAt: r.created_at,
 
-  // --------------------------------------------------------------------------
-  // PERSONAL / COMMUNITY BOOK FIELDS
-  // --------------------------------------------------------------------------
-
+  // Personal / Community Book fields
   bookType: r.book_type || 'library',
   ownerVisitorId: r.owner_visitor_id || null,
   lendingEnabled: r.lending_enabled ?? false,
   condition: r.condition || null,
-  lendingPeriodDays:
-    r.lending_period_days ?? 7,
-  handoverLocation:
-    r.handover_location || null,
+  lendingPeriodDays: r.lending_period_days ?? 7,
+  handoverLocation: r.handover_location || null,
 });
 
 const mapVisitor = (r) => ({
@@ -318,7 +313,10 @@ const mapAttendance = (r) => ({
 // ============================================================================
 
 export async function fetchLibraries() {
-  const { data, error } = await supabase
+  const {
+    data,
+    error,
+  } = await supabase
     .from('libraries')
     .select('*')
     .order('name', {
@@ -337,7 +335,8 @@ export async function fetchLibraries() {
 // ============================================================================
 
 export async function addLibrary(library) {
-  const suppliedId = normalizeText(library?.id);
+  const suppliedId =
+    normalizeText(library?.id);
 
   const id =
     suppliedId ||
@@ -364,7 +363,10 @@ export async function addLibrary(library) {
     );
   }
 
-  const { data, error } = await supabase
+  const {
+    data,
+    error,
+  } = await supabase
     .from('libraries')
     .insert({
       id,
@@ -397,11 +399,14 @@ export async function addLibrary(library) {
 }
 
 // ============================================================================
-// FETCH BOOKS
+// FETCH ALL BOOKS
 // ============================================================================
 
 export async function fetchBooks() {
-  const { data, error } = await supabase
+  const {
+    data,
+    error,
+  } = await supabase
     .from('books')
     .select('*')
     .order('created_at', {
@@ -410,6 +415,90 @@ export async function fetchBooks() {
 
   if (error) {
     throw cleanErr(error);
+  }
+
+  return (data || []).map(mapBook);
+}
+
+// ============================================================================
+// FETCH PERSONAL BOOKS OWNED BY A VISITOR
+// ============================================================================
+
+export async function fetchPersonalBooks(
+  visitorId
+) {
+  const normalizedVisitorId =
+    normalizeText(visitorId);
+
+  if (!normalizedVisitorId) {
+    return [];
+  }
+
+  if (!isValidUuid(normalizedVisitorId)) {
+    throw new Error(
+      'Invalid visitor ID.'
+    );
+  }
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from('books')
+    .select('*')
+    .eq(
+      'book_type',
+      'personal'
+    )
+    .eq(
+      'owner_visitor_id',
+      normalizedVisitorId
+    )
+    .order('created_at', {
+      ascending: false,
+    });
+
+  if (error) {
+    throw cleanErr(
+      error,
+      'Unable to load your personal books.'
+    );
+  }
+
+  return (data || []).map(mapBook);
+}
+
+// ============================================================================
+// FETCH COMMUNITY BOOKS
+// ============================================================================
+//
+// Returns visitor-owned books that the owner has made available for lending.
+// ============================================================================
+
+export async function fetchCommunityBooks() {
+  const {
+    data,
+    error,
+  } = await supabase
+    .from('books')
+    .select('*')
+    .eq(
+      'book_type',
+      'personal'
+    )
+    .eq(
+      'lending_enabled',
+      true
+    )
+    .order('created_at', {
+      ascending: false,
+    });
+
+  if (error) {
+    throw cleanErr(
+      error,
+      'Unable to load community books.'
+    );
   }
 
   return (data || []).map(mapBook);
@@ -436,7 +525,10 @@ export async function fetchVisitors() {
     return [];
   }
 
-  const { data, error } = await supabase
+  const {
+    data,
+    error,
+  } = await supabase
     .from('visitors')
     .select(
       'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at'
@@ -456,27 +548,17 @@ export async function fetchVisitors() {
 // FETCH BORROW REQUESTS
 // ============================================================================
 //
-// Supports both SHELF authentication flows:
+// Supports:
 //
 // 1. Supabase Auth session
-//    - Visitor email/password login
-//    - Staff/Admin login
+// 2. SHELF local visitor QR session
 //
-// 2. SHELF local visitor session
-//    - Visitor QR login
-//
-// QR login does not create a Supabase Auth session.
-// Therefore, QR visitors use the visitor-specific
-// get_visitor_borrow_requests() PostgreSQL RPC.
-//
+// QR login does not create a Supabase Auth session, so the visitor-specific
+// RPC is used for the local QR session.
 // ============================================================================
 
 export async function fetchBorrowRequests() {
   try {
-    // ========================================================================
-    // 1. CHECK SUPABASE AUTH SESSION
-    // ========================================================================
-
     const {
       data: sessionData,
       error: sessionError,
@@ -489,9 +571,9 @@ export async function fetchBorrowRequests() {
       );
     }
 
-    // ========================================================================
-    // 2. NORMAL SUPABASE AUTH SESSION
-    // ========================================================================
+    // ------------------------------------------------------------------------
+    // SUPABASE AUTH SESSION
+    // ------------------------------------------------------------------------
 
     if (sessionData?.session) {
       const {
@@ -516,9 +598,9 @@ export async function fetchBorrowRequests() {
       );
     }
 
-    // ========================================================================
-    // 3. SHELF LOCAL VISITOR SESSION
-    // ========================================================================
+    // ------------------------------------------------------------------------
+    // LOCAL SHELF VISITOR SESSION
+    // ------------------------------------------------------------------------
 
     let localSession = null;
 
@@ -539,9 +621,9 @@ export async function fetchBorrowRequests() {
       );
     }
 
-    // ========================================================================
-    // 4. VALIDATE LOCAL VISITOR SESSION
-    // ========================================================================
+    // ------------------------------------------------------------------------
+    // VISITOR-SPECIFIC RPC
+    // ------------------------------------------------------------------------
 
     if (
       localSession?.role === 'visitor' &&
@@ -569,10 +651,6 @@ export async function fetchBorrowRequests() {
         mapBorrowRequest
       );
     }
-
-    // ========================================================================
-    // 5. NO ACTIVE SESSION
-    // ========================================================================
 
     return [];
   } catch (error) {
@@ -606,7 +684,10 @@ export async function fetchAttendanceLogs() {
     return [];
   }
 
-  const { data, error } = await supabase
+  const {
+    data,
+    error,
+  } = await supabase
     .from('attendance_logs')
     .select('*')
     .order('time_in', {
@@ -624,7 +705,9 @@ export async function fetchAttendanceLogs() {
 // GET VISITOR
 // ============================================================================
 
-export async function getVisitor(visitorId) {
+export async function getVisitor(
+  visitorId
+) {
   const normalizedVisitorId =
     normalizeText(visitorId);
 
@@ -638,12 +721,18 @@ export async function getVisitor(visitorId) {
     );
   }
 
-  const { data, error } = await supabase
+  const {
+    data,
+    error,
+  } = await supabase
     .from('visitors')
     .select(
       'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at'
     )
-    .eq('id', normalizedVisitorId)
+    .eq(
+      'id',
+      normalizedVisitorId
+    )
     .maybeSingle();
 
   if (error) {
@@ -681,10 +770,6 @@ export async function registerVisitor({
   const normalizedPassword =
     asString(password);
 
-  // --------------------------------------------------------------------------
-  // VALIDATION
-  // --------------------------------------------------------------------------
-
   if (!normalizedFullName) {
     throw new Error(
       'Full name is required.'
@@ -716,24 +801,30 @@ export async function registerVisitor({
   }
 
   // --------------------------------------------------------------------------
-  // 1. CREATE / RESUME SUPABASE AUTH ACCOUNT
+  // CREATE SUPABASE AUTH ACCOUNT
   // --------------------------------------------------------------------------
 
   const {
     data: authData,
     error: authError,
-  } = await supabase.auth.signUp({
-    email: normalizedEmail,
-    password: normalizedPassword,
-    options: {
-      data: {
-        role: 'visitor',
-        full_name: normalizedFullName,
-        contact_number: normalizedContactNumber,
-        address: normalizedAddress,
+  } =
+    await supabase.auth.signUp({
+      email:
+        normalizedEmail,
+      password:
+        normalizedPassword,
+      options: {
+        data: {
+          role: 'visitor',
+          full_name:
+            normalizedFullName,
+          contact_number:
+            normalizedContactNumber,
+          address:
+            normalizedAddress,
+        },
       },
-    },
-  });
+    });
 
   if (authError) {
     console.error(
@@ -747,9 +838,15 @@ export async function registerVisitor({
       ).toLowerCase();
 
     if (
-      message.includes('already registered') ||
-      message.includes('already exists') ||
-      message.includes('user already registered')
+      message.includes(
+        'already registered'
+      ) ||
+      message.includes(
+        'already exists'
+      ) ||
+      message.includes(
+        'user already registered'
+      )
     ) {
       throw new Error(
         'This email is already registered. Please log in instead.'
@@ -761,10 +858,6 @@ export async function registerVisitor({
       'Unable to create the visitor authentication account.'
     );
   }
-
-  // --------------------------------------------------------------------------
-  // 2. VERIFY AUTH USER
-  // --------------------------------------------------------------------------
 
   if (!authData?.user?.id) {
     throw new Error(
@@ -800,31 +893,32 @@ export async function registerVisitor({
   );
 
   // --------------------------------------------------------------------------
-  // 3. CREATE OR RESUME VISITOR PROFILE THROUGH RPC
+  // CREATE VISITOR PROFILE
   // --------------------------------------------------------------------------
 
   const {
     data: registrationData,
     error: registrationError,
-  } = await supabase.rpc(
-    'register_visitor',
-    {
-      p_auth_user_id:
-        authUserId,
+  } =
+    await supabase.rpc(
+      'register_visitor',
+      {
+        p_auth_user_id:
+          authUserId,
 
-      p_full_name:
-        normalizedFullName,
+        p_full_name:
+          normalizedFullName,
 
-      p_contact_number:
-        normalizedContactNumber,
+        p_contact_number:
+          normalizedContactNumber,
 
-      p_email:
-        normalizedEmail,
+        p_email:
+          normalizedEmail,
 
-      p_address:
-        normalizedAddress,
-    }
-  );
+        p_address:
+          normalizedAddress,
+      }
+    );
 
   if (registrationError) {
     console.error(
@@ -843,16 +937,7 @@ export async function registerVisitor({
       ) ||
       databaseMessage.includes(
         'already registered as a visitor'
-      )
-    ) {
-      await safeSignOut();
-
-      throw new Error(
-        'This email is already registered as a SHELF visitor. Please log in instead.'
-      );
-    }
-
-    if (
+      ) ||
       databaseMessage.includes(
         'visitor account with this email already exists'
       )
@@ -871,10 +956,6 @@ export async function registerVisitor({
       'The visitor authentication account was created, but the visitor profile could not be created.'
     );
   }
-
-  // --------------------------------------------------------------------------
-  // 4. GET VISITOR ID
-  // --------------------------------------------------------------------------
 
   const row =
     firstRow(registrationData);
@@ -908,14 +989,10 @@ export async function registerVisitor({
     }
   );
 
-  // --------------------------------------------------------------------------
-  // 5. SIGN OUT BEFORE OTP VERIFICATION
-  // --------------------------------------------------------------------------
-
   await safeSignOut();
 
   // --------------------------------------------------------------------------
-  // 6. SEND SHELF OTP
+  // SEND OTP
   // --------------------------------------------------------------------------
 
   const {
@@ -937,15 +1014,6 @@ export async function registerVisitor({
       emailError
     );
 
-    console.error(
-      'SEND VISITOR OTP ERROR CONTEXT:',
-      {
-        name: emailError?.name,
-        message: emailError?.message,
-        context: emailError?.context,
-      }
-    );
-
     let detailedMessage =
       'Your registration was created, but we could not send the verification email. Please try again.';
 
@@ -955,34 +1023,35 @@ export async function registerVisitor({
 
       if (response) {
         const responseText =
-          typeof response?.text === 'function'
+          typeof response?.text ===
+          'function'
             ? await response.text()
             : null;
-
-        console.error(
-          'SEND VISITOR OTP RAW RESPONSE:',
-          responseText
-        );
 
         if (responseText) {
           try {
             const parsed =
-              JSON.parse(responseText);
-
-            console.error(
-              'SEND VISITOR OTP RESPONSE JSON:',
-              parsed
-            );
+              JSON.parse(
+                responseText
+              );
 
             if (parsed?.error) {
               detailedMessage =
-                String(parsed.error);
-            } else if (parsed?.message) {
+                String(
+                  parsed.error
+                );
+            } else if (
+              parsed?.message
+            ) {
               detailedMessage =
-                String(parsed.message);
+                String(
+                  parsed.message
+                );
             }
           } catch {
-            if (responseText.trim()) {
+            if (
+              responseText.trim()
+            ) {
               detailedMessage =
                 responseText.trim();
             }
@@ -1013,10 +1082,6 @@ export async function registerVisitor({
     );
   }
 
-  // --------------------------------------------------------------------------
-  // 7. RETURN OTP REGISTRATION SESSION
-  // --------------------------------------------------------------------------
-
   return {
     visitorId,
   };
@@ -1046,13 +1111,14 @@ export async function resendOtp(
 
   const {
     error,
-  } = await supabase.rpc(
-    'resend_otp',
-    {
-      p_visitor_id:
-        normalizedVisitorId,
-    }
-  );
+  } =
+    await supabase.rpc(
+      'resend_otp',
+      {
+        p_visitor_id:
+          normalizedVisitorId,
+      }
+    );
 
   if (error) {
     throw cleanErr(error);
@@ -1134,16 +1200,17 @@ export async function verifyVisitorOtp(
   const {
     data,
     error,
-  } = await supabase.rpc(
-    'verify_visitor_otp',
-    {
-      p_visitor_id:
-        normalizedVisitorId,
+  } =
+    await supabase.rpc(
+      'verify_visitor_otp',
+      {
+        p_visitor_id:
+          normalizedVisitorId,
 
-      p_code:
-        normalizedCode,
-    }
-  );
+        p_code:
+          normalizedCode,
+      }
+    );
 
   if (error) {
     throw cleanErr(error);
@@ -1195,9 +1262,9 @@ export async function loginVisitor({
     );
   }
 
-  // ========================================================================
+  // --------------------------------------------------------------------------
   // QR LOGIN
-  // ========================================================================
+  // --------------------------------------------------------------------------
 
   if (
     isValidShelfQr(
@@ -1205,21 +1272,24 @@ export async function loginVisitor({
     )
   ) {
     const normalizedQr =
-      normalizeQr(normalizedIdentifier);
+      normalizeQr(
+        normalizedIdentifier
+      );
 
     const {
       data: visitor,
       error: visitorError,
-    } = await supabase
-      .from('visitors')
-      .select(
-        'id, full_name, email, otp_verified, qr_code, is_active, auth_user_id'
-      )
-      .eq(
-        'qr_code',
-        normalizedQr
-      )
-      .maybeSingle();
+    } =
+      await supabase
+        .from('visitors')
+        .select(
+          'id, full_name, email, otp_verified, qr_code, is_active, auth_user_id'
+        )
+        .eq(
+          'qr_code',
+          normalizedQr
+        )
+        .maybeSingle();
 
     if (visitorError) {
       throw cleanErr(
@@ -1265,9 +1335,9 @@ export async function loginVisitor({
     };
   }
 
-  // ========================================================================
+  // --------------------------------------------------------------------------
   // EMAIL + PASSWORD LOGIN
-  // ========================================================================
+  // --------------------------------------------------------------------------
 
   if (!normalizedPassword) {
     throw new Error(
@@ -1342,10 +1412,6 @@ export async function loginVisitor({
       'Supabase returned an invalid authentication user ID.'
     );
   }
-
-  // ========================================================================
-  // LOAD VISITOR PROFILE
-  // ========================================================================
 
   const {
     data: visitor,
@@ -1461,16 +1527,17 @@ export async function findVisitorByQr(
   const {
     data,
     error,
-  } = await supabase.rpc(
-    'find_visitor_by_qr',
-    {
-      p_qr:
-        normalizedQrCode,
+  } =
+    await supabase.rpc(
+      'find_visitor_by_qr',
+      {
+        p_qr:
+          normalizedQrCode,
 
-      p_library_id:
-        normalizedLibraryId,
-    }
-  );
+        p_library_id:
+          normalizedLibraryId,
+      }
+    );
 
   if (error) {
     throw cleanErr(error);
@@ -1558,8 +1625,7 @@ export async function loginStaffAccount(
     const authErrorMessage =
       normalizeText(
         error?.message
-      )
-        .toLowerCase();
+      ).toLowerCase();
 
     if (
       authErrorMessage.includes(
@@ -1623,10 +1689,6 @@ export async function loginStaffAccount(
       'Supabase returned an invalid staff user ID.'
     );
   }
-
-  // ========================================================================
-  // LOAD STAFF PROFILE
-  // ========================================================================
 
   const {
     data: profile,
@@ -1786,13 +1848,21 @@ export async function scanAttendance(
     );
   }
 
-  if (!isValidShelfQr(normalizedQrCode)) {
+  if (
+    !isValidShelfQr(
+      normalizedQrCode
+    )
+  ) {
     throw new Error(
       'Invalid SHELF visitor QR pass.'
     );
   }
 
-  if (!isValidUuid(normalizedLibraryId)) {
+  if (
+    !isValidUuid(
+      normalizedLibraryId
+    )
+  ) {
     throw new Error(
       'Invalid library branch ID.'
     );
@@ -1801,16 +1871,17 @@ export async function scanAttendance(
   const {
     data,
     error,
-  } = await supabase.rpc(
-    'toggle_attendance',
-    {
-      p_qr:
-        normalizedQrCode,
+  } =
+    await supabase.rpc(
+      'toggle_attendance',
+      {
+        p_qr:
+          normalizedQrCode,
 
-      p_library_id:
-        normalizedLibraryId,
-    }
-  );
+        p_library_id:
+          normalizedLibraryId,
+      }
+    );
 
   if (error) {
     throw cleanErr(error);
@@ -1903,8 +1974,7 @@ export async function addBook(
         category:
           normalizeText(
             book?.category
-          ) ||
-          'General',
+          ) || 'General',
 
         isbn:
           normalizeText(
@@ -1967,26 +2037,6 @@ export async function addBook(
 // ============================================================================
 // PERSONAL BOOK — ADD
 // ============================================================================
-//
-// Creates a visitor-owned book through:
-//
-//   add_personal_book(
-//      p_visitor_id,
-//      p_title,
-//      p_author,
-//      p_category,
-//      p_isbn,
-//      p_summary,
-//      p_condition,
-//      p_lending_period_days,
-//      p_handover_location,
-//      p_lending_enabled
-//   )
-//
-// No cover upload is used for personal books.
-// cover_url remains NULL.
-//
-// ============================================================================
 
 export async function addPersonalBook({
   visitorId,
@@ -2022,7 +2072,9 @@ export async function addPersonalBook({
     normalizeText(condition) || 'Good';
 
   const normalizedHandoverLocation =
-    normalizeText(handoverLocation) || null;
+    normalizeText(
+      handoverLocation
+    ) || null;
 
   const normalizedLendingPeriod =
     Number(lendingPeriodDays);
@@ -2030,25 +2082,21 @@ export async function addPersonalBook({
   const normalizedLendingEnabled =
     lendingEnabled !== false;
 
-  // --------------------------------------------------------------------------
-  // VALIDATE VISITOR
-  // --------------------------------------------------------------------------
-
   if (!normalizedVisitorId) {
     throw new Error(
       'Visitor ID is required.'
     );
   }
 
-  if (!isValidUuid(normalizedVisitorId)) {
+  if (
+    !isValidUuid(
+      normalizedVisitorId
+    )
+  ) {
     throw new Error(
       'Invalid visitor ID.'
     );
   }
-
-  // --------------------------------------------------------------------------
-  // VALIDATE TITLE
-  // --------------------------------------------------------------------------
 
   if (!normalizedTitle) {
     throw new Error(
@@ -2056,19 +2104,11 @@ export async function addPersonalBook({
     );
   }
 
-  // --------------------------------------------------------------------------
-  // VALIDATE AUTHOR
-  // --------------------------------------------------------------------------
-
   if (!normalizedAuthor) {
     throw new Error(
       'Book author is required.'
     );
   }
-
-  // --------------------------------------------------------------------------
-  // VALIDATE CONDITION
-  // --------------------------------------------------------------------------
 
   if (
     !PERSONAL_BOOK_CONDITIONS.includes(
@@ -2079,10 +2119,6 @@ export async function addPersonalBook({
       'Invalid book condition.'
     );
   }
-
-  // --------------------------------------------------------------------------
-  // VALIDATE LENDING PERIOD
-  // --------------------------------------------------------------------------
 
   if (
     !Number.isInteger(
@@ -2098,10 +2134,6 @@ export async function addPersonalBook({
     );
   }
 
-  // --------------------------------------------------------------------------
-  // VALIDATE HANDOVER LOCATION
-  // --------------------------------------------------------------------------
-
   if (
     normalizedLendingEnabled &&
     !normalizedHandoverLocation
@@ -2110,10 +2142,6 @@ export async function addPersonalBook({
       'Handover location is required when lending is enabled.'
     );
   }
-
-  // --------------------------------------------------------------------------
-  // CALL DATABASE RPC
-  // --------------------------------------------------------------------------
 
   const {
     data,
@@ -2158,18 +2186,10 @@ export async function addPersonalBook({
     console.error(
       'ADD PERSONAL BOOK RPC ERROR:',
       {
-        code:
-          error?.code,
-
-        message:
-          error?.message,
-
-        details:
-          error?.details,
-
-        hint:
-          error?.hint,
-
+        code: error?.code,
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
         visitorId:
           normalizedVisitorId,
       }
@@ -2374,7 +2394,11 @@ export async function updateBook(
     );
   }
 
-  if (!isValidUuid(normalizedBookId)) {
+  if (
+    !isValidUuid(
+      normalizedBookId
+    )
+  ) {
     throw new Error(
       'Invalid book ID.'
     );
@@ -2382,10 +2406,7 @@ export async function updateBook(
 
   const dbPatch = {};
 
-  // --------------------------------------------------------------------------
-  // STANDARD BOOK FIELDS
-  // --------------------------------------------------------------------------
-
+  // Standard fields
   if (
     patch?.title !== undefined
   ) {
@@ -2534,10 +2555,7 @@ export async function updateBook(
       ) || DEFAULT_COVER_URL;
   }
 
-  // --------------------------------------------------------------------------
-  // PERSONAL BOOK FIELDS
-  // --------------------------------------------------------------------------
-
+  // Personal / community fields
   if (
     patch?.bookType !== undefined
   ) {
@@ -2649,19 +2667,11 @@ export async function updateBook(
       ) || null;
   }
 
-  // --------------------------------------------------------------------------
-  // NO CHANGES
-  // --------------------------------------------------------------------------
-
   if (
     Object.keys(dbPatch).length === 0
   ) {
     return null;
   }
-
-  // --------------------------------------------------------------------------
-  // UPDATE DATABASE
-  // --------------------------------------------------------------------------
 
   const {
     data,
@@ -2700,7 +2710,11 @@ export async function deleteBook(
     );
   }
 
-  if (!isValidUuid(normalizedBookId)) {
+  if (
+    !isValidUuid(
+      normalizedBookId
+    )
+  ) {
     throw new Error(
       'Invalid book ID.'
     );
@@ -2720,6 +2734,10 @@ export async function deleteBook(
   if (error) {
     throw cleanErr(error);
   }
+
+  return {
+    success: true,
+  };
 }
 
 // ============================================================================
@@ -2738,7 +2756,11 @@ export async function loadSampleCatalog(
     );
   }
 
-  if (!isValidUuid(normalizedLibraryId)) {
+  if (
+    !isValidUuid(
+      normalizedLibraryId
+    )
+  ) {
     throw new Error(
       'Invalid library ID.'
     );
@@ -2896,15 +2918,16 @@ export async function loadSampleCatalog(
 }
 
 // ============================================================================
-// BORROW REQUEST
+// BORROW REQUEST — LIBRARY BOOKS
 // ============================================================================
 //
-// Creates the request through the PostgreSQL RPC:
+// Uses:
 //
 //   request_borrow(p_visitor_id, p_book_id)
 //
-// The database remains responsible for the atomic borrow rules.
-//
+// IMPORTANT:
+// Personal/community books should use a separate owner-approval workflow.
+// This function remains for normal library books.
 // ============================================================================
 
 export async function requestBorrow(
@@ -2917,25 +2940,21 @@ export async function requestBorrow(
   const normalizedBookId =
     normalizeText(bookId);
 
-  // --------------------------------------------------------------------------
-  // VALIDATE VISITOR ID
-  // --------------------------------------------------------------------------
-
   if (!normalizedVisitorId) {
     throw new Error(
       'Visitor ID is required.'
     );
   }
 
-  if (!isValidUuid(normalizedVisitorId)) {
+  if (
+    !isValidUuid(
+      normalizedVisitorId
+    )
+  ) {
     throw new Error(
       'Invalid visitor ID.'
     );
   }
-
-  // --------------------------------------------------------------------------
-  // VALIDATE BOOK ID
-  // --------------------------------------------------------------------------
 
   if (!normalizedBookId) {
     throw new Error(
@@ -2943,15 +2962,15 @@ export async function requestBorrow(
     );
   }
 
-  if (!isValidUuid(normalizedBookId)) {
+  if (
+    !isValidUuid(
+      normalizedBookId
+    )
+  ) {
     throw new Error(
       'Invalid book ID.'
     );
   }
-
-  // --------------------------------------------------------------------------
-  // CALL DATABASE RPC
-  // --------------------------------------------------------------------------
 
   const {
     data,
@@ -2967,10 +2986,6 @@ export async function requestBorrow(
           normalizedBookId,
       }
     );
-
-  // --------------------------------------------------------------------------
-  // HANDLE RPC ERROR
-  // --------------------------------------------------------------------------
 
   if (error) {
     console.error(
@@ -3003,10 +3018,6 @@ export async function requestBorrow(
 
     const lowerMessage =
       message.toLowerCase();
-
-    // ------------------------------------------------------------------------
-    // VISITOR ERRORS
-    // ------------------------------------------------------------------------
 
     if (
       lowerMessage.includes(
@@ -3053,10 +3064,6 @@ export async function requestBorrow(
       );
     }
 
-    // ------------------------------------------------------------------------
-    // BOOK ERRORS
-    // ------------------------------------------------------------------------
-
     if (
       lowerMessage.includes(
         'book not found'
@@ -3089,10 +3096,6 @@ export async function requestBorrow(
       );
     }
 
-    // ------------------------------------------------------------------------
-    // DUPLICATE REQUEST ERRORS
-    // ------------------------------------------------------------------------
-
     if (
       lowerMessage.includes(
         'already requested'
@@ -3122,10 +3125,6 @@ export async function requestBorrow(
       );
     }
 
-    // ------------------------------------------------------------------------
-    // AUTHORIZATION ERRORS
-    // ------------------------------------------------------------------------
-
     if (
       lowerMessage.includes(
         'permission denied'
@@ -3141,10 +3140,6 @@ export async function requestBorrow(
         'You are not authorized to create a borrow request.'
       );
     }
-
-    // ------------------------------------------------------------------------
-    // DATABASE VALIDATION ERRORS
-    // ------------------------------------------------------------------------
 
     if (
       lowerMessage.includes(
@@ -3166,19 +3161,11 @@ export async function requestBorrow(
       );
     }
 
-    // ------------------------------------------------------------------------
-    // FALLBACK
-    // ------------------------------------------------------------------------
-
     throw cleanErr(
       error,
       'Unable to create the borrow request. Please try again.'
     );
   }
-
-  // --------------------------------------------------------------------------
-  // CHECK RPC RESULT
-  // --------------------------------------------------------------------------
 
   const row =
     firstRow(data);
@@ -3188,10 +3175,6 @@ export async function requestBorrow(
       'Borrow request was not created.'
     );
   }
-
-  // --------------------------------------------------------------------------
-  // CHECK RETURNED REQUEST ID
-  // --------------------------------------------------------------------------
 
   if (
     row.id &&
@@ -3206,10 +3189,6 @@ export async function requestBorrow(
       'The database returned an invalid borrow request.'
     );
   }
-
-  // --------------------------------------------------------------------------
-  // MAP DATABASE ROW
-  // --------------------------------------------------------------------------
 
   return mapBorrowRequest(
     row
