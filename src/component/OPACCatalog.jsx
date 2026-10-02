@@ -2959,16 +2959,17 @@ const handleConfirmCommunityBookReturn = async (request) => {
           )}
 
           {loadingCommunityBooks ? (
+
             <div className="rounded-xl border border-slate-200 bg-white p-10 text-center">
 
               <p className="text-sm text-slate-500">
-                Loading community
-                books...
+                Loading community books...
               </p>
 
             </div>
-          ) : filteredCommunityBooks.length ===
-            0 ? (
+
+          ) : filteredCommunityBooks.length === 0 ? (
+
             <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
 
               <Users
@@ -2978,19 +2979,18 @@ const handleConfirmCommunityBookReturn = async (request) => {
               />
 
               <h3 className="mt-3 text-base font-bold text-slate-700">
-                No community books
-                available yet.
+                No community books available yet.
               </h3>
 
               <p className="mt-1 text-xs text-slate-500">
-                When visitors share
-                books for lending,
-                they will appear
-                here.
+                When visitors share books for lending,
+                they will appear here.
               </p>
 
             </div>
+
           ) : (
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
 
               {filteredCommunityBooks.map(
@@ -2998,16 +2998,22 @@ const handleConfirmCommunityBookReturn = async (request) => {
               )}
 
             </div>
+
           )}
 
         </section>
-      ) : activeView ===
-        'personalBooks' ? (
+
+      ) : activeView === 'personalBooks' ? (
+
         /* =====================================================
            MY PERSONAL BOOKS
         ====================================================== */
 
         <section className="space-y-5">
+
+          {/* =====================================================
+              PERSONAL BOOK HEADER
+          ====================================================== */}
 
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
 
@@ -3028,10 +3034,9 @@ const handleConfirmCommunityBookReturn = async (request) => {
               </div>
 
               <p className="mt-1 text-xs text-slate-500">
-                Manage books that you
-                personally own and
-                optionally share with
-                the SHELF community.
+                Manage books that you personally own
+                and optionally share with the SHELF
+                community.
               </p>
 
             </div>
@@ -3040,9 +3045,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
               type="button"
               onClick={() => {
                 resetPersonalBookForm();
-                setShowAddPersonalBook(
-                  true
-                );
+                setShowAddPersonalBook(true);
               }}
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#002046] px-4 py-2.5 text-sm font-bold text-white hover:opacity-90"
             >
@@ -3064,233 +3067,403 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
           <div className="rounded-xl border border-violet-200 bg-white shadow-sm overflow-hidden">
 
+            {/* HEADER */}
+
             <div className="px-5 py-4 border-b border-violet-100 bg-violet-50">
+
               <div className="flex items-center justify-between gap-3">
+
                 <div>
+
                   <h3 className="text-sm font-bold text-violet-900">
                     Community Book Requests
                   </h3>
+
                   <p className="mt-1 text-xs text-violet-700">
-                    Review requests from visitors who want to borrow your personal books.
+                    Review requests from visitors who want
+                    to borrow your personal books.
                   </p>
+
                 </div>
 
                 {ownerCommunityRequests.length > 0 && (
+
                   <span className="shrink-0 rounded-full bg-violet-600 px-2.5 py-1 text-[11px] font-bold text-white">
                     {ownerCommunityRequests.length}
                   </span>
+
                 )}
+
               </div>
+
             </div>
 
+            {/* ERROR */}
+
             {ownerCommunityRequestError && (
+
               <div className="mx-5 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
                 {ownerCommunityRequestError}
               </div>
+
             )}
 
+            {/* SUCCESS / NOTICE */}
+
             {communityRequestNotice && (
+
               <div className="mx-5 mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700">
                 {communityRequestNotice}
               </div>
+
             )}
 
+            {/* LOADING */}
+
             {loadingOwnerCommunityRequests ? (
+
               <div className="p-6 text-center">
+
                 <p className="text-xs text-slate-500">
                   Loading community book requests...
                 </p>
+
               </div>
+
             ) : ownerCommunityRequests.length === 0 ? (
+
+              /* EMPTY */
+
               <div className="p-6 text-center">
-                <Users size={28} className="mx-auto text-slate-300" aria-hidden="true" />
+
+                <Users
+                  size={28}
+                  className="mx-auto text-slate-300"
+                  aria-hidden="true"
+                />
+
                 <p className="mt-2 text-sm font-semibold text-slate-600">
                   No community book requests yet.
                 </p>
+
                 <p className="mt-1 text-xs text-slate-400">
-                  Requests from other visitors will appear here when they ask to borrow one of your books.
+                  Requests from other visitors will appear
+                  here when they ask to borrow one of your books.
                 </p>
+
               </div>
+
             ) : (
+
+              /* REQUEST LIST */
+
               <div className="divide-y divide-slate-100">
+
                 {ownerCommunityRequests.map((request) => {
-                  const status = String(request?.status ?? '')
-  .trim()
-  .toLowerCase();
-                  const isPending = status === 'pending';
-                  const isProcessing = processingCommunityRequestId === request.id;
+
+                  const status = String(
+                    request?.status ?? ''
+                  )
+                    .trim()
+                    .toLowerCase();
+
+                  const isProcessing =
+                    processingCommunityRequestId ===
+                    request.id;
 
                   console.log(
-  'SHELF COMMUNITY REQUEST:',
-  request.id,
-  'STATUS:',
-  request.status,
-  'NORMALIZED:',
-  String(request.status || '').trim().toLowerCase()
-);
-                
+                    'SHELF COMMUNITY REQUEST:',
+                    request.id,
+                    'STATUS:',
+                    request.status,
+                    'NORMALIZED:',
+                    status
+                  );
+
                   return (
-                    <div key={request.id} className="p-5">
-                      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded bg-violet-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-violet-700">
-                              Community Request
-                            </span>
-                            <span
-  className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
-    status === 'approved'
-      ? 'bg-emerald-100 text-emerald-700'
-      : status === 'borrowed'
-        ? 'bg-blue-100 text-blue-700'
-        : status === 'returned'
-          ? 'bg-slate-100 text-slate-700'
-          : status === 'rejected'
-            ? 'bg-red-100 text-red-700'
-            : 'bg-amber-100 text-amber-700'
-  }`}
->
-  {status === 'approved'
-    ? 'Approved'
-    : status === 'borrowed'
-      ? 'Borrowed'
-      : status === 'returned'
-        ? 'Returned'
-        : status === 'rejected'
-          ? 'Rejected'
-          : 'Pending'}
-</span>
-                          </div>
 
-                          <h4 className="mt-2 text-sm font-bold text-slate-800">
-                            {request.bookTitle || 'Untitled Book'}
-                          </h4>
+                    <div
+                      key={request.id}
+                      className="p-5"
+                    >
 
-                          <p className="mt-1 text-xs text-slate-500">
-                            Requested by <span className="font-semibold text-slate-700">{request.requesterName || 'SHELF Visitor'}</span>
-                          </p>
+                      {/* =====================================================
+                          REQUEST INFORMATION
+                      ====================================================== */}
 
-                          <p className="mt-1 text-[11px] text-slate-400">
-                            Requested: {formatDateTime(request.requestDate)}
-                          </p>
+                      <div className="space-y-3">
 
-                          {request.ownerResponse && (
-                            <div className="mt-3 rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
-                              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                Owner response
-                              </p>
-                              <p className="mt-1 text-xs text-slate-600">
-                                {request.ownerResponse}
-                              </p>
-                            </div>
-                          )}
+                        <div className="flex flex-wrap items-center gap-2">
+
+                          <span className="rounded bg-violet-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-violet-700">
+                            Community Request
+                          </span>
+
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                              status === 'approved'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : status === 'borrowed'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : status === 'returned'
+                                    ? 'bg-slate-100 text-slate-700'
+                                    : status === 'rejected'
+                                      ? 'bg-red-100 text-red-700'
+                                      : 'bg-amber-100 text-amber-700'
+                            }`}
+                          >
+                            {status === 'approved'
+                              ? 'Approved'
+                              : status === 'borrowed'
+                                ? 'Borrowed'
+                                : status === 'returned'
+                                  ? 'Returned'
+                                  : status === 'rejected'
+                                    ? 'Rejected'
+                                    : 'Pending'}
+                          </span>
+
                         </div>
 
-                        {/* ================================================================
-    COMMUNITY REQUEST ACTIONS
-    ================================================================ */}
+                        <h4 className="text-sm font-bold text-slate-800">
+                          {request.bookTitle ||
+                            'Untitled Book'}
+                        </h4>
 
-{isPending && (
-  <div className="flex flex-col sm:flex-row gap-2 lg:min-w-[230px] lg:justify-end">
-    <button
-      type="button"
-      disabled={Boolean(processingCommunityRequestId)}
-      onClick={() =>
-        handleApproveCommunityRequest(request)
-      }
-      className="rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-    >
-      {isProcessing
-        ? 'Processing...'
-        : 'Approve Request'}
-    </button>
+                        <p className="text-xs text-slate-500">
 
-    <button
-      type="button"
-      disabled={Boolean(processingCommunityRequestId)}
-      onClick={() =>
-        openRejectCommunityRequest(request)
-      }
-      className="rounded-lg bg-red-50 px-4 py-2.5 text-xs font-bold text-red-600 hover:bg-red-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
-    >
-      Reject Request
-    </button>
-  </div>
-)}
+                          Requested by{' '}
 
-{status === 'approved' && (
-  <div className="flex flex-col gap-2 lg:min-w-[230px] lg:items-end">
-    <div className="rounded-lg bg-yellow-300 px-4 py-2 text-xs font-black text-black">
-      APPROVED ACTION AREA IS RENDERING
-    </div>
+                          <span className="font-semibold text-slate-700">
+                            {request.requesterName ||
+                              'SHELF Visitor'}
+                          </span>
 
-    <button
-      type="button"
-      disabled={Boolean(processingCommunityRequestId)}
-      onClick={() =>
-        handleConfirmCommunityBookPickup(request)
-      }
-      className="rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-    >
-      {isProcessing
-        ? 'Processing...'
-        : 'Confirm Handover'}
-    </button>
+                        </p>
 
-    <p className="text-[10px] text-slate-400 text-right">
-      Confirm this after the book has been handed to the requester.
-    </p>
-  </div>
-)}
+                        <p className="text-[11px] text-slate-400">
 
-{status === 'borrowed' && (
-  <div className="flex flex-col gap-2 lg:min-w-[230px] lg:items-end">
-    <button
-      type="button"
-      disabled={Boolean(processingCommunityRequestId)}
-      onClick={() =>
-        handleConfirmCommunityBookReturn(request)
-      }
-      className="rounded-lg bg-violet-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-violet-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-    >
-      {isProcessing
-        ? 'Processing...'
-        : 'Confirm Return'}
-    </button>
+                          Requested:{' '}
 
-    <p className="text-[10px] text-slate-400 text-right">
-      Confirm after the requester has returned the book.
-    </p>
-  </div>
-)}
+                          {formatDateTime(
+                            request.requestDate
+                          )}
 
-{status === 'returned' && (
-  <div className="lg:min-w-[230px] lg:text-right">
-    <span className="inline-flex rounded-lg bg-slate-100 px-4 py-2.5 text-xs font-bold text-slate-600">
-      Book Returned
-    </span>
-  </div>
-)}
+                        </p>
+
+                        {request.ownerResponse && (
+
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                              Owner response
+                            </p>
+
+                            <p className="mt-1 text-xs text-slate-600">
+                              {request.ownerResponse}
+                            </p>
+
+                          </div>
+
+                        )}
+
+                      </div>
+
+                      {/* =====================================================
+                          PENDING — APPROVE / REJECT
+                      ====================================================== */}
+
+                      {status === 'pending' && (
+
+                        <div className="mt-4 flex flex-col sm:flex-row gap-2">
+
+                          <button
+                            type="button"
+                            disabled={Boolean(
+                              processingCommunityRequestId
+                            )}
+                            onClick={() =>
+                              handleApproveCommunityRequest(
+                                request
+                              )
+                            }
+                            className="rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+
+                            {isProcessing
+                              ? 'Processing...'
+                              : 'Approve Request'}
+
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={Boolean(
+                              processingCommunityRequestId
+                            )}
+                            onClick={() =>
+                              openRejectCommunityRequest(
+                                request
+                              )
+                            }
+                            className="rounded-lg bg-red-50 px-4 py-2.5 text-xs font-bold text-red-600 hover:bg-red-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+
+                            Reject Request
+
+                          </button>
+
+                        </div>
+
+                      )}
+
+                      {/* =====================================================
+                          APPROVED — CONFIRM HANDOVER
+                      ====================================================== */}
+
+                      {status === 'approved' && (
+
+                        <div className="mt-4 w-full rounded-xl border-2 border-blue-300 bg-blue-50 p-4">
+
+                          <div className="flex items-center gap-2">
+
+                            <span className="inline-flex h-2.5 w-2.5 rounded-full bg-blue-600" />
+
+                            <p className="text-xs font-black uppercase tracking-wider text-blue-800">
+                              Approved — Awaiting Handover
+                            </p>
+
+                          </div>
+
+                          <p className="mt-2 text-xs text-blue-700">
+                            This request has been approved.
+                            After you physically hand the book
+                            to the requester, click the button below.
+                          </p>
+
+                          <button
+                            type="button"
+                            disabled={Boolean(
+                              processingCommunityRequestId
+                            )}
+                            onClick={() =>
+                              handleConfirmCommunityBookPickup(
+                                request
+                              )
+                            }
+                            className="mt-4 w-full rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+
+                            {isProcessing
+                              ? 'Processing...'
+                              : 'Confirm Handover'}
+
+                          </button>
+
+                        </div>
+
+                      )}
+
+                      {/* =====================================================
+                          BORROWED — CONFIRM RETURN
+                      ====================================================== */}
+
+                      {status === 'borrowed' && (
+
+                        <div className="mt-4 w-full rounded-xl border-2 border-violet-300 bg-violet-50 p-4">
+
+                          <p className="text-xs font-black uppercase tracking-wider text-violet-800">
+                            Book Currently Borrowed
+                          </p>
+
+                          <p className="mt-2 text-xs text-violet-700">
+                            Confirm the return after the requester
+                            gives the book back to you.
+                          </p>
+
+                          <button
+                            type="button"
+                            disabled={Boolean(
+                              processingCommunityRequestId
+                            )}
+                            onClick={() =>
+                              handleConfirmCommunityBookReturn(
+                                request
+                              )
+                            }
+                            className="mt-4 w-full rounded-lg bg-violet-600 px-5 py-3 text-sm font-black text-white hover:bg-violet-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+
+                            {isProcessing
+                              ? 'Processing...'
+                              : 'Confirm Return'}
+
+                          </button>
+
+                        </div>
+
+                      )}
+
+                      {/* =====================================================
+                          RETURNED
+                      ====================================================== */}
+
+                      {status === 'returned' && (
+
+                        <div className="mt-4 w-full rounded-lg border border-slate-200 bg-slate-100 px-4 py-3">
+
+                          <p className="text-xs font-bold text-slate-700">
+                            Book Returned
+                          </p>
+
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            This community book transaction is complete.
+                          </p>
+
+                        </div>
+
+                      )}
+
+                    </div>
+
+                  );
+
+                })}
+
+              </div>
+
+            )}
 
           </div>
 
+          {/* =====================================================
+              PERSONAL BOOK ERROR
+          ====================================================== */}
+
           {personalBookError && (
+
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
               {personalBookError}
             </div>
+
           )}
 
+          {/* =====================================================
+              PERSONAL BOOK LIST
+          ====================================================== */}
+
           {loadingPersonalBooks ? (
+
             <div className="rounded-xl border border-slate-200 bg-white p-10 text-center">
 
               <p className="text-sm text-slate-500">
-                Loading your personal
-                books...
+                Loading your personal books...
               </p>
 
             </div>
-          ) : filteredPersonalBooks.length ===
-            0 ? (
+
+          ) : filteredPersonalBooks.length === 0 ? (
+
             <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
 
               <UserRound
@@ -3300,24 +3473,19 @@ const handleConfirmCommunityBookReturn = async (request) => {
               />
 
               <h3 className="mt-3 text-base font-bold text-slate-700">
-                You have no personal
-                books yet.
+                You have no personal books yet.
               </h3>
 
               <p className="mt-1 text-xs text-slate-500">
-                Add a book that you
-                personally own to keep
-                it in your SHELF
-                collection.
+                Add a book that you personally own
+                to keep it in your SHELF collection.
               </p>
 
               <button
                 type="button"
                 onClick={() => {
                   resetPersonalBookForm();
-                  setShowAddPersonalBook(
-                    true
-                  );
+                  setShowAddPersonalBook(true);
                 }}
                 className="mt-4 inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2.5 text-xs font-bold text-slate-950 hover:bg-amber-400"
               >
@@ -3332,7 +3500,9 @@ const handleConfirmCommunityBookReturn = async (request) => {
               </button>
 
             </div>
+
           ) : (
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
               {filteredPersonalBooks.map(
@@ -3340,113 +3510,108 @@ const handleConfirmCommunityBookReturn = async (request) => {
               )}
 
             </div>
+
           )}
 
         </section>
+
       ) : (
-/* =====================================================
-   MY REQUESTS
-====================================================== */
 
-<div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+        /* =====================================================
+           MY REQUESTS
+        ====================================================== */
 
-  {myRequests.length === 0 ? (
-    <p className="p-6 text-sm text-slate-500">
-      You have no borrow requests yet. Browse
-      the catalog to get started.
-    </p>
-  ) : (
-    <table className="w-full text-left text-sm">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
 
-      <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase tracking-wider">
+          {myRequests.length === 0 ? (
 
-        <tr>
+            <p className="p-6 text-sm text-slate-500">
+              You have no borrow requests yet.
+              Browse the catalog to get started.
+            </p>
 
-          <th className="p-4">
-            Book Title
-          </th>
+          ) : (
 
-          <th className="p-4">
-            Status
-          </th>
+            <table className="w-full text-left text-sm">
 
-          <th className="p-4">
-            Details
-          </th>
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase tracking-wider">
 
-          <th className="p-4">
-            Fine (PHP)
-          </th>
+                <tr>
 
-          <th className="p-4 text-right">
-            Action
-          </th>
+                  <th className="p-4">
+                    Book Title
+                  </th>
 
-        </tr>
+                  <th className="p-4">
+                    Status
+                  </th>
 
-      </thead>
+                  <th className="p-4">
+                    Details
+                  </th>
 
-      <tbody className="divide-y divide-slate-100 text-slate-700">
+                  <th className="p-4">
+                    Fine (PHP)
+                  </th>
 
-        {myRequests.map(
-          (request) => {
+                  <th className="p-4 text-right">
+                    Action
+                  </th>
 
-            const currentFine =
-              calculateCurrentFine(
-                request
-              );
+                </tr>
 
-            const isCommunityRequest =
-              request?.isCommunityBook === true ||
-              request?.requestType === 'community';
+              </thead>
 
-            const isOverdue =
-              !isCommunityRequest &&
-              request.status ===
-                'borrowed' &&
-              currentFine > 0;
+              <tbody className="divide-y divide-slate-100 text-slate-700">
 
-            const overdueDays =
-              request.dueDate &&
-              isOverdue
-                ? calculateOverdueDays(
-                    request.dueDate
-                  )
-                : 0;
+                {myRequests.map(
+                  (request) => {
 
-            /*
-             * Normal library requests can be cancelled
-             * while queued or ready for pickup.
-             *
-             * Community requests use their own lifecycle,
-             * so do not send them through the normal
-             * cancel_borrow_request flow.
-             */
-            const canCancel =
-              !isCommunityRequest &&
-              [
-                'queued',
-                'ready_for_pickup',
-              ].includes(
-                request.status
-              );
+                    const currentFine =
+                      calculateCurrentFine(
+                        request
+                      );
 
-            const isCancelling =
-              cancellingRequestId ===
-              request.id;
+                    const isCommunityRequest =
+                      request?.isCommunityBook === true ||
+                      request?.requestType === 'community';
 
-            const queuePosition =
-              request.queuePosition ??
-              request.queue_position ??
-              request.position;
+                    const isOverdue =
+                      !isCommunityRequest &&
+                      request.status === 'borrowed' &&
+                      currentFine > 0;
 
-            return (
-              <tr
-                key={
-                  request.id
-                }
-                className="hover:bg-slate-50"
-              >
+                    const overdueDays =
+                      request.dueDate &&
+                      isOverdue
+                        ? calculateOverdueDays(
+                            request.dueDate
+                          )
+                        : 0;
+
+                    const canCancel =
+                      !isCommunityRequest &&
+                      [
+                        'queued',
+                        'ready_for_pickup',
+                      ].includes(
+                        request.status
+                      );
+
+                    const isCancelling =
+                      cancellingRequestId ===
+                      request.id;
+
+                    const queuePosition =
+                      request.queuePosition ??
+                      request.queue_position ??
+                      request.position;
+
+                    return (
+                      <tr
+                        key={request.id}
+                        className="hover:bg-slate-50"
+                      >
 
                 {/* =================================================
                     BOOK TITLE
