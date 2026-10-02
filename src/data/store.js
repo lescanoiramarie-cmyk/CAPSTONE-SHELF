@@ -229,6 +229,10 @@ const mapAttendance = (r) => ({
   checkedOutAt: r.checked_out_at,
 });
 
+// ============================================================================
+// ERROR HANDLER
+// ============================================================================
+
 function cleanErr(
   error,
   fallback = 'Something went wrong. Please try again.'
@@ -481,41 +485,36 @@ export async function registerVisitor({
   }
 
   // --------------------------------------------------------------------------
-  // CREATE AUTH USER
+  // CREATE SUPABASE AUTH ACCOUNT
   // --------------------------------------------------------------------------
   //
-  // IMPORTANT:
-  // Do NOT query public.visitors here.
+  // Password goes ONLY to Supabase Auth.
+  // It is never inserted into public.visitors.
   //
-  // During registration the browser can be using the anon role. A direct
-  // `.from('visitors')` query would therefore be subject to the table's
-  // permissions/RLS and can produce:
+  // There is intentionally NO:
   //
-  //   permission denied for table visitors
+  //   supabase.from('visitors').select(...)
   //
-  // Duplicate-email checking is handled inside the SECURITY DEFINER
-  // register_visitor() PostgreSQL function instead.
+  // here.
+  //
+  // Duplicate visitor checking is handled by register_visitor().
   // --------------------------------------------------------------------------
 
   const {
     data: authData,
     error: authError,
-  } =
-    await supabase.auth.signUp({
-      email: normalizedEmail,
-      password: normalizedPassword,
-      options: {
-        data: {
-          role: 'visitor',
-          full_name:
-            normalizedFullName,
-          contact_number:
-            normalizedContactNumber,
-          address:
-            normalizedAddress,
-        },
+  } = await supabase.auth.signUp({
+    email: normalizedEmail,
+    password: normalizedPassword,
+    options: {
+      data: {
+        role: 'visitor',
+        full_name: normalizedFullName,
+        contact_number: normalizedContactNumber,
+        address: normalizedAddress,
       },
-    });
+    },
+  });
 
   if (authError) {
     const message =
@@ -551,11 +550,12 @@ export async function registerVisitor({
     );
   }
 
-  // Supabase can intentionally return a user without an error when an
-  // existing email is detected, depending on the Auth configuration.
-  // An empty identities array indicates that the user was not newly created.
+  // Supabase may return a user without an error for an existing email,
+  // depending on the project's Auth settings.
   if (
-    Array.isArray(authData.user.identities) &&
+    Array.isArray(
+      authData.user.identities
+    ) &&
     authData.user.identities.length === 0
   ) {
     throw new Error(
@@ -564,46 +564,44 @@ export async function registerVisitor({
   }
 
   const authUserId =
-    String(authData.user.id).trim();
+    String(
+      authData.user.id
+    ).trim();
 
   // --------------------------------------------------------------------------
-  // CREATE VISITOR PROFILE THROUGH SECURITY-DEFINER RPC
+  // CREATE VISITOR PROFILE
   // --------------------------------------------------------------------------
   //
-  // The browser only EXECUTES the RPC.
+  // The browser calls ONLY the RPC.
   //
-  // register_visitor() is:
-  //   SECURITY DEFINER
-  //   OWNER = postgres
-  //   search_path = public
+  // register_visitor() must be SECURITY DEFINER and owned by postgres.
   //
-  // Therefore the INSERT into public.visitors is performed by the function
-  // owner rather than directly by the anonymous browser role.
+  // The INSERT into public.visitors is therefore performed by PostgreSQL
+  // function security rather than by the browser's anon role.
   // --------------------------------------------------------------------------
 
   const {
     data: registrationData,
     error: registrationError,
-  } =
-    await supabase.rpc(
-      'register_visitor',
-      {
-        p_auth_user_id:
-          authUserId,
+  } = await supabase.rpc(
+    'register_visitor',
+    {
+      p_auth_user_id:
+        authUserId,
 
-        p_full_name:
-          normalizedFullName,
+      p_full_name:
+        normalizedFullName,
 
-        p_contact_number:
-          normalizedContactNumber,
+      p_contact_number:
+        normalizedContactNumber,
 
-        p_email:
-          normalizedEmail,
+      p_email:
+        normalizedEmail,
 
-        p_address:
-          normalizedAddress,
-      }
-    );
+      p_address:
+        normalizedAddress,
+    }
+  );
 
   if (registrationError) {
     console.error(
@@ -611,7 +609,6 @@ export async function registerVisitor({
       registrationError
     );
 
-    // Remove the newly created Auth session if signUp created one.
     try {
       await supabase.auth.signOut();
     } catch {
@@ -649,7 +646,11 @@ export async function registerVisitor({
     ).trim();
 
   // --------------------------------------------------------------------------
-  // SIGN OUT THE NEW AUTH SESSION
+  // SIGN OUT AUTH SESSION
+  // --------------------------------------------------------------------------
+  //
+  // Registration is not automatically a logged-in visitor session.
+  // The visitor must verify the OTP first.
   // --------------------------------------------------------------------------
 
   try {
@@ -659,21 +660,28 @@ export async function registerVisitor({
   }
 
   // --------------------------------------------------------------------------
-  // SEND SHELF OTP
+  // SEND OTP
+  // --------------------------------------------------------------------------
+  //
+  // The Edge Function is responsible for retrieving the visitor record and
+  // sending the OTP email.
+  //
+  // IMPORTANT:
+  // send-visitor-otp MUST use a server-side/service-role Supabase client
+  // when reading public.visitors. Never expose the service-role key in React.
   // --------------------------------------------------------------------------
 
   const {
     data: emailData,
     error: emailError,
-  } =
-    await supabase.functions.invoke(
-      'send-visitor-otp',
-      {
-        body: {
-          visitorId,
-        },
-      }
-    );
+  } = await supabase.functions.invoke(
+    'send-visitor-otp',
+    {
+      body: {
+        visitorId,
+      },
+    }
+  );
 
   if (emailError) {
     console.error(
@@ -706,7 +714,9 @@ export async function registerVisitor({
 // RESEND VISITOR OTP
 // ============================================================================
 
-export async function resendOtp(visitorId) {
+export async function resendOtp(
+  visitorId
+) {
   const normalizedVisitorId =
     String(visitorId || '').trim();
 
@@ -716,6 +726,7 @@ export async function resendOtp(visitorId) {
     );
   }
 
+  // Generate a new OTP through PostgreSQL.
   const {
     error,
   } = await supabase.rpc(
@@ -730,6 +741,7 @@ export async function resendOtp(visitorId) {
     throw cleanErr(error);
   }
 
+  // Send the newly generated OTP.
   const {
     data: emailData,
     error: emailError,
@@ -790,7 +802,11 @@ export async function verifyVisitorOtp(
     );
   }
 
-  if (!/^\d{6}$/.test(normalizedCode)) {
+  if (
+    !/^\d{6}$/.test(
+      normalizedCode
+    )
+  ) {
     throw new Error(
       'Please enter the complete 6-digit verification code.'
     );
@@ -826,13 +842,18 @@ export async function verifyVisitorOtp(
   }
 
   return {
-    id: row.id,
+    id:
+      row.id,
+
     fullName:
       row.full_name,
+
     email:
       row.email,
+
     qrCode:
       row.qr_code,
+
     otpVerified: true,
   };
 }
@@ -870,17 +891,16 @@ export async function loginVisitor({
     const {
       data: visitor,
       error: visitorError,
-    } =
-      await supabase
-        .from('visitors')
-        .select(
-          'id, full_name, email, otp_verified, qr_code, is_active, auth_user_id'
-        )
-        .eq(
-          'qr_code',
-          normalizedIdentifier
-        )
-        .maybeSingle();
+    } = await supabase
+      .from('visitors')
+      .select(
+        'id, full_name, email, otp_verified, qr_code, is_active, auth_user_id'
+      )
+      .eq(
+        'qr_code',
+        normalizedIdentifier
+      )
+      .maybeSingle();
 
     if (visitorError) {
       throw cleanErr(
@@ -942,8 +962,7 @@ export async function loginVisitor({
   } =
     await supabase.auth.signInWithPassword({
       email:
-        normalizedIdentifier
-          .toLowerCase(),
+        normalizedIdentifier.toLowerCase(),
 
       password:
         normalizedPassword,
@@ -1207,7 +1226,9 @@ export async function loginStaffAccount(
     }
 
     const authErrorMessage =
-      String(error?.message || '')
+      String(
+        error?.message || ''
+      )
         .trim()
         .toLowerCase();
 
@@ -1694,7 +1715,9 @@ export async function addBooksBulk(
     throw cleanErr(error);
   }
 
-  return (data || []).map(mapBook);
+  return (data || []).map(
+    mapBook
+  );
 }
 
 // ============================================================================
