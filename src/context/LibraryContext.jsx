@@ -37,10 +37,11 @@ const emptyData = {
   visitors: [],
   borrowRequests: [],
   attendanceLogs: [],
-
-  // Personal / Community books
   personalBooks: [],
   communityBooks: [],
+
+  myCommunityBookRequests: [],
+  ownerCommunityBookRequests: [],
 };
 
 export function LibraryProvider({ children }) {
