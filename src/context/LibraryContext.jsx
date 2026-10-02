@@ -1,4 +1,10 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import {
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+} from 'react';
+
 import { supabase } from '../lib/supabaseClient';
 import * as store from '../data/store';
 import { LibraryContext } from './libraryContext.js';
@@ -9,6 +15,12 @@ const emptyData = {
   visitors: [],
   borrowRequests: [],
   attendanceLogs: [],
+
+  // =========================================================
+  // PERSONAL / COMMUNITY BOOKS
+  // =========================================================
+  personalBooks: [],
+  communityBooks: [],
 };
 
 export function LibraryProvider({ children }) {
@@ -16,38 +28,182 @@ export function LibraryProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [connectionError, setConnectionError] = useState('');
 
-  /**
-   * Load all SHELF data from Supabase.
-   *
-   * This is intentionally centralized here so components such as
-   * OPACCatalog and VisitorDashboard always receive the latest
-   * database state through useLibraryData().
-   */
+  // =========================================================
+  // GET CURRENT VISITOR ID
+  // =========================================================
+  //
+  // SHELF currently supports QR/local-session visitor login.
+  // Therefore, do not rely exclusively on supabase.auth.getUser().
+  //
+  // The store already knows how to work with the SHELF visitor
+  // session, so we first try the Supabase Auth session and then
+  // the local SHELF session.
+  // =========================================================
+
+  const getCurrentVisitorId = useCallback(async () => {
+    try {
+      const {
+        data: authData,
+      } = await supabase.auth.getSession();
+
+      const authUserId =
+        authData?.session?.user?.id || null;
+
+      if (authUserId) {
+        try {
+          const visitor = await store.getVisitor(
+            authUserId
+          );
+
+          if (visitor?.id) {
+            return visitor.id;
+          }
+        } catch (error) {
+          console.warn(
+            'SHELF could not resolve visitor from Supabase Auth:',
+            error
+          );
+        }
+      }
+    } catch (error) {
+      console.warn(
+        'SHELF Supabase session lookup failed:',
+        error
+      );
+    }
+
+    // =======================================================
+    // FALLBACK: SHELF LOCAL QR SESSION
+    // =======================================================
+
+    try {
+      const rawSession =
+        globalThis.localStorage?.getItem(
+          'shelf_ilms_session_v1'
+        );
+
+      if (!rawSession) {
+        return null;
+      }
+
+      const parsedSession =
+        JSON.parse(rawSession);
+
+      return (
+        parsedSession?.user?.id ||
+        parsedSession?.visitor?.id ||
+        parsedSession?.id ||
+        null
+      );
+    } catch (error) {
+      console.warn(
+        'SHELF local visitor session could not be read:',
+        error
+      );
+
+      return null;
+    }
+  }, []);
+
+  // =========================================================
+  // LOAD ALL SHELF DATA
+  // =========================================================
+
   const refreshAll = useCallback(async () => {
     try {
+      // -------------------------------------------------------
+      // Resolve current visitor first.
+      // -------------------------------------------------------
+
+      const currentVisitorId =
+        await getCurrentVisitorId();
+
+      // -------------------------------------------------------
+      // Load shared/global data.
+      // -------------------------------------------------------
+
       const [
         books,
         libraries,
         visitors,
         borrowRequests,
         attendanceLogs,
+        communityBooks,
       ] = await Promise.all([
         store.fetchBooks(),
         store.fetchLibraries(),
         store.fetchVisitors(),
         store.fetchBorrowRequests(),
         store.fetchAttendanceLogs(),
+
+        // Community books are available to visitors who can
+        // access the catalog.
+        store.fetchCommunityBooks(),
       ]);
 
+      // -------------------------------------------------------
+      // Load books owned by the current visitor.
+      // -------------------------------------------------------
+
+      let personalBooks = [];
+
+      if (currentVisitorId) {
+        try {
+          personalBooks =
+            await store.fetchPersonalBooks(
+              currentVisitorId
+            );
+        } catch (error) {
+          console.error(
+            'SHELF personal books loading failed:',
+            error
+          );
+
+          // Do not destroy the rest of the application
+          // state if only personal books fail.
+          personalBooks = [];
+        }
+      }
+
+      // -------------------------------------------------------
+      // Update centralized application state.
+      // -------------------------------------------------------
+
       setData({
-        books: Array.isArray(books) ? books : [],
-        libraries: Array.isArray(libraries) ? libraries : [],
-        visitors: Array.isArray(visitors) ? visitors : [],
-        borrowRequests: Array.isArray(borrowRequests)
+        books: Array.isArray(books)
+          ? books
+          : [],
+
+        libraries: Array.isArray(libraries)
+          ? libraries
+          : [],
+
+        visitors: Array.isArray(visitors)
+          ? visitors
+          : [],
+
+        borrowRequests: Array.isArray(
+          borrowRequests
+        )
           ? borrowRequests
           : [],
-        attendanceLogs: Array.isArray(attendanceLogs)
+
+        attendanceLogs: Array.isArray(
+          attendanceLogs
+        )
           ? attendanceLogs
+          : [],
+
+        personalBooks: Array.isArray(
+          personalBooks
+        )
+          ? personalBooks
+          : [],
+
+        communityBooks: Array.isArray(
+          communityBooks
+        )
+          ? communityBooks
           : [],
       });
 
@@ -59,9 +215,14 @@ export function LibraryProvider({ children }) {
         visitors,
         borrowRequests,
         attendanceLogs,
+        personalBooks,
+        communityBooks,
       };
     } catch (err) {
-      console.error('SHELF refreshAll error:', err);
+      console.error(
+        'SHELF refreshAll error:',
+        err
+      );
 
       setConnectionError(
         err?.message ||
@@ -72,11 +233,12 @@ export function LibraryProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [getCurrentVisitorId]);
 
-  /**
-   * Initial load + authentication listener + Supabase Realtime.
-   */
+  // =========================================================
+  // INITIAL LOAD + AUTH + REALTIME
+  // =========================================================
+
   useEffect(() => {
     let mounted = true;
 
@@ -95,27 +257,41 @@ export function LibraryProvider({ children }) {
 
     void initialize();
 
-    const authSubscription = supabase?.auth?.onAuthStateChange(
-      () => {
-        // Do not perform heavy Supabase queries directly
-        // inside the auth callback.
-        setTimeout(() => {
-          if (mounted) {
-            void refreshAll().catch((error) => {
-              console.error(
-                'SHELF auth refresh failed:',
-                error
+    // -------------------------------------------------------
+    // Supabase authentication changes
+    // -------------------------------------------------------
+
+    const authSubscription =
+      supabase?.auth?.onAuthStateChange(
+        () => {
+          // Do not perform heavy Supabase operations
+          // directly inside the Auth callback.
+          setTimeout(() => {
+            if (mounted) {
+              void refreshAll().catch(
+                (error) => {
+                  console.error(
+                    'SHELF auth refresh failed:',
+                    error
+                  );
+                }
               );
-            });
-          }
-        }, 0);
-      }
-    );
+            }
+          }, 0);
+        }
+      );
+
+    // -------------------------------------------------------
+    // Supabase Realtime
+    // -------------------------------------------------------
 
     const channel = supabase
       ? supabase
           .channel('shelf-ilms-realtime')
 
+          // =================================================
+          // BOOKS
+          // =================================================
           .on(
             'postgres_changes',
             {
@@ -124,15 +300,20 @@ export function LibraryProvider({ children }) {
               table: 'books',
             },
             () => {
-              void refreshAll().catch((error) => {
-                console.error(
-                  'Realtime books refresh failed:',
-                  error
-                );
-              });
+              void refreshAll().catch(
+                (error) => {
+                  console.error(
+                    'Realtime books refresh failed:',
+                    error
+                  );
+                }
+              );
             }
           )
 
+          // =================================================
+          // BORROW REQUESTS
+          // =================================================
           .on(
             'postgres_changes',
             {
@@ -141,15 +322,20 @@ export function LibraryProvider({ children }) {
               table: 'borrow_requests',
             },
             () => {
-              void refreshAll().catch((error) => {
-                console.error(
-                  'Realtime borrow requests refresh failed:',
-                  error
-                );
-              });
+              void refreshAll().catch(
+                (error) => {
+                  console.error(
+                    'Realtime borrow requests refresh failed:',
+                    error
+                  );
+                }
+              );
             }
           )
 
+          // =================================================
+          // ATTENDANCE
+          // =================================================
           .on(
             'postgres_changes',
             {
@@ -158,15 +344,20 @@ export function LibraryProvider({ children }) {
               table: 'attendance_logs',
             },
             () => {
-              void refreshAll().catch((error) => {
-                console.error(
-                  'Realtime attendance refresh failed:',
-                  error
-                );
-              });
+              void refreshAll().catch(
+                (error) => {
+                  console.error(
+                    'Realtime attendance refresh failed:',
+                    error
+                  );
+                }
+              );
             }
           )
 
+          // =================================================
+          // VISITORS
+          // =================================================
           .on(
             'postgres_changes',
             {
@@ -175,15 +366,20 @@ export function LibraryProvider({ children }) {
               table: 'visitors',
             },
             () => {
-              void refreshAll().catch((error) => {
-                console.error(
-                  'Realtime visitors refresh failed:',
-                  error
-                );
-              });
+              void refreshAll().catch(
+                (error) => {
+                  console.error(
+                    'Realtime visitors refresh failed:',
+                    error
+                  );
+                }
+              );
             }
           )
 
+          // =================================================
+          // LIBRARIES
+          // =================================================
           .on(
             'postgres_changes',
             {
@@ -192,12 +388,14 @@ export function LibraryProvider({ children }) {
               table: 'libraries',
             },
             () => {
-              void refreshAll().catch((error) => {
-                console.error(
-                  'Realtime libraries refresh failed:',
-                  error
-                );
-              });
+              void refreshAll().catch(
+                (error) => {
+                  console.error(
+                    'Realtime libraries refresh failed:',
+                    error
+                  );
+                }
+              );
             }
           )
 
@@ -213,41 +411,25 @@ export function LibraryProvider({ children }) {
       mounted = false;
 
       if (supabase && channel) {
-        void supabase.removeChannel(channel);
+        void supabase.removeChannel(
+          channel
+        );
       }
 
       authSubscription?.data?.subscription?.unsubscribe();
     };
   }, [refreshAll]);
 
-  /**
-   * Execute a store operation and ALWAYS refresh the
-   * centralized application state afterward.
-   *
-   * This is especially important for borrow requests.
-   *
-   * Example:
-   *
-   * requestBorrow(...)
-   *      ↓
-   * store.requestBorrow(...)
-   *      ↓
-   * Supabase INSERT succeeds
-   *      ↓
-   * refreshAll()
-   *      ↓
-   * data.borrowRequests contains the new request
-   *      ↓
-   * OPACCatalog re-renders immediately
-   */
+  // =========================================================
+  // GENERIC MUTATION + REFRESH
+  // =========================================================
+
   const withRefresh = useCallback(
     (fn, operationName = 'operation') =>
       async (...args) => {
         try {
           const result = await fn(...args);
 
-          // Explicitly reload the database state after
-          // every successful mutation.
           await refreshAll();
 
           return result;
@@ -257,41 +439,58 @@ export function LibraryProvider({ children }) {
             error
           );
 
-          // Do not hide the original error from the component.
           throw error;
         }
       },
     [refreshAll]
   );
 
-  /**
-   * Mutation functions.
-   *
-   * Each operation refreshes the centralized state after
-   * Supabase successfully changes the database.
-   */
+  // =========================================================
+  // LIBRARY MUTATIONS
+  // =========================================================
+
   const addLibrary = useMemo(
-    () => withRefresh(store.addLibrary, 'addLibrary'),
+    () =>
+      withRefresh(
+        store.addLibrary,
+        'addLibrary'
+      ),
     [withRefresh]
   );
 
   const addBook = useMemo(
-    () => withRefresh(store.addBook, 'addBook'),
+    () =>
+      withRefresh(
+        store.addBook,
+        'addBook'
+      ),
     [withRefresh]
   );
 
   const addBooksBulk = useMemo(
-    () => withRefresh(store.addBooksBulk, 'addBooksBulk'),
+    () =>
+      withRefresh(
+        store.addBooksBulk,
+        'addBooksBulk'
+      ),
     [withRefresh]
   );
 
   const updateBook = useMemo(
-    () => withRefresh(store.updateBook, 'updateBook'),
+    () =>
+      withRefresh(
+        store.updateBook,
+        'updateBook'
+      ),
     [withRefresh]
   );
 
   const deleteBook = useMemo(
-    () => withRefresh(store.deleteBook, 'deleteBook'),
+    () =>
+      withRefresh(
+        store.deleteBook,
+        'deleteBook'
+      ),
     [withRefresh]
   );
 
@@ -303,6 +502,30 @@ export function LibraryProvider({ children }) {
       ),
     [withRefresh]
   );
+
+  // =========================================================
+  // PERSONAL BOOK MUTATIONS
+  // =========================================================
+  //
+  // addPersonalBook() creates a visitor-owned book.
+  //
+  // We expose it through the LibraryContext so that
+  // OPACCatalog does not need to import Supabase/store
+  // directly.
+  // =========================================================
+
+  const addPersonalBook = useMemo(
+    () =>
+      withRefresh(
+        store.addPersonalBook,
+        'addPersonalBook'
+      ),
+    [withRefresh]
+  );
+
+  // =========================================================
+  // BORROW / RESERVATION
+  // =========================================================
 
   const requestBorrow = useMemo(
     () =>
@@ -340,6 +563,10 @@ export function LibraryProvider({ children }) {
     [withRefresh]
   );
 
+  // =========================================================
+  // ATTENDANCE
+  // =========================================================
+
   const scanAttendance = useMemo(
     () =>
       withRefresh(
@@ -349,18 +576,23 @@ export function LibraryProvider({ children }) {
     [withRefresh]
   );
 
-  /**
-   * Context value.
-   */
+  // =========================================================
+  // CONTEXT VALUE
+  // =========================================================
+
   const value = useMemo(
     () => ({
       data,
+
       loading,
+
       connectionError,
 
-      // Expose refreshAll so components can explicitly
-      // request the latest database state when needed.
       refreshAll,
+
+      // -----------------------------------------------------
+      // Library management
+      // -----------------------------------------------------
 
       addLibrary,
 
@@ -371,16 +603,41 @@ export function LibraryProvider({ children }) {
 
       loadSampleCatalog,
 
+      // -----------------------------------------------------
+      // Personal / community books
+      // -----------------------------------------------------
+
+      addPersonalBook,
+
+      // -----------------------------------------------------
+      // Borrowing
+      // -----------------------------------------------------
+
       requestBorrow,
       cancelBorrowRequest,
 
       confirmPickup,
       confirmReturn,
 
+      // -----------------------------------------------------
+      // Attendance
+      // -----------------------------------------------------
+
       scanAttendance,
 
-      findVisitorByQr: store.findVisitorByQr,
-      getVisitor: store.getVisitor,
+      // -----------------------------------------------------
+      // Visitor helpers
+      // -----------------------------------------------------
+
+      findVisitorByQr:
+        store.findVisitorByQr,
+
+      getVisitor:
+        store.getVisitor,
+
+      // -----------------------------------------------------
+      // Business rules
+      // -----------------------------------------------------
 
       PICKUP_WINDOW_HOURS:
         store.PICKUP_WINDOW_HOURS,
@@ -396,22 +653,32 @@ export function LibraryProvider({ children }) {
       loading,
       connectionError,
       refreshAll,
+
       addLibrary,
+
       addBook,
       addBooksBulk,
       updateBook,
       deleteBook,
+
       loadSampleCatalog,
+
+      addPersonalBook,
+
       requestBorrow,
       cancelBorrowRequest,
+
       confirmPickup,
       confirmReturn,
+
       scanAttendance,
     ]
   );
 
   return (
-    <LibraryContext.Provider value={value}>
+    <LibraryContext.Provider
+      value={value}
+    >
       {connectionError && (
         <div className="bg-red-600 text-white text-xs font-semibold px-4 py-2 text-center">
           Could not reach the database:{' '}
