@@ -2974,13 +2974,17 @@ export async function fetchMyCommunityBookRequests(visitorId) {
 
 export async function approveCommunityBookRequest(
   requestId,
-  ownerVisitorId
+  ownerVisitorId,
+  response = null
 ) {
   const normalizedRequestId =
     normalizeText(requestId);
 
-  const normalizedOwnerId =
+  const normalizedOwnerVisitorId =
     normalizeText(ownerVisitorId);
+
+  const normalizedResponse =
+    normalizeText(response);
 
   if (!normalizedRequestId) {
     throw new Error(
@@ -2994,32 +2998,40 @@ export async function approveCommunityBookRequest(
     );
   }
 
-  if (!normalizedOwnerId) {
+  if (!normalizedOwnerVisitorId) {
     throw new Error(
       'Owner visitor ID is required.'
     );
   }
 
-  if (!isValidUuid(normalizedOwnerId)) {
+  if (!isValidUuid(normalizedOwnerVisitorId)) {
     throw new Error(
       'Invalid owner visitor ID.'
+    );
+  }
+
+  if (normalizedResponse.length > 500) {
+    throw new Error(
+      'Response must not exceed 500 characters.'
     );
   }
 
   const {
     data,
     error,
-  } =
-    await supabase.rpc(
-      'approve_community_book_request',
-      {
-        p_request_id:
-          normalizedRequestId,
+  } = await supabase.rpc(
+    'approve_community_book_request',
+    {
+      p_request_id:
+        normalizedRequestId,
 
-        p_owner_visitor_id:
-          normalizedOwnerId,
-      }
-    );
+      p_owner_visitor_id:
+        normalizedOwnerVisitorId,
+
+      p_response:
+        normalizedResponse || null,
+    }
+  );
 
   if (error) {
     console.error(
@@ -3029,45 +3041,35 @@ export async function approveCommunityBookRequest(
 
     throw cleanErr(
       error,
-      'Unable to approve the community book request.'
+      'Unable to approve the community book request. Please try again.'
     );
   }
 
-  const row =
-    firstRow(data);
+  const result = firstRow(data);
 
-  return row || data;
+  if (!result?.id) {
+    throw new Error(
+      'The community book request was not approved.'
+    );
+  }
+
+  return result;
 }
 
-// ============================================================================
-// REJECT COMMUNITY BOOK REQUEST
-// ============================================================================
-//
-// The owner rejects a visitor's request.
-//
-// PostgreSQL RPC:
-//
-//   reject_community_book_request(
-//      p_request_id,
-//      p_owner_visitor_id,
-//      p_reason
-//   )
-//
-// ============================================================================
 
 export async function rejectCommunityBookRequest(
   requestId,
   ownerVisitorId,
-  reason = null
+  response = null
 ) {
   const normalizedRequestId =
     normalizeText(requestId);
 
-  const normalizedOwnerId =
+  const normalizedOwnerVisitorId =
     normalizeText(ownerVisitorId);
 
-  const normalizedReason =
-    normalizeText(reason) || null;
+  const normalizedResponse =
+    normalizeText(response);
 
   if (!normalizedRequestId) {
     throw new Error(
@@ -3081,44 +3083,40 @@ export async function rejectCommunityBookRequest(
     );
   }
 
-  if (!normalizedOwnerId) {
+  if (!normalizedOwnerVisitorId) {
     throw new Error(
       'Owner visitor ID is required.'
     );
   }
 
-  if (!isValidUuid(normalizedOwnerId)) {
+  if (!isValidUuid(normalizedOwnerVisitorId)) {
     throw new Error(
       'Invalid owner visitor ID.'
     );
   }
 
-  if (
-    normalizedReason &&
-    normalizedReason.length > 500
-  ) {
+  if (normalizedResponse.length > 500) {
     throw new Error(
-      'Rejection reason must not exceed 500 characters.'
+      'Response must not exceed 500 characters.'
     );
   }
 
   const {
     data,
     error,
-  } =
-    await supabase.rpc(
-      'reject_community_book_request',
-      {
-        p_request_id:
-          normalizedRequestId,
+  } = await supabase.rpc(
+    'reject_community_book_request',
+    {
+      p_request_id:
+        normalizedRequestId,
 
-        p_owner_visitor_id:
-          normalizedOwnerId,
+      p_owner_visitor_id:
+        normalizedOwnerVisitorId,
 
-        p_reason:
-          normalizedReason,
-      }
-    );
+      p_response:
+        normalizedResponse || null,
+    }
+  );
 
   if (error) {
     console.error(
@@ -3128,14 +3126,19 @@ export async function rejectCommunityBookRequest(
 
     throw cleanErr(
       error,
-      'Unable to reject the community book request.'
+      'Unable to reject the community book request. Please try again.'
     );
   }
 
-  const row =
-    firstRow(data);
+  const result = firstRow(data);
 
-  return row || data;
+  if (!result?.id) {
+    throw new Error(
+      'The community book request was not rejected.'
+    );
+  }
+
+  return result;
 }
 
 // ============================================================================
