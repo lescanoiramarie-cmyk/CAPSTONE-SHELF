@@ -17,6 +17,7 @@ import {
   Settings,
   Sun,
   UserRound,
+  UsersRound,
   X,
 } from 'lucide-react';
 
@@ -28,7 +29,6 @@ import LibraryMap from '../../component/LibraryMap.jsx';
 import FAQ from '../../component/FAQ.jsx';
 import VisitorServices from '../../component/VisitorServices.jsx';
 import AIRecommendations from '../../component/AIRecommendations.jsx';
-import PersonalBooks from '../../component/PersonalBooks.jsx';
 import DashboardWelcome from '../../component/DashboardWelcome.jsx';
 
 function formatDateTime(iso) {
@@ -213,7 +213,12 @@ export default function VisitorDashboard() {
 
       context.fillStyle = '#ffffff';
 
-      context.fillRect(qrX - 25, qrY - 25, qrSize + 50, qrSize + 50);
+      context.fillRect(
+        qrX - 25,
+        qrY - 25,
+        qrSize + 50,
+        qrSize + 50
+      );
 
       context.drawImage(qrImage, qrX, qrY, qrSize, qrSize);
 
@@ -281,7 +286,9 @@ export default function VisitorDashboard() {
   // VISITOR DETAILS
   // =========================================================
 
-  const visitorDetails = visitors.find((visitor) => visitor.id === user?.id);
+  const visitorDetails = visitors.find(
+    (visitor) => visitor.id === user?.id
+  );
 
   // =========================================================
   // VISITOR TRANSACTION HISTORY
@@ -290,7 +297,9 @@ export default function VisitorDashboard() {
   const myTransactions = borrowRequests
     .filter((request) => request.visitorId === user?.id)
     .sort(
-      (a, b) => new Date(b.requestDate || 0) - new Date(a.requestDate || 0)
+      (a, b) =>
+        new Date(b.requestDate || 0) -
+        new Date(a.requestDate || 0)
     );
 
   // =========================================================
@@ -299,6 +308,18 @@ export default function VisitorDashboard() {
 
   const libraryName = (id) =>
     libraries.find((library) => library.id === id)?.name || id;
+
+  // =========================================================
+  // OPAC VIEWS
+  // =========================================================
+
+  const opacViews = [
+    'catalog',
+    'categories',
+    'communityBooks',
+    'personalBooks',
+    'myBorrows',
+  ];
 
   // =========================================================
   // UI
@@ -350,14 +371,48 @@ export default function VisitorDashboard() {
       ====================================================== */}
 
       <main className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
-        {/* PAGE HEADER */}
+        {/* =================================================
+            PAGE HEADER
+        ================================================== */}
+
         <DashboardWelcome
           name={user?.name?.split(' ')[0]}
           description="Search books, check availability, manage requests, and keep track of your library visits."
           actions={[
-            { label: 'Scan QR Pass', Icon: QrCode, onClick: () => { setMenuSection('profile'); setIsMenuOpen(true); } },
-            { label: 'Search Catalog', Icon: Search, onClick: () => { setTab('catalog'); document.getElementById('visitor-catalog')?.scrollIntoView({ behavior: 'smooth' }); } },
-            { label: 'View Fines', Icon: CircleDollarSign, onClick: () => { setTab('myBorrows'); document.getElementById('visitor-catalog')?.scrollIntoView({ behavior: 'smooth' }); } },
+            {
+              label: 'Scan QR Pass',
+              Icon: QrCode,
+              onClick: () => {
+                setMenuSection('profile');
+                setIsMenuOpen(true);
+              },
+            },
+            {
+              label: 'Search Catalog',
+              Icon: Search,
+              onClick: () => {
+                setTab('catalog');
+
+                document
+                  .getElementById('visitor-catalog')
+                  ?.scrollIntoView({
+                    behavior: 'smooth',
+                  });
+              },
+            },
+            {
+              label: 'View Fines',
+              Icon: CircleDollarSign,
+              onClick: () => {
+                setTab('myBorrows');
+
+                document
+                  .getElementById('visitor-catalog')
+                  ?.scrollIntoView({
+                    behavior: 'smooth',
+                  });
+              },
+            },
           ]}
         />
 
@@ -381,14 +436,19 @@ export default function VisitorDashboard() {
               Icon: Bookmark,
             },
             {
-              id: 'myBorrows',
-              label: 'My Requests & Borrows',
-              Icon: CalendarDays,
+              id: 'communityBooks',
+              label: 'Community Books',
+              Icon: UsersRound,
             },
             {
               id: 'personalBooks',
               label: 'My Personal Books',
               Icon: BookMarked,
+            },
+            {
+              id: 'myBorrows',
+              label: 'My Requests & Borrows',
+              Icon: CalendarDays,
             },
             {
               id: 'map',
@@ -411,61 +471,76 @@ export default function VisitorDashboard() {
                   setCatalogResetKey((key) => key + 1);
                 }
               }}
-              className={`pb-3 text-sm font-bold transition flex-shrink-0 ${
+              className={`pb-3 text-sm font-bold transition flex-shrink-0 flex items-center gap-1.5 ${
                 tab === tabItem.id
                   ? 'text-amber-700 dark:text-amber-400 border-b-2 border-amber-500'
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
+              aria-current={tab === tabItem.id ? 'page' : undefined}
             >
-              <Icon size={16} aria-hidden="true" />{' '}
+              <Icon size={16} aria-hidden="true" />
               {tabItem.label}
             </button>
           ))}
         </nav>
 
         {/* =================================================
-            CATALOG / CATEGORY / BORROW TAB
+            OPAC VIEWS
         ================================================== */}
 
-        {['catalog', 'categories', 'myBorrows'].includes(tab) && (
-          <div id="visitor-catalog" className="space-y-6 scroll-mt-5">
-            {/* AI RECOMMENDATIONS SECTION */}
+        {opacViews.includes(tab) && (
+          <div
+            id="visitor-catalog"
+            className="space-y-6 scroll-mt-5"
+          >
+            {/* =================================================
+                AI RECOMMENDATIONS
+            ================================================== */}
+
             {tab === 'catalog' && <AIRecommendations />}
 
-            {/* LIBRARY FILTER */}
+            {/* =================================================
+                LIBRARY FILTER
+            ================================================== */}
 
-            {libraryFilter && (
-              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                <span>
-                  Filtered to <b>{libraryName(libraryFilter)}</b>
-                </span>
+            {libraryFilter &&
+              (
+                tab === 'catalog' ||
+                tab === 'categories' ||
+                tab === 'myBorrows'
+              ) && (
+                <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                  <span>
+                    Filtered to <b>{libraryName(libraryFilter)}</b>
+                  </span>
 
-                <button
-                  type="button"
-                  onClick={() => setLibraryFilter(null)}
-                  className="text-[#002046] dark:text-blue-400 font-bold hover:underline"
-                >
-                  Clear filter
-                </button>
-              </div>
-            )}
+                  <button
+                    type="button"
+                    onClick={() => setLibraryFilter(null)}
+                    className="text-[#002046] dark:text-blue-400 font-bold hover:underline"
+                  >
+                    Clear filter
+                  </button>
+                </div>
+              )}
 
-            {/* OPAC */}
+            {/* =================================================
+                OPAC
+            ================================================== */}
 
             <OPACCatalog
-              libraryFilter={libraryFilter}
+              libraryFilter={
+                tab === 'communityBooks' ||
+                tab === 'personalBooks'
+                  ? null
+                  : libraryFilter
+              }
               activeView={tab}
               onViewChange={setTab}
               catalogResetKey={catalogResetKey}
             />
           </div>
         )}
-
-        {/* =================================================
-            PERSONAL BOOKS TAB
-        ================================================== */}
-
-        {tab === 'personalBooks' && <PersonalBooks userId={user?.id} />}
 
         {/* =================================================
             LIBRARY MAP
@@ -485,7 +560,10 @@ export default function VisitorDashboard() {
         ================================================== */}
 
         {tab === 'services' && (
-          <VisitorServices user={user} libraries={libraries} />
+          <VisitorServices
+            user={user}
+            libraries={libraries}
+          />
         )}
       </main>
 
@@ -542,15 +620,29 @@ export default function VisitorDashboard() {
               aria-label="Visitor menu sections"
             >
               {[
-                { id: 'profile', label: 'Profile', Icon: UserRound },
-                { id: 'faq', label: 'FAQ', Icon: CircleHelp },
-                { id: 'settings', label: 'Settings', Icon: Settings },
+                {
+                  id: 'profile',
+                  label: 'Profile',
+                  Icon: UserRound,
+                },
+                {
+                  id: 'faq',
+                  label: 'FAQ',
+                  Icon: CircleHelp,
+                },
+                {
+                  id: 'settings',
+                  label: 'Settings',
+                  Icon: Settings,
+                },
               ].map(({ id, label, Icon }) => (
                 <button
                   key={id}
                   type="button"
                   onClick={() => setMenuSection(id)}
-                  aria-current={menuSection === id ? 'page' : undefined}
+                  aria-current={
+                    menuSection === id ? 'page' : undefined
+                  }
                   className={`flex flex-col items-center gap-1 border-b-2 px-2 py-3 text-xs font-semibold ${
                     menuSection === id
                       ? 'border-[#002046] text-[#002046] dark:border-blue-400 dark:text-blue-400'
@@ -589,8 +681,14 @@ export default function VisitorDashboard() {
                           'Email',
                           visitorDetails?.email || user?.email,
                         ],
-                        ['Contact number', visitorDetails?.contactNumber],
-                        ['Address', visitorDetails?.address],
+                        [
+                          'Contact number',
+                          visitorDetails?.contactNumber,
+                        ],
+                        [
+                          'Address',
+                          visitorDetails?.address,
+                        ],
                       ].map(([label, value]) => (
                         <div
                           key={label}
@@ -658,7 +756,10 @@ export default function VisitorDashboard() {
 
                   <section>
                     <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
-                      <CalendarDays size={16} aria-hidden="true" />
+                      <CalendarDays
+                        size={16}
+                        aria-hidden="true"
+                      />
                       Attendance History
                     </h3>
 
@@ -697,162 +798,174 @@ export default function VisitorDashboard() {
 
                     {myTransactions.length ? (
                       <div className="space-y-3">
-                        {myTransactions.slice(0, 10).map((transaction) => {
-                          const status = String(
-                            transaction.status || ''
-                          ).toLowerCase();
+                        {myTransactions
+                          .slice(0, 10)
+                          .map((transaction) => {
+                            const status = String(
+                              transaction.status || ''
+                            ).toLowerCase();
 
-                          const statusLabel = formatStatus(transaction.status);
+                            const statusLabel = formatStatus(
+                              transaction.status
+                            );
 
-                          const statusClass = getStatusClass(transaction.status);
+                            const statusClass = getStatusClass(
+                              transaction.status
+                            );
 
-                          const fineAmount = Number(
-                            transaction.fineAmount
-                          );
+                            const fineAmount = Number(
+                              transaction.fineAmount
+                            );
 
-                          return (
-                            <article
-                              key={transaction.id}
-                              className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 p-3"
-                            >
-                              {/* BOOK + STATUS */}
+                            return (
+                              <article
+                                key={transaction.id}
+                                className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 p-3"
+                              >
+                                {/* BOOK + STATUS */}
 
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <h4 className="break-words text-xs font-bold text-slate-800 dark:text-slate-200">
-                                    {transaction.bookTitle ||
-                                      'Book transaction'}
-                                  </h4>
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <h4 className="break-words text-xs font-bold text-slate-800 dark:text-slate-200">
+                                      {transaction.bookTitle ||
+                                        'Book transaction'}
+                                    </h4>
 
-                                  {transaction.requestDate && (
-                                    <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                                      Requested:{' '}
-                                      {formatDateTime(transaction.requestDate)}
-                                    </p>
-                                  )}
+                                    {transaction.requestDate && (
+                                      <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                                        Requested:{' '}
+                                        {formatDateTime(
+                                          transaction.requestDate
+                                        )}
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  <span
+                                    className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${statusClass}`}
+                                  >
+                                    {statusLabel || 'Unknown'}
+                                  </span>
                                 </div>
 
-                                <span
-                                  className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${statusClass}`}
-                                >
-                                  {statusLabel || 'Unknown'}
-                                </span>
-                              </div>
+                                {/* TRANSACTION DETAILS */}
 
-                              {/* TRANSACTION DETAILS */}
+                                <div className="mt-3 grid grid-cols-1 gap-1.5 text-[11px] sm:grid-cols-2">
+                                  {/* BORROW DATE */}
 
-                              <div className="mt-3 grid grid-cols-1 gap-1.5 text-[11px] sm:grid-cols-2">
-                                {/* BORROW DATE */}
-
-                                {transaction.borrowDate && (
-                                  <div>
-                                    <span className="font-semibold text-slate-600 dark:text-slate-400">
-                                      Borrowed:{' '}
-                                    </span>
-
-                                    <span className="text-slate-500 dark:text-slate-300">
-                                      {formatDateTime(
-                                        transaction.borrowDate
-                                      )}
-                                    </span>
-                                  </div>
-                                )}
-
-                                {/* DUE DATE */}
-
-                                {transaction.dueDate && (
-                                  <div>
-                                    <span className="font-semibold text-slate-600 dark:text-slate-400">
-                                      Due:{' '}
-                                    </span>
-
-                                    <span className="text-slate-500 dark:text-slate-300">
-                                      {formatDateTime(transaction.dueDate)}
-                                    </span>
-                                  </div>
-                                )}
-
-                                {/* RETURN DATE */}
-
-                                {transaction.returnDate && (
-                                  <div>
-                                    <span className="font-semibold text-slate-600 dark:text-slate-400">
-                                      Returned:{' '}
-                                    </span>
-
-                                    <span className="text-slate-500 dark:text-slate-300">
-                                      {formatDateTime(
-                                        transaction.returnDate
-                                      )}
-                                    </span>
-                                  </div>
-                                )}
-
-                                {/* FINE */}
-
-                                {!Number.isNaN(fineAmount) &&
-                                  fineAmount > 0 && (
+                                  {transaction.borrowDate && (
                                     <div>
-                                      <span className="font-semibold text-red-600 dark:text-red-400">
-                                        Fine:{' '}
+                                      <span className="font-semibold text-slate-600 dark:text-slate-400">
+                                        Borrowed:{' '}
                                       </span>
 
-                                      <span className="font-bold text-red-600 dark:text-red-400">
-                                        ₱{fineAmount.toFixed(2)}
+                                      <span className="text-slate-500 dark:text-slate-300">
+                                        {formatDateTime(
+                                          transaction.borrowDate
+                                        )}
                                       </span>
                                     </div>
                                   )}
-                              </div>
 
-                              {/* PICKUP DEADLINE */}
+                                  {/* DUE DATE */}
 
-                              {transaction.pickupDeadline &&
-                                status !== 'cancelled' && (
-                                  <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-400">
-                                    <span className="font-semibold">
-                                      Pickup deadline:{' '}
-                                    </span>
+                                  {transaction.dueDate && (
+                                    <div>
+                                      <span className="font-semibold text-slate-600 dark:text-slate-400">
+                                        Due:{' '}
+                                      </span>
 
-                                    {formatDateTime(
-                                      transaction.pickupDeadline
+                                      <span className="text-slate-500 dark:text-slate-300">
+                                        {formatDateTime(
+                                          transaction.dueDate
+                                        )}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {/* RETURN DATE */}
+
+                                  {transaction.returnDate && (
+                                    <div>
+                                      <span className="font-semibold text-slate-600 dark:text-slate-400">
+                                        Returned:{' '}
+                                      </span>
+
+                                      <span className="text-slate-500 dark:text-slate-300">
+                                        {formatDateTime(
+                                          transaction.returnDate
+                                        )}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {/* FINE */}
+
+                                  {!Number.isNaN(fineAmount) &&
+                                    fineAmount > 0 && (
+                                      <div>
+                                        <span className="font-semibold text-red-600 dark:text-red-400">
+                                          Fine:{' '}
+                                        </span>
+
+                                        <span className="font-bold text-red-600 dark:text-red-400">
+                                          ₱{fineAmount.toFixed(2)}
+                                        </span>
+                                      </div>
                                     )}
+                                </div>
+
+                                {/* PICKUP DEADLINE */}
+
+                                {transaction.pickupDeadline &&
+                                  status !== 'cancelled' && (
+                                    <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-400">
+                                      <span className="font-semibold">
+                                        Pickup deadline:{' '}
+                                      </span>
+
+                                      {formatDateTime(
+                                        transaction.pickupDeadline
+                                      )}
+                                    </p>
+                                  )}
+
+                                {/* QUEUE POSITION */}
+
+                                {status === 'queued' &&
+                                  transaction.queuePosition !== null &&
+                                  transaction.queuePosition !==
+                                    undefined && (
+                                    <p className="mt-2 text-[11px] font-semibold text-purple-700 dark:text-purple-400">
+                                      Queue position: #
+                                      {transaction.queuePosition}
+                                    </p>
+                                  )}
+
+                                {/* CANCELLATION REASON */}
+
+                                {status === 'cancelled' &&
+                                  transaction.cancelReason && (
+                                    <p className="mt-2 text-[11px] text-red-600 dark:text-red-400">
+                                      <span className="font-semibold">
+                                        Cancellation reason:{' '}
+                                      </span>
+
+                                      {transaction.cancelReason}
+                                    </p>
+                                  )}
+
+                                {/* STAFF CONFIRMATION */}
+
+                                {transaction.confirmedBy && (
+                                  <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">
+                                    Pickup confirmed by:{' '}
+                                    {transaction.confirmedBy}
                                   </p>
                                 )}
-
-                              {/* QUEUE POSITION */}
-
-                              {status === 'queued' &&
-                                transaction.queuePosition !== null &&
-                                transaction.queuePosition !== undefined && (
-                                  <p className="mt-2 text-[11px] font-semibold text-purple-700 dark:text-purple-400">
-                                    Queue position: #{transaction.queuePosition}
-                                  </p>
-                                )}
-
-                              {/* CANCELLATION REASON */}
-
-                              {status === 'cancelled' &&
-                                transaction.cancelReason && (
-                                  <p className="mt-2 text-[11px] text-red-600 dark:text-red-400">
-                                    <span className="font-semibold">
-                                      Cancellation reason:{' '}
-                                    </span>
-
-                                    {transaction.cancelReason}
-                                  </p>
-                                )}
-
-                              {/* STAFF CONFIRMATION */}
-
-                              {transaction.confirmedBy && (
-                                <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">
-                                  Pickup confirmed by:{' '}
-                                  {transaction.confirmedBy}
-                                </p>
-                              )}
-                            </article>
-                          );
-                        })}
+                              </article>
+                            );
+                          })}
                       </div>
                     ) : (
                       <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -883,10 +996,17 @@ export default function VisitorDashboard() {
                     <div className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-700 p-3">
                       <div className="flex items-center gap-2">
                         {isDarkAppearance ? (
-                          <Moon size={18} className="text-slate-400" />
+                          <Moon
+                            size={18}
+                            className="text-slate-400"
+                          />
                         ) : (
-                          <Sun size={18} className="text-amber-500" />
+                          <Sun
+                            size={18}
+                            className="text-amber-500"
+                          />
                         )}
+
                         <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
                           Dark Mode
                         </span>
@@ -894,16 +1014,25 @@ export default function VisitorDashboard() {
 
                       <button
                         type="button"
-                        onClick={() => setIsDarkAppearance((prev) => !prev)}
+                        onClick={() =>
+                          setIsDarkAppearance((prev) => !prev)
+                        }
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                           isDarkAppearance
                             ? 'bg-[#002046] dark:bg-blue-600'
                             : 'bg-slate-300'
                         }`}
+                        aria-label={
+                          isDarkAppearance
+                            ? 'Disable dark mode'
+                            : 'Enable dark mode'
+                        }
                       >
                         <span
                           className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            isDarkAppearance ? 'translate-x-6' : 'translate-x-1'
+                            isDarkAppearance
+                              ? 'translate-x-6'
+                              : 'translate-x-1'
                           }`}
                         />
                       </button>
