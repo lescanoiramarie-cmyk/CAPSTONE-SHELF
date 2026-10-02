@@ -9,6 +9,28 @@ import { supabase } from '../lib/supabaseClient';
 import * as store from '../data/store';
 import { LibraryContext } from './libraryContext.js';
 
+// ============================================================================
+// SHELF ILMS — Library Context Provider
+// ----------------------------------------------------------------------------
+// Central application state and business-logic bridge.
+//
+// Components should use this context instead of importing Supabase/store
+// functions directly.
+//
+// Authentication:
+//   Visitors      → Supabase Auth or SHELF local QR session
+//   Staff/Admin   → Supabase Auth + staff profile
+//
+// Community books:
+//   OPACCatalog
+//       ↓
+//   LibraryContext.requestCommunityBook
+//       ↓
+//   store.requestCommunityBook
+//       ↓
+//   PostgreSQL RPC: request_community_book
+// ============================================================================
+
 const emptyData = {
   books: [],
   libraries: [],
@@ -16,9 +38,7 @@ const emptyData = {
   borrowRequests: [],
   attendanceLogs: [],
 
-  // =========================================================
-  // PERSONAL / COMMUNITY BOOKS
-  // =========================================================
+  // Personal / Community books
   personalBooks: [],
   communityBooks: [],
 };
@@ -28,19 +48,24 @@ export function LibraryProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [connectionError, setConnectionError] = useState('');
 
-  // =========================================================
+  // ==========================================================================
   // GET CURRENT VISITOR ID
-  // =========================================================
+  // ==========================================================================
   //
-  // SHELF currently supports QR/local-session visitor login.
-  // Therefore, do not rely exclusively on supabase.auth.getUser().
+  // SHELF supports:
   //
-  // The store already knows how to work with the SHELF visitor
-  // session, so we first try the Supabase Auth session and then
-  // the local SHELF session.
-  // =========================================================
+  // 1. Supabase Auth visitor sessions
+  // 2. SHELF local QR visitor sessions
+  //
+  // QR login may not create a Supabase Auth session, so the local session
+  // remains an important fallback.
+  // ==========================================================================
 
   const getCurrentVisitorId = useCallback(async () => {
+    // ------------------------------------------------------------------------
+    // Try Supabase Auth first.
+    // ------------------------------------------------------------------------
+
     try {
       const {
         data: authData,
@@ -51,9 +76,8 @@ export function LibraryProvider({ children }) {
 
       if (authUserId) {
         try {
-          const visitor = await store.getVisitor(
-            authUserId
-          );
+          const visitor =
+            await store.getVisitor(authUserId);
 
           if (visitor?.id) {
             return visitor.id;
@@ -72,9 +96,9 @@ export function LibraryProvider({ children }) {
       );
     }
 
-    // =======================================================
-    // FALLBACK: SHELF LOCAL QR SESSION
-    // =======================================================
+    // ------------------------------------------------------------------------
+    // Fallback: SHELF local QR session.
+    // ------------------------------------------------------------------------
 
     try {
       const rawSession =
@@ -105,22 +129,22 @@ export function LibraryProvider({ children }) {
     }
   }, []);
 
-  // =========================================================
+  // ==========================================================================
   // LOAD ALL SHELF DATA
-  // =========================================================
+  // ==========================================================================
 
   const refreshAll = useCallback(async () => {
     try {
-      // -------------------------------------------------------
+      // ----------------------------------------------------------------------
       // Resolve current visitor first.
-      // -------------------------------------------------------
+      // ----------------------------------------------------------------------
 
       const currentVisitorId =
         await getCurrentVisitorId();
 
-      // -------------------------------------------------------
+      // ----------------------------------------------------------------------
       // Load shared/global data.
-      // -------------------------------------------------------
+      // ----------------------------------------------------------------------
 
       const [
         books,
@@ -131,19 +155,21 @@ export function LibraryProvider({ children }) {
         communityBooks,
       ] = await Promise.all([
         store.fetchBooks(),
+
         store.fetchLibraries(),
+
         store.fetchVisitors(),
+
         store.fetchBorrowRequests(),
+
         store.fetchAttendanceLogs(),
 
-        // Community books are available to visitors who can
-        // access the catalog.
         store.fetchCommunityBooks(),
       ]);
 
-      // -------------------------------------------------------
+      // ----------------------------------------------------------------------
       // Load books owned by the current visitor.
-      // -------------------------------------------------------
+      // ----------------------------------------------------------------------
 
       let personalBooks = [];
 
@@ -159,15 +185,14 @@ export function LibraryProvider({ children }) {
             error
           );
 
-          // Do not destroy the rest of the application
-          // state if only personal books fail.
+          // Do not prevent the rest of the application from loading.
           personalBooks = [];
         }
       }
 
-      // -------------------------------------------------------
+      // ----------------------------------------------------------------------
       // Update centralized application state.
-      // -------------------------------------------------------
+      // ----------------------------------------------------------------------
 
       setData({
         books: Array.isArray(books)
@@ -235,12 +260,16 @@ export function LibraryProvider({ children }) {
     }
   }, [getCurrentVisitorId]);
 
-  // =========================================================
+  // ==========================================================================
   // INITIAL LOAD + AUTH + REALTIME
-  // =========================================================
+  // ==========================================================================
 
   useEffect(() => {
     let mounted = true;
+
+    // ------------------------------------------------------------------------
+    // Initial data load.
+    // ------------------------------------------------------------------------
 
     const initialize = async () => {
       try {
@@ -257,15 +286,14 @@ export function LibraryProvider({ children }) {
 
     void initialize();
 
-    // -------------------------------------------------------
-    // Supabase authentication changes
-    // -------------------------------------------------------
+    // ------------------------------------------------------------------------
+    // Supabase authentication changes.
+    // ------------------------------------------------------------------------
 
     const authSubscription =
       supabase?.auth?.onAuthStateChange(
         () => {
-          // Do not perform heavy Supabase operations
-          // directly inside the Auth callback.
+          // Avoid heavy operations directly inside the auth callback.
           setTimeout(() => {
             if (mounted) {
               void refreshAll().catch(
@@ -281,17 +309,18 @@ export function LibraryProvider({ children }) {
         }
       );
 
-    // -------------------------------------------------------
-    // Supabase Realtime
-    // -------------------------------------------------------
+    // ------------------------------------------------------------------------
+    // Supabase Realtime.
+    // ------------------------------------------------------------------------
 
     const channel = supabase
       ? supabase
           .channel('shelf-ilms-realtime')
 
-          // =================================================
+          // ==================================================================
           // BOOKS
-          // =================================================
+          // ==================================================================
+
           .on(
             'postgres_changes',
             {
@@ -311,9 +340,10 @@ export function LibraryProvider({ children }) {
             }
           )
 
-          // =================================================
+          // ==================================================================
           // BORROW REQUESTS
-          // =================================================
+          // ==================================================================
+
           .on(
             'postgres_changes',
             {
@@ -333,9 +363,41 @@ export function LibraryProvider({ children }) {
             }
           )
 
-          // =================================================
+          // ==================================================================
+          // COMMUNITY BOOK REQUESTS
+          // ==================================================================
+          //
+          // This keeps the visitor UI synchronized when an owner/request
+          // workflow changes a community-book request.
+          //
+          // It is safe even if Realtime is not enabled for the table;
+          // the subscription simply will not receive events until the table
+          // is included in the Supabase realtime publication.
+          // ==================================================================
+
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'community_book_requests',
+            },
+            () => {
+              void refreshAll().catch(
+                (error) => {
+                  console.error(
+                    'Realtime community book request refresh failed:',
+                    error
+                  );
+                }
+              );
+            }
+          )
+
+          // ==================================================================
           // ATTENDANCE
-          // =================================================
+          // ==================================================================
+
           .on(
             'postgres_changes',
             {
@@ -355,9 +417,10 @@ export function LibraryProvider({ children }) {
             }
           )
 
-          // =================================================
+          // ==================================================================
           // VISITORS
-          // =================================================
+          // ==================================================================
+
           .on(
             'postgres_changes',
             {
@@ -377,9 +440,10 @@ export function LibraryProvider({ children }) {
             }
           )
 
-          // =================================================
+          // ==================================================================
           // LIBRARIES
-          // =================================================
+          // ==================================================================
+
           .on(
             'postgres_changes',
             {
@@ -407,6 +471,10 @@ export function LibraryProvider({ children }) {
           })
       : null;
 
+    // ------------------------------------------------------------------------
+    // Cleanup.
+    // ------------------------------------------------------------------------
+
     return () => {
       mounted = false;
 
@@ -416,19 +484,29 @@ export function LibraryProvider({ children }) {
         );
       }
 
-      authSubscription?.data?.subscription?.unsubscribe();
+      authSubscription
+        ?.data
+        ?.subscription
+        ?.unsubscribe();
     };
   }, [refreshAll]);
 
-  // =========================================================
+  // ==========================================================================
   // GENERIC MUTATION + REFRESH
-  // =========================================================
+  // ==========================================================================
 
   const withRefresh = useCallback(
     (fn, operationName = 'operation') =>
       async (...args) => {
         try {
-          const result = await fn(...args);
+          if (typeof fn !== 'function') {
+            throw new Error(
+              `${operationName} service is not available.`
+            );
+          }
+
+          const result =
+            await fn(...args);
 
           await refreshAll();
 
@@ -445,9 +523,9 @@ export function LibraryProvider({ children }) {
     [refreshAll]
   );
 
-  // =========================================================
+  // ==========================================================================
   // LIBRARY MUTATIONS
-  // =========================================================
+  // ==========================================================================
 
   const addLibrary = useMemo(
     () =>
@@ -503,16 +581,9 @@ export function LibraryProvider({ children }) {
     [withRefresh]
   );
 
-  // =========================================================
+  // ==========================================================================
   // PERSONAL BOOK MUTATIONS
-  // =========================================================
-  //
-  // addPersonalBook() creates a visitor-owned book.
-  //
-  // We expose it through the LibraryContext so that
-  // OPACCatalog does not need to import Supabase/store
-  // directly.
-  // =========================================================
+  // ==========================================================================
 
   const addPersonalBook = useMemo(
     () =>
@@ -523,9 +594,31 @@ export function LibraryProvider({ children }) {
     [withRefresh]
   );
 
-  // =========================================================
+  // ==========================================================================
+  // COMMUNITY BOOK REQUEST
+  // ==========================================================================
+  //
+  // IMPORTANT:
+  // This is the missing bridge that caused:
+  //
+  // "Community book request service is not available."
+  //
+  // store.requestCommunityBook already exists in store.js.
+  // This memo exposes that function to OPACCatalog through useLibrary().
+  // ==========================================================================
+
+  const requestCommunityBook = useMemo(
+    () =>
+      withRefresh(
+        store.requestCommunityBook,
+        'requestCommunityBook'
+      ),
+    [withRefresh]
+  );
+
+  // ==========================================================================
   // BORROW / RESERVATION
-  // =========================================================
+  // ==========================================================================
 
   const requestBorrow = useMemo(
     () =>
@@ -563,9 +656,9 @@ export function LibraryProvider({ children }) {
     [withRefresh]
   );
 
-  // =========================================================
+  // ==========================================================================
   // ATTENDANCE
-  // =========================================================
+  // ==========================================================================
 
   const scanAttendance = useMemo(
     () =>
@@ -576,12 +669,16 @@ export function LibraryProvider({ children }) {
     [withRefresh]
   );
 
-  // =========================================================
+  // ==========================================================================
   // CONTEXT VALUE
-  // =========================================================
+  // ==========================================================================
 
   const value = useMemo(
     () => ({
+      // ----------------------------------------------------------------------
+      // Centralized data
+      // ----------------------------------------------------------------------
+
       data,
 
       loading,
@@ -590,44 +687,51 @@ export function LibraryProvider({ children }) {
 
       refreshAll,
 
-      // -----------------------------------------------------
+      // ----------------------------------------------------------------------
       // Library management
-      // -----------------------------------------------------
+      // ----------------------------------------------------------------------
 
       addLibrary,
 
       addBook,
+
       addBooksBulk,
+
       updateBook,
+
       deleteBook,
 
       loadSampleCatalog,
 
-      // -----------------------------------------------------
-      // Personal / community books
-      // -----------------------------------------------------
+      // ----------------------------------------------------------------------
+      // Personal / Community books
+      // ----------------------------------------------------------------------
 
       addPersonalBook,
 
-      // -----------------------------------------------------
+      requestCommunityBook,
+
+      // ----------------------------------------------------------------------
       // Borrowing
-      // -----------------------------------------------------
+      // ----------------------------------------------------------------------
 
       requestBorrow,
+
       cancelBorrowRequest,
 
       confirmPickup,
+
       confirmReturn,
 
-      // -----------------------------------------------------
+      // ----------------------------------------------------------------------
       // Attendance
-      // -----------------------------------------------------
+      // ----------------------------------------------------------------------
 
       scanAttendance,
 
-      // -----------------------------------------------------
+      // ----------------------------------------------------------------------
       // Visitor helpers
-      // -----------------------------------------------------
+      // ----------------------------------------------------------------------
 
       findVisitorByQr:
         store.findVisitorByQr,
@@ -635,9 +739,9 @@ export function LibraryProvider({ children }) {
       getVisitor:
         store.getVisitor,
 
-      // -----------------------------------------------------
+      // ----------------------------------------------------------------------
       // Business rules
-      // -----------------------------------------------------
+      // ----------------------------------------------------------------------
 
       PICKUP_WINDOW_HOURS:
         store.PICKUP_WINDOW_HOURS,
@@ -650,30 +754,47 @@ export function LibraryProvider({ children }) {
     }),
     [
       data,
+
       loading,
+
       connectionError,
+
       refreshAll,
 
       addLibrary,
 
       addBook,
+
       addBooksBulk,
+
       updateBook,
+
       deleteBook,
 
       loadSampleCatalog,
 
       addPersonalBook,
 
+      // IMPORTANT:
+      // requestCommunityBook must be included here so the context
+      // value updates correctly when the function changes.
+      requestCommunityBook,
+
       requestBorrow,
+
       cancelBorrowRequest,
 
       confirmPickup,
+
       confirmReturn,
 
       scanAttendance,
     ]
   );
+
+  // ==========================================================================
+  // PROVIDER
+  // ==========================================================================
 
   return (
     <LibraryContext.Provider
