@@ -142,17 +142,19 @@ export default function OPACCatalog({
 } = useLibraryData();
 
   const {
-    requestBorrow,
-    cancelBorrowRequest,
-    addPersonalBook,
-    requestCommunityBook,
-    fetchOwnerCommunityBookRequests,
-    approveCommunityBookRequest,
-    rejectCommunityBookRequest,
-    PICKUP_WINDOW_HOURS,
-    BORROW_PERIOD_DAYS,
-  } = useLibrary();
-
+  requestBorrow,
+  cancelBorrowRequest,
+  addPersonalBook,
+  requestCommunityBook,
+  fetchOwnerCommunityBookRequests,
+  approveCommunityBookRequest,
+  rejectCommunityBookRequest,
+  confirmCommunityBookPickup,
+  confirmCommunityBookReturn,
+  PICKUP_WINDOW_HOURS,
+  BORROW_PERIOD_DAYS,
+} = useLibrary();
+  
   // =========================================================
   // SEARCH / FILTER STATES
   // =========================================================
@@ -1562,6 +1564,119 @@ const myRequests = useMemo(() => {
     }
   };
 
+const handleConfirmCommunityBookPickup = async (request) => {
+  if (!request?.id || !user?.id) {
+    setNotice(
+      'Unable to identify this community book request.'
+    );
+    return;
+  }
+
+  if (processingCommunityRequestId) {
+    return;
+  }
+
+  if (typeof confirmCommunityBookPickup !== 'function') {
+    setNotice(
+      'Community book pickup service is not available. Please refresh the page.'
+    );
+    return;
+  }
+
+  setProcessingCommunityRequestId(request.id);
+  setOwnerCommunityRequestError('');
+  setCommunityRequestNotice('');
+
+  try {
+    const result =
+      await confirmCommunityBookPickup(
+        request.id,
+        user.id
+      );
+
+    if (!result?.id) {
+      throw new Error(
+        'The community book handover could not be confirmed.'
+      );
+    }
+
+    setCommunityRequestNotice(
+      `"${request.bookTitle}" has been marked as borrowed.`
+    );
+
+    await reloadOwnerCommunityRequests();
+  } catch (error) {
+    console.error(
+      'Confirm community book pickup error:',
+      error
+    );
+
+    setOwnerCommunityRequestError(
+      error?.message ||
+        'Unable to confirm the community book handover. Please try again.'
+    );
+  } finally {
+    setProcessingCommunityRequestId(null);
+  }
+};
+
+
+const handleConfirmCommunityBookReturn = async (request) => {
+  if (!request?.id || !user?.id) {
+    setNotice(
+      'Unable to identify this community book request.'
+    );
+    return;
+  }
+
+  if (processingCommunityRequestId) {
+    return;
+  }
+
+  if (typeof confirmCommunityBookReturn !== 'function') {
+    setNotice(
+      'Community book return service is not available. Please refresh the page.'
+    );
+    return;
+  }
+
+  setProcessingCommunityRequestId(request.id);
+  setOwnerCommunityRequestError('');
+  setCommunityRequestNotice('');
+
+  try {
+    const result =
+      await confirmCommunityBookReturn(
+        request.id,
+        user.id
+      );
+
+    if (!result?.id) {
+      throw new Error(
+        'The community book return could not be confirmed.'
+      );
+    }
+
+    setCommunityRequestNotice(
+      `"${request.bookTitle}" has been marked as returned.`
+    );
+
+    await reloadOwnerCommunityRequests();
+  } catch (error) {
+    console.error(
+      'Confirm community book return error:',
+      error
+    );
+
+    setOwnerCommunityRequestError(
+      error?.message ||
+        'Unable to confirm the community book return. Please try again.'
+    );
+  } finally {
+    setProcessingCommunityRequestId(null);
+  }
+};
+  
   // =========================================================
   // CANCEL REQUEST
   // =========================================================
@@ -2902,18 +3017,18 @@ const myRequests = useMemo(() => {
                               Community Request
                             </span>
                             <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
-                              status === 'approved'
-                                ? 'bg-emerald-100 text-emerald-700'
-                                : status === 'rejected'
-                                  ? 'bg-red-100 text-red-700'
-                                  : 'bg-amber-100 text-amber-700'
-                            }`}>
-                              {status === 'approved'
-                                ? 'Approved'
-                                : status === 'rejected'
-                                  ? 'Rejected'
-                                  : 'Pending'}
-                            </span>
+  status === 'approved'
+    ? 'bg-emerald-100 text-emerald-700'
+    : status === 'rejected'
+      ? 'bg-red-100 text-red-700'
+      : 'bg-amber-100 text-amber-700'
+}`}>
+  {status === 'approved'
+    ? 'Approved'
+    : status === 'rejected'
+      ? 'Rejected'
+      : 'Pending'}
+</span>
                           </div>
 
                           <h4 className="mt-2 text-sm font-bold text-slate-800">
@@ -2941,32 +3056,82 @@ const myRequests = useMemo(() => {
                         </div>
 
                         {isPending && (
-                          <div className="flex flex-col sm:flex-row gap-2 lg:min-w-[230px] lg:justify-end">
-                            <button
-                              type="button"
-                              disabled={Boolean(processingCommunityRequestId)}
-                              onClick={() => handleApproveCommunityRequest(request)}
-                              className="rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {isProcessing ? 'Processing...' : 'Approve Request'}
-                            </button>
+  <div className="flex flex-col sm:flex-row gap-2 lg:min-w-[230px] lg:justify-end">
+    <button
+      type="button"
+      disabled={Boolean(processingCommunityRequestId)}
+      onClick={() =>
+        handleApproveCommunityRequest(request)
+      }
+      className="rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      {isProcessing
+        ? 'Processing...'
+        : 'Approve Request'}
+    </button>
 
-                            <button
-                              type="button"
-                              disabled={Boolean(processingCommunityRequestId)}
-                              onClick={() => openRejectCommunityRequest(request)}
-                              className="rounded-lg bg-red-50 px-4 py-2.5 text-xs font-bold text-red-600 hover:bg-red-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              Reject Request
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+    <button
+      type="button"
+      disabled={Boolean(processingCommunityRequestId)}
+      onClick={() =>
+        openRejectCommunityRequest(request)
+      }
+      className="rounded-lg bg-red-50 px-4 py-2.5 text-xs font-bold text-red-600 hover:bg-red-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      Reject Request
+    </button>
+  </div>
+)}
+
+{status === 'approved' && (
+  <div className="flex flex-col gap-2 lg:min-w-[230px] lg:items-end">
+    <button
+      type="button"
+      disabled={Boolean(processingCommunityRequestId)}
+      onClick={() =>
+        handleConfirmCommunityBookPickup(request)
+      }
+      className="rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      {isProcessing
+        ? 'Processing...'
+        : 'Confirm Handover'}
+    </button>
+
+    <p className="text-[10px] text-slate-400 text-right">
+      Confirm this after the book has been handed to the requester.
+    </p>
+  </div>
+)}
+
+{status === 'borrowed' && (
+  <div className="flex flex-col gap-2 lg:min-w-[230px] lg:items-end">
+    <button
+      type="button"
+      disabled={Boolean(processingCommunityRequestId)}
+      onClick={() =>
+        handleConfirmCommunityBookReturn(request)
+      }
+      className="rounded-lg bg-violet-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-violet-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      {isProcessing
+        ? 'Processing...'
+        : 'Confirm Return'}
+    </button>
+
+    <p className="text-[10px] text-slate-400 text-right">
+      Confirm after the requester has returned the book.
+    </p>
+  </div>
+)}
+
+{status === 'returned' && (
+  <div className="lg:min-w-[230px] lg:text-right">
+    <span className="inline-flex rounded-lg bg-slate-100 px-4 py-2.5 text-xs font-bold text-slate-600">
+      Book Returned
+    </span>
+  </div>
+)}
 
           </div>
 
