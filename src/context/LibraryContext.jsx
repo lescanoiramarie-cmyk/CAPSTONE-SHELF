@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import * as store from '../data/store';
 import { LibraryContext } from './libraryContext.js';
@@ -16,6 +16,13 @@ export function LibraryProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [connectionError, setConnectionError] = useState('');
 
+  /**
+   * Load all SHELF data from Supabase.
+   *
+   * This is intentionally centralized here so components such as
+   * OPACCatalog and VisitorDashboard always receive the latest
+   * database state through useLibraryData().
+   */
   const refreshAll = useCallback(async () => {
     try {
       const [
@@ -33,36 +40,82 @@ export function LibraryProvider({ children }) {
       ]);
 
       setData({
+        books: Array.isArray(books) ? books : [],
+        libraries: Array.isArray(libraries) ? libraries : [],
+        visitors: Array.isArray(visitors) ? visitors : [],
+        borrowRequests: Array.isArray(borrowRequests)
+          ? borrowRequests
+          : [],
+        attendanceLogs: Array.isArray(attendanceLogs)
+          ? attendanceLogs
+          : [],
+      });
+
+      setConnectionError('');
+
+      return {
         books,
         libraries,
         visitors,
         borrowRequests,
         attendanceLogs,
-      });
-
-      setConnectionError('');
+      };
     } catch (err) {
+      console.error('SHELF refreshAll error:', err);
+
       setConnectionError(
-        err.message ||
+        err?.message ||
           'Could not connect to the database.'
       );
+
+      throw err;
     } finally {
       setLoading(false);
     }
   }, []);
 
+  /**
+   * Initial load + authentication listener + Supabase Realtime.
+   */
   useEffect(() => {
-    void Promise.resolve().then(refreshAll);
+    let mounted = true;
 
-    const { data: authSubscription } = supabase?.auth.onAuthStateChange(() => {
-      setTimeout(() => {
-        refreshAll();
-      }, 0);
-    }) || { data: {} };
+    const initialize = async () => {
+      try {
+        await refreshAll();
+      } catch (error) {
+        if (mounted) {
+          console.error(
+            'SHELF initial data loading failed:',
+            error
+          );
+        }
+      }
+    };
+
+    void initialize();
+
+    const authSubscription = supabase?.auth?.onAuthStateChange(
+      () => {
+        // Do not perform heavy Supabase queries directly
+        // inside the auth callback.
+        setTimeout(() => {
+          if (mounted) {
+            void refreshAll().catch((error) => {
+              console.error(
+                'SHELF auth refresh failed:',
+                error
+              );
+            });
+          }
+        }, 0);
+      }
+    );
 
     const channel = supabase
       ? supabase
           .channel('shelf-ilms-realtime')
+
           .on(
             'postgres_changes',
             {
@@ -70,8 +123,16 @@ export function LibraryProvider({ children }) {
               schema: 'public',
               table: 'books',
             },
-            refreshAll
+            () => {
+              void refreshAll().catch((error) => {
+                console.error(
+                  'Realtime books refresh failed:',
+                  error
+                );
+              });
+            }
           )
+
           .on(
             'postgres_changes',
             {
@@ -79,8 +140,16 @@ export function LibraryProvider({ children }) {
               schema: 'public',
               table: 'borrow_requests',
             },
-            refreshAll
+            () => {
+              void refreshAll().catch((error) => {
+                console.error(
+                  'Realtime borrow requests refresh failed:',
+                  error
+                );
+              });
+            }
           )
+
           .on(
             'postgres_changes',
             {
@@ -88,8 +157,16 @@ export function LibraryProvider({ children }) {
               schema: 'public',
               table: 'attendance_logs',
             },
-            refreshAll
+            () => {
+              void refreshAll().catch((error) => {
+                console.error(
+                  'Realtime attendance refresh failed:',
+                  error
+                );
+              });
+            }
           )
+
           .on(
             'postgres_changes',
             {
@@ -97,8 +174,16 @@ export function LibraryProvider({ children }) {
               schema: 'public',
               table: 'visitors',
             },
-            refreshAll
+            () => {
+              void refreshAll().catch((error) => {
+                console.error(
+                  'Realtime visitors refresh failed:',
+                  error
+                );
+              });
+            }
           )
+
           .on(
             'postgres_changes',
             {
@@ -106,79 +191,231 @@ export function LibraryProvider({ children }) {
               schema: 'public',
               table: 'libraries',
             },
-            refreshAll
+            () => {
+              void refreshAll().catch((error) => {
+                console.error(
+                  'Realtime libraries refresh failed:',
+                  error
+                );
+              });
+            }
           )
-          .subscribe()
+
+          .subscribe((status) => {
+            console.log(
+              'SHELF realtime status:',
+              status
+            );
+          })
       : null;
 
     return () => {
-      if (supabase && channel) supabase.removeChannel(channel);
-      authSubscription.subscription?.unsubscribe();
+      mounted = false;
+
+      if (supabase && channel) {
+        void supabase.removeChannel(channel);
+      }
+
+      authSubscription?.data?.subscription?.unsubscribe();
     };
   }, [refreshAll]);
 
-  const withRefresh =
-    (fn) =>
-    async (...args) => {
-      const result = await fn(...args);
-      await refreshAll();
-      return result;
-    };
+  /**
+   * Execute a store operation and ALWAYS refresh the
+   * centralized application state afterward.
+   *
+   * This is especially important for borrow requests.
+   *
+   * Example:
+   *
+   * requestBorrow(...)
+   *      ↓
+   * store.requestBorrow(...)
+   *      ↓
+   * Supabase INSERT succeeds
+   *      ↓
+   * refreshAll()
+   *      ↓
+   * data.borrowRequests contains the new request
+   *      ↓
+   * OPACCatalog re-renders immediately
+   */
+  const withRefresh = useCallback(
+    (fn, operationName = 'operation') =>
+      async (...args) => {
+        try {
+          const result = await fn(...args);
 
-  const value = {
-    data,
-    loading,
-    connectionError,
+          // Explicitly reload the database state after
+          // every successful mutation.
+          await refreshAll();
 
-    addLibrary: withRefresh(store.addLibrary),
+          return result;
+        } catch (error) {
+          console.error(
+            `SHELF ${operationName} failed:`,
+            error
+          );
 
-    addBook: withRefresh(store.addBook),
-    addBooksBulk: withRefresh(store.addBooksBulk),
-    updateBook: withRefresh(store.updateBook),
-    deleteBook: withRefresh(store.deleteBook),
+          // Do not hide the original error from the component.
+          throw error;
+        }
+      },
+    [refreshAll]
+  );
 
-    loadSampleCatalog:
-      withRefresh(store.loadSampleCatalog),
+  /**
+   * Mutation functions.
+   *
+   * Each operation refreshes the centralized state after
+   * Supabase successfully changes the database.
+   */
+  const addLibrary = useMemo(
+    () => withRefresh(store.addLibrary, 'addLibrary'),
+    [withRefresh]
+  );
 
-    requestBorrow:
-      withRefresh(store.requestBorrow),
+  const addBook = useMemo(
+    () => withRefresh(store.addBook, 'addBook'),
+    [withRefresh]
+  );
 
-    cancelBorrowRequest:
-      withRefresh(store.cancelBorrowRequest),
+  const addBooksBulk = useMemo(
+    () => withRefresh(store.addBooksBulk, 'addBooksBulk'),
+    [withRefresh]
+  );
 
-    confirmPickup:
-      withRefresh(store.confirmPickup),
+  const updateBook = useMemo(
+    () => withRefresh(store.updateBook, 'updateBook'),
+    [withRefresh]
+  );
 
-    confirmReturn:
-      withRefresh(store.confirmReturn),
+  const deleteBook = useMemo(
+    () => withRefresh(store.deleteBook, 'deleteBook'),
+    [withRefresh]
+  );
 
-    scanAttendance:
-      withRefresh(store.scanAttendance),
+  const loadSampleCatalog = useMemo(
+    () =>
+      withRefresh(
+        store.loadSampleCatalog,
+        'loadSampleCatalog'
+      ),
+    [withRefresh]
+  );
 
-    findVisitorByQr:
-      store.findVisitorByQr,
+  const requestBorrow = useMemo(
+    () =>
+      withRefresh(
+        store.requestBorrow,
+        'requestBorrow'
+      ),
+    [withRefresh]
+  );
 
-    getVisitor:
-      store.getVisitor,
+  const cancelBorrowRequest = useMemo(
+    () =>
+      withRefresh(
+        store.cancelBorrowRequest,
+        'cancelBorrowRequest'
+      ),
+    [withRefresh]
+  );
 
-    PICKUP_WINDOW_HOURS:
-      store.PICKUP_WINDOW_HOURS,
+  const confirmPickup = useMemo(
+    () =>
+      withRefresh(
+        store.confirmPickup,
+        'confirmPickup'
+      ),
+    [withRefresh]
+  );
 
-    BORROW_PERIOD_DAYS:
-      store.BORROW_PERIOD_DAYS,
+  const confirmReturn = useMemo(
+    () =>
+      withRefresh(
+        store.confirmReturn,
+        'confirmReturn'
+      ),
+    [withRefresh]
+  );
 
-    FINE_PER_DAY:
-      store.FINE_PER_DAY,
-  };
+  const scanAttendance = useMemo(
+    () =>
+      withRefresh(
+        store.scanAttendance,
+        'scanAttendance'
+      ),
+    [withRefresh]
+  );
+
+  /**
+   * Context value.
+   */
+  const value = useMemo(
+    () => ({
+      data,
+      loading,
+      connectionError,
+
+      // Expose refreshAll so components can explicitly
+      // request the latest database state when needed.
+      refreshAll,
+
+      addLibrary,
+
+      addBook,
+      addBooksBulk,
+      updateBook,
+      deleteBook,
+
+      loadSampleCatalog,
+
+      requestBorrow,
+      cancelBorrowRequest,
+
+      confirmPickup,
+      confirmReturn,
+
+      scanAttendance,
+
+      findVisitorByQr: store.findVisitorByQr,
+      getVisitor: store.getVisitor,
+
+      PICKUP_WINDOW_HOURS:
+        store.PICKUP_WINDOW_HOURS,
+
+      BORROW_PERIOD_DAYS:
+        store.BORROW_PERIOD_DAYS,
+
+      FINE_PER_DAY:
+        store.FINE_PER_DAY,
+    }),
+    [
+      data,
+      loading,
+      connectionError,
+      refreshAll,
+      addLibrary,
+      addBook,
+      addBooksBulk,
+      updateBook,
+      deleteBook,
+      loadSampleCatalog,
+      requestBorrow,
+      cancelBorrowRequest,
+      confirmPickup,
+      confirmReturn,
+      scanAttendance,
+    ]
+  );
 
   return (
     <LibraryContext.Provider value={value}>
       {connectionError && (
         <div className="bg-red-600 text-white text-xs font-semibold px-4 py-2 text-center">
           Could not reach the database:{' '}
-          {connectionError} — check your .env Supabase
-          credentials (see .env.example) and that
-          supabase/schema.sql has been run.
+          {connectionError}
         </div>
       )}
 
