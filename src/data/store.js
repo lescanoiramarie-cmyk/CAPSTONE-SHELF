@@ -2868,14 +2868,14 @@ export async function requestCommunityBook(
 export async function fetchOwnerCommunityBookRequests(
   ownerVisitorId
 ) {
-  const normalizedOwnerId =
+  const normalizedOwnerVisitorId =
     normalizeText(ownerVisitorId);
 
-  if (!normalizedOwnerId) {
+  if (!normalizedOwnerVisitorId) {
     return [];
   }
 
-  if (!isValidUuid(normalizedOwnerId)) {
+  if (!isValidUuid(normalizedOwnerVisitorId)) {
     throw new Error(
       'Invalid owner visitor ID.'
     );
@@ -2884,14 +2884,13 @@ export async function fetchOwnerCommunityBookRequests(
   const {
     data,
     error,
-  } =
-    await supabase.rpc(
-      'fetch_owner_community_book_requests',
-      {
-        p_owner_visitor_id:
-          normalizedOwnerId,
-      }
-    );
+  } = await supabase.rpc(
+    'fetch_owner_community_book_requests',
+    {
+      p_owner_visitor_id:
+        normalizedOwnerVisitorId,
+    }
+  );
 
   if (error) {
     console.error(
@@ -2906,10 +2905,55 @@ export async function fetchOwnerCommunityBookRequests(
   }
 
   return Array.isArray(data)
-    ? data
+    ? data.map((request) => ({
+        id:
+          request.id,
+
+        bookId:
+          request.book_id,
+
+        bookTitle:
+          request.book_title ||
+          request.title ||
+          'Untitled Book',
+
+        requesterVisitorId:
+          request.requester_visitor_id ||
+          null,
+
+        requesterName:
+          request.requester_name ||
+          request.visitor_name ||
+          'SHELF Visitor',
+
+        status:
+          request.status ||
+          'pending',
+
+        requestDate:
+          request.request_date ||
+          request.created_at ||
+          request.requested_at ||
+          null,
+
+        approvedAt:
+          request.approved_at ||
+          null,
+
+        rejectedAt:
+          request.rejected_at ||
+          null,
+
+        ownerResponse:
+          request.owner_response ||
+          null,
+
+        lendingPeriodDays:
+          request.lending_period_days ??
+          null,
+      }))
     : [];
 }
-
 // ============================================================================
 // FETCH COMMUNITY BOOK REQUESTS — REQUESTER
 // ============================================================================
