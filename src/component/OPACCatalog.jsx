@@ -3008,6 +3008,15 @@ const handleConfirmCommunityBookReturn = async (request) => {
                   const isPending = status === 'pending';
                   const isProcessing = processingCommunityRequestId === request.id;
 
+                  console.log(
+  'SHELF COMMUNITY REQUEST:',
+  request.id,
+  'STATUS:',
+  request.status,
+  'NORMALIZED:',
+  String(request.status || '').trim().toLowerCase()
+);
+                
                   return (
                     <div key={request.id} className="p-5">
                       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
