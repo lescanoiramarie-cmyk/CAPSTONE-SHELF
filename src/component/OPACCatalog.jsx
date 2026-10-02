@@ -2763,29 +2763,36 @@ export default function OPACCatalog({
                   <div>
 
                     <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                      Category
-                    </label>
+  Category
+</label>
 
-                    <input
-                      type="text"
-                      value={
-                        personalBookForm.category
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        updatePersonalBookForm(
-                          'category',
-                          event.target
-                            .value
-                        )
-                      }
-                      placeholder="e.g. Computer Science"
-                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
-                    />
-
-                  </div>
-
+<select
+  value={personalBookForm.category}
+  onChange={(event) =>
+    updatePersonalBookForm(
+      'category',
+      event.target.value
+    )
+  }
+  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+>
+  <option value="">Select a category</option>
+  <option value="Fiction">Fiction</option>
+  <option value="Non-Fiction">Non-Fiction</option>
+  <option value="Academic">Academic</option>
+  <option value="Computer Science">Computer Science</option>
+  <option value="Engineering">Engineering</option>
+  <option value="Education">Education</option>
+  <option value="Business">Business</option>
+  <option value="Science">Science</option>
+  <option value="Mathematics">Mathematics</option>
+  <option value="History">History</option>
+  <option value="Literature">Literature</option>
+  <option value="Arts">Arts</option>
+  <option value="Social Sciences">Social Sciences</option>
+  <option value="Reference">Reference</option>
+  <option value="Other">Other</option>
+</select>
                   <div>
 
                     <label className="block text-xs font-bold text-slate-700 mb-1.5">
