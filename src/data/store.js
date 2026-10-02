@@ -820,39 +820,99 @@ export async function registerVisitor({
   // --------------------------------------------------------------------------
 
   const {
-    data: emailData,
-    error: emailError,
-  } =
-    await supabase.functions.invoke(
-      'send-visitor-otp',
-      {
-        body: {
-          visitorId,
-        },
+  data: emailData,
+  error: emailError,
+} =
+  await supabase.functions.invoke(
+    'send-visitor-otp',
+    {
+      body: {
+        visitorId,
+      },
+    }
+  );
+
+if (emailError) {
+  console.error(
+    'SEND VISITOR OTP ERROR:',
+    emailError
+  );
+
+  console.error(
+    'SEND VISITOR OTP ERROR CONTEXT:',
+    {
+      name: emailError?.name,
+      message: emailError?.message,
+      context: emailError?.context,
+    }
+  );
+
+  let detailedMessage =
+    'Your registration was created, but we could not send the verification email. Please try again.';
+
+  try {
+    const response =
+      emailError?.context;
+
+    if (response) {
+      const responseText =
+        typeof response?.text === 'function'
+          ? await response.text()
+          : null;
+
+      console.error(
+        'SEND VISITOR OTP RAW RESPONSE:',
+        responseText
+      );
+
+      if (responseText) {
+        try {
+          const parsed =
+            JSON.parse(responseText);
+
+          console.error(
+            'SEND VISITOR OTP RESPONSE JSON:',
+            parsed
+          );
+
+          if (parsed?.error) {
+            detailedMessage =
+              String(parsed.error);
+          } else if (parsed?.message) {
+            detailedMessage =
+              String(parsed.message);
+          }
+        } catch {
+          if (responseText.trim()) {
+            detailedMessage =
+              responseText.trim();
+          }
+        }
       }
-    );
-
-  if (emailError) {
+    }
+  } catch (readError) {
     console.error(
-      'SEND VISITOR OTP ERROR:',
-      emailError
-    );
-
-    throw new Error(
-      'Your registration was created, but we could not send the verification email. Please try again.'
+      'Could not read Edge Function error response:',
+      readError
     );
   }
 
-  if (
-    emailData &&
-    typeof emailData === 'object' &&
-    emailData.success === false
-  ) {
-    throw new Error(
+  throw new Error(
+    detailedMessage
+  );
+}
+
+if (
+  emailData &&
+  typeof emailData === 'object' &&
+  emailData.success === false
+) {
+  throw new Error(
+    emailData.error ||
       emailData.message ||
-        'Your registration was created, but we could not send the verification email. Please try again.'
-    );
-  }
+      'Your registration was created, but we could not send the verification email. Please try again.'
+  );
+}
 
   // --------------------------------------------------------------------------
   // 7. RETURN OTP REGISTRATION SESSION
