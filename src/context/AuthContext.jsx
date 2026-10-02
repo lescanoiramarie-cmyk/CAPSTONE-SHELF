@@ -7,17 +7,33 @@ import { supabase } from '../lib/supabaseClient.js';
 const SESSION_KEY = 'shelf_ilms_session_v1';
 
 export const AuthProvider = ({ children }) => {
+  // =========================================================
+  // RESTORE SHELF SESSION
+  // =========================================================
+
   const [user, setUser] = useState(() => {
     try {
       const raw =
         globalThis.localStorage.getItem(SESSION_KEY);
 
-      return raw ? JSON.parse(raw) : null;
+      if (!raw) {
+        return null;
+      }
+
+      return JSON.parse(raw);
     } catch (error) {
       console.error(
         'Failed to restore SHELF session:',
         error
       );
+
+      try {
+        globalThis.localStorage.removeItem(
+          SESSION_KEY
+        );
+      } catch {
+        // Ignore cleanup errors.
+      }
 
       return null;
     }
@@ -66,15 +82,17 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
 
     try {
+      // Only remove SHELF's own session.
+      // Do NOT clear the entire localStorage because
+      // other application/browser data may be stored there.
       globalThis.localStorage.removeItem(
         SESSION_KEY
       );
 
-      globalThis.localStorage.clear();
       globalThis.sessionStorage.clear();
     } catch (error) {
       console.error(
-        'Failed to clear browser session:',
+        'Failed to clear SHELF browser session:',
         error
       );
     }
@@ -98,7 +116,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   // =========================================================
-  // VISITOR OTP
+  // VISITOR OTP VERIFICATION
   // =========================================================
 
   const verifyVisitorOtp = async (
@@ -120,6 +138,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // =========================================================
+  // RESEND VISITOR OTP
+  // =========================================================
+
   const resendVisitorOtp = async (
     visitorId
   ) => {
@@ -133,6 +155,49 @@ export const AuthProvider = ({ children }) => {
 
       throw error;
     }
+  };
+
+  // =========================================================
+  // BUILD VISITOR SESSION
+  //
+  // Centralized helper so email login, QR login, and
+  // visitor-session login all use exactly the same shape.
+  // =========================================================
+
+  const createVisitorSession = (visitor) => {
+    if (!visitor?.id) {
+      throw new Error(
+        'Visitor information is incomplete.'
+      );
+    }
+
+    return {
+      role: 'visitor',
+      id: visitor.id,
+      name: visitor.fullName,
+      email: visitor.email,
+      qrCode: visitor.qrCode,
+    };
+  };
+
+  // =========================================================
+  // BUILD STAFF SESSION
+  // =========================================================
+
+  const createStaffSession = (staff) => {
+    if (!staff?.id) {
+      throw new Error(
+        'Staff information is incomplete.'
+      );
+    }
+
+    return {
+      id: staff.id,
+      role: staff.role,
+      name: staff.name,
+      email: staff.email,
+      libraryId: staff.libraryId,
+    };
   };
 
   // =========================================================
@@ -156,13 +221,8 @@ export const AuthProvider = ({ children }) => {
         );
       }
 
-      const visitorSession = {
-        role: 'visitor',
-        id: visitor.id,
-        name: visitor.fullName,
-        email: visitor.email,
-        qrCode: visitor.qrCode,
-      };
+      const visitorSession =
+        createVisitorSession(visitor);
 
       setUser(visitorSession);
 
@@ -179,6 +239,9 @@ export const AuthProvider = ({ children }) => {
 
   // =========================================================
   // VISITOR SESSION
+  //
+  // Used when the application already has verified visitor
+  // information, such as after OTP verification or QR flow.
   // =========================================================
 
   const loginAsVisitorSession = (
@@ -190,13 +253,8 @@ export const AuthProvider = ({ children }) => {
       );
     }
 
-    const visitorSession = {
-      role: 'visitor',
-      id: visitor.id,
-      name: visitor.fullName,
-      email: visitor.email,
-      qrCode: visitor.qrCode,
-    };
+    const visitorSession =
+      createVisitorSession(visitor);
 
     setUser(visitorSession);
 
@@ -250,13 +308,8 @@ export const AuthProvider = ({ children }) => {
         );
       }
 
-      const staffSession = {
-        id: staff.id,
-        role: staff.role,
-        name: staff.name,
-        email: staff.email,
-        libraryId: staff.libraryId,
-      };
+      const staffSession =
+        createStaffSession(staff);
 
       setUser(staffSession);
 
@@ -357,11 +410,6 @@ export const AuthProvider = ({ children }) => {
   // 1. Visitor
   // 2. Staff
   //
-  // This prevents a normal visitor account from receiving:
-  //
-  // "This account has not been provisioned as a
-  // SHELF staff account."
-  //
   // EMAIL:
   // - Try visitor first.
   // - If visitor fails, try staff.
@@ -393,8 +441,12 @@ export const AuthProvider = ({ children }) => {
     // =======================================================
     // QR LOGIN
     //
-    // QR/pass IDs do not contain "@", so they are handled
-    // directly as visitor login.
+    // SHELF QR codes such as:
+    //
+    // SHELF-QR-404725
+    //
+    // do not contain "@", so they are handled directly
+    // as visitor login.
     // =======================================================
 
     if (!normalizedIdentifier.includes('@')) {
@@ -412,13 +464,8 @@ export const AuthProvider = ({ children }) => {
           );
         }
 
-        const visitorSession = {
-          role: 'visitor',
-          id: visitor.id,
-          name: visitor.fullName,
-          email: visitor.email,
-          qrCode: visitor.qrCode,
-        };
+        const visitorSession =
+          createVisitorSession(visitor);
 
         setUser(visitorSession);
 
@@ -450,10 +497,8 @@ export const AuthProvider = ({ children }) => {
     // =======================================================
     // 1. TRY VISITOR LOGIN FIRST
     //
-    // Normal visitor accounts should succeed here.
-    //
-    // If successful, we immediately return the visitor
-    // session and never attempt staff authorization.
+    // This prevents a normal visitor from receiving a staff
+    // provisioning error.
     // =======================================================
 
     let visitorError = null;
@@ -468,13 +513,8 @@ export const AuthProvider = ({ children }) => {
         });
 
       if (visitor) {
-        const visitorSession = {
-          role: 'visitor',
-          id: visitor.id,
-          name: visitor.fullName,
-          email: visitor.email,
-          qrCode: visitor.qrCode,
-        };
+        const visitorSession =
+          createVisitorSession(visitor);
 
         setUser(visitorSession);
 
@@ -504,7 +544,6 @@ export const AuthProvider = ({ children }) => {
     //
     // - Sub-Admin
     // - Super Admin
-    //
     // =======================================================
 
     try {
@@ -542,8 +581,6 @@ export const AuthProvider = ({ children }) => {
 
       // =====================================================
       // INACTIVE STAFF
-      //
-      // Do not hide this with a visitor error.
       // =====================================================
 
       if (
@@ -557,7 +594,7 @@ export const AuthProvider = ({ children }) => {
       // INVALID STAFF CREDENTIALS
       //
       // Visitor login already failed, so return the visitor
-      // error if one exists.
+      // error when available.
       // =====================================================
 
       if (
@@ -569,13 +606,6 @@ export const AuthProvider = ({ children }) => {
 
       // =====================================================
       // NOT PROVISIONED AS STAFF
-      //
-      // This should normally not appear for a visitor anymore
-      // because visitor login was already attempted first.
-      //
-      // If neither visitor nor staff login succeeds, return
-      // the visitor-side error instead of exposing the staff
-      // provisioning message to a normal visitor.
       // =====================================================
 
       if (
@@ -603,19 +633,28 @@ export const AuthProvider = ({ children }) => {
         user,
         logout,
 
+        // -----------------------------------------------------
         // Visitor
+        // -----------------------------------------------------
+
         registerVisitor,
         verifyVisitorOtp,
         resendVisitorOtp,
         loginVisitor,
         loginAsVisitorSession,
 
+        // -----------------------------------------------------
         // Staff
+        // -----------------------------------------------------
+
         loginStaffAccount,
         loginSubAdmin,
         loginSuperAdmin,
 
+        // -----------------------------------------------------
         // Unified login
+        // -----------------------------------------------------
+
         login,
       }}
     >
