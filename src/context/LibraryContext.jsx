@@ -1080,6 +1080,24 @@ const rejectCommunityBookRequest = useMemo(
   [withRefresh]
 );
 
+const confirmCommunityBookPickup = useMemo(
+  () =>
+    withRefresh(
+      store.confirmCommunityBookPickup,
+      'confirmCommunityBookPickup'
+    ),
+  [withRefresh]
+);
+
+const confirmCommunityBookReturn = useMemo(
+  () =>
+    withRefresh(
+      store.confirmCommunityBookReturn,
+      'confirmCommunityBookReturn'
+    ),
+  [withRefresh]
+);
+
   // ==========================================================================
   // BORROW / RESERVATION
   // ==========================================================================
@@ -1221,6 +1239,10 @@ const rejectCommunityBookRequest = useMemo(
       approveCommunityBookRequest,
 
       rejectCommunityBookRequest,
+
+      confirmCommunityBookPickup,
+      
+      confirmCommunityBookReturn,
 
       // ----------------------------------------------------------------------
       // Borrowing
