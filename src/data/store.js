@@ -481,44 +481,20 @@ export async function registerVisitor({
   }
 
   // --------------------------------------------------------------------------
-  // CHECK IF VISITOR PROFILE ALREADY EXISTS
-  // --------------------------------------------------------------------------
-
-  const {
-    data: existingVisitor,
-    error: existingVisitorError,
-  } = await supabase
-    .from('visitors')
-    .select('id, auth_user_id, otp_verified, is_active')
-    .eq('email', normalizedEmail)
-    .maybeSingle();
-
-  if (existingVisitorError) {
-    throw cleanErr(
-      existingVisitorError,
-      'Unable to check the visitor account.'
-    );
-  }
-
-  if (existingVisitor) {
-    if (
-      existingVisitor.otp_verified === false
-    ) {
-      throw new Error(
-        'This email already has an unverified registration. Please verify the OTP or request a new code.'
-      );
-    }
-
-    throw new Error(
-      'A visitor account with this email already exists.'
-    );
-  }
-
-  // --------------------------------------------------------------------------
   // CREATE AUTH USER
   // --------------------------------------------------------------------------
-  // The password is sent directly to Supabase Auth.
-  // It is NOT inserted into the visitors table.
+  //
+  // IMPORTANT:
+  // Do NOT query public.visitors here.
+  //
+  // During registration the browser can be using the anon role. A direct
+  // `.from('visitors')` query would therefore be subject to the table's
+  // permissions/RLS and can produce:
+  //
+  //   permission denied for table visitors
+  //
+  // Duplicate-email checking is handled inside the SECURITY DEFINER
+  // register_visitor() PostgreSQL function instead.
   // --------------------------------------------------------------------------
 
   const {
@@ -575,11 +551,34 @@ export async function registerVisitor({
     );
   }
 
+  // Supabase can intentionally return a user without an error when an
+  // existing email is detected, depending on the Auth configuration.
+  // An empty identities array indicates that the user was not newly created.
+  if (
+    Array.isArray(authData.user.identities) &&
+    authData.user.identities.length === 0
+  ) {
+    throw new Error(
+      'A visitor account with this email already exists.'
+    );
+  }
+
   const authUserId =
     String(authData.user.id).trim();
 
   // --------------------------------------------------------------------------
-  // CREATE VISITOR PROFILE
+  // CREATE VISITOR PROFILE THROUGH SECURITY-DEFINER RPC
+  // --------------------------------------------------------------------------
+  //
+  // The browser only EXECUTES the RPC.
+  //
+  // register_visitor() is:
+  //   SECURITY DEFINER
+  //   OWNER = postgres
+  //   search_path = public
+  //
+  // Therefore the INSERT into public.visitors is performed by the function
+  // owner rather than directly by the anonymous browser role.
   // --------------------------------------------------------------------------
 
   const {
@@ -612,9 +611,7 @@ export async function registerVisitor({
       registrationError
     );
 
-    // If profile creation fails after Auth creation,
-    // sign out so the partially completed registration
-    // does not leave an active frontend session.
+    // Remove the newly created Auth session if signUp created one.
     try {
       await supabase.auth.signOut();
     } catch {
@@ -653,13 +650,6 @@ export async function registerVisitor({
 
   // --------------------------------------------------------------------------
   // SIGN OUT THE NEW AUTH SESSION
-  // --------------------------------------------------------------------------
-  // If email confirmation is disabled in Supabase Auth,
-  // signUp may automatically create a session.
-  //
-  // SHELF uses its own OTP verification flow, so the newly
-  // registered visitor should not enter the application
-  // before the SHELF OTP is verified.
   // --------------------------------------------------------------------------
 
   try {
@@ -849,15 +839,6 @@ export async function verifyVisitorOtp(
 
 // ============================================================================
 // VISITOR LOGIN
-// ----------------------------------------------------------------------------
-// Email login:
-//   Supabase Auth verifies the password.
-//
-// QR login:
-//   Directly finds the visitor using qr_code.
-//
-// No visitor password is ever compared against a column
-// in the visitors table.
 // ============================================================================
 
 export async function loginVisitor({
@@ -1058,10 +1039,6 @@ export async function loginVisitor({
     );
   }
 
-  // --------------------------------------------------------------------------
-  // ACTIVE CHECK
-  // --------------------------------------------------------------------------
-
   if (
     visitor.is_active === false
   ) {
@@ -1075,10 +1052,6 @@ export async function loginVisitor({
       'This visitor account is currently inactive.'
     );
   }
-
-  // --------------------------------------------------------------------------
-  // OTP CHECK
-  // --------------------------------------------------------------------------
 
   if (
     visitor.otp_verified !== true
@@ -1111,15 +1084,6 @@ export async function loginVisitor({
 
 // ============================================================================
 // FIND VISITOR BY QR
-// ----------------------------------------------------------------------------
-// Used by authorized staff when scanning a visitor at a library branch.
-//
-// Existing deployed RPC:
-//   find_visitor_by_qr(text, text)
-//
-// Parameters:
-//   p_qr
-//   p_library_id
 // ============================================================================
 
 export async function findVisitorByQr(
@@ -1218,10 +1182,6 @@ export async function loginStaffAccount(
     );
   }
 
-  // --------------------------------------------------------------------------
-  // SUPABASE AUTH
-  // --------------------------------------------------------------------------
-
   const {
     data,
     error,
@@ -1305,10 +1265,6 @@ export async function loginStaffAccount(
     );
   }
 
-  // --------------------------------------------------------------------------
-  // LOAD STAFF PROFILE
-  // --------------------------------------------------------------------------
-
   const {
     data: profile,
     error: profileError,
@@ -1354,10 +1310,6 @@ export async function loginStaffAccount(
     );
   }
 
-  // --------------------------------------------------------------------------
-  // ACTIVE CHECK
-  // --------------------------------------------------------------------------
-
   if (
     profile.is_active !== true
   ) {
@@ -1371,10 +1323,6 @@ export async function loginStaffAccount(
       'This staff account is currently inactive.'
     );
   }
-
-  // --------------------------------------------------------------------------
-  // ROLE CHECK
-  // --------------------------------------------------------------------------
 
   const allowedRoles = [
     'subadmin',
