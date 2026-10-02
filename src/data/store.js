@@ -437,80 +437,84 @@ export async function registerVisitor({
   address,
   password,
 }) {
-  const normalizedFullName = String(fullName || '').trim();
-  const normalizedContactNumber = String(contactNumber || '').trim();
-  const normalizedEmail = String(email || '').trim().toLowerCase();
-  const normalizedAddress = String(address || '').trim();
-  const normalizedPassword = String(password || '');
+  const normalizedFullName =
+    String(fullName || '').trim();
+
+  const normalizedContactNumber =
+    String(contactNumber || '').trim();
+
+  const normalizedEmail =
+    String(email || '').trim().toLowerCase();
+
+  const normalizedAddress =
+    String(address || '').trim();
+
+  const normalizedPassword =
+    String(password || '');
 
   if (!normalizedFullName) {
-    throw new Error('Full name is required.');
+    throw new Error(
+      'Full name is required.'
+    );
   }
 
   if (!normalizedContactNumber) {
-    throw new Error('Contact number is required.');
+    throw new Error(
+      'Contact number is required.'
+    );
   }
 
   if (!normalizedEmail) {
-    throw new Error('Email address is required.');
+    throw new Error(
+      'Email address is required.'
+    );
   }
 
   if (!normalizedAddress) {
-    throw new Error('Address is required.');
+    throw new Error(
+      'Address is required.'
+    );
   }
 
   if (!normalizedPassword) {
-    throw new Error('Password is required.');
-  }
-
-  // ------------------------------------------------------------
-  // 1. Check if this email already has a visitor profile
-  // ------------------------------------------------------------
-  const {
-    data: existingVisitor,
-    error: existingVisitorError,
-  } = await supabase
-    .from('visitors')
-    .select('id, auth_user_id, email, is_active')
-    .eq('email', normalizedEmail)
-    .maybeSingle();
-
-  if (existingVisitorError) {
-    console.error(
-      'CHECK EXISTING VISITOR ERROR:',
-      existingVisitorError
-    );
-
-    throw cleanErr(
-      existingVisitorError,
-      'Unable to check the visitor account.'
-    );
-  }
-
-  if (existingVisitor?.id) {
     throw new Error(
-      'A visitor account with this email already exists.'
+      'Password is required.'
     );
   }
 
   // ------------------------------------------------------------
-  // 2. Create a NEW Supabase Auth account
+  // 1. CREATE SUPABASE AUTH ACCOUNT
   // ------------------------------------------------------------
+
   const {
     data: authData,
     error: authError,
   } = await supabase.auth.signUp({
-    email: normalizedEmail,
-    password: normalizedPassword,
+    email:
+      normalizedEmail,
+
+    password:
+      normalizedPassword,
+
     options: {
       data: {
         role: 'visitor',
-        full_name: normalizedFullName,
-        contact_number: normalizedContactNumber,
-        address: normalizedAddress,
+
+        full_name:
+          normalizedFullName,
+
+        contact_number:
+          normalizedContactNumber,
+
+        address:
+          normalizedAddress,
       },
     },
   });
+
+  // ------------------------------------------------------------
+  // 2. HANDLE AUTH REGISTRATION ERROR
+  // ------------------------------------------------------------
 
   if (authError) {
     console.error(
@@ -518,17 +522,24 @@ export async function registerVisitor({
       authError
     );
 
-    const message = String(
-      authError?.message || ''
-    ).toLowerCase();
+    const message =
+      String(
+        authError?.message || ''
+      ).toLowerCase();
 
     if (
-      message.includes('already registered') ||
-      message.includes('already exists') ||
-      message.includes('user already registered')
+      message.includes(
+        'already registered'
+      ) ||
+      message.includes(
+        'already exists'
+      ) ||
+      message.includes(
+        'user already registered'
+      )
     ) {
       throw new Error(
-        'This email is already registered in the authentication system. Please use another email address.'
+        'This email is already registered. Please use another email address.'
       );
     }
 
@@ -538,27 +549,66 @@ export async function registerVisitor({
     );
   }
 
+  // ------------------------------------------------------------
+  // 3. MAKE SURE AUTH USER WAS CREATED
+  // ------------------------------------------------------------
+
   if (!authData?.user?.id) {
     throw new Error(
       'Supabase Auth did not return a user account. Please try again.'
     );
   }
 
-  const authUserId = String(authData.user.id).trim();
+  // Supabase can sometimes return an existing account
+  // with no identities instead of a normal duplicate error.
+  if (
+    Array.isArray(
+      authData.user.identities
+    ) &&
+    authData.user.identities.length === 0
+  ) {
+    throw new Error(
+      'This email is already registered. Please use another email address.'
+    );
+  }
+
+  const authUserId =
+    String(
+      authData.user.id
+    ).trim();
 
   // ------------------------------------------------------------
-  // 3. Create the visitor profile
+  // 4. CREATE VISITOR PROFILE THROUGH RPC
+  //
+  // IMPORTANT:
+  // Do NOT query public.visitors directly here.
+  //
+  // register_visitor() is SECURITY DEFINER and performs
+  // the duplicate checks and INSERT on the server.
   // ------------------------------------------------------------
+
   const {
     data: registrationData,
     error: registrationError,
-  } = await supabase.rpc('register_visitor', {
-    p_auth_user_id: authUserId,
-    p_full_name: normalizedFullName,
-    p_contact_number: normalizedContactNumber,
-    p_email: normalizedEmail,
-    p_address: normalizedAddress,
-  });
+  } = await supabase.rpc(
+    'register_visitor',
+    {
+      p_auth_user_id:
+        authUserId,
+
+      p_full_name:
+        normalizedFullName,
+
+      p_contact_number:
+        normalizedContactNumber,
+
+      p_email:
+        normalizedEmail,
+
+      p_address:
+        normalizedAddress,
+    }
+  );
 
   if (registrationError) {
     console.error(
@@ -566,9 +616,13 @@ export async function registerVisitor({
       registrationError
     );
 
+    // If the visitor profile could not be created,
+    // sign out the newly-created Auth session.
     try {
       await supabase.auth.signOut();
-    } catch {}
+    } catch {
+      // Ignore cleanup errors.
+    }
 
     throw cleanErr(
       registrationError,
@@ -576,43 +630,61 @@ export async function registerVisitor({
     );
   }
 
-  const row = Array.isArray(registrationData)
-    ? registrationData[0]
-    : registrationData;
+  // ------------------------------------------------------------
+  // 5. GET VISITOR ID RETURNED BY RPC
+  // ------------------------------------------------------------
+
+  const row =
+    Array.isArray(
+      registrationData
+    )
+      ? registrationData[0]
+      : registrationData;
 
   if (!row?.visitor_id) {
     try {
       await supabase.auth.signOut();
-    } catch {}
+    } catch {
+      // Ignore cleanup errors.
+    }
 
     throw new Error(
       'The visitor profile could not be created. Please try again.'
     );
   }
 
-  const visitorId = String(row.visitor_id).trim();
+  const visitorId =
+    String(
+      row.visitor_id
+    ).trim();
 
   // ------------------------------------------------------------
-  // 4. Sign out before OTP verification
+  // 6. SIGN OUT BEFORE OTP VERIFICATION
   // ------------------------------------------------------------
+
   try {
     await supabase.auth.signOut();
-  } catch {}
+  } catch {
+    // Ignore cleanup errors.
+  }
 
   // ------------------------------------------------------------
-  // 5. Send OTP email
+  // 7. SEND OTP EMAIL
   // ------------------------------------------------------------
+
   const {
     data: emailData,
     error: emailError,
-  } = await supabase.functions.invoke(
-    'send-visitor-otp',
-    {
-      body: {
-        visitorId,
-      },
-    }
-  );
+  } =
+    await supabase.functions.invoke(
+      'send-visitor-otp',
+      {
+        body: {
+          visitorId:
+            visitorId,
+        },
+      }
+    );
 
   if (emailError) {
     console.error(
@@ -636,8 +708,13 @@ export async function registerVisitor({
     );
   }
 
+  // ------------------------------------------------------------
+  // 8. RETURN REGISTRATION SESSION
+  // ------------------------------------------------------------
+
   return {
-    visitorId,
+    visitorId:
+      visitorId,
   };
 }
 
