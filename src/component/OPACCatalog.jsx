@@ -144,6 +144,7 @@ export default function OPACCatalog({
     requestBorrow,
     cancelBorrowRequest,
     addPersonalBook,
+    requestCommunityBook,
     PICKUP_WINDOW_HOURS,
     BORROW_PERIOD_DAYS,
   } = useLibrary();
@@ -192,6 +193,9 @@ export default function OPACCatalog({
     useState(null);
 
   const [submittingBorrow, setSubmittingBorrow] =
+    useState(false);
+
+  const [submittingCommunityRequest, setSubmittingCommunityRequest] =
     useState(false);
 
   // =========================================================
@@ -1045,6 +1049,75 @@ export default function OPACCatalog({
         );
       }
     };
+
+  // =========================================================
+  // REQUEST COMMUNITY BOOK
+  // =========================================================
+
+  const handleRequestCommunityBook = async (book) => {
+    if (!book?.id) {
+      setNotice('Unable to identify this community book.');
+      return;
+    }
+
+    if (!user?.id) {
+      setNotice('Please log in before requesting a community book.');
+      return;
+    }
+
+    if (book.bookType !== 'personal') {
+      setNotice('This is not a community book.');
+      return;
+    }
+
+    if (
+      book.ownerVisitorId &&
+      String(book.ownerVisitorId) === String(user.id)
+    ) {
+      setNotice('You cannot request your own personal book.');
+      return;
+    }
+
+    if (book.lendingEnabled === false) {
+      setNotice('This community book is not currently available for lending.');
+      return;
+    }
+
+    if (submittingCommunityRequest) {
+      return;
+    }
+
+    if (typeof requestCommunityBook !== 'function') {
+      setNotice('Community book request service is not available. Please refresh the page and try again.');
+      console.error('requestCommunityBook is missing from LibraryContext.');
+      return;
+    }
+
+    setSubmittingCommunityRequest(true);
+    setNotice('');
+
+    try {
+      const request = await requestCommunityBook(user.id, book.id);
+
+      if (!request?.id) {
+        throw new Error('The community book request was not created. Please try again.');
+      }
+
+      setNotice(
+        `"${book.title}" request was submitted successfully. The owner must approve your request before borrowing can proceed.`
+      );
+
+      setSelectedBook(null);
+    } catch (error) {
+      console.error('Community book request error:', error);
+      setNotice(
+        error?.message ||
+          'Unable to request this community book. Please try again.'
+      );
+    } finally {
+      setSubmittingCommunityRequest(false);
+    }
+  };
 
   // =========================================================
   // CANCEL REQUEST
@@ -3419,33 +3492,33 @@ export default function OPACCatalog({
     COMMUNITY BOOK ACTION
 ====================================================== */}
 
-{selectedBook.bookType === 'personal' && (
+{selectedBook?.bookType === 'personal' && (
   <div className="border-t border-slate-200 pt-4 space-y-3">
-
     <button
       type="button"
-      onClick={() => {
-        setNotice(
-          'Community book borrowing will be available after the owner approval workflow is enabled.'
-        );
-      }}
-      className="w-full rounded-lg bg-violet-600 text-white py-2.5 text-sm font-bold hover:bg-violet-700 transition"
+      onClick={() => handleRequestCommunityBook(selectedBook)}
+      disabled={submittingCommunityRequest}
+      className="w-full rounded-lg bg-violet-600 text-white py-2.5 text-sm font-bold hover:bg-violet-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
     >
-      Request Community Book
+      {submittingCommunityRequest
+        ? 'Submitting Request...'
+        : 'Request Community Book'}
     </button>
 
-    <div className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-3">
-      <p className="text-xs font-bold text-violet-800">
-        Community Book Request
+    {selectedBook.ownerVisitorId &&
+    String(selectedBook.ownerVisitorId) === String(user?.id) ? (
+      <p className="text-xs text-amber-600 text-center">
+        You own this book. You cannot request your own personal book.
       </p>
-
-      <p className="mt-1 text-[11px] leading-relaxed text-violet-700">
-        Community book borrowing is not yet available.
-        The owner approval workflow must be implemented
-        before a request can be submitted.
+    ) : selectedBook.lendingEnabled === false ? (
+      <p className="text-xs text-slate-500 text-center">
+        This book is not currently available for community lending.
       </p>
-    </div>
-
+    ) : (
+      <p className="text-[10px] text-slate-400 text-center">
+        Your request will be sent to the book owner for approval.
+      </p>
+    )}
   </div>
 )}
 
