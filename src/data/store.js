@@ -484,21 +484,12 @@ export async function registerVisitor({
     );
   }
 
-  // --------------------------------------------------------------------------
-  // CREATE SUPABASE AUTH ACCOUNT
-  // --------------------------------------------------------------------------
-  //
-  // Password goes ONLY to Supabase Auth.
-  // It is never inserted into public.visitors.
-  //
-  // There is intentionally NO:
-  //
-  //   supabase.from('visitors').select(...)
-  //
-  // here.
-  //
-  // Duplicate visitor checking is handled by register_visitor().
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // CREATE OR RESOLVE SUPABASE AUTH ACCOUNT
+  // ==========================================================================
+
+  let authUser = null;
+  let isExistingAuthAccount = false;
 
   const {
     data: authData,
@@ -516,92 +507,213 @@ export async function registerVisitor({
     },
   });
 
+  // --------------------------------------------------------------------------
+  // NEW AUTH ACCOUNT
+  // --------------------------------------------------------------------------
+
+  if (
+    !authError &&
+    authData?.user?.id
+  ) {
+    authUser = authData.user;
+
+    // Supabase can return an existing email as a user with zero identities.
+    // That must be handled as an existing Auth account.
+    if (
+      Array.isArray(authUser.identities) &&
+      authUser.identities.length === 0
+    ) {
+      isExistingAuthAccount = true;
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // EXISTING AUTH ACCOUNT REPORTED AS AN ERROR
+  // --------------------------------------------------------------------------
+
   if (authError) {
     const message =
       String(
         authError?.message || ''
       ).toLowerCase();
 
-    if (
-      message.includes(
-        'already registered'
-      ) ||
-      message.includes(
-        'already exists'
-      ) ||
-      message.includes(
-        'user already registered'
-      )
-    ) {
-      throw new Error(
-        'A visitor account with this email already exists.'
+    const isDuplicateAuthEmail =
+      message.includes('already registered') ||
+      message.includes('already exists') ||
+      message.includes('user already registered');
+
+    if (!isDuplicateAuthEmail) {
+      throw cleanErr(
+        authError,
+        'Unable to create the visitor account.'
       );
     }
 
-    throw cleanErr(
-      authError,
-      'Unable to create the visitor account.'
-    );
+    isExistingAuthAccount = true;
   }
 
-  if (!authData?.user?.id) {
+  // ==========================================================================
+  // EXISTING AUTH ACCOUNT
+  // ==========================================================================
+  //
+  // If Supabase Auth already has the email, authenticate using the password
+  // supplied by the user. This lets us safely distinguish:
+  //
+  //   existing Auth + existing visitor
+  //   existing Auth + no visitor
+  //
+  // ==========================================================================
+
+  if (isExistingAuthAccount) {
+    const {
+      data: existingAuthData,
+      error: existingAuthError,
+    } =
+      await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password: normalizedPassword,
+      });
+
+    if (existingAuthError) {
+      const message =
+        String(
+          existingAuthError?.message || ''
+        ).toLowerCase();
+
+      if (
+        message.includes(
+          'invalid login credentials'
+        )
+      ) {
+        throw new Error(
+          'An account with this email already exists. Please use the correct password or use another email address.'
+        );
+      }
+
+      if (
+        message.includes(
+          'email not confirmed'
+        )
+      ) {
+        throw new Error(
+          'This email account already exists but has not been confirmed. Please verify the email account first.'
+        );
+      }
+
+      throw cleanErr(
+        existingAuthError,
+        'Unable to authenticate the existing email account.'
+      );
+    }
+
+    if (!existingAuthData?.user?.id) {
+      throw new Error(
+        'The existing authentication account could not be loaded.'
+      );
+    }
+
+    authUser =
+      existingAuthData.user;
+  }
+
+  // ==========================================================================
+  // VERIFY AUTH USER ID
+  // ==========================================================================
+
+  if (!authUser?.id) {
     throw new Error(
       'Supabase Auth did not return a user account. Please try again.'
     );
   }
 
-  // Supabase may return a user without an error for an existing email,
-  // depending on the project's Auth settings.
-  if (
-    Array.isArray(
-      authData.user.identities
-    ) &&
-    authData.user.identities.length === 0
-  ) {
-    throw new Error(
-      'A visitor account with this email already exists.'
-    );
-  }
-
   const authUserId =
     String(
-      authData.user.id
+      authUser.id
     ).trim();
 
-  // --------------------------------------------------------------------------
-  // CREATE VISITOR PROFILE
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // CHECK EXISTING VISITOR PROFILE
+  // ==========================================================================
   //
-  // The browser calls ONLY the RPC.
+  // This check is performed only for an existing Auth account.
   //
-  // register_visitor() must be SECURITY DEFINER and owned by postgres.
+  // For a completely new Auth account, register_visitor() itself performs
+  // duplicate protection atomically.
   //
-  // The INSERT into public.visitors is therefore performed by PostgreSQL
-  // function security rather than by the browser's anon role.
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+
+  if (isExistingAuthAccount) {
+    const {
+      data: existingVisitor,
+      error: existingVisitorError,
+    } =
+      await supabase
+        .from('visitors')
+        .select(
+          'id, email, auth_user_id, otp_verified, is_active'
+        )
+        .eq(
+          'auth_user_id',
+          authUserId
+        )
+        .maybeSingle();
+
+    if (existingVisitorError) {
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // Ignore cleanup errors.
+      }
+
+      throw cleanErr(
+        existingVisitorError,
+        'Unable to check the existing visitor profile.'
+      );
+    }
+
+    if (existingVisitor) {
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // Ignore cleanup errors.
+      }
+
+      throw new Error(
+        'A visitor account with this email already exists.'
+      );
+    }
+
+    // No visitor profile exists.
+    // Continue and connect this existing Auth account to SHELF.
+  }
+
+  // ==========================================================================
+  // CREATE VISITOR PROFILE THROUGH RPC
+  // ==========================================================================
 
   const {
     data: registrationData,
     error: registrationError,
-  } = await supabase.rpc(
-    'register_visitor',
-    {
-      p_auth_user_id:
-        authUserId,
+  } =
+    await supabase.rpc(
+      'register_visitor',
+      {
+        p_auth_user_id:
+          authUserId,
 
-      p_full_name:
-        normalizedFullName,
+        p_full_name:
+          normalizedFullName,
 
-      p_contact_number:
-        normalizedContactNumber,
+        p_contact_number:
+          normalizedContactNumber,
 
-      p_email:
-        normalizedEmail,
+        p_email:
+          normalizedEmail,
 
-      p_address:
-        normalizedAddress,
-    }
-  );
+        p_address:
+          normalizedAddress,
+      }
+    );
 
   if (registrationError) {
     console.error(
@@ -645,13 +757,9 @@ export async function registerVisitor({
       row.visitor_id
     ).trim();
 
-  // --------------------------------------------------------------------------
-  // SIGN OUT AUTH SESSION
-  // --------------------------------------------------------------------------
-  //
-  // Registration is not automatically a logged-in visitor session.
-  // The visitor must verify the OTP first.
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // SIGN OUT AFTER REGISTRATION
+  // ==========================================================================
 
   try {
     await supabase.auth.signOut();
@@ -659,29 +767,22 @@ export async function registerVisitor({
     // Ignore cleanup errors.
   }
 
-  // --------------------------------------------------------------------------
+  // ==========================================================================
   // SEND OTP
-  // --------------------------------------------------------------------------
-  //
-  // The Edge Function is responsible for retrieving the visitor record and
-  // sending the OTP email.
-  //
-  // IMPORTANT:
-  // send-visitor-otp MUST use a server-side/service-role Supabase client
-  // when reading public.visitors. Never expose the service-role key in React.
-  // --------------------------------------------------------------------------
+  // ==========================================================================
 
   const {
     data: emailData,
     error: emailError,
-  } = await supabase.functions.invoke(
-    'send-visitor-otp',
-    {
-      body: {
-        visitorId,
-      },
-    }
-  );
+  } =
+    await supabase.functions.invoke(
+      'send-visitor-otp',
+      {
+        body: {
+          visitorId,
+        },
+      }
+    );
 
   if (emailError) {
     console.error(
@@ -726,7 +827,6 @@ export async function resendOtp(
     );
   }
 
-  // Generate a new OTP through PostgreSQL.
   const {
     error,
   } = await supabase.rpc(
@@ -741,19 +841,19 @@ export async function resendOtp(
     throw cleanErr(error);
   }
 
-  // Send the newly generated OTP.
   const {
     data: emailData,
     error: emailError,
-  } = await supabase.functions.invoke(
-    'send-visitor-otp',
-    {
-      body: {
-        visitorId:
-          normalizedVisitorId,
-      },
-    }
-  );
+  } =
+    await supabase.functions.invoke(
+      'send-visitor-otp',
+      {
+        body: {
+          visitorId:
+            normalizedVisitorId,
+        },
+      }
+    );
 
   if (emailError) {
     console.error(
@@ -878,9 +978,9 @@ export async function loginVisitor({
     );
   }
 
-  // --------------------------------------------------------------------------
+  // ==========================================================================
   // QR LOGIN
-  // --------------------------------------------------------------------------
+  // ==========================================================================
 
   const looksLikeQr =
     /^SHELF-QR-\d{6}$/i.test(
@@ -946,9 +1046,9 @@ export async function loginVisitor({
     };
   }
 
-  // --------------------------------------------------------------------------
+  // ==========================================================================
   // EMAIL + PASSWORD LOGIN
-  // --------------------------------------------------------------------------
+  // ==========================================================================
 
   if (!normalizedPassword) {
     throw new Error(
@@ -1014,9 +1114,9 @@ export async function loginVisitor({
       authData.user.id
     ).trim();
 
-  // --------------------------------------------------------------------------
+  // ==========================================================================
   // LOAD VISITOR PROFILE
-  // --------------------------------------------------------------------------
+  // ==========================================================================
 
   const {
     data: visitor,
