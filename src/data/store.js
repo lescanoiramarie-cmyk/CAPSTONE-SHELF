@@ -2309,11 +2309,7 @@ export async function requestCommunityBook(
     );
   }
 
-  if (
-    !isValidUuid(
-      normalizedRequesterId
-    )
-  ) {
+  if (!isValidUuid(normalizedRequesterId)) {
     throw new Error(
       'Invalid visitor ID.'
     );
@@ -2325,11 +2321,7 @@ export async function requestCommunityBook(
     );
   }
 
-  if (
-    !isValidUuid(
-      normalizedBookId
-    )
-  ) {
+  if (!isValidUuid(normalizedBookId)) {
     throw new Error(
       'Invalid book ID.'
     );
@@ -2338,40 +2330,21 @@ export async function requestCommunityBook(
   const {
     data,
     error,
-  } =
-    await supabase.rpc(
-      'request_community_book',
-      {
-        p_requester_visitor_id:
-          normalizedRequesterId,
+  } = await supabase.rpc(
+    'request_community_book',
+    {
+      p_requester_visitor_id:
+        normalizedRequesterId,
 
-        p_book_id:
-          normalizedBookId,
-      }
-    );
+      p_book_id:
+        normalizedBookId,
+    }
+  );
 
   if (error) {
     console.error(
       'COMMUNITY BOOK REQUEST RPC ERROR:',
-      {
-        code:
-          error?.code,
-
-        message:
-          error?.message,
-
-        details:
-          error?.details,
-
-        hint:
-          error?.hint,
-
-        requesterVisitorId:
-          normalizedRequesterId,
-
-        bookId:
-          normalizedBookId,
-      }
+      error
     );
 
     throw cleanErr(
@@ -2380,8 +2353,7 @@ export async function requestCommunityBook(
     );
   }
 
-  const row =
-    firstRow(data);
+  const row = firstRow(data);
 
   if (!row?.id) {
     throw new Error(
@@ -2390,36 +2362,16 @@ export async function requestCommunityBook(
   }
 
   return {
-    id:
-      row.id,
-
-    bookId:
-      row.book_id,
-
-    bookTitle:
-      row.book_title,
-
-    ownerVisitorId:
-      row.owner_visitor_id,
-
-    ownerName:
-      row.owner_name,
-
-    requesterVisitorId:
-      row.requester_visitor_id,
-
-    requesterName:
-      row.requester_name,
-
-    status:
-      row.status,
-
-    requestDate:
-      row.request_date,
-
-    ownerResponse:
-      row.owner_response ||
-      null,
+    id: row.id,
+    bookId: row.book_id,
+    bookTitle: row.book_title,
+    ownerVisitorId: row.owner_visitor_id,
+    ownerName: row.owner_name,
+    requesterVisitorId: row.requester_visitor_id,
+    requesterName: row.requester_name,
+    status: row.status,
+    requestDate: row.request_date,
+    ownerResponse: row.owner_response || null,
   };
 }
 
