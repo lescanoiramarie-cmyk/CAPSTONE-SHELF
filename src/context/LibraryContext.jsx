@@ -62,41 +62,98 @@ export function LibraryProvider({ children }) {
   // remains an important fallback.
   // ==========================================================================
 
-  const getCurrentVisitorId = useCallback(async () => {
-    // ------------------------------------------------------------------------
-    // Try Supabase Auth first.
-    // ------------------------------------------------------------------------
+ const getCurrentVisitorId = useCallback(async () => {
+  // ------------------------------------------------------------------------
+  // 1. Try the SHELF local visitor session first.
+  //    QR/local visitor login stores the visitor identity here.
+  // ------------------------------------------------------------------------
 
-    try {
-      const {
-        data: authData,
-      } = await supabase.auth.getSession();
+  try {
+    const rawSession =
+      localStorage.getItem('shelf_ilms_session_v1');
 
-      const authUserId =
-        authData?.session?.user?.id || null;
+    if (rawSession) {
+      const parsedSession =
+        JSON.parse(rawSession);
 
-      if (authUserId) {
-        try {
-          const visitor =
-            await store.getVisitor(authUserId);
+      const localVisitorId =
+        parsedSession?.user?.id ||
+        parsedSession?.user?.visitorId ||
+        parsedSession?.user?.visitor_id ||
+        parsedSession?.visitor?.id ||
+        parsedSession?.visitor?.visitorId ||
+        parsedSession?.visitor?.visitor_id ||
+        parsedSession?.id ||
+        parsedSession?.visitorId ||
+        parsedSession?.visitor_id ||
+        null;
 
-          if (visitor?.id) {
-            return visitor.id;
-          }
-        } catch (error) {
-          console.warn(
-            'SHELF could not resolve visitor from Supabase Auth:',
-            error
-          );
-        }
+      if (localVisitorId) {
+        console.log(
+          'SHELF — VISITOR ID FROM LOCAL SESSION:',
+          localVisitorId
+        );
+
+        return localVisitorId;
       }
-    } catch (error) {
-      console.warn(
-        'SHELF Supabase session lookup failed:',
-        error
-      );
     }
+  } catch (error) {
+    console.warn(
+      'SHELF local visitor session lookup failed:',
+      error
+    );
+  }
 
+  // ------------------------------------------------------------------------
+  // 2. Fallback to Supabase Auth.
+  // ------------------------------------------------------------------------
+
+  try {
+    const {
+      data: authData,
+    } = await supabase.auth.getSession();
+
+    const authUserId =
+      authData?.session?.user?.id || null;
+
+    if (authUserId) {
+      try {
+        const visitor =
+          await store.getVisitor(authUserId);
+
+        if (visitor?.id) {
+          console.log(
+            'SHELF — VISITOR ID FROM SUPABASE AUTH:',
+            visitor.id
+          );
+
+          return visitor.id;
+        }
+      } catch (error) {
+        console.warn(
+          'SHELF could not resolve visitor from Supabase Auth:',
+          error
+        );
+      }
+    }
+  } catch (error) {
+    console.warn(
+      'SHELF Supabase session lookup failed:',
+      error
+    );
+  }
+
+  // ------------------------------------------------------------------------
+  // 3. No visitor identity available.
+  // ------------------------------------------------------------------------
+
+  console.warn(
+    'SHELF — NO CURRENT VISITOR ID FOUND.'
+  );
+
+  return null;
+}, []);
+  
     // ------------------------------------------------------------------------
     // Fallback: SHELF local QR session.
     // ------------------------------------------------------------------------
