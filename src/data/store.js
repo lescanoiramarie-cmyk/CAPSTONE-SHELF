@@ -128,7 +128,7 @@ export const SAMPLE_BOOKS = [
     libraryId: '277829af-1475-47ae-9e26-4b64c68f54f4',
     totalCopies: 5,
     summary:
-      'This comprehensive guide serves as an essential roadmap for students and software engineers aiming to master the foundational mechanics of computer science. Designed with clarity and practical implementation in mind, the text thoroughly explores complex topics such as binary search trees, stacks, queues, sorting algorithms, and advanced memory allocation techniques specifically within the Java programming environment. Readers are provided with clear architectural breakdowns and step-by-step code examples that demystify how underlying data structures affect application performance and scalability. Furthermore, the book emphasizes object-oriented design principles, ensuring that developers not only learn how to implement data structures efficiently but also how to write maintainable, modular, and robust codebases. Whether you are preparing for technical interviews, building enterprise-grade applications, or laying down the core academic groundwork required for advanced software engineering, this textbook bridges the crucial gap between abstract theoretical computer science and real-world programming execution, making it an indispensable resource for any modern technical library collection.',
+      'This comprehensive guide serves as an essential roadmap for students and software engineers aiming to master the foundational mechanics of computer science. Designed with clarity and practical implementation in mind, the text thoroughly explores complex topics such as binary search trees, stacks, queues, sorting algorithms, and advanced memory allocation techniques specifically within the Java programming environment.',
     coverUrl:
       'https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&q=80&w=400',
   },
@@ -141,7 +141,7 @@ export const SAMPLE_BOOKS = [
     libraryId: '3ccf575d-4573-4ed9-acdb-c8d9cf8a949e',
     totalCopies: 3,
     summary:
-      'Even bad code can function properly, but failing to keep code clean can drastically slow down a development team, stall product lifecycles, and accumulate massive technical debt over time. This seminal handbook introduces programmers to the core values, disciplines, and best practices of agile software craftsmanship. The author breaks down the art of writing readable, reusable, and refactorable code by examining meaningful naming conventions, proper function sizing, object-oriented design boundaries, effective error handling protocols, and comprehensive unit testing strategies. Through extensive comparative code examples, readers learn to distinguish between messy, convoluted implementations and elegant, self-documenting architectures. The text challenges programmers to take professional pride in their codebases, arguing that writing clean code is not merely an aesthetic preference but a fundamental ethical and economic necessity for long-term project viability. Packed with invaluable insights, heuristics, and practical refactoring exercises, this textbook transforms casual programmers into disciplined software artisans capable of collaborating seamlessly in high-performance development teams.',
+      'Even bad code can function properly, but failing to keep code clean can drastically slow down a development team, stall product lifecycles, and accumulate massive technical debt over time. This handbook introduces programmers to the core values, disciplines, and best practices of agile software craftsmanship.',
     coverUrl:
       'https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&q=80&w=400',
   },
@@ -154,11 +154,66 @@ export const SAMPLE_BOOKS = [
     libraryId: '84819f90-5923-4bd8-8aa0-1805e7613e81',
     totalCopies: 4,
     summary:
-      'Widely recognized as a cornerstone text for engineering and physical science students, this authoritative volume offers a rigorous and deeply analytical foundation in classical mechanics, thermodynamics, electromagnetism, and modern physics. The curriculum is meticulously structured to cultivate critical analytical thinking and problem-solving skills, taking complex physical phenomena and breaking them down through mathematical rigor, vector calculus applications, and real-world engineering scenarios. Each chapter features conceptual questions, detailed problem sets, and illustrative visual diagrams that connect abstract theoretical equations to tangible physical reality. Students explore the conservation of energy, rotational dynamics, wave motion, electromagnetic induction, and quantum principles with exceptional clarity. Designed to support rigorous academic programs, the book encourages learners to look beyond rote formula memorization and truly grasp the universal laws governing the physical universe.',
+      'Widely recognized as a cornerstone text for engineering and physical science students, this authoritative volume offers a rigorous foundation in classical mechanics, thermodynamics, electromagnetism, and modern physics.',
     coverUrl:
       'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&q=80&w=400',
   },
 ];
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+const asString = (value) =>
+  value === null || value === undefined
+    ? ''
+    : String(value);
+
+const normalizeText = (value) =>
+  asString(value).trim();
+
+const normalizeEmail = (value) =>
+  normalizeText(value).toLowerCase();
+
+const normalizeQr = (value) =>
+  normalizeText(value).toUpperCase();
+
+const isValidUuid = (value) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    normalizeText(value)
+  );
+
+const isValidShelfQr = (value) =>
+  /^SHELF-QR-\d{6}$/i.test(
+    normalizeText(value)
+  );
+
+function cleanErr(
+  error,
+  fallback = 'Something went wrong. Please try again.'
+) {
+  const message = normalizeText(error?.message);
+
+  return new Error(
+    message || fallback
+  );
+}
+
+async function safeSignOut() {
+  try {
+    await supabase.auth.signOut();
+  } catch {
+    // Ignore cleanup errors.
+  }
+}
+
+function firstRow(data) {
+  if (Array.isArray(data)) {
+    return data[0] || null;
+  }
+
+  return data || null;
+}
 
 // ============================================================================
 // ROW → CAMELCASE MAPPERS
@@ -230,27 +285,16 @@ const mapAttendance = (r) => ({
 });
 
 // ============================================================================
-// ERROR HANDLER
-// ============================================================================
-
-function cleanErr(
-  error,
-  fallback = 'Something went wrong. Please try again.'
-) {
-  return new Error(
-    String(error?.message || fallback)
-  );
-}
-
-// ============================================================================
-// FETCHING
+// FETCH LIBRARIES
 // ============================================================================
 
 export async function fetchLibraries() {
   const { data, error } = await supabase
     .from('libraries')
     .select('*')
-    .order('name');
+    .order('name', {
+      ascending: true,
+    });
 
   if (error) {
     throw cleanErr(error);
@@ -259,9 +303,15 @@ export async function fetchLibraries() {
   return (data || []).map(mapLibrary);
 }
 
+// ============================================================================
+// ADD LIBRARY
+// ============================================================================
+
 export async function addLibrary(library) {
+  const suppliedId = normalizeText(library?.id);
+
   const id =
-    library.id ||
+    suppliedId ||
     globalThis.crypto?.randomUUID?.();
 
   if (!id) {
@@ -270,28 +320,56 @@ export async function addLibrary(library) {
     );
   }
 
-  const { error } = await supabase
+  if (!isValidUuid(id)) {
+    throw new Error(
+      'The library ID must be a valid UUID.'
+    );
+  }
+
+  const name =
+    normalizeText(library?.name);
+
+  if (!name) {
+    throw new Error(
+      'Library name is required.'
+    );
+  }
+
+  const { data, error } = await supabase
     .from('libraries')
     .insert({
       id,
-      name: String(library.name || '').trim(),
+      name,
       campus:
-        String(library.campus || '').trim() || null,
+        normalizeText(library?.campus) || null,
       address:
-        String(library.address || '').trim() || null,
-      lat: Number(library.lat),
-      lng: Number(library.lng),
+        normalizeText(library?.address) || null,
+      lat:
+        Number.isFinite(Number(library?.lat))
+          ? Number(library.lat)
+          : null,
+      lng:
+        Number.isFinite(Number(library?.lng))
+          ? Number(library.lng)
+          : null,
       hours:
-        String(library.hours || '').trim() || null,
-      status: library.status || 'Open',
-    });
+        normalizeText(library?.hours) || null,
+      status:
+        normalizeText(library?.status) || 'Open',
+    })
+    .select()
+    .single();
 
   if (error) {
     throw cleanErr(error);
   }
 
-  return id;
+  return mapLibrary(data);
 }
+
+// ============================================================================
+// FETCH BOOKS
+// ============================================================================
 
 export async function fetchBooks() {
   const { data, error } = await supabase
@@ -308,10 +386,22 @@ export async function fetchBooks() {
   return (data || []).map(mapBook);
 }
 
+// ============================================================================
+// FETCH VISITORS
+// ============================================================================
+
 export async function fetchVisitors() {
   const {
     data: sessionData,
+    error: sessionError,
   } = await supabase.auth.getSession();
+
+  if (sessionError) {
+    throw cleanErr(
+      sessionError,
+      'Unable to check the current authentication session.'
+    );
+  }
 
   if (!sessionData?.session) {
     return [];
@@ -333,10 +423,22 @@ export async function fetchVisitors() {
   return (data || []).map(mapVisitor);
 }
 
+// ============================================================================
+// FETCH BORROW REQUESTS
+// ============================================================================
+
 export async function fetchBorrowRequests() {
   const {
     data: sessionData,
+    error: sessionError,
   } = await supabase.auth.getSession();
+
+  if (sessionError) {
+    throw cleanErr(
+      sessionError,
+      'Unable to check the current authentication session.'
+    );
+  }
 
   if (!sessionData?.session) {
     return [];
@@ -356,10 +458,22 @@ export async function fetchBorrowRequests() {
   return (data || []).map(mapBorrowRequest);
 }
 
+// ============================================================================
+// FETCH ATTENDANCE LOGS
+// ============================================================================
+
 export async function fetchAttendanceLogs() {
   const {
     data: sessionData,
+    error: sessionError,
   } = await supabase.auth.getSession();
+
+  if (sessionError) {
+    throw cleanErr(
+      sessionError,
+      'Unable to check the current authentication session.'
+    );
+  }
 
   if (!sessionData?.session) {
     return [];
@@ -379,9 +493,22 @@ export async function fetchAttendanceLogs() {
   return (data || []).map(mapAttendance);
 }
 
+// ============================================================================
+// GET VISITOR
+// ============================================================================
+
 export async function getVisitor(visitorId) {
-  if (!visitorId) {
+  const normalizedVisitorId =
+    normalizeText(visitorId);
+
+  if (!normalizedVisitorId) {
     return null;
+  }
+
+  if (!isValidUuid(normalizedVisitorId)) {
+    throw new Error(
+      'Invalid visitor ID.'
+    );
   }
 
   const { data, error } = await supabase
@@ -389,45 +516,20 @@ export async function getVisitor(visitorId) {
     .select(
       'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at'
     )
-    .eq('id', visitorId)
+    .eq('id', normalizedVisitorId)
     .maybeSingle();
 
   if (error) {
     throw cleanErr(error);
   }
 
-  return data ? mapVisitor(data) : null;
+  return data
+    ? mapVisitor(data)
+    : null;
 }
 
 // ============================================================================
-// VISITOR ACCOUNTS
-// ----------------------------------------------------------------------------
-// Visitors use Supabase Auth for passwords.
-//
-// Registration:
-//   supabase.auth.signUp()
-//        ↓
-//   auth.users
-//        ↓
-//   register_visitor(auth_user_id, profile data)
-//        ↓
-//   visitors row + OTP
-//        ↓
-//   send-visitor-otp Edge Function
-//
-// Verification:
-//   verify_visitor_otp(uuid,text)
-//
-// Email login:
-//   supabase.auth.signInWithPassword()
-//        ↓
-//   visitors.auth_user_id
-//
-// QR login:
-//   visitors.qr_code
-//
-// IMPORTANT:
-// Visitor passwords are NEVER stored in the visitors table.
+// VISITOR REGISTRATION
 // ============================================================================
 
 export async function registerVisitor({
@@ -438,19 +540,19 @@ export async function registerVisitor({
   password,
 }) {
   const normalizedFullName =
-    String(fullName || '').trim();
+    normalizeText(fullName);
 
   const normalizedContactNumber =
-    String(contactNumber || '').trim();
+    normalizeText(contactNumber);
 
   const normalizedEmail =
-    String(email || '').trim().toLowerCase();
+    normalizeEmail(email);
 
   const normalizedAddress =
-    String(address || '').trim();
+    normalizeText(address);
 
   const normalizedPassword =
-    String(password || '');
+    asString(password);
 
   if (!normalizedFullName) {
     throw new Error(
@@ -482,9 +584,9 @@ export async function registerVisitor({
     );
   }
 
-  // ------------------------------------------------------------
+  // --------------------------------------------------------------------------
   // 1. CREATE SUPABASE AUTH ACCOUNT
-  // ------------------------------------------------------------
+  // --------------------------------------------------------------------------
 
   const {
     data: authData,
@@ -502,10 +604,6 @@ export async function registerVisitor({
     },
   });
 
-  // ------------------------------------------------------------
-  // 2. HANDLE AUTH REGISTRATION ERROR
-  // ------------------------------------------------------------
-
   if (authError) {
     console.error(
       'SUPABASE AUTH REGISTRATION ERROR:',
@@ -513,7 +611,8 @@ export async function registerVisitor({
     );
 
     const message =
-      String(authError?.message || '').toLowerCase();
+      normalizeText(authError?.message)
+        .toLowerCase();
 
     if (
       message.includes('already registered') ||
@@ -531,9 +630,9 @@ export async function registerVisitor({
     );
   }
 
-  // ------------------------------------------------------------
-  // 3. MAKE SURE AUTH USER WAS CREATED
-  // ------------------------------------------------------------
+  // --------------------------------------------------------------------------
+  // 2. VERIFY AUTH USER
+  // --------------------------------------------------------------------------
 
   if (!authData?.user?.id) {
     throw new Error(
@@ -542,32 +641,32 @@ export async function registerVisitor({
   }
 
   const authUserId =
-    String(authData.user.id).trim();
+    normalizeText(authData.user.id);
 
-  /*
-   * Supabase may return an existing Auth account from signUp()
-   * without throwing a normal "already registered" error.
-   *
-   * When that happens, identities can be empty.
-   */
+  if (!isValidUuid(authUserId)) {
+    await safeSignOut();
+
+    throw new Error(
+      'Supabase returned an invalid authentication user ID.'
+    );
+  }
+
+  // Supabase can return an existing user from signUp()
+  // without a normal "already registered" error.
   if (
     Array.isArray(authData.user.identities) &&
     authData.user.identities.length === 0
   ) {
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      // Ignore cleanup errors.
-    }
+    await safeSignOut();
 
     throw new Error(
       'This email is already registered. Please log in instead.'
     );
   }
 
-  // ------------------------------------------------------------
-  // 4. CREATE VISITOR PROFILE THROUGH RPC
-  // ------------------------------------------------------------
+  // --------------------------------------------------------------------------
+  // 3. CREATE VISITOR PROFILE THROUGH RPC
+  // --------------------------------------------------------------------------
 
   const {
     data: registrationData,
@@ -575,11 +674,20 @@ export async function registerVisitor({
   } = await supabase.rpc(
     'register_visitor',
     {
-      p_auth_user_id: authUserId,
-      p_full_name: normalizedFullName,
-      p_contact_number: normalizedContactNumber,
-      p_email: normalizedEmail,
-      p_address: normalizedAddress,
+      p_auth_user_id:
+        authUserId,
+
+      p_full_name:
+        normalizedFullName,
+
+      p_contact_number:
+        normalizedContactNumber,
+
+      p_email:
+        normalizedEmail,
+
+      p_address:
+        normalizedAddress,
     }
   );
 
@@ -590,29 +698,16 @@ export async function registerVisitor({
     );
 
     const databaseMessage =
-      String(
-        registrationError?.message || ''
-      ).trim();
+      normalizeText(
+        registrationError?.message
+      ).toLowerCase();
 
-    /*
-     * IMPORTANT:
-     * Your current deployed PostgreSQL function raises:
-     *
-     * "This authentication account is already registered as a visitor."
-     *
-     * Convert that database exception into a clean application
-     * message instead of exposing P0001/PostgreSQL details.
-     */
     if (
-      databaseMessage.toLowerCase().includes(
+      databaseMessage.includes(
         'authentication account is already registered as a visitor'
       )
     ) {
-      try {
-        await supabase.auth.signOut();
-      } catch {
-        // Ignore cleanup errors.
-      }
+      await safeSignOut();
 
       throw new Error(
         'This email is already registered as a SHELF visitor. Please log in instead.'
@@ -620,26 +715,18 @@ export async function registerVisitor({
     }
 
     if (
-      databaseMessage.toLowerCase().includes(
+      databaseMessage.includes(
         'visitor account with this email already exists'
       )
     ) {
-      try {
-        await supabase.auth.signOut();
-      } catch {
-        // Ignore cleanup errors.
-      }
+      await safeSignOut();
 
       throw new Error(
         'This email is already registered as a SHELF visitor. Please log in instead.'
       );
     }
 
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      // Ignore cleanup errors.
-    }
+    await safeSignOut();
 
     throw cleanErr(
       registrationError,
@@ -647,21 +734,15 @@ export async function registerVisitor({
     );
   }
 
-  // ------------------------------------------------------------
-  // 5. GET VISITOR ID RETURNED BY RPC
-  // ------------------------------------------------------------
+  // --------------------------------------------------------------------------
+  // 4. GET VISITOR ID
+  // --------------------------------------------------------------------------
 
   const row =
-    Array.isArray(registrationData)
-      ? registrationData[0]
-      : registrationData;
+    firstRow(registrationData);
 
   if (!row?.visitor_id) {
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      // Ignore cleanup errors.
-    }
+    await safeSignOut();
 
     throw new Error(
       'The visitor profile could not be created. Please try again.'
@@ -669,21 +750,25 @@ export async function registerVisitor({
   }
 
   const visitorId =
-    String(row.visitor_id).trim();
+    normalizeText(row.visitor_id);
 
-  // ------------------------------------------------------------
-  // 6. SIGN OUT BEFORE OTP VERIFICATION
-  // ------------------------------------------------------------
+  if (!isValidUuid(visitorId)) {
+    await safeSignOut();
 
-  try {
-    await supabase.auth.signOut();
-  } catch {
-    // Ignore cleanup errors.
+    throw new Error(
+      'The visitor profile returned an invalid ID.'
+    );
   }
 
-  // ------------------------------------------------------------
-  // 7. SEND OTP EMAIL
-  // ------------------------------------------------------------
+  // --------------------------------------------------------------------------
+  // 5. SIGN OUT BEFORE OTP VERIFICATION
+  // --------------------------------------------------------------------------
+
+  await safeSignOut();
+
+  // --------------------------------------------------------------------------
+  // 6. SEND OTP
+  // --------------------------------------------------------------------------
 
   const {
     data: emailData,
@@ -720,10 +805,6 @@ export async function registerVisitor({
     );
   }
 
-  // ------------------------------------------------------------
-  // 8. RETURN REGISTRATION SESSION
-  // ------------------------------------------------------------
-
   return {
     visitorId,
   };
@@ -737,11 +818,17 @@ export async function resendOtp(
   visitorId
 ) {
   const normalizedVisitorId =
-    String(visitorId || '').trim();
+    normalizeText(visitorId);
 
   if (!normalizedVisitorId) {
     throw new Error(
       'Registration session not found. Please register again.'
+    );
+  }
+
+  if (!isValidUuid(normalizedVisitorId)) {
+    throw new Error(
+      'Invalid visitor registration session.'
     );
   }
 
@@ -809,10 +896,10 @@ export async function verifyVisitorOtp(
   code
 ) {
   const normalizedVisitorId =
-    String(visitorId || '').trim();
+    normalizeText(visitorId);
 
   const normalizedCode =
-    String(code || '').trim();
+    normalizeText(code);
 
   if (!normalizedVisitorId) {
     throw new Error(
@@ -820,11 +907,13 @@ export async function verifyVisitorOtp(
     );
   }
 
-  if (
-    !/^\d{6}$/.test(
-      normalizedCode
-    )
-  ) {
+  if (!isValidUuid(normalizedVisitorId)) {
+    throw new Error(
+      'Invalid visitor registration session.'
+    );
+  }
+
+  if (!/^\d{6}$/.test(normalizedCode)) {
     throw new Error(
       'Please enter the complete 6-digit verification code.'
     );
@@ -849,9 +938,7 @@ export async function verifyVisitorOtp(
   }
 
   const row =
-    Array.isArray(data)
-      ? data[0]
-      : data;
+    firstRow(data);
 
   if (!row?.id) {
     throw new Error(
@@ -885,10 +972,10 @@ export async function loginVisitor({
   password,
 }) {
   const normalizedIdentifier =
-    String(identifier || '').trim();
+    normalizeText(identifier);
 
   const normalizedPassword =
-    String(password || '');
+    asString(password);
 
   if (!normalizedIdentifier) {
     throw new Error(
@@ -896,16 +983,18 @@ export async function loginVisitor({
     );
   }
 
-  // ========================================================================
+  // ==========================================================================
   // QR LOGIN
-  // ========================================================================
+  // ==========================================================================
 
-  const looksLikeQr =
-    /^SHELF-QR-\d{6}$/i.test(
+  if (
+    isValidShelfQr(
       normalizedIdentifier
-    );
+    )
+  ) {
+    const normalizedQr =
+      normalizeQr(normalizedIdentifier);
 
-  if (looksLikeQr) {
     const {
       data: visitor,
       error: visitorError,
@@ -916,7 +1005,7 @@ export async function loginVisitor({
       )
       .eq(
         'qr_code',
-        normalizedIdentifier
+        normalizedQr
       )
       .maybeSingle();
 
@@ -964,9 +1053,9 @@ export async function loginVisitor({
     };
   }
 
-  // ========================================================================
+  // ==========================================================================
   // EMAIL + PASSWORD LOGIN
-  // ========================================================================
+  // ==========================================================================
 
   if (!normalizedPassword) {
     throw new Error(
@@ -980,7 +1069,9 @@ export async function loginVisitor({
   } =
     await supabase.auth.signInWithPassword({
       email:
-        normalizedIdentifier.toLowerCase(),
+        normalizeEmail(
+          normalizedIdentifier
+        ),
 
       password:
         normalizedPassword,
@@ -988,9 +1079,9 @@ export async function loginVisitor({
 
   if (authError) {
     const message =
-      String(
-        authError?.message || ''
-      ).trim();
+      normalizeText(
+        authError?.message
+      );
 
     const lowerMessage =
       message.toLowerCase();
@@ -1028,13 +1119,21 @@ export async function loginVisitor({
   }
 
   const authUserId =
-    String(
+    normalizeText(
       authData.user.id
-    ).trim();
+    );
 
-  // ========================================================================
+  if (!isValidUuid(authUserId)) {
+    await safeSignOut();
+
+    throw new Error(
+      'Supabase returned an invalid authentication user ID.'
+    );
+  }
+
+  // ==========================================================================
   // LOAD VISITOR PROFILE
-  // ========================================================================
+  // ==========================================================================
 
   const {
     data: visitor,
@@ -1052,11 +1151,7 @@ export async function loginVisitor({
       .maybeSingle();
 
   if (visitorError) {
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      // Ignore cleanup errors.
-    }
+    await safeSignOut();
 
     throw cleanErr(
       visitorError,
@@ -1065,11 +1160,7 @@ export async function loginVisitor({
   }
 
   if (!visitor) {
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      // Ignore cleanup errors.
-    }
+    await safeSignOut();
 
     throw new Error(
       'This account is not registered as a SHELF visitor.'
@@ -1079,11 +1170,7 @@ export async function loginVisitor({
   if (
     visitor.is_active === false
   ) {
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      // Ignore cleanup errors.
-    }
+    await safeSignOut();
 
     throw new Error(
       'This visitor account is currently inactive.'
@@ -1093,11 +1180,7 @@ export async function loginVisitor({
   if (
     visitor.otp_verified !== true
   ) {
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      // Ignore cleanup errors.
-    }
+    await safeSignOut();
 
     throw new Error(
       'Please verify your OTP code before logging in.'
@@ -1128,10 +1211,10 @@ export async function findVisitorByQr(
   libraryId
 ) {
   const normalizedQrCode =
-    String(qrCode || '').trim();
+    normalizeQr(qrCode);
 
   const normalizedLibraryId =
-    String(libraryId || '').trim();
+    normalizeText(libraryId);
 
   if (!normalizedQrCode) {
     return null;
@@ -1140,6 +1223,26 @@ export async function findVisitorByQr(
   if (!normalizedLibraryId) {
     throw new Error(
       'Library branch is required to scan a visitor.'
+    );
+  }
+
+  if (
+    !isValidShelfQr(
+      normalizedQrCode
+    )
+  ) {
+    throw new Error(
+      'Invalid SHELF visitor QR pass.'
+    );
+  }
+
+  if (
+    !isValidUuid(
+      normalizedLibraryId
+    )
+  ) {
+    throw new Error(
+      'Invalid library branch ID.'
     );
   }
 
@@ -1163,15 +1266,18 @@ export async function findVisitorByQr(
 
   if (
     !data ||
-    data.length === 0
+    (Array.isArray(data) &&
+      data.length === 0)
   ) {
     return null;
   }
 
   const row =
-    Array.isArray(data)
-      ? data[0]
-      : data;
+    firstRow(data);
+
+  if (!row) {
+    return null;
+  }
 
   return {
     id:
@@ -1203,12 +1309,10 @@ export async function loginStaffAccount(
   }
 
   const normalizedEmail =
-    String(email || '')
-      .trim()
-      .toLowerCase();
+    normalizeEmail(email);
 
   const normalizedPassword =
-    String(password || '');
+    asString(password);
 
   if (
     !normalizedEmail ||
@@ -1237,17 +1341,12 @@ export async function loginStaffAccount(
       error
     );
 
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      // Ignore cleanup errors.
-    }
+    await safeSignOut();
 
     const authErrorMessage =
-      String(
-        error?.message || ''
+      normalizeText(
+        error?.message
       )
-        .trim()
         .toLowerCase();
 
     if (
@@ -1292,17 +1391,30 @@ export async function loginStaffAccount(
     );
   }
 
-  if (!data?.user) {
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      // Ignore cleanup errors.
-    }
+  if (!data?.user?.id) {
+    await safeSignOut();
 
     throw new Error(
       'Supabase Auth did not return a user.'
     );
   }
+
+  const authUserId =
+    normalizeText(
+      data.user.id
+    );
+
+  if (!isValidUuid(authUserId)) {
+    await safeSignOut();
+
+    throw new Error(
+      'Supabase returned an invalid staff user ID.'
+    );
+  }
+
+  // ==========================================================================
+  // LOAD STAFF PROFILE
+  // ==========================================================================
 
   const {
     data: profile,
@@ -1315,7 +1427,7 @@ export async function loginStaffAccount(
       )
       .eq(
         'id',
-        data.user.id
+        authUserId
       )
       .maybeSingle();
 
@@ -1325,11 +1437,7 @@ export async function loginStaffAccount(
       profileError
     );
 
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      // Ignore cleanup errors.
-    }
+    await safeSignOut();
 
     throw cleanErr(
       profileError,
@@ -1338,11 +1446,7 @@ export async function loginStaffAccount(
   }
 
   if (!profile) {
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      // Ignore cleanup errors.
-    }
+    await safeSignOut();
 
     throw new Error(
       'This account has not been provisioned as a SHELF staff account.'
@@ -1352,11 +1456,7 @@ export async function loginStaffAccount(
   if (
     profile.is_active !== true
   ) {
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      // Ignore cleanup errors.
-    }
+    await safeSignOut();
 
     throw new Error(
       'This staff account is currently inactive.'
@@ -1373,11 +1473,7 @@ export async function loginStaffAccount(
       profile.role
     )
   ) {
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      // Ignore cleanup errors.
-    }
+    await safeSignOut();
 
     throw new Error(
       'This account does not have a valid SHELF staff role.'
@@ -1420,11 +1516,7 @@ export async function loginSubAdmin(
     staff.role !==
     'subadmin'
   ) {
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      // Ignore cleanup errors.
-    }
+    await safeSignOut();
 
     throw new Error(
       'This account is not authorized as a sub-admin.'
@@ -1452,11 +1544,7 @@ export async function loginSuperAdmin(
     staff.role !==
     'superadmin'
   ) {
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      // Ignore cleanup errors.
-    }
+    await safeSignOut();
 
     throw new Error(
       'This account is not authorized as a super-admin.'
@@ -1474,6 +1562,30 @@ export async function scanAttendance(
   qrCode,
   libraryId
 ) {
+  const normalizedQrCode =
+    normalizeQr(qrCode);
+
+  const normalizedLibraryId =
+    normalizeText(libraryId);
+
+  if (!normalizedQrCode) {
+    throw new Error(
+      'Visitor QR pass is required.'
+    );
+  }
+
+  if (!isValidShelfQr(normalizedQrCode)) {
+    throw new Error(
+      'Invalid SHELF visitor QR pass.'
+    );
+  }
+
+  if (!isValidUuid(normalizedLibraryId)) {
+    throw new Error(
+      'Invalid library branch ID.'
+    );
+  }
+
   const {
     data,
     error,
@@ -1481,12 +1593,10 @@ export async function scanAttendance(
     'toggle_attendance',
     {
       p_qr:
-        String(
-          qrCode || ''
-        ).trim(),
+        normalizedQrCode,
 
       p_library_id:
-        libraryId,
+        normalizedLibraryId,
     }
   );
 
@@ -1495,9 +1605,7 @@ export async function scanAttendance(
   }
 
   const row =
-    Array.isArray(data)
-      ? data[0]
-      : data;
+    firstRow(data);
 
   if (!row) {
     throw new Error(
@@ -1525,17 +1633,47 @@ export async function scanAttendance(
 }
 
 // ============================================================================
-// BOOK INVENTORY
+// BOOK INVENTORY — ADD BOOK
 // ============================================================================
 
 export async function addBook(
   book
 ) {
+  const title =
+    normalizeText(book?.title);
+
+  const author =
+    normalizeText(book?.author);
+
+  const libraryId =
+    normalizeText(book?.libraryId);
+
+  if (!title) {
+    throw new Error(
+      'Book title is required.'
+    );
+  }
+
+  if (!author) {
+    throw new Error(
+      'Book author is required.'
+    );
+  }
+
+  if (
+    libraryId &&
+    !isValidUuid(libraryId)
+  ) {
+    throw new Error(
+      'Invalid library ID.'
+    );
+  }
+
   const totalCopies =
     Math.max(
       1,
       Number(
-        book.totalCopies
+        book?.totalCopies
       ) || 1
     );
 
@@ -1546,34 +1684,28 @@ export async function addBook(
     await supabase
       .from('books')
       .insert({
-        title:
-          String(
-            book.title || ''
-          ).trim(),
+        title,
 
-        author:
-          String(
-            book.author || ''
-          ).trim(),
+        author,
 
         category:
-          String(
-            book.category || ''
-          ).trim() ||
+          normalizeText(
+            book?.category
+          ) ||
           'General',
 
         isbn:
-          String(
-            book.isbn || ''
-          ).trim(),
+          normalizeText(
+            book?.isbn
+          ) || null,
 
         shelf_location:
-          String(
-            book.shelfLocation || ''
-          ).trim(),
+          normalizeText(
+            book?.shelfLocation
+          ) || null,
 
         library_id:
-          book.libraryId,
+          libraryId || null,
 
         total_copies:
           totalCopies,
@@ -1582,14 +1714,14 @@ export async function addBook(
           totalCopies,
 
         summary:
-          String(
-            book.summary || ''
-          ).trim(),
+          normalizeText(
+            book?.summary
+          ) || null,
 
         cover_url:
-          String(
-            book.coverUrl || ''
-          ).trim() ||
+          normalizeText(
+            book?.coverUrl
+          ) ||
           DEFAULT_COVER_URL,
       })
       .select()
@@ -1623,7 +1755,9 @@ export async function addBooksBulk(
       (book, index) => {
         const normalized =
           Object.fromEntries(
-            Object.entries(book).map(
+            Object.entries(
+              book || {}
+            ).map(
               ([key, value]) => [
                 String(key)
                   .trim()
@@ -1638,24 +1772,24 @@ export async function addBooksBulk(
           );
 
         const title =
-          String(
-            normalized.title || ''
-          ).trim();
+          normalizeText(
+            normalized.title
+          );
 
         const author =
-          String(
-            normalized.author || ''
-          ).trim();
+          normalizeText(
+            normalized.author
+          );
 
         const isbn =
-          String(
-            normalized.isbn || ''
-          ).trim();
+          normalizeText(
+            normalized.isbn
+          );
 
         const category =
-          String(
-            normalized.category || ''
-          ).trim();
+          normalizeText(
+            normalized.category
+          );
 
         const stock =
           Number(
@@ -1678,12 +1812,23 @@ export async function addBooksBulk(
           );
         }
 
+        const libraryId =
+          normalizeText(
+            normalized.library_id
+          );
+
+        if (
+          libraryId &&
+          !isValidUuid(libraryId)
+        ) {
+          throw new Error(
+            `Row ${index + 1} contains an invalid library UUID.`
+          );
+        }
+
         return {
           library_id:
-            String(
-              normalized.library_id ||
-                ''
-            ).trim() || null,
+            libraryId || null,
 
           title,
 
@@ -1700,22 +1845,19 @@ export async function addBooksBulk(
             stock,
 
           shelf_location:
-            String(
-              normalized.shelf_location ||
-                ''
-            ).trim() || null,
+            normalizeText(
+              normalized.shelf_location
+            ) || null,
 
           summary:
-            String(
-              normalized.summary ||
-                ''
-            ).trim() || null,
+            normalizeText(
+              normalized.summary
+            ) || null,
 
           cover_url:
-            String(
-              normalized.cover_url ||
-                ''
-            ).trim() || null,
+            normalizeText(
+              normalized.cover_url
+            ) || DEFAULT_COVER_URL,
         };
       }
     );
@@ -1746,86 +1888,157 @@ export async function updateBook(
   bookId,
   patch
 ) {
+  const normalizedBookId =
+    normalizeText(bookId);
+
+  if (!normalizedBookId) {
+    throw new Error(
+      'Book ID is required.'
+    );
+  }
+
+  if (!isValidUuid(normalizedBookId)) {
+    throw new Error(
+      'Invalid book ID.'
+    );
+  }
+
   const dbPatch = {};
 
   if (
-    patch.title !==
-    undefined
+    patch?.title !== undefined
   ) {
     dbPatch.title =
-      patch.title;
+      normalizeText(
+        patch.title
+      );
   }
 
   if (
-    patch.author !==
-    undefined
+    patch?.author !== undefined
   ) {
     dbPatch.author =
-      patch.author;
+      normalizeText(
+        patch.author
+      );
   }
 
   if (
-    patch.category !==
-    undefined
+    patch?.category !== undefined
   ) {
     dbPatch.category =
-      patch.category;
+      normalizeText(
+        patch.category
+      );
   }
 
   if (
-    patch.isbn !==
-    undefined
+    patch?.isbn !== undefined
   ) {
     dbPatch.isbn =
-      patch.isbn;
+      normalizeText(
+        patch.isbn
+      ) || null;
   }
 
   if (
-    patch.shelfLocation !==
-    undefined
+    patch?.shelfLocation !== undefined
   ) {
     dbPatch.shelf_location =
-      patch.shelfLocation;
+      normalizeText(
+        patch.shelfLocation
+      ) || null;
   }
 
   if (
-    patch.libraryId !==
-    undefined
+    patch?.libraryId !== undefined
   ) {
+    const libraryId =
+      normalizeText(
+        patch.libraryId
+      );
+
+    if (
+      libraryId &&
+      !isValidUuid(libraryId)
+    ) {
+      throw new Error(
+        'Invalid library ID.'
+      );
+    }
+
     dbPatch.library_id =
-      patch.libraryId;
+      libraryId || null;
   }
 
   if (
-    patch.totalCopies !==
-    undefined
+    patch?.totalCopies !== undefined
   ) {
+    const totalCopies =
+      Number(
+        patch.totalCopies
+      );
+
+    if (
+      !Number.isInteger(
+        totalCopies
+      ) ||
+      totalCopies < 1
+    ) {
+      throw new Error(
+        'Total copies must be a positive whole number.'
+      );
+    }
+
     dbPatch.total_copies =
-      patch.totalCopies;
+      totalCopies;
   }
 
   if (
-    patch.availableCopies !==
-    undefined
+    patch?.availableCopies !== undefined
   ) {
+    const availableCopies =
+      Number(
+        patch.availableCopies
+      );
+
+    if (
+      !Number.isInteger(
+        availableCopies
+      ) ||
+      availableCopies < 0
+    ) {
+      throw new Error(
+        'Available copies must be a non-negative whole number.'
+      );
+    }
+
     dbPatch.available_copies =
-      patch.availableCopies;
+      availableCopies;
   }
 
   if (
-    patch.summary !==
-    undefined
+    patch?.summary !== undefined
   ) {
     dbPatch.summary =
-      patch.summary;
+      normalizeText(
+        patch.summary
+      ) || null;
   }
 
   if (
-    patch.coverUrl !==
-    undefined
+    patch?.coverUrl !== undefined
   ) {
     dbPatch.cover_url =
-      patch.coverUrl;
+      normalizeText(
+        patch.coverUrl
+      ) || DEFAULT_COVER_URL;
+  }
+
+  if (
+    Object.keys(dbPatch).length === 0
+  ) {
+    return;
   }
 
   const {
@@ -1836,7 +2049,7 @@ export async function updateBook(
       .update(dbPatch)
       .eq(
         'id',
-        bookId
+        normalizedBookId
       );
 
   if (error) {
@@ -1851,6 +2064,21 @@ export async function updateBook(
 export async function deleteBook(
   bookId
 ) {
+  const normalizedBookId =
+    normalizeText(bookId);
+
+  if (!normalizedBookId) {
+    throw new Error(
+      'Book ID is required.'
+    );
+  }
+
+  if (!isValidUuid(normalizedBookId)) {
+    throw new Error(
+      'Invalid book ID.'
+    );
+  }
+
   const {
     error,
   } =
@@ -1859,7 +2087,7 @@ export async function deleteBook(
       .delete()
       .eq(
         'id',
-        bookId
+        normalizedBookId
       );
 
   if (error) {
@@ -1874,9 +2102,18 @@ export async function deleteBook(
 export async function loadSampleCatalog(
   libraryId
 ) {
-  if (!libraryId) {
+  const normalizedLibraryId =
+    normalizeText(libraryId);
+
+  if (!normalizedLibraryId) {
     throw new Error(
       'A library must be selected before loading books.'
+    );
+  }
+
+  if (!isValidUuid(normalizedLibraryId)) {
+    throw new Error(
+      'Invalid library ID.'
     );
   }
 
@@ -1888,7 +2125,7 @@ export async function loadSampleCatalog(
     'history',
   ];
 
-  let allBooks = [];
+  const allBooks = [];
 
   for (
     const cat of categories
@@ -1919,6 +2156,12 @@ export async function loadSampleCatalog(
                 Math.random() * 5
               ) + 3;
 
+            const categoryName =
+              cat.replace(
+                '+',
+                ' '
+              );
+
             return {
               title:
                 doc.title ||
@@ -1929,12 +2172,7 @@ export async function loadSampleCatalog(
                 'Unknown Author',
 
               category:
-                cat
-                  .replace(
-                    '+',
-                    ' '
-                  )
-                  .toUpperCase(),
+                categoryName.toUpperCase(),
 
               isbn:
                 doc.isbn?.[0] ||
@@ -1953,7 +2191,7 @@ export async function loadSampleCatalog(
                 )}-${(index % 10) + 1}`,
 
               library_id:
-                libraryId,
+                normalizedLibraryId,
 
               total_copies:
                 copies,
@@ -1963,10 +2201,7 @@ export async function loadSampleCatalog(
 
               summary:
                 doc.first_sentence?.[0] ||
-                `An authoritative academic resource focusing on ${cat.replace(
-                  '+',
-                  ' '
-                )}, providing comprehensive theoretical frameworks, practical methodologies, and foundational insights for higher education students and researchers within the university network.`,
+                `An authoritative academic resource focusing on ${categoryName}, providing comprehensive theoretical frameworks, practical methodologies, and foundational insights for higher education students and researchers within the library network.`,
 
               cover_url:
                 doc.cover_i
@@ -1988,31 +2223,67 @@ export async function loadSampleCatalog(
   }
 
   if (
-    allBooks.length > 0
+    allBooks.length === 0
   ) {
-    const {
-      error,
-    } =
-      await supabase
-        .from('books')
-        .insert(
-          allBooks
-        );
-
-    if (error) {
-      throw cleanErr(error);
-    }
+    throw new Error(
+      'No books could be loaded from Open Library.'
+    );
   }
+
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from('books')
+      .insert(
+        allBooks
+      )
+      .select();
+
+  if (error) {
+    throw cleanErr(error);
+  }
+
+  return (data || []).map(
+    mapBook
+  );
 }
 
 // ============================================================================
-// BORROW REQUESTS
+// BORROW REQUEST
 // ============================================================================
 
 export async function requestBorrow(
   visitorId,
   bookId
 ) {
+  const normalizedVisitorId =
+    normalizeText(visitorId);
+
+  const normalizedBookId =
+    normalizeText(bookId);
+
+  if (
+    !isValidUuid(
+      normalizedVisitorId
+    )
+  ) {
+    throw new Error(
+      'Invalid visitor ID.'
+    );
+  }
+
+  if (
+    !isValidUuid(
+      normalizedBookId
+    )
+  ) {
+    throw new Error(
+      'Invalid book ID.'
+    );
+  }
+
   const {
     data,
     error,
@@ -2021,10 +2292,10 @@ export async function requestBorrow(
       'request_borrow',
       {
         p_visitor_id:
-          visitorId,
+          normalizedVisitorId,
 
         p_book_id:
-          bookId,
+          normalizedBookId,
       }
     );
 
@@ -2033,9 +2304,7 @@ export async function requestBorrow(
   }
 
   const row =
-    Array.isArray(data)
-      ? data[0]
-      : data;
+    firstRow(data);
 
   if (!row) {
     throw new Error(
@@ -2056,6 +2325,23 @@ export async function cancelBorrowRequest(
   requestId,
   reason = 'cancelled'
 ) {
+  const normalizedRequestId =
+    normalizeText(requestId);
+
+  if (
+    !isValidUuid(
+      normalizedRequestId
+    )
+  ) {
+    throw new Error(
+      'Invalid borrow request ID.'
+    );
+  }
+
+  const normalizedReason =
+    normalizeText(reason) ||
+    'cancelled';
+
   const {
     error,
   } =
@@ -2063,16 +2349,20 @@ export async function cancelBorrowRequest(
       'cancel_borrow_request',
       {
         p_request_id:
-          requestId,
+          normalizedRequestId,
 
         p_reason:
-          reason,
+          normalizedReason,
       }
     );
 
   if (error) {
     throw cleanErr(error);
   }
+
+  return {
+    success: true,
+  };
 }
 
 // ============================================================================
@@ -2083,6 +2373,28 @@ export async function confirmPickup(
   requestId,
   staffName
 ) {
+  const normalizedRequestId =
+    normalizeText(requestId);
+
+  const normalizedStaffName =
+    normalizeText(staffName);
+
+  if (
+    !isValidUuid(
+      normalizedRequestId
+    )
+  ) {
+    throw new Error(
+      'Invalid borrow request ID.'
+    );
+  }
+
+  if (!normalizedStaffName) {
+    throw new Error(
+      'Staff name is required.'
+    );
+  }
+
   const {
     error,
   } =
@@ -2090,16 +2402,20 @@ export async function confirmPickup(
       'confirm_pickup',
       {
         p_request_id:
-          requestId,
+          normalizedRequestId,
 
         p_staff_name:
-          staffName,
+          normalizedStaffName,
       }
     );
 
   if (error) {
     throw cleanErr(error);
   }
+
+  return {
+    success: true,
+  };
 }
 
 // ============================================================================
@@ -2110,6 +2426,28 @@ export async function confirmReturn(
   requestId,
   staffName
 ) {
+  const normalizedRequestId =
+    normalizeText(requestId);
+
+  const normalizedStaffName =
+    normalizeText(staffName);
+
+  if (
+    !isValidUuid(
+      normalizedRequestId
+    )
+  ) {
+    throw new Error(
+      'Invalid borrow request ID.'
+    );
+  }
+
+  if (!normalizedStaffName) {
+    throw new Error(
+      'Staff name is required.'
+    );
+  }
+
   const {
     error,
   } =
@@ -2117,14 +2455,18 @@ export async function confirmReturn(
       'confirm_return',
       {
         p_request_id:
-          requestId,
+          normalizedRequestId,
 
         p_staff_name:
-          staffName,
+          normalizedStaffName,
       }
     );
 
   if (error) {
     throw cleanErr(error);
   }
+
+  return {
+    success: true,
+  };
 }
