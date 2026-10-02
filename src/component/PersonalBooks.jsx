@@ -13,20 +13,42 @@ async function loadBooksForVisitor(userId) {
   return data || [];
 }
 
-export default function PersonalBooks({ userId }) {
+export default function PersonalBooks({ userId: propUserId }) {
   const [books, setBooks] = useState([]);
+  const [currentUserId, setCurrentUserId] = useState(propUserId || null);
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
   const [privacyStatus, setPrivacyStatus] = useState('private');
   const [listingType, setListingType] = useState('none');
-  const [price, setPrice] = useState(''); // Ginawang empty string bilang default placeholder
+  const [price, setPrice] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
+  // 1. Kumuha at mag-check ng Active Authenticated User Session
+  useEffect(() => {
+    async function resolveUser() {
+      if (propUserId) {
+        setCurrentUserId(propUserId);
+        return;
+      }
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setCurrentUserId(user.id);
+      } else {
+        setError('No active user session found. Please log in.');
+      }
+    }
+    resolveUser();
+  }, [propUserId]);
+
+  // 2. Load books tuwing may valid na currentUserId
   useEffect(() => {
     let active = true;
-    loadBooksForVisitor(userId)
+    if (!currentUserId) return;
+
+    loadBooksForVisitor(currentUserId)
       .then((rows) => {
         if (active) setBooks(rows);
       })
@@ -37,15 +59,27 @@ export default function PersonalBooks({ userId }) {
     return () => {
       active = false;
     };
-  }, [userId]);
+  }, [currentUserId]);
 
-  // Handle Add Book
+  // 3. Handle Add Book (Ligtas laban sa Null Foreign Keys)
   const handleAddBook = async (e) => {
     e.preventDefault();
     setError('');
     setMessage('');
 
-    // Validation para sa Price kapag Selling
+    // Verify User Session bago mag-insert
+    let activeUserId = currentUserId;
+    if (!activeUserId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        activeUserId = user.id;
+        setCurrentUserId(user.id);
+      } else {
+        setError('User is not authenticated. Cannot save book.');
+        return;
+      }
+    }
+
     if (privacyStatus === 'public' && listingType === 'sell' && (parseFloat(price) <= 0 || !price)) {
       setError('Please enter a valid selling price greater than 0.');
       return;
@@ -53,21 +87,27 @@ export default function PersonalBooks({ userId }) {
 
     setLoading(true);
 
-    const { error } = await supabase.from('personal_books').insert([
-      {
-        owner_id: userId,
-        title,
-        author,
-        privacy_status: privacyStatus,
-        listing_type: privacyStatus === 'public' ? listingType : 'none',
-        price: listingType === 'sell' && privacyStatus === 'public' ? parseFloat(price) : 0,
-      },
-    ]);
+    // Dynamic Insert Payload (I-i-insert lang ang owner_id kapag tiyak na may valid ID)
+    const payload = {
+      title,
+      author,
+      privacy_status: privacyStatus,
+      listing_type: privacyStatus === 'public' ? listingType : 'none',
+      price: listingType === 'sell' && privacyStatus === 'public' ? parseFloat(price) : 0,
+    };
+
+    if (activeUserId) {
+      payload.owner_id = activeUserId;
+    }
+
+    const { error: insertError } = await supabase
+      .from('personal_books')
+      .insert([payload]);
 
     setLoading(false);
 
-    if (error) {
-      setError('Error adding book: ' + error.message);
+    if (insertError) {
+      setError('Error adding book: ' + insertError.message);
     } else {
       setMessage('Book added successfully.');
       setTitle('');
@@ -75,7 +115,7 @@ export default function PersonalBooks({ userId }) {
       setPrivacyStatus('private');
       setListingType('none');
       setPrice('');
-      setBooks(await loadBooksForVisitor(userId));
+      setBooks(await loadBooksForVisitor(activeUserId));
     }
   };
 
@@ -105,7 +145,6 @@ export default function PersonalBooks({ userId }) {
           style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
         />
 
-        {/* Visibility Setting */}
         <div>
           <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>
             Privacy Setting:
@@ -120,7 +159,6 @@ export default function PersonalBooks({ userId }) {
           </select>
         </div>
 
-        {/* Lend or Sell Setting (Visible only if Public) */}
         {privacyStatus === 'public' && (
           <div>
             <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>
@@ -136,7 +174,6 @@ export default function PersonalBooks({ userId }) {
               <option value="sell">Sell to Other Visitors</option>
             </select>
 
-            {/* SELLING PRICE INPUT (IN-UPDATE ANG PROPERTIES AT ONCHANGE) */}
             {listingType === 'sell' && (
               <input 
                 type="number" 
@@ -146,7 +183,6 @@ export default function PersonalBooks({ userId }) {
                 value={price} 
                 onChange={(e) => {
                   const val = e.target.value;
-                  // Pinipigilan ang negative values sa input field
                   setPrice(val === '' ? '' : Math.max(0, parseFloat(val)));
                 }} 
                 required
@@ -179,7 +215,7 @@ export default function PersonalBooks({ userId }) {
               <h4 style={{ margin: '0 0 4px 0' }}>{b.title}</h4>
               <p style={{ margin: '0 0 6px 0', color: '#555' }}>by {b.author}</p>
               <span style={{ fontSize: '12px', padding: '2px 6px', backgroundColor: b.privacy_status === 'public' ? '#dcfce7' : '#f3f4f6', borderRadius: '4px' }}>
-                {b.privacy_status.toUpperCase()}
+                {b.privacy_status ? b.privacy_status.toUpperCase() : 'PRIVATE'}
               </span>
               {b.privacy_status === 'public' && b.listing_type !== 'none' && (
                 <span style={{ fontSize: '12px', marginLeft: '8px', padding: '2px 6px', backgroundColor: '#e0f2fe', borderRadius: '4px' }}>
