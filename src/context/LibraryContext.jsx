@@ -24,11 +24,11 @@ import { LibraryContext } from './libraryContext.js';
 // Community books:
 //   OPACCatalog
 //       ↓
-//   LibraryContext.requestCommunityBook
+//   LibraryContext
 //       ↓
-//   store.requestCommunityBook
+//   store.js
 //       ↓
-//   PostgreSQL RPC: request_community_book
+//   PostgreSQL RPC functions
 // ============================================================================
 
 const emptyData = {
@@ -366,14 +366,6 @@ export function LibraryProvider({ children }) {
           // ==================================================================
           // COMMUNITY BOOK REQUESTS
           // ==================================================================
-          //
-          // This keeps the visitor UI synchronized when an owner/request
-          // workflow changes a community-book request.
-          //
-          // It is safe even if Realtime is not enabled for the table;
-          // the subscription simply will not receive events until the table
-          // is included in the Supabase realtime publication.
-          // ==================================================================
 
           .on(
             'postgres_changes',
@@ -582,7 +574,7 @@ export function LibraryProvider({ children }) {
   );
 
   // ==========================================================================
-  // PERSONAL BOOK MUTATIONS
+  // PERSONAL BOOK
   // ==========================================================================
 
   const addPersonalBook = useMemo(
@@ -595,17 +587,12 @@ export function LibraryProvider({ children }) {
   );
 
   // ==========================================================================
-  // COMMUNITY BOOK REQUEST
+  // COMMUNITY BOOK REQUESTS
   // ==========================================================================
-  //
-  // IMPORTANT:
-  // This is the missing bridge that caused:
-  //
-  // "Community book request service is not available."
-  //
-  // store.requestCommunityBook already exists in store.js.
-  // This memo exposes that function to OPACCatalog through useLibrary().
-  // ==========================================================================
+
+  // --------------------------------------------------------------------------
+  // Request a community book
+  // --------------------------------------------------------------------------
 
   const requestCommunityBook = useMemo(
     () =>
@@ -615,6 +602,70 @@ export function LibraryProvider({ children }) {
       ),
     [withRefresh]
   );
+
+  // --------------------------------------------------------------------------
+  // Fetch requests for books owned by current visitor
+  // --------------------------------------------------------------------------
+
+  const fetchOwnerCommunityBookRequests =
+    useMemo(
+      () =>
+        typeof store.fetchOwnerCommunityBookRequests ===
+        'function'
+          ? store.fetchOwnerCommunityBookRequests
+          : async () => {
+              throw new Error(
+                'fetchOwnerCommunityBookRequests service is not available.'
+              );
+            },
+      []
+    );
+
+  // --------------------------------------------------------------------------
+  // Fetch requests made by current visitor
+  // --------------------------------------------------------------------------
+
+  const fetchMyCommunityBookRequests =
+    useMemo(
+      () =>
+        typeof store.fetchMyCommunityBookRequests ===
+        'function'
+          ? store.fetchMyCommunityBookRequests
+          : async () => {
+              throw new Error(
+                'fetchMyCommunityBookRequests service is not available.'
+              );
+            },
+      []
+    );
+
+  // --------------------------------------------------------------------------
+  // Approve community book request
+  // --------------------------------------------------------------------------
+
+  const approveCommunityBookRequest =
+    useMemo(
+      () =>
+        withRefresh(
+          store.approveCommunityBookRequest,
+          'approveCommunityBookRequest'
+        ),
+      [withRefresh]
+    );
+
+  // --------------------------------------------------------------------------
+  // Reject community book request
+  // --------------------------------------------------------------------------
+
+  const rejectCommunityBookRequest =
+    useMemo(
+      () =>
+        withRefresh(
+          store.rejectCommunityBookRequest,
+          'rejectCommunityBookRequest'
+        ),
+      [withRefresh]
+    );
 
   // ==========================================================================
   // BORROW / RESERVATION
@@ -681,6 +732,45 @@ export function LibraryProvider({ children }) {
 
       data,
 
+      // Expose individual collections too.
+      // This preserves compatibility with components that use:
+      // const { books } = useLibraryData();
+
+      books:
+        Array.isArray(data.books)
+          ? data.books
+          : [],
+
+      libraries:
+        Array.isArray(data.libraries)
+          ? data.libraries
+          : [],
+
+      visitors:
+        Array.isArray(data.visitors)
+          ? data.visitors
+          : [],
+
+      borrowRequests:
+        Array.isArray(data.borrowRequests)
+          ? data.borrowRequests
+          : [],
+
+      attendanceLogs:
+        Array.isArray(data.attendanceLogs)
+          ? data.attendanceLogs
+          : [],
+
+      personalBooks:
+        Array.isArray(data.personalBooks)
+          ? data.personalBooks
+          : [],
+
+      communityBooks:
+        Array.isArray(data.communityBooks)
+          ? data.communityBooks
+          : [],
+
       loading,
 
       connectionError,
@@ -710,6 +800,14 @@ export function LibraryProvider({ children }) {
       addPersonalBook,
 
       requestCommunityBook,
+
+      fetchOwnerCommunityBookRequests,
+
+      fetchMyCommunityBookRequests,
+
+      approveCommunityBookRequest,
+
+      rejectCommunityBookRequest,
 
       // ----------------------------------------------------------------------
       // Borrowing
@@ -775,10 +873,15 @@ export function LibraryProvider({ children }) {
 
       addPersonalBook,
 
-      // IMPORTANT:
-      // requestCommunityBook must be included here so the context
-      // value updates correctly when the function changes.
       requestCommunityBook,
+
+      fetchOwnerCommunityBookRequests,
+
+      fetchMyCommunityBookRequests,
+
+      approveCommunityBookRequest,
+
+      rejectCommunityBookRequest,
 
       requestBorrow,
 
