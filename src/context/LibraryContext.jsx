@@ -169,6 +169,32 @@ const refreshAll = useCallback(async () => {
       currentVisitorId
     );
 
+    useEffect(() => {
+  const handleVisitorSessionChanged = () => {
+    console.log(
+      'SHELF — VISITOR SESSION CHANGED. REFRESHING DATA...'
+    );
+
+    refreshAll().catch((error) => {
+      console.error(
+        'SHELF visitor session refresh failed:',
+        error
+      );
+    });
+  };
+
+  window.addEventListener(
+    'shelf:visitor-session-changed',
+    handleVisitorSessionChanged
+  );
+
+  return () => {
+    window.removeEventListener(
+      'shelf:visitor-session-changed',
+      handleVisitorSessionChanged
+    );
+  };
+}, [refreshAll]);
 
     // ----------------------------------------------------------------------
     // Load shared/global data.
@@ -612,37 +638,6 @@ const refreshAll = useCallback(async () => {
     setLoading(false);
   }
 }, [getCurrentVisitorId]);
-
-  // ==========================================================================
-  // REFRESH WHEN VISITOR SESSION CHANGES
-  // ==========================================================================
-
-  useEffect(() => {
-  const handleVisitorSessionChanged = () => {
-    console.log(
-      'SHELF — VISITOR SESSION CHANGED. REFRESHING DATA...'
-    );
-
-    refreshAll().catch((error) => {
-      console.error(
-        'SHELF visitor session refresh failed:',
-        error
-      );
-    });
-  };
-
-  window.addEventListener(
-    'shelf:visitor-session-changed',
-    handleVisitorSessionChanged
-  );
-
-  return () => {
-    window.removeEventListener(
-      'shelf:visitor-session-changed',
-      handleVisitorSessionChanged
-    );
-  };
-}, [refreshAll]);
 
   // ==========================================================================
   // INITIAL LOAD + AUTH + REALTIME
