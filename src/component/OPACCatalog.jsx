@@ -361,13 +361,123 @@ export default function OPACCatalog({
       setOwnerCommunityRequestError('');
 
       try {
-        const requests = await fetchOwnerCommunityBookRequests(user.id);
+        const requests =
+  await fetchOwnerCommunityBookRequests(user.id);
 
-        if (!cancelled) {
-          setOwnerCommunityRequests(
-            Array.isArray(requests) ? requests : []
-          );
-        }
+if (!cancelled) {
+  const normalizedRequests =
+    Array.isArray(requests)
+      ? requests.map((request) => ({
+          ...request,
+
+          id: request.id,
+
+          bookId:
+            request.book_id ??
+            request.bookId ??
+            null,
+
+          bookTitle:
+            request.book_title ??
+            request.bookTitle ??
+            'Untitled Book',
+
+          ownerVisitorId:
+            request.owner_visitor_id ??
+            request.ownerVisitorId ??
+            null,
+
+          ownerName:
+            request.owner_name ??
+            request.ownerName ??
+            null,
+
+          requesterVisitorId:
+            request.requester_visitor_id ??
+            request.requesterVisitorId ??
+            null,
+
+          requesterName:
+            request.requester_name ??
+            request.requesterName ??
+            'SHELF Visitor',
+
+          status:
+            String(
+              request.status ?? 'pending'
+            )
+              .trim()
+              .toLowerCase(),
+
+          requestDate:
+            request.request_date ??
+            request.requestDate ??
+            null,
+
+          approvedAt:
+            request.approved_at ??
+            request.approvedAt ??
+            null,
+
+          rejectedAt:
+            request.rejected_at ??
+            request.rejectedAt ??
+            null,
+
+          ownerResponse:
+            request.owner_response ??
+            request.ownerResponse ??
+            null,
+
+          pickupDeadline:
+            request.pickup_deadline ??
+            request.pickupDeadline ??
+            null,
+
+          borrowDate:
+            request.borrow_date ??
+            request.borrowDate ??
+            null,
+
+          dueDate:
+            request.due_date ??
+            request.dueDate ??
+            null,
+
+          returnDate:
+            request.return_date ??
+            request.returnDate ??
+            null,
+
+          fineAmount:
+            request.fine_amount ??
+            request.fineAmount ??
+            0,
+
+          confirmedBy:
+            request.confirmed_by ??
+            request.confirmedBy ??
+            null,
+
+          returnConfirmedBy:
+            request.return_confirmed_by ??
+            request.returnConfirmedBy ??
+            null,
+
+          requestType: 'community',
+          isCommunityBook: true,
+        }))
+      : [];
+
+  console.log(
+    'SHELF — NORMALIZED OWNER COMMUNITY REQUESTS:',
+    normalizedRequests
+  );
+
+  setOwnerCommunityRequests(
+    normalizedRequests
+  );
+}
       } catch (error) {
         console.error('Load owner community requests error:', error);
 
