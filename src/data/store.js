@@ -590,9 +590,9 @@ export async function fetchVisitors() {
 // ============================================================================
 
 export async function fetchBorrowRequests() {
-  // --------------------------------------------------------------------------
-  // 1. READ CURRENT SHELF VISITOR SESSION
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // 1. READ LOCAL SHELF SESSION
+  // ==========================================================================
 
   let localSession = null;
 
@@ -603,58 +603,159 @@ export async function fetchBorrowRequests() {
       );
 
     if (rawSession) {
-      localSession = JSON.parse(rawSession);
+      localSession = JSON.parse(
+        rawSession
+      );
     }
   } catch (storageError) {
     console.error(
-      'Unable to read SHELF visitor session:',
+      'SHELF — unable to read local session:',
       storageError
     );
   }
 
-  // --------------------------------------------------------------------------
-  // 2. RESOLVE CURRENT VISITOR ID
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // 2. RESOLVE THE ACTUAL VISITOR ID
+  // ==========================================================================
   //
-  // QR/local SHELF login stores the visitor ID locally.
+  // IMPORTANT:
   //
-  // Prefer:
-  //   user.id
-  //   visitor.id
-  //   session.id
+  // Supabase Auth ID:
+  //     auth.users.id
   //
-  // The normalized ID is then used by BOTH:
-  //   - normal borrow request RPC
-  //   - community book request RPC
+  // SHELF visitor ID:
+  //     public.visitors.id
   //
-  // --------------------------------------------------------------------------
+  // Community requests use:
+  //     requester_visitor_id
+  //
+  // Therefore we MUST use visitors.id.
+  // ==========================================================================
 
-  const visitorId =
-    localSession?.user?.id ||
-    localSession?.user?.visitorId ||
-    localSession?.visitor?.id ||
-    localSession?.visitor?.visitorId ||
-    localSession?.id ||
-    null;
+  let normalizedVisitorId = null;
 
-  const normalizedVisitorId =
-    normalizeText(visitorId);
+  try {
+    // ------------------------------------------------------------------------
+    // 2A. FIRST: TRY SUPABASE AUTH
+    // ------------------------------------------------------------------------
+
+    const {
+      data: sessionData,
+      error: sessionError,
+    } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      console.warn(
+        'SHELF — unable to read Supabase auth session:',
+        sessionError
+      );
+    }
+
+    const authUserId =
+      sessionData?.session?.user?.id ||
+      null;
+
+    // ------------------------------------------------------------------------
+    // 2B. RESOLVE AUTH USER → SHELF VISITOR
+    // ------------------------------------------------------------------------
+
+    if (
+      authUserId &&
+      isValidUuid(authUserId)
+    ) {
+      try {
+        const visitor =
+          await getVisitor(
+            authUserId
+          );
+
+        if (
+          visitor?.id &&
+          isValidUuid(
+            normalizeText(
+              visitor.id
+            )
+          )
+        ) {
+          normalizedVisitorId =
+            normalizeText(
+              visitor.id
+            );
+
+          console.log(
+            'SHELF — resolved visitor from Supabase Auth:',
+            {
+              authUserId,
+              visitorId:
+                normalizedVisitorId,
+            }
+          );
+        }
+      } catch (visitorLookupError) {
+        console.warn(
+          'SHELF — unable to resolve Auth user to visitor:',
+          visitorLookupError
+        );
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // 2C. FALLBACK: LOCAL SHELF SESSION
+    // ------------------------------------------------------------------------
+    //
+    // QR/local login normally stores the SHELF visitor ID.
+    // ========================================================================
+
+    if (
+      !normalizedVisitorId
+    ) {
+      const localVisitorId =
+        localSession?.visitor?.id ||
+        localSession?.visitor?.visitorId ||
+        localSession?.user?.visitorId ||
+        localSession?.user?.visitor_id ||
+        localSession?.user?.id ||
+        localSession?.id ||
+        null;
+
+      if (
+        localVisitorId &&
+        isValidUuid(
+          normalizeText(
+            localVisitorId
+          )
+        )
+      ) {
+        normalizedVisitorId =
+          normalizeText(
+            localVisitorId
+          );
+
+        console.log(
+          'SHELF — resolved visitor from local session:',
+          {
+            visitorId:
+              normalizedVisitorId,
+          }
+        );
+      }
+    }
+
+  } catch (visitorResolveError) {
+    console.error(
+      'SHELF — VISITOR ID RESOLUTION ERROR:',
+      visitorResolveError
+    );
+  }
 
   console.log(
-    'SHELF — CURRENT VISITOR FOR REQUESTS:',
-    {
-      visitorId,
-      normalizedVisitorId,
-      isValidUuid:
-        isValidUuid(
-          normalizedVisitorId
-        ),
-    }
+    'SHELF — FINAL VISITOR ID FOR REQUESTS:',
+    normalizedVisitorId
   );
 
-  // --------------------------------------------------------------------------
+  // ==========================================================================
   // 3. LOAD NORMAL LIBRARY BORROW REQUESTS
-  // --------------------------------------------------------------------------
+  // ==========================================================================
 
   let normalRequests = [];
 
@@ -666,21 +767,25 @@ export async function fetchBorrowRequests() {
 
     if (sessionError) {
       console.warn(
-        'Unable to check Supabase session:',
+        'SHELF — unable to check Supabase session:',
         sessionError
       );
     }
 
     // ------------------------------------------------------------------------
-    // 3A. AUTHENTICATED SUPABASE SESSION
+    // AUTHENTICATED SESSION
     // ------------------------------------------------------------------------
 
-    if (sessionData?.session) {
+    if (
+      sessionData?.session
+    ) {
       const {
         data,
         error,
       } = await supabase
-        .from('borrow_requests')
+        .from(
+          'borrow_requests'
+        )
         .select('*')
         .order(
           'request_date',
@@ -705,11 +810,7 @@ export async function fetchBorrowRequests() {
     }
 
     // ------------------------------------------------------------------------
-    // 3B. QR / LOCAL SHELF SESSION
-    // ------------------------------------------------------------------------
-    //
-    // QR login does not necessarily create a Supabase Auth session.
-    // Use the visitor-specific SECURITY DEFINER RPC.
+    // QR / LOCAL SESSION
     // ------------------------------------------------------------------------
 
     else if (
@@ -745,37 +846,16 @@ export async function fetchBorrowRequests() {
 
   } catch (normalError) {
     console.error(
-      'NORMAL BORROW REQUESTS ERROR:',
+      'SHELF — NORMAL BORROW REQUESTS ERROR:',
       normalError
     );
 
-    // Community requests must still be loaded
-    // even when normal borrow requests fail.
     normalRequests = [];
   }
 
-  // --------------------------------------------------------------------------
+  // ==========================================================================
   // 4. LOAD COMMUNITY BOOK REQUESTS
-  // --------------------------------------------------------------------------
-  //
-  // IMPORTANT:
-  //
-  // The community request RPC is the authoritative source.
-  //
-  // It already filters using:
-  //
-  //   requester_visitor_id = current visitor
-  //
-  // Therefore:
-  //
-  //   pending
-  //   approved
-  //   rejected
-  //   cancelled
-  //
-  // must all remain in the returned request history.
-  //
-  // --------------------------------------------------------------------------
+  // ==========================================================================
 
   let communityRequests = [];
 
@@ -785,6 +865,11 @@ export async function fetchBorrowRequests() {
     )
   ) {
     try {
+      console.log(
+        'SHELF — FETCHING COMMUNITY REQUESTS FOR VISITOR:',
+        normalizedVisitorId
+      );
+
       const {
         data,
         error,
@@ -798,119 +883,75 @@ export async function fetchBorrowRequests() {
 
       if (error) {
         console.error(
-          'FETCH MY COMMUNITY BOOK REQUESTS RPC ERROR:',
+          'SHELF — COMMUNITY REQUEST RPC ERROR:',
           error
         );
-
-        communityRequests = [];
       } else {
         communityRequests =
           Array.isArray(data)
             ? data
             : [];
+
+        console.log(
+          'SHELF — COMMUNITY REQUEST RPC RESULT:',
+          {
+            visitorId:
+              normalizedVisitorId,
+
+            count:
+              communityRequests.length,
+
+            data:
+              communityRequests,
+          }
+        );
       }
 
     } catch (communityError) {
       console.error(
-        'COMMUNITY BOOK REQUEST FETCH FAILED:',
+        'SHELF — COMMUNITY REQUEST FETCH ERROR:',
         communityError
       );
-
-      communityRequests = [];
     }
 
   } else {
     console.warn(
-      'SHELF — COMMUNITY REQUESTS NOT LOADED: invalid visitor ID.',
+      'SHELF — COMMUNITY REQUESTS SKIPPED: no valid visitor ID.',
       {
-        normalizedVisitorId,
+        visitorId:
+          normalizedVisitorId,
       }
     );
   }
 
-  // --------------------------------------------------------------------------
-  // 5. DEBUG RAW COMMUNITY REQUESTS
-  // --------------------------------------------------------------------------
-
-  console.log(
-    'SHELF — RAW COMMUNITY REQUESTS:',
-    {
-      visitorId:
-        normalizedVisitorId,
-
-      count:
-        communityRequests.length,
-
-      requests:
-        communityRequests,
-    }
-  );
-
-  // --------------------------------------------------------------------------
-  // 6. MAP COMMUNITY BOOK REQUESTS
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // 5. MAP COMMUNITY REQUESTS
+  // ==========================================================================
 
   const mappedCommunityRequests =
     communityRequests
       .filter(
         (request) =>
           request &&
-          (
-            request.id ||
-            request.request_id
-          )
+          request.id
       )
       .map(
         (request) => {
 
-          // ---------------------------------------------------------------
-          // Request ID
-          // ---------------------------------------------------------------
-
           const requestId =
-            request.id ||
-            request.request_id ||
-            null;
-
-          // ---------------------------------------------------------------
-          // Book ID
-          // ---------------------------------------------------------------
+            request.id;
 
           const bookId =
             request.book_id ||
-            request.bookId ||
             null;
-
-          // ---------------------------------------------------------------
-          // Book title
-          // ---------------------------------------------------------------
 
           const bookTitle =
             request.book_title ||
-            request.bookTitle ||
-            request.title ||
             'Untitled Book';
-
-          // ---------------------------------------------------------------
-          // Request date
-          // ---------------------------------------------------------------
 
           const requestDate =
             request.request_date ||
-            request.requestDate ||
-            request.requested_at ||
-            request.requestedAt ||
-            request.created_at ||
-            request.createdAt ||
             null;
-
-          // ---------------------------------------------------------------
-          // Status
-          // ---------------------------------------------------------------
-          //
-          // Preserve the actual database status.
-          // Do NOT convert approved/rejected back to pending.
-          // ---------------------------------------------------------------
 
           const status =
             normalizeText(
@@ -918,130 +959,38 @@ export async function fetchBorrowRequests() {
             ).toLowerCase() ||
             'pending';
 
-          // ---------------------------------------------------------------
-          // Requester visitor ID
-          // ---------------------------------------------------------------
-
           const requesterVisitorId =
             request.requester_visitor_id ||
-            request.requesterVisitorId ||
-            request.visitor_id ||
-            request.visitorId ||
             normalizedVisitorId ||
             null;
 
-          // ---------------------------------------------------------------
-          // Requester name
-          // ---------------------------------------------------------------
-
           const requesterName =
             request.requester_name ||
-            request.requesterName ||
-            request.visitor_name ||
-            request.visitorName ||
             localSession?.user?.fullName ||
             localSession?.user?.full_name ||
             localSession?.visitor?.fullName ||
             localSession?.visitor?.full_name ||
             'SHELF Visitor';
 
-          // ---------------------------------------------------------------
-          // Owner
-          // ---------------------------------------------------------------
-
           const ownerVisitorId =
             request.owner_visitor_id ||
-            request.ownerVisitorId ||
             null;
 
           const ownerName =
             request.owner_name ||
-            request.ownerName ||
             null;
 
-          // ---------------------------------------------------------------
-          // Status timestamps
-          // ---------------------------------------------------------------
+          const ownerResponse =
+            request.owner_response ||
+            null;
 
           const approvedAt =
             request.approved_at ||
-            request.approvedAt ||
             null;
 
           const rejectedAt =
             request.rejected_at ||
-            request.rejectedAt ||
             null;
-
-          // ---------------------------------------------------------------
-          // Owner response
-          // ---------------------------------------------------------------
-
-          const ownerResponse =
-            request.owner_response ||
-            request.ownerResponse ||
-            null;
-
-          // ---------------------------------------------------------------
-          // Optional request information
-          // ---------------------------------------------------------------
-
-          const pickupDeadline =
-            request.pickup_deadline ||
-            request.pickupDeadline ||
-            null;
-
-          const queuePosition =
-            request.queue_position ??
-            request.queuePosition ??
-            null;
-
-          const borrowDate =
-            request.borrow_date ||
-            request.borrowDate ||
-            null;
-
-          const dueDate =
-            request.due_date ||
-            request.dueDate ||
-            null;
-
-          const returnDate =
-            request.return_date ||
-            request.returnDate ||
-            null;
-
-          const fineAmount =
-            Number(
-              request.fine_amount ??
-              request.fineAmount ??
-              0
-            ) || 0;
-
-          const confirmedBy =
-            request.confirmed_by ||
-            request.confirmedBy ||
-            null;
-
-          const returnConfirmedBy =
-            request.return_confirmed_by ||
-            request.returnConfirmedBy ||
-            null;
-
-          const cancelReason =
-            request.cancel_reason ||
-            request.cancelReason ||
-            request.reason ||
-            null;
-
-          const lendingPeriodDays =
-            request.lending_period_days ??
-            request.lendingPeriodDays ??
-            null;
-
-          // ---------------------------------------------------------------
-          // NORMALIZED COMMUNITY REQUEST
-          // ---------------------------------------------------------------
 
           return {
             id:
@@ -1066,40 +1015,49 @@ export async function fetchBorrowRequests() {
               requestDate,
 
             pickupDeadline:
-              pickupDeadline,
+              request.pickup_deadline ||
+              null,
 
             queuePosition:
-              queuePosition,
+              request.queue_position ??
+              null,
 
             borrowDate:
-              borrowDate,
+              request.borrow_date ||
+              null,
 
             dueDate:
-              dueDate,
+              request.due_date ||
+              null,
 
             returnDate:
-              returnDate,
+              request.return_date ||
+              null,
 
             fineAmount:
-              fineAmount,
+              Number(
+                request.fine_amount ??
+                0
+              ) || 0,
 
             confirmedBy:
-              confirmedBy,
+              request.confirmed_by ||
+              null,
 
             returnConfirmedBy:
-              returnConfirmedBy,
+              request.return_confirmed_by ||
+              null,
 
             cancelReason:
-              cancelReason,
+              request.cancel_reason ||
+              null,
 
-            // Community marker
             requestType:
               'community',
 
             isCommunityBook:
               true,
 
-            // Owner information
             ownerVisitorId:
               ownerVisitorId,
 
@@ -1116,14 +1074,15 @@ export async function fetchBorrowRequests() {
               rejectedAt,
 
             lendingPeriodDays:
-              lendingPeriodDays,
+              request.lending_period_days ??
+              null,
           };
         }
       );
 
-  // --------------------------------------------------------------------------
-  // 7. MAP NORMAL LIBRARY REQUESTS
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // 6. MAP NORMAL LIBRARY REQUESTS
+  // ==========================================================================
 
   const mappedNormalRequests =
     normalRequests
@@ -1144,18 +1103,18 @@ export async function fetchBorrowRequests() {
         })
       );
 
-  // --------------------------------------------------------------------------
-  // 8. MERGE NORMAL + COMMUNITY REQUESTS
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // 7. MERGE REQUESTS
+  // ==========================================================================
 
   const mergedRequests = [
     ...mappedNormalRequests,
     ...mappedCommunityRequests,
   ];
 
-  // --------------------------------------------------------------------------
-  // 9. REMOVE DUPLICATES
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // 8. REMOVE DUPLICATES
+  // ==========================================================================
 
   const uniqueRequests =
     Array.from(
@@ -1177,86 +1136,41 @@ export async function fetchBorrowRequests() {
       ).values()
     );
 
-  // --------------------------------------------------------------------------
-  // 10. SORT NEWEST FIRST
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // 9. SORT NEWEST FIRST
+  // ==========================================================================
 
   uniqueRequests.sort(
-    (a, b) => {
-      const dateA =
-        a?.requestDate
-          ? new Date(
-              a.requestDate
-            ).getTime()
-          : 0;
-
-      const dateB =
-        b?.requestDate
-          ? new Date(
-              b.requestDate
-            ).getTime()
-          : 0;
-
-      return dateB - dateA;
-    }
+    (a, b) =>
+      new Date(
+        b?.requestDate || 0
+      ).getTime() -
+      new Date(
+        a?.requestDate || 0
+      ).getTime()
   );
 
-  // --------------------------------------------------------------------------
-  // 11. FINAL DEBUG
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // 10. FINAL DEBUG
+  // ==========================================================================
 
   console.log(
-    'SHELF — FINAL REQUESTS & BORROWS:',
+    'SHELF — FINAL REQUEST LIST:',
     {
       visitorId:
         normalizedVisitorId,
 
-      normalRequests:
+      normalCount:
         mappedNormalRequests.length,
 
-      communityRequests:
+      communityCount:
         mappedCommunityRequests.length,
 
-      totalRequests:
+      totalCount:
         uniqueRequests.length,
 
-      communityRequestDetails:
-        mappedCommunityRequests.map(
-          (request) => ({
-            id:
-              request.id,
-
-            bookTitle:
-              request.bookTitle,
-
-            requesterVisitorId:
-              request.visitorId,
-
-            requesterName:
-              request.visitorName,
-
-            ownerVisitorId:
-              request.ownerVisitorId,
-
-            ownerName:
-              request.ownerName,
-
-            status:
-              request.status,
-
-            requestDate:
-              request.requestDate,
-
-            approvedAt:
-              request.approvedAt,
-
-            rejectedAt:
-              request.rejectedAt,
-
-            ownerResponse:
-              request.ownerResponse,
-          })
-        ),
+      communityRequests:
+        mappedCommunityRequests,
     }
   );
 
