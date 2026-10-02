@@ -651,8 +651,6 @@ export async function registerVisitor({
     );
   }
 
-  // Supabase can return an existing user from signUp()
-  // without a normal "already registered" error.
   if (
     Array.isArray(authData.user.identities) &&
     authData.user.identities.length === 0
@@ -2253,6 +2251,12 @@ export async function loadSampleCatalog(
 // ============================================================================
 // BORROW REQUEST
 // ============================================================================
+// Creates the request through the PostgreSQL RPC:
+//
+//   request_borrow(p_visitor_id, p_book_id)
+//
+// The database remains responsible for the atomic borrow rules.
+// ============================================================================
 
 export async function requestBorrow(
   visitorId,
@@ -2264,25 +2268,41 @@ export async function requestBorrow(
   const normalizedBookId =
     normalizeText(bookId);
 
-  if (
-    !isValidUuid(
-      normalizedVisitorId
-    )
-  ) {
+  // --------------------------------------------------------------------------
+  // VALIDATE VISITOR ID
+  // --------------------------------------------------------------------------
+
+  if (!normalizedVisitorId) {
+    throw new Error(
+      'Visitor ID is required.'
+    );
+  }
+
+  if (!isValidUuid(normalizedVisitorId)) {
     throw new Error(
       'Invalid visitor ID.'
     );
   }
 
-  if (
-    !isValidUuid(
-      normalizedBookId
-    )
-  ) {
+  // --------------------------------------------------------------------------
+  // VALIDATE BOOK ID
+  // --------------------------------------------------------------------------
+
+  if (!normalizedBookId) {
+    throw new Error(
+      'Book ID is required.'
+    );
+  }
+
+  if (!isValidUuid(normalizedBookId)) {
     throw new Error(
       'Invalid book ID.'
     );
   }
+
+  // --------------------------------------------------------------------------
+  // CALL DATABASE RPC
+  // --------------------------------------------------------------------------
 
   const {
     data,
@@ -2299,9 +2319,217 @@ export async function requestBorrow(
       }
     );
 
+  // --------------------------------------------------------------------------
+  // HANDLE RPC ERROR
+  // --------------------------------------------------------------------------
+
   if (error) {
-    throw cleanErr(error);
+    console.error(
+      'BORROW REQUEST RPC ERROR:',
+      {
+        code:
+          error?.code,
+
+        message:
+          error?.message,
+
+        details:
+          error?.details,
+
+        hint:
+          error?.hint,
+
+        visitorId:
+          normalizedVisitorId,
+
+        bookId:
+          normalizedBookId,
+      }
+    );
+
+    const message =
+      normalizeText(
+        error?.message
+      );
+
+    const lowerMessage =
+      message.toLowerCase();
+
+    // ------------------------------------------------------------------------
+    // VISITOR ERRORS
+    // ------------------------------------------------------------------------
+
+    if (
+      lowerMessage.includes(
+        'visitor not found'
+      ) ||
+      lowerMessage.includes(
+        'visitor does not exist'
+      ) ||
+      lowerMessage.includes(
+        'registration not found'
+      )
+    ) {
+      throw new Error(
+        'Visitor account could not be found.'
+      );
+    }
+
+    if (
+      lowerMessage.includes(
+        'visitor is inactive'
+      ) ||
+      lowerMessage.includes(
+        'account is inactive'
+      )
+    ) {
+      throw new Error(
+        'This visitor account is currently inactive.'
+      );
+    }
+
+    if (
+      lowerMessage.includes(
+        'visitor is not verified'
+      ) ||
+      lowerMessage.includes(
+        'not verified'
+      ) ||
+      lowerMessage.includes(
+        'otp_verified'
+      )
+    ) {
+      throw new Error(
+        'Please verify your visitor account before requesting a book.'
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // BOOK ERRORS
+    // ------------------------------------------------------------------------
+
+    if (
+      lowerMessage.includes(
+        'book not found'
+      ) ||
+      lowerMessage.includes(
+        'book does not exist'
+      )
+    ) {
+      throw new Error(
+        'The selected book could not be found.'
+      );
+    }
+
+    if (
+      lowerMessage.includes(
+        'no available copies'
+      ) ||
+      lowerMessage.includes(
+        'book is unavailable'
+      ) ||
+      lowerMessage.includes(
+        'not available'
+      ) ||
+      lowerMessage.includes(
+        'available_copies'
+      )
+    ) {
+      throw new Error(
+        'This book is currently unavailable.'
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // DUPLICATE REQUEST ERRORS
+    // ------------------------------------------------------------------------
+
+    if (
+      lowerMessage.includes(
+        'already requested'
+      ) ||
+      lowerMessage.includes(
+        'duplicate request'
+      ) ||
+      lowerMessage.includes(
+        'active borrow request'
+      ) ||
+      lowerMessage.includes(
+        'already has a borrow request'
+      )
+    ) {
+      throw new Error(
+        'You already have an active borrow request for this book.'
+      );
+    }
+
+    if (
+      lowerMessage.includes(
+        'already borrowed'
+      )
+    ) {
+      throw new Error(
+        'You already have this book borrowed.'
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // AUTHORIZATION ERRORS
+    // ------------------------------------------------------------------------
+
+    if (
+      lowerMessage.includes(
+        'permission denied'
+      ) ||
+      lowerMessage.includes(
+        'not authorized'
+      ) ||
+      lowerMessage.includes(
+        'unauthorized'
+      )
+    ) {
+      throw new Error(
+        'You are not authorized to create a borrow request.'
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // DATABASE VALIDATION ERRORS
+    // ------------------------------------------------------------------------
+
+    if (
+      lowerMessage.includes(
+        'foreign key'
+      )
+    ) {
+      throw new Error(
+        'The selected visitor or book is not valid.'
+      );
+    }
+
+    if (
+      lowerMessage.includes(
+        'uuid'
+      )
+    ) {
+      throw new Error(
+        'The visitor or book ID is invalid.'
+      );
+    }
+
+    // ------------------------------------------------------------------------
+    // FALLBACK
+    // ------------------------------------------------------------------------
+
+    throw cleanErr(
+      error,
+      'Unable to create the borrow request. Please try again.'
+    );
   }
+
+  // --------------------------------------------------------------------------
+  // CHECK RPC RESULT
+  // --------------------------------------------------------------------------
 
   const row =
     firstRow(data);
@@ -2311,6 +2539,28 @@ export async function requestBorrow(
       'Borrow request was not created.'
     );
   }
+
+  // --------------------------------------------------------------------------
+  // CHECK RETURNED REQUEST ID
+  // --------------------------------------------------------------------------
+
+  if (
+    row.id &&
+    !isValidUuid(row.id)
+  ) {
+    console.error(
+      'INVALID BORROW REQUEST RETURNED BY RPC:',
+      row
+    );
+
+    throw new Error(
+      'The database returned an invalid borrow request.'
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // MAP DATABASE ROW
+  // --------------------------------------------------------------------------
 
   return mapBorrowRequest(
     row
