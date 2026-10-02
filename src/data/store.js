@@ -612,17 +612,48 @@ export async function fetchBorrowRequests() {
     );
   }
 
+  // --------------------------------------------------------------------------
+  // 2. RESOLVE CURRENT VISITOR ID
+  // --------------------------------------------------------------------------
+  //
+  // QR/local SHELF login stores the visitor ID locally.
+  //
+  // Prefer:
+  //   user.id
+  //   visitor.id
+  //   session.id
+  //
+  // The normalized ID is then used by BOTH:
+  //   - normal borrow request RPC
+  //   - community book request RPC
+  //
+  // --------------------------------------------------------------------------
+
   const visitorId =
     localSession?.user?.id ||
+    localSession?.user?.visitorId ||
     localSession?.visitor?.id ||
+    localSession?.visitor?.visitorId ||
     localSession?.id ||
     null;
 
   const normalizedVisitorId =
     normalizeText(visitorId);
 
+  console.log(
+    'SHELF — CURRENT VISITOR FOR REQUESTS:',
+    {
+      visitorId,
+      normalizedVisitorId,
+      isValidUuid:
+        isValidUuid(
+          normalizedVisitorId
+        ),
+    }
+  );
+
   // --------------------------------------------------------------------------
-  // 2. LOAD NORMAL LIBRARY BORROW REQUESTS
+  // 3. LOAD NORMAL LIBRARY BORROW REQUESTS
   // --------------------------------------------------------------------------
 
   let normalRequests = [];
@@ -641,7 +672,7 @@ export async function fetchBorrowRequests() {
     }
 
     // ------------------------------------------------------------------------
-    // AUTHENTICATED USER
+    // 3A. AUTHENTICATED SUPABASE SESSION
     // ------------------------------------------------------------------------
 
     if (sessionData?.session) {
@@ -651,9 +682,12 @@ export async function fetchBorrowRequests() {
       } = await supabase
         .from('borrow_requests')
         .select('*')
-        .order('request_date', {
-          ascending: false,
-        });
+        .order(
+          'request_date',
+          {
+            ascending: false,
+          }
+        );
 
       if (error) {
         throw cleanErr(
@@ -663,16 +697,19 @@ export async function fetchBorrowRequests() {
       }
 
       normalRequests =
-        (data || []).map(
-          mapBorrowRequest
-        );
+        Array.isArray(data)
+          ? data.map(
+              mapBorrowRequest
+            )
+          : [];
     }
 
     // ------------------------------------------------------------------------
-    // QR / LOCAL SHELF SESSION
+    // 3B. QR / LOCAL SHELF SESSION
+    // ------------------------------------------------------------------------
     //
     // QR login does not necessarily create a Supabase Auth session.
-    // Therefore use the existing visitor-specific RPC.
+    // Use the visitor-specific SECURITY DEFINER RPC.
     // ------------------------------------------------------------------------
 
     else if (
@@ -699,32 +736,45 @@ export async function fetchBorrowRequests() {
       }
 
       normalRequests =
-        (data || []).map(
-          mapBorrowRequest
-        );
+        Array.isArray(data)
+          ? data.map(
+              mapBorrowRequest
+            )
+          : [];
     }
+
   } catch (normalError) {
     console.error(
       'NORMAL BORROW REQUESTS ERROR:',
       normalError
     );
 
-    // Do not stop community requests from loading.
+    // Community requests must still be loaded
+    // even when normal borrow requests fail.
     normalRequests = [];
   }
 
   // --------------------------------------------------------------------------
-  // 3. LOAD COMMUNITY BOOK REQUESTS
+  // 4. LOAD COMMUNITY BOOK REQUESTS
   // --------------------------------------------------------------------------
   //
-  // PRIMARY:
-  //     fetch_my_community_book_requests()
+  // IMPORTANT:
   //
-  // FALLBACK:
-  //     direct query to community_book_requests
+  // The community request RPC is the authoritative source.
   //
-  // The fallback is useful when the RPC exists but returns no rows because
-  // the RPC result/query is not exposing the request correctly.
+  // It already filters using:
+  //
+  //   requester_visitor_id = current visitor
+  //
+  // Therefore:
+  //
+  //   pending
+  //   approved
+  //   rejected
+  //   cancelled
+  //
+  // must all remain in the returned request history.
+  //
   // --------------------------------------------------------------------------
 
   let communityRequests = [];
@@ -734,10 +784,6 @@ export async function fetchBorrowRequests() {
       normalizedVisitorId
     )
   ) {
-    // ========================================================================
-    // 3A. PRIMARY RPC
-    // ========================================================================
-
     try {
       const {
         data,
@@ -755,88 +801,53 @@ export async function fetchBorrowRequests() {
           'FETCH MY COMMUNITY BOOK REQUESTS RPC ERROR:',
           error
         );
-      } else if (
-        Array.isArray(data)
-      ) {
+
+        communityRequests = [];
+      } else {
         communityRequests =
-          data;
-      }
-    } catch (rpcError) {
-      console.error(
-        'COMMUNITY BOOK REQUEST RPC FAILED:',
-        rpcError
-      );
-    }
-
-    // ========================================================================
-    // 3B. DIRECT TABLE FALLBACK
-    //
-    // Only run this when the RPC did not return anything.
-    // ========================================================================
-
-    if (
-      communityRequests.length === 0
-    ) {
-      try {
-        const {
-          data,
-          error,
-        } = await supabase
-          .from(
-            'community_book_requests'
-          )
-          .select('*')
-          .eq(
-            'requester_visitor_id',
-            normalizedVisitorId
-          )
-          .order(
-            'created_at',
-            {
-              ascending: false,
-            }
-          );
-
-        if (error) {
-          console.error(
-            'DIRECT COMMUNITY REQUEST QUERY ERROR:',
-            error
-          );
-        } else if (
           Array.isArray(data)
-        ) {
-          communityRequests =
-            data;
-        }
-      } catch (directError) {
-        console.error(
-          'DIRECT COMMUNITY REQUEST FALLBACK FAILED:',
-          directError
-        );
+            ? data
+            : [];
       }
+
+    } catch (communityError) {
+      console.error(
+        'COMMUNITY BOOK REQUEST FETCH FAILED:',
+        communityError
+      );
+
+      communityRequests = [];
     }
+
+  } else {
+    console.warn(
+      'SHELF — COMMUNITY REQUESTS NOT LOADED: invalid visitor ID.',
+      {
+        normalizedVisitorId,
+      }
+    );
   }
 
   // --------------------------------------------------------------------------
-  // 4. NORMALIZE COMMUNITY REQUESTS
+  // 5. DEBUG RAW COMMUNITY REQUESTS
   // --------------------------------------------------------------------------
 
-   // --------------------------------------------------------------------------
-  // 4. MAP COMMUNITY BOOK REQUESTS
+  console.log(
+    'SHELF — RAW COMMUNITY REQUESTS:',
+    {
+      visitorId:
+        normalizedVisitorId,
+
+      count:
+        communityRequests.length,
+
+      requests:
+        communityRequests,
+    }
+  );
+
   // --------------------------------------------------------------------------
-  //
-  // IMPORTANT:
-  // Community requests are request-history records.
-  //
-  // Do NOT filter by status here.
-  //
-  // A request must remain visible after:
-  //   pending   → approved
-  //   pending   → rejected
-  //   pending   → cancelled
-  //
-  // The status is used by the UI to display the current state.
-  // It must NOT determine whether the request is included in the result.
+  // 6. MAP COMMUNITY BOOK REQUESTS
   // --------------------------------------------------------------------------
 
   const mappedCommunityRequests =
@@ -851,30 +862,28 @@ export async function fetchBorrowRequests() {
       )
       .map(
         (request) => {
-          // ------------------------------------------------------------------
+
+          // ---------------------------------------------------------------
           // Request ID
-          // ------------------------------------------------------------------
+          // ---------------------------------------------------------------
 
           const requestId =
             request.id ||
             request.request_id ||
             null;
 
-          // ------------------------------------------------------------------
+          // ---------------------------------------------------------------
           // Book ID
-          // ------------------------------------------------------------------
+          // ---------------------------------------------------------------
 
           const bookId =
             request.book_id ||
             request.bookId ||
             null;
 
-          // ------------------------------------------------------------------
+          // ---------------------------------------------------------------
           // Book title
-          // ------------------------------------------------------------------
-          //
-          // fetch_my_community_book_requests() already returns book_title.
-          // ------------------------------------------------------------------
+          // ---------------------------------------------------------------
 
           const bookTitle =
             request.book_title ||
@@ -882,13 +891,9 @@ export async function fetchBorrowRequests() {
             request.title ||
             'Untitled Book';
 
-          // ------------------------------------------------------------------
+          // ---------------------------------------------------------------
           // Request date
-          // ------------------------------------------------------------------
-          //
-          // PostgreSQL RPC returns request_date.
-          // Keep it even after approve/reject.
-          // ------------------------------------------------------------------
+          // ---------------------------------------------------------------
 
           const requestDate =
             request.request_date ||
@@ -899,13 +904,13 @@ export async function fetchBorrowRequests() {
             request.createdAt ||
             null;
 
-          // ------------------------------------------------------------------
+          // ---------------------------------------------------------------
           // Status
-          // ------------------------------------------------------------------
+          // ---------------------------------------------------------------
           //
-          // IMPORTANT:
+          // Preserve the actual database status.
           // Do NOT convert approved/rejected back to pending.
-          // ------------------------------------------------------------------
+          // ---------------------------------------------------------------
 
           const status =
             normalizeText(
@@ -913,18 +918,9 @@ export async function fetchBorrowRequests() {
             ).toLowerCase() ||
             'pending';
 
-          // ------------------------------------------------------------------
-          // Requester
-          // ------------------------------------------------------------------
-          //
-          // PostgreSQL RPC returns:
-          //   requester_visitor_id
-          //   requester_name
-          //
-          // These are mapped to the common request structure:
-          //   visitorId
-          //   visitorName
-          // ------------------------------------------------------------------
+          // ---------------------------------------------------------------
+          // Requester visitor ID
+          // ---------------------------------------------------------------
 
           const requesterVisitorId =
             request.requester_visitor_id ||
@@ -933,6 +929,10 @@ export async function fetchBorrowRequests() {
             request.visitorId ||
             normalizedVisitorId ||
             null;
+
+          // ---------------------------------------------------------------
+          // Requester name
+          // ---------------------------------------------------------------
 
           const requesterName =
             request.requester_name ||
@@ -945,9 +945,9 @@ export async function fetchBorrowRequests() {
             localSession?.visitor?.full_name ||
             'SHELF Visitor';
 
-          // ------------------------------------------------------------------
+          // ---------------------------------------------------------------
           // Owner
-          // ------------------------------------------------------------------
+          // ---------------------------------------------------------------
 
           const ownerVisitorId =
             request.owner_visitor_id ||
@@ -959,9 +959,9 @@ export async function fetchBorrowRequests() {
             request.ownerName ||
             null;
 
-          // ------------------------------------------------------------------
-          // Request status timestamps
-          // ------------------------------------------------------------------
+          // ---------------------------------------------------------------
+          // Status timestamps
+          // ---------------------------------------------------------------
 
           const approvedAt =
             request.approved_at ||
@@ -973,18 +973,18 @@ export async function fetchBorrowRequests() {
             request.rejectedAt ||
             null;
 
-          // ------------------------------------------------------------------
+          // ---------------------------------------------------------------
           // Owner response
-          // ------------------------------------------------------------------
+          // ---------------------------------------------------------------
 
           const ownerResponse =
             request.owner_response ||
             request.ownerResponse ||
             null;
 
-          // ------------------------------------------------------------------
+          // ---------------------------------------------------------------
           // Optional request information
-          // ------------------------------------------------------------------
+          // ---------------------------------------------------------------
 
           const pickupDeadline =
             request.pickup_deadline ||
@@ -1039,15 +1039,11 @@ export async function fetchBorrowRequests() {
             request.lendingPeriodDays ??
             null;
 
-          // ------------------------------------------------------------------
-          // Return normalized community request.
-          // ------------------------------------------------------------------
+          // ---------------------------------------------------------------
+          // NORMALIZED COMMUNITY REQUEST
+          // ---------------------------------------------------------------
 
           return {
-            // --------------------------------------------------------------
-            // Common request fields
-            // --------------------------------------------------------------
-
             id:
               requestId,
 
@@ -1096,20 +1092,14 @@ export async function fetchBorrowRequests() {
             cancelReason:
               cancelReason,
 
-            // --------------------------------------------------------------
-            // Community request identification
-            // --------------------------------------------------------------
-
+            // Community marker
             requestType:
               'community',
 
             isCommunityBook:
               true,
 
-            // --------------------------------------------------------------
-            // Community-book-specific fields
-            // --------------------------------------------------------------
-
+            // Owner information
             ownerVisitorId:
               ownerVisitorId,
 
@@ -1132,7 +1122,7 @@ export async function fetchBorrowRequests() {
       );
 
   // --------------------------------------------------------------------------
-  // 5. NORMAL LIBRARY REQUESTS
+  // 7. MAP NORMAL LIBRARY REQUESTS
   // --------------------------------------------------------------------------
 
   const mappedNormalRequests =
@@ -1155,7 +1145,7 @@ export async function fetchBorrowRequests() {
       );
 
   // --------------------------------------------------------------------------
-  // 6. MERGE BOTH REQUEST TYPES
+  // 8. MERGE NORMAL + COMMUNITY REQUESTS
   // --------------------------------------------------------------------------
 
   const mergedRequests = [
@@ -1164,14 +1154,7 @@ export async function fetchBorrowRequests() {
   ];
 
   // --------------------------------------------------------------------------
-  // 7. REMOVE DUPLICATES
-  // --------------------------------------------------------------------------
-  //
-  // IMPORTANT:
-  // Use the request UUID as the unique key.
-  //
-  // An approved/rejected community request still has the same UUID, so
-  // changing its status will NOT create or remove a different request.
+  // 9. REMOVE DUPLICATES
   // --------------------------------------------------------------------------
 
   const uniqueRequests =
@@ -1195,7 +1178,7 @@ export async function fetchBorrowRequests() {
     );
 
   // --------------------------------------------------------------------------
-  // 8. SORT NEWEST FIRST
+  // 10. SORT NEWEST FIRST
   // --------------------------------------------------------------------------
 
   uniqueRequests.sort(
@@ -1219,14 +1202,11 @@ export async function fetchBorrowRequests() {
   );
 
   // --------------------------------------------------------------------------
-  // 9. DEBUG INFORMATION
-  // --------------------------------------------------------------------------
-  //
-  // This lets us verify that approved/rejected requests are still returned.
+  // 11. FINAL DEBUG
   // --------------------------------------------------------------------------
 
   console.log(
-    'SHELF — REQUESTS & BORROWS:',
+    'SHELF — FINAL REQUESTS & BORROWS:',
     {
       visitorId:
         normalizedVisitorId,
@@ -1249,11 +1229,14 @@ export async function fetchBorrowRequests() {
             bookTitle:
               request.bookTitle,
 
+            requesterVisitorId:
+              request.visitorId,
+
             requesterName:
               request.visitorName,
 
-            requesterVisitorId:
-              request.visitorId,
+            ownerVisitorId:
+              request.ownerVisitorId,
 
             ownerName:
               request.ownerName,
@@ -1278,6 +1261,8 @@ export async function fetchBorrowRequests() {
   );
 
   return uniqueRequests;
+}
+
 // ============================================================================
 // FETCH ATTENDANCE LOGS
 // ============================================================================
