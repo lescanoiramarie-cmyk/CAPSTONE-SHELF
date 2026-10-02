@@ -197,6 +197,7 @@ export default function VisitorLogin() {
 
   const [view, setView] = useState('login');
   const [error, setError] = useState('');
+  const [canResendVisitorOtp, setCanResendVisitorOtp] = useState(false);
 
   const [fieldErrors, setFieldErrors] = useState({
     fullName: '',
@@ -753,6 +754,7 @@ export default function VisitorLogin() {
     event.preventDefault();
 
     setError('');
+    setCanResendVisitorOtp(false);
 
     const identifier =
       loginData.identifier.trim();
@@ -798,10 +800,31 @@ export default function VisitorLogin() {
         );
       }
     } catch (err) {
-      setError(
-        err?.message ||
-          'Invalid email/ID or password.'
-      );
+      const message = String(err?.message || 'Invalid email/ID or password.');
+      if (message.toLowerCase().includes('email has not been confirmed') ||
+        message.toLowerCase().includes('email not confirmed')) {
+        setCanResendVisitorOtp(true);
+        setError('This visitor account has not confirmed its email. Request a new verification code to continue.');
+      } else {
+        setError(message);
+      }
+    }
+  };
+
+  const handleResendUnconfirmedVisitorOtp = async () => {
+    const email = loginData.identifier.trim().toLowerCase();
+    if (!email.includes('@')) return;
+
+    setError('');
+    try {
+      await resendVisitorOtp(email);
+      setPendingVisitorId(email);
+      setPendingEmail(email);
+      setOtpInput('');
+      setCanResendVisitorOtp(false);
+      setView('otp');
+    } catch (err) {
+      setError(err?.message || 'Unable to resend the verification code.');
     }
   };
 
@@ -1178,6 +1201,16 @@ export default function VisitorLogin() {
             >
               {error}
             </div>
+          )}
+
+          {view === 'login' && canResendVisitorOtp && (
+            <button
+              type="button"
+              onClick={handleResendUnconfirmedVisitorOtp}
+              className="w-full text-xs font-semibold text-[#002046] hover:underline"
+            >
+              Resend Visitor Verification Code
+            </button>
           )}
 
           {/* =================================================
@@ -1875,13 +1908,14 @@ export default function VisitorLogin() {
                       value={
                         loginData.identifier
                       }
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        setCanResendVisitorOtp(false);
                         setLoginData({
                           ...loginData,
                           identifier:
                             event.target.value,
-                        })
-                      }
+                        });
+                      }}
                       className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
                     />
                   </div>
