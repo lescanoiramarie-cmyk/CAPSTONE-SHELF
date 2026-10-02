@@ -6,7 +6,7 @@
 // themselves.
 //
 // Authentication:
-//   Visitors      → PostgreSQL RPC
+//   Visitors      → Supabase Auth + visitors.auth_user_id
 //   Staff/Admin   → Supabase Auth + staff_profiles
 //
 // Business rules that must be atomic are handled by PostgreSQL RPC functions.
@@ -128,7 +128,7 @@ export const SAMPLE_BOOKS = [
     libraryId: '277829af-1475-47ae-9e26-4b64c68f54f4',
     totalCopies: 5,
     summary:
-      'This comprehensive guide serves as an essential roadmap for students and software engineers aiming to master the foundational mechanics of computer science. Designed with clarity and practical implementation in mind, the text thoroughly explores complex topics such as binary search trees, stacks, queues, sorting algorithms, and advanced memory allocation techniques specifically within the Java programming environment. Readers are provided with clear architectural breakdowns and step-by-step code examples that demystify how underlying data structures affect application performance and scalability. Furthermore, the book emphasizes object-oriented design principles, ensuring that developers not only learn how to implement data structures efficiently but also how to write maintainable, modular, and robust codebases. Whether you are preparing for technical interviews, building enterprise-grade applications, or laying down the core academic groundwork required for advanced software engineering, this textbook bridges the crucial gap between abstract theoretical computer science concepts and real-world programming execution, making it an indispensable resource for any modern technical library collection.',
+      'This comprehensive guide serves as an essential roadmap for students and software engineers aiming to master the foundational mechanics of computer science. Designed with clarity and practical implementation in mind, the text thoroughly explores complex topics such as binary search trees, stacks, queues, sorting algorithms, and advanced memory allocation techniques specifically within the Java programming environment. Readers are provided with clear architectural breakdowns and step-by-step code examples that demystify how underlying data structures affect application performance and scalability. Furthermore, the book emphasizes object-oriented design principles, ensuring that developers not only learn how to implement data structures efficiently but also how to write maintainable, modular, and robust codebases. Whether you are preparing for technical interviews, building enterprise-grade applications, or laying down the core academic groundwork required for advanced software engineering, this textbook bridges the crucial gap between abstract theoretical computer science and real-world programming execution, making it an indispensable resource for any modern technical library collection.',
     coverUrl:
       'https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&q=80&w=400',
   },
@@ -141,7 +141,7 @@ export const SAMPLE_BOOKS = [
     libraryId: '3ccf575d-4573-4ed9-acdb-c8d9cf8a949e',
     totalCopies: 3,
     summary:
-      'Even bad code can function properly, but failing to keep code clean can drastically slow down a development team, stall product lifecycles, and accumulate massive technical debt over time. This seminal handbook introduces programmers to the core values, disciplines, and best practices of agile software craftsmanship. The author breaks down the art of writing readable, reusable, and refactorable code by examining meaningful naming conventions, proper function sizing, object-oriented design boundaries, effective error handling protocols, and comprehensive unit testing strategies. Through extensive comparative code examples, readers learn to distinguish between messy, convoluted implementations and elegant, self-documenting architectures. The text challenges developers to take professional pride in their codebases, arguing that writing clean code is not merely an aesthetic preference but a fundamental ethical and economic necessity for long-term project viability. Packed with invaluable insights, heuristics, and practical refactoring exercises, this textbook transforms casual programmers into disciplined software artisans capable of collaborating seamlessly in high-performance team environments.',
+      'Even bad code can function properly, but failing to keep code clean can drastically slow down a development team, stall product lifecycles, and accumulate massive technical debt over time. This seminal handbook introduces programmers to the core values, disciplines, and best practices of agile software craftsmanship. The author breaks down the art of writing readable, reusable, and refactorable code by examining meaningful naming conventions, proper function sizing, object-oriented design boundaries, effective error handling protocols, and comprehensive unit testing strategies. Through extensive comparative code examples, readers learn to distinguish between messy, convoluted implementations and elegant, self-documenting architectures. The text challenges programmers to take professional pride in their codebases, arguing that writing clean code is not merely an aesthetic preference but a fundamental ethical and economic necessity for long-term project viability. Packed with invaluable insights, heuristics, and practical refactoring exercises, this textbook transforms casual programmers into disciplined software artisans capable of collaborating seamlessly in high-performance development teams.',
     coverUrl:
       'https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&q=80&w=400',
   },
@@ -154,7 +154,7 @@ export const SAMPLE_BOOKS = [
     libraryId: '84819f90-5923-4bd8-8aa0-1805e7613e81',
     totalCopies: 4,
     summary:
-      'Widely recognized as a cornerstone text for engineering and physical science students, this authoritative volume offers a rigorous and deeply analytical foundation in classical mechanics, thermodynamics, electromagnetism, and modern physics. The curriculum is meticulously structured to cultivate critical analytical thinking and problem-solving skills, taking complex physical phenomena and breaking them down through mathematical rigor, vector calculus applications, and real-world engineering scenarios. Each chapter features conceptual questions, detailed problem sets, and illustrative visual diagrams that connect abstract theoretical equations to tangible physical reality. Students explore the conservation of energy, rotational dynamics, wave motion, electromagnetic induction, and quantum principles with exceptional clarity. Designed to support rigorous academic programs, the book encourages learners to look beyond rote formula memorization and truly grasp the universal laws governing the physical universe. It serves as an enduring reference tool that students will carry with them from their foundational undergraduate coursework into their professional careers.',
+      'Widely recognized as a cornerstone text for engineering and physical science students, this authoritative volume offers a rigorous and deeply analytical foundation in classical mechanics, thermodynamics, electromagnetism, and modern physics. The curriculum is meticulously structured to cultivate critical analytical thinking and problem-solving skills, taking complex physical phenomena and breaking them down through mathematical rigor, vector calculus applications, and real-world engineering scenarios. Each chapter features conceptual questions, detailed problem sets, and illustrative visual diagrams that connect abstract theoretical equations to tangible physical reality. Students explore the conservation of energy, rotational dynamics, wave motion, electromagnetic induction, and quantum principles with exceptional clarity. Designed to support rigorous academic programs, the book encourages learners to look beyond rote formula memorization and truly grasp the universal laws governing the physical universe.',
     coverUrl:
       'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&q=80&w=400',
   },
@@ -398,23 +398,32 @@ export async function getVisitor(visitorId) {
 // ============================================================================
 // VISITOR ACCOUNTS
 // ----------------------------------------------------------------------------
-// Visitors use PostgreSQL RPC authentication.
+// Visitors use Supabase Auth for passwords.
 //
 // Registration:
-//   register_visitor()
+//   supabase.auth.signUp()
 //        ↓
-//   visitors row created with OTP
+//   auth.users
+//        ↓
+//   register_visitor(auth_user_id, profile data)
+//        ↓
+//   visitors row + OTP
 //        ↓
 //   send-visitor-otp Edge Function
 //
 // Verification:
-//   verify_visitor_otp()
+//   verify_visitor_otp(uuid,text)
 //
-// Login:
-//   login_visitor()
+// Email login:
+//   supabase.auth.signInWithPassword()
+//        ↓
+//   visitors.auth_user_id
+//
+// QR login:
+//   visitors.qr_code
 //
 // IMPORTANT:
-// Visitors DO NOT use supabase.auth.signUp().
+// Visitor passwords are NEVER stored in the visitors table.
 // ============================================================================
 
 export async function registerVisitor({
@@ -472,56 +481,209 @@ export async function registerVisitor({
   }
 
   // --------------------------------------------------------------------------
-  // CREATE VISITOR
+  // CHECK IF VISITOR PROFILE ALREADY EXISTS
   // --------------------------------------------------------------------------
 
   const {
-    data,
-    error,
-  } = await supabase.rpc(
-    'register_visitor',
-    {
-      p_full_name: normalizedFullName,
-      p_contact_number: normalizedContactNumber,
-      p_email: normalizedEmail,
-      p_address: normalizedAddress,
-      p_password: normalizedPassword,
-    }
-  );
+    data: existingVisitor,
+    error: existingVisitorError,
+  } = await supabase
+    .from('visitors')
+    .select('id, auth_user_id, otp_verified, is_active')
+    .eq('email', normalizedEmail)
+    .maybeSingle();
 
-  if (error) {
-    throw cleanErr(error);
+  if (existingVisitorError) {
+    throw cleanErr(
+      existingVisitorError,
+      'Unable to check the visitor account.'
+    );
+  }
+
+  if (existingVisitor) {
+    if (
+      existingVisitor.otp_verified === false
+    ) {
+      throw new Error(
+        'This email already has an unverified registration. Please verify the OTP or request a new code.'
+      );
+    }
+
+    throw new Error(
+      'A visitor account with this email already exists.'
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // CREATE AUTH USER
+  // --------------------------------------------------------------------------
+  // The password is sent directly to Supabase Auth.
+  // It is NOT inserted into the visitors table.
+  // --------------------------------------------------------------------------
+
+  const {
+    data: authData,
+    error: authError,
+  } =
+    await supabase.auth.signUp({
+      email: normalizedEmail,
+      password: normalizedPassword,
+      options: {
+        data: {
+          role: 'visitor',
+          full_name:
+            normalizedFullName,
+          contact_number:
+            normalizedContactNumber,
+          address:
+            normalizedAddress,
+        },
+      },
+    });
+
+  if (authError) {
+    const message =
+      String(
+        authError?.message || ''
+      ).toLowerCase();
+
+    if (
+      message.includes(
+        'already registered'
+      ) ||
+      message.includes(
+        'already exists'
+      ) ||
+      message.includes(
+        'user already registered'
+      )
+    ) {
+      throw new Error(
+        'A visitor account with this email already exists.'
+      );
+    }
+
+    throw cleanErr(
+      authError,
+      'Unable to create the visitor account.'
+    );
+  }
+
+  if (!authData?.user?.id) {
+    throw new Error(
+      'Supabase Auth did not return a user account. Please try again.'
+    );
+  }
+
+  const authUserId =
+    String(authData.user.id).trim();
+
+  // --------------------------------------------------------------------------
+  // CREATE VISITOR PROFILE
+  // --------------------------------------------------------------------------
+
+  const {
+    data: registrationData,
+    error: registrationError,
+  } =
+    await supabase.rpc(
+      'register_visitor',
+      {
+        p_auth_user_id:
+          authUserId,
+
+        p_full_name:
+          normalizedFullName,
+
+        p_contact_number:
+          normalizedContactNumber,
+
+        p_email:
+          normalizedEmail,
+
+        p_address:
+          normalizedAddress,
+      }
+    );
+
+  if (registrationError) {
+    console.error(
+      'REGISTER VISITOR PROFILE ERROR:',
+      registrationError
+    );
+
+    // If profile creation fails after Auth creation,
+    // sign out so the partially completed registration
+    // does not leave an active frontend session.
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Ignore cleanup errors.
+    }
+
+    throw cleanErr(
+      registrationError,
+      'The authentication account was created, but the visitor profile could not be created.'
+    );
   }
 
   const row =
-    Array.isArray(data)
-      ? data[0]
-      : data;
+    Array.isArray(
+      registrationData
+    )
+      ? registrationData[0]
+      : registrationData;
 
   if (!row?.visitor_id) {
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Ignore cleanup errors.
+    }
+
     throw new Error(
-      'Registration was unsuccessful. Please try again.'
+      'The visitor profile could not be created. Please try again.'
     );
   }
 
   const visitorId =
-    String(row.visitor_id).trim();
+    String(
+      row.visitor_id
+    ).trim();
 
   // --------------------------------------------------------------------------
-  // SEND OTP
+  // SIGN OUT THE NEW AUTH SESSION
+  // --------------------------------------------------------------------------
+  // If email confirmation is disabled in Supabase Auth,
+  // signUp may automatically create a session.
+  //
+  // SHELF uses its own OTP verification flow, so the newly
+  // registered visitor should not enter the application
+  // before the SHELF OTP is verified.
+  // --------------------------------------------------------------------------
+
+  try {
+    await supabase.auth.signOut();
+  } catch {
+    // Ignore cleanup errors.
+  }
+
+  // --------------------------------------------------------------------------
+  // SEND SHELF OTP
   // --------------------------------------------------------------------------
 
   const {
     data: emailData,
     error: emailError,
-  } = await supabase.functions.invoke(
-    'send-visitor-otp',
-    {
-      body: {
-        visitorId,
-      },
-    }
-  );
+  } =
+    await supabase.functions.invoke(
+      'send-visitor-otp',
+      {
+        body: {
+          visitorId,
+        },
+      }
+    );
 
   if (emailError) {
     console.error(
@@ -652,6 +814,7 @@ export async function verifyVisitorOtp(
     {
       p_visitor_id:
         normalizedVisitorId,
+
       p_code:
         normalizedCode,
     }
@@ -674,15 +837,27 @@ export async function verifyVisitorOtp(
 
   return {
     id: row.id,
-    fullName: row.full_name,
-    email: row.email,
-    qrCode: row.qr_code,
+    fullName:
+      row.full_name,
+    email:
+      row.email,
+    qrCode:
+      row.qr_code,
     otpVerified: true,
   };
 }
 
 // ============================================================================
 // VISITOR LOGIN
+// ----------------------------------------------------------------------------
+// Email login:
+//   Supabase Auth verifies the password.
+//
+// QR login:
+//   Directly finds the visitor using qr_code.
+//
+// No visitor password is ever compared against a column
+// in the visitors table.
 // ============================================================================
 
 export async function loginVisitor({
@@ -701,44 +876,250 @@ export async function loginVisitor({
     );
   }
 
-  const {
-    data,
-    error,
-  } = await supabase.rpc(
-    'login_visitor',
-    {
-      p_identifier:
-        normalizedIdentifier,
-      p_password:
-        normalizedPassword,
-    }
-  );
+  // --------------------------------------------------------------------------
+  // QR LOGIN
+  // --------------------------------------------------------------------------
 
-  if (error) {
-    throw cleanErr(error);
+  const looksLikeQr =
+    /^SHELF-QR-\d{6}$/i.test(
+      normalizedIdentifier
+    );
+
+  if (looksLikeQr) {
+    const {
+      data: visitor,
+      error: visitorError,
+    } =
+      await supabase
+        .from('visitors')
+        .select(
+          'id, full_name, email, otp_verified, qr_code, is_active, auth_user_id'
+        )
+        .eq(
+          'qr_code',
+          normalizedIdentifier
+        )
+        .maybeSingle();
+
+    if (visitorError) {
+      throw cleanErr(
+        visitorError,
+        'Unable to verify the visitor QR pass.'
+      );
+    }
+
+    if (!visitor) {
+      throw new Error(
+        'Visitor QR pass was not found.'
+      );
+    }
+
+    if (
+      visitor.is_active === false
+    ) {
+      throw new Error(
+        'This visitor account is currently inactive.'
+      );
+    }
+
+    if (
+      visitor.otp_verified !== true
+    ) {
+      throw new Error(
+        'Please verify your visitor account before using the QR pass.'
+      );
+    }
+
+    return {
+      id:
+        visitor.id,
+
+      fullName:
+        visitor.full_name,
+
+      email:
+        visitor.email,
+
+      qrCode:
+        visitor.qr_code,
+    };
   }
 
-  const row =
-    Array.isArray(data)
-      ? data[0]
-      : data;
+  // --------------------------------------------------------------------------
+  // EMAIL + PASSWORD LOGIN
+  // --------------------------------------------------------------------------
 
-  if (!row?.id) {
+  if (!normalizedPassword) {
     throw new Error(
-      'Visitor account was not found.'
+      'Password is required.'
+    );
+  }
+
+  const {
+    data: authData,
+    error: authError,
+  } =
+    await supabase.auth.signInWithPassword({
+      email:
+        normalizedIdentifier
+          .toLowerCase(),
+
+      password:
+        normalizedPassword,
+    });
+
+  if (authError) {
+    const message =
+      String(
+        authError?.message || ''
+      ).trim();
+
+    const lowerMessage =
+      message.toLowerCase();
+
+    if (
+      lowerMessage.includes(
+        'invalid login credentials'
+      )
+    ) {
+      throw new Error(
+        'Invalid login credentials'
+      );
+    }
+
+    if (
+      lowerMessage.includes(
+        'email not confirmed'
+      )
+    ) {
+      throw new Error(
+        'Please verify your email account before logging in.'
+      );
+    }
+
+    throw cleanErr(
+      authError,
+      'Unable to log in to the visitor account.'
+    );
+  }
+
+  if (!authData?.user?.id) {
+    throw new Error(
+      'Supabase Auth did not return a visitor account.'
+    );
+  }
+
+  const authUserId =
+    String(
+      authData.user.id
+    ).trim();
+
+  // --------------------------------------------------------------------------
+  // LOAD VISITOR PROFILE
+  // --------------------------------------------------------------------------
+
+  const {
+    data: visitor,
+    error: visitorError,
+  } =
+    await supabase
+      .from('visitors')
+      .select(
+        'id, full_name, email, otp_verified, qr_code, is_active, auth_user_id'
+      )
+      .eq(
+        'auth_user_id',
+        authUserId
+      )
+      .maybeSingle();
+
+  if (visitorError) {
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Ignore cleanup errors.
+    }
+
+    throw cleanErr(
+      visitorError,
+      'Unable to load the visitor profile.'
+    );
+  }
+
+  if (!visitor) {
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Ignore cleanup errors.
+    }
+
+    throw new Error(
+      'This account is not registered as a SHELF visitor.'
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // ACTIVE CHECK
+  // --------------------------------------------------------------------------
+
+  if (
+    visitor.is_active === false
+  ) {
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Ignore cleanup errors.
+    }
+
+    throw new Error(
+      'This visitor account is currently inactive.'
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // OTP CHECK
+  // --------------------------------------------------------------------------
+
+  if (
+    visitor.otp_verified !== true
+  ) {
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Ignore cleanup errors.
+    }
+
+    throw new Error(
+      'Please verify your OTP code before logging in.'
     );
   }
 
   return {
-    id: row.id,
-    fullName: row.full_name,
-    email: row.email,
-    qrCode: row.qr_code,
+    id:
+      visitor.id,
+
+    fullName:
+      visitor.full_name,
+
+    email:
+      visitor.email,
+
+    qrCode:
+      visitor.qr_code,
   };
 }
 
 // ============================================================================
 // FIND VISITOR BY QR
+// ----------------------------------------------------------------------------
+// Used by authorized staff when scanning a visitor at a library branch.
+//
+// Existing deployed RPC:
+//   find_visitor_by_qr(text, text)
+//
+// Parameters:
+//   p_qr
+//   p_library_id
 // ============================================================================
 
 export async function findVisitorByQr(
@@ -748,12 +1129,18 @@ export async function findVisitorByQr(
   const normalizedQrCode =
     String(qrCode || '').trim();
 
+  const normalizedLibraryId =
+    String(libraryId || '').trim();
+
   if (!normalizedQrCode) {
     return null;
   }
 
-  // libraryId is retained for compatibility with existing components.
-  // The deployed RPC only requires p_qr.
+  if (!normalizedLibraryId) {
+    throw new Error(
+      'Library branch is required to scan a visitor.'
+    );
+  }
 
   const {
     data,
@@ -763,6 +1150,9 @@ export async function findVisitorByQr(
     {
       p_qr:
         normalizedQrCode,
+
+      p_library_id:
+        normalizedLibraryId,
     }
   );
 
@@ -783,10 +1173,17 @@ export async function findVisitorByQr(
       : data;
 
   return {
-    id: row.id,
-    fullName: row.full_name,
-    email: row.email,
-    qrCode: row.qr_code,
+    id:
+      row.id,
+
+    fullName:
+      row.full_name,
+
+    email:
+      row.email,
+
+    qrCode:
+      row.qr_code,
   };
 }
 
@@ -832,6 +1229,7 @@ export async function loginStaffAccount(
     await supabase.auth.signInWithPassword({
       email:
         normalizedEmail,
+
       password:
         normalizedPassword,
     });
@@ -960,7 +1358,9 @@ export async function loginStaffAccount(
   // ACTIVE CHECK
   // --------------------------------------------------------------------------
 
-  if (profile.is_active !== true) {
+  if (
+    profile.is_active !== true
+  ) {
     try {
       await supabase.auth.signOut();
     } catch {
@@ -998,11 +1398,20 @@ export async function loginStaffAccount(
   }
 
   return {
-    id: profile.id,
-    email: profile.email,
-    name: profile.full_name,
-    role: profile.role,
-    libraryId: profile.library_id,
+    id:
+      profile.id,
+
+    email:
+      profile.email,
+
+    name:
+      profile.full_name,
+
+    role:
+      profile.role,
+
+    libraryId:
+      profile.library_id,
   };
 }
 
@@ -1088,6 +1497,7 @@ export async function scanAttendance(
         String(
           qrCode || ''
         ).trim(),
+
       p_library_id:
         libraryId,
     }
@@ -1112,12 +1522,15 @@ export async function scanAttendance(
     visitor: {
       id:
         row.visitor_id,
+
       fullName:
         row.visitor_name,
     },
+
     log: {
       id:
         row.log_id,
+
       action:
         row.action,
     },
@@ -1620,6 +2033,7 @@ export async function requestBorrow(
       {
         p_visitor_id:
           visitorId,
+
         p_book_id:
           bookId,
       }
@@ -1661,6 +2075,7 @@ export async function cancelBorrowRequest(
       {
         p_request_id:
           requestId,
+
         p_reason:
           reason,
       }
@@ -1687,6 +2102,7 @@ export async function confirmPickup(
       {
         p_request_id:
           requestId,
+
         p_staff_name:
           staffName,
       }
@@ -1713,6 +2129,7 @@ export async function confirmReturn(
       {
         p_request_id:
           requestId,
+
         p_staff_name:
           staffName,
       }
