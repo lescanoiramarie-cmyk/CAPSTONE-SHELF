@@ -352,20 +352,18 @@ export const AuthProvider = ({ children }) => {
   // =========================================================
   // UNIFIED LOGIN
   //
-  // STAFF FIRST
-  // VISITOR SECOND
+  // EMAIL/PASSWORD:
   //
-  // IMPORTANT:
+  // 1. Try staff login.
+  // 2. If credentials are invalid, try visitor login.
+  // 3. If the account is authenticated but has no
+  //    staff_profiles record, try visitor login.
+  // 4. If an actual staff account is inactive, STOP and
+  //    show the inactive-staff error.
   //
-  // Visitor fallback is allowed ONLY when the staff login
-  // fails because the credentials are invalid.
+  // QR:
   //
-  // If the account is an actual staff account but is:
-  // - inactive
-  // - not provisioned
-  // - invalid staff role
-  //
-  // the staff-specific error is returned directly.
+  // Visitor QR login goes directly to visitor login.
   // =========================================================
 
   const login = async ({
@@ -378,23 +376,36 @@ export const AuthProvider = ({ children }) => {
     const normalizedPassword =
       String(password || '');
 
+    // =======================================================
+    // BASIC VALIDATION
+    // =======================================================
+
     if (!normalizedIdentifier) {
       throw new Error(
         'Email or visitor QR pass is required.'
       );
     }
 
-    if (!normalizedPassword && normalizedIdentifier.includes('@')) {
-      throw new Error(
-        'Password is required.'
-      );
-    }
+    // =======================================================
+    // VISITOR QR LOGIN
+    //
+    // QR/pass IDs do not contain @.
+    // They should go directly to visitor login.
+    // =======================================================
 
     if (!normalizedIdentifier.includes('@')) {
-      const visitor = await store.loginVisitor({
-        identifier: normalizedIdentifier,
-        password: '',
-      });
+      const visitor =
+        await store.loginVisitor({
+          identifier: normalizedIdentifier,
+          password: '',
+        });
+
+      if (!visitor) {
+        throw new Error(
+          'Visitor account was not found.'
+        );
+      }
+
       const visitorSession = {
         role: 'visitor',
         id: visitor.id,
@@ -402,15 +413,31 @@ export const AuthProvider = ({ children }) => {
         email: visitor.email,
         qrCode: visitor.qrCode,
       };
+
       setUser(visitorSession);
-      return { success: true, role: 'visitor', user: visitor };
+
+      return {
+        success: true,
+        role: 'visitor',
+        user: visitor,
+      };
+    }
+
+    // =======================================================
+    // EMAIL LOGIN REQUIRES PASSWORD
+    // =======================================================
+
+    if (!normalizedPassword) {
+      throw new Error(
+        'Password is required.'
+      );
     }
 
     // =======================================================
     // 1. TRY STAFF LOGIN FIRST
     // =======================================================
 
-    let staffError;
+    let staffError = null;
 
     try {
       const staff =
@@ -418,6 +445,12 @@ export const AuthProvider = ({ children }) => {
           normalizedIdentifier,
           normalizedPassword
         );
+
+      if (!staff) {
+        throw new Error(
+          'Staff profile was not found.'
+        );
+      }
 
       return {
         success: true,
@@ -434,35 +467,72 @@ export const AuthProvider = ({ children }) => {
     }
 
     // =======================================================
-    // IMPORTANT STAFF ERROR HANDLING
-    //
-    // Only "Invalid login credentials" should fall through
-    // to visitor login.
-    //
-    // Any other staff error means that authentication reached
-    // a staff-related condition and should be shown directly.
+    // 2. CHECK STAFF ERROR
     // =======================================================
 
     const staffErrorMessage =
-      String(staffError?.message || '')
-        .trim();
+      String(
+        staffError?.message || ''
+      ).trim();
 
-    const shouldTryVisitorLogin =
+    // =======================================================
+    // INVALID STAFF CREDENTIALS
+    //
+    // This can simply be a normal visitor account, so try
+    // visitor login.
+    // =======================================================
+
+    const isInvalidStaffCredentials =
       staffErrorMessage ===
       'Invalid login credentials';
+
+    // =======================================================
+    // NOT PROVISIONED AS STAFF
+    //
+    // Supabase Auth accepted the account, but there is no
+    // matching staff_profiles row.
+    //
+    // This is expected for normal visitor accounts.
+    // Therefore try visitor login.
+    // =======================================================
+
+    const isNotProvisionedStaff =
+      staffErrorMessage ===
+      'This account has not been provisioned as a SHELF staff account.';
+
+    // =======================================================
+    // INACTIVE STAFF
+    //
+    // DO NOT fall through to visitor login.
+    //
+    // This preserves the existing disabled-staff behavior.
+    // =======================================================
+
+    const isInactiveStaff =
+      staffErrorMessage ===
+      'This staff account is currently inactive.';
+
+    if (isInactiveStaff) {
+      throw staffError;
+    }
+
+    // =======================================================
+    // ONLY THESE STAFF ERRORS CAN FALL THROUGH:
+    //
+    // 1. Invalid login credentials
+    // 2. Account not provisioned as SHELF staff
+    // =======================================================
+
+    const shouldTryVisitorLogin =
+      isInvalidStaffCredentials ||
+      isNotProvisionedStaff;
 
     if (!shouldTryVisitorLogin) {
       throw staffError;
     }
 
     // =======================================================
-    // 2. TRY VISITOR LOGIN
-    //
-    // This happens only when Supabase Auth says that the
-    // supplied credentials are not valid for a staff account.
-    //
-    // This allows normal visitor email/password and QR login
-    // to continue working.
+    // 3. TRY VISITOR LOGIN
     // =======================================================
 
     try {
