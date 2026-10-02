@@ -115,6 +115,21 @@ export const DEFAULT_COVER_URL =
   'https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&q=80&w=400';
 
 // ============================================================================
+// PERSONAL BOOK RULES
+// ============================================================================
+
+export const PERSONAL_BOOK_CONDITIONS = [
+  'New',
+  'Like New',
+  'Good',
+  'Fair',
+  'Poor',
+];
+
+export const PERSONAL_BOOK_MIN_LENDING_DAYS = 1;
+export const PERSONAL_BOOK_MAX_LENDING_DAYS = 30;
+
+// ============================================================================
 // DEMO / SAMPLE CATALOG
 // ============================================================================
 
@@ -243,6 +258,20 @@ const mapBook = (r) => ({
   availableCopies: r.available_copies,
   summary: r.summary,
   coverUrl: r.cover_url,
+  createdAt: r.created_at,
+
+  // --------------------------------------------------------------------------
+  // PERSONAL / COMMUNITY BOOK FIELDS
+  // --------------------------------------------------------------------------
+
+  bookType: r.book_type || 'library',
+  ownerVisitorId: r.owner_visitor_id || null,
+  lendingEnabled: r.lending_enabled ?? false,
+  condition: r.condition || null,
+  lendingPeriodDays:
+    r.lending_period_days ?? 7,
+  handoverLocation:
+    r.handover_location || null,
 });
 
 const mapVisitor = (r) => ({
@@ -437,9 +466,10 @@ export async function fetchVisitors() {
 //    - Visitor QR login
 //
 // QR login does not create a Supabase Auth session.
-// Therefore, QR visitors use the protected
+// Therefore, QR visitors use the visitor-specific
 // get_visitor_borrow_requests() PostgreSQL RPC.
 //
+// ============================================================================
 
 export async function fetchBorrowRequests() {
   try {
@@ -462,11 +492,6 @@ export async function fetchBorrowRequests() {
     // ========================================================================
     // 2. NORMAL SUPABASE AUTH SESSION
     // ========================================================================
-    //
-    // Email/password visitor login and staff login have a real
-    // Supabase Auth session. Keep using the normal RLS-protected
-    // borrow_requests query for these users.
-    //
 
     if (sessionData?.session) {
       const {
@@ -494,27 +519,6 @@ export async function fetchBorrowRequests() {
     // ========================================================================
     // 3. SHELF LOCAL VISITOR SESSION
     // ========================================================================
-    //
-    // QR login creates this local session:
-    //
-    // shelf_ilms_session_v1
-    //
-    // Example:
-    //
-    // {
-    //   role: 'visitor',
-    //   id: 'b8561667-e47b-4519-a782-e95cefb360a7',
-    //   name: 'Kyle Cordero',
-    //   email: '25-63135@g.batstate-u.edu.ph',
-    //   qrCode: 'SHELF-QR-xxxxxx'
-    // }
-    //
-    // We DO NOT query borrow_requests directly as anon because
-    // the table has RLS enabled.
-    //
-    // Instead, the visitor-specific PostgreSQL RPC validates the
-    // visitor and returns only that visitor's requests.
-    //
 
     let localSession = null;
 
@@ -580,6 +584,7 @@ export async function fetchBorrowRequests() {
     throw error;
   }
 }
+
 // ============================================================================
 // FETCH ATTENDANCE LOGS
 // ============================================================================
@@ -780,22 +785,6 @@ export async function registerVisitor({
     );
   }
 
-  // IMPORTANT:
-  // DO NOT reject identities.length === 0 here.
-  //
-  // Supabase may return an existing Auth user with an empty identities array
-  // when the user is retrying a registration that has not completed SHELF OTP
-  // verification yet.
-  //
-  // The register_visitor RPC is responsible for determining whether the
-  // visitor is:
-  //
-  //   1. already verified      -> reject duplicate
-  //   2. pending/unverified    -> resume registration
-  //   3. completely new        -> create visitor
-  //
-  // --------------------------------------------------------------------------
-
   console.log(
     'SUPABASE AUTH USER FOR VISITOR REGISTRATION:',
     {
@@ -848,10 +837,6 @@ export async function registerVisitor({
         registrationError?.message
       ).toLowerCase();
 
-    // ------------------------------------------------------------------------
-    // EXISTING VERIFIED SHELF VISITOR
-    // ------------------------------------------------------------------------
-
     if (
       databaseMessage.includes(
         'already registered as a shelf visitor'
@@ -867,10 +852,6 @@ export async function registerVisitor({
       );
     }
 
-    // ------------------------------------------------------------------------
-    // DUPLICATE EMAIL
-    // ------------------------------------------------------------------------
-
     if (
       databaseMessage.includes(
         'visitor account with this email already exists'
@@ -882,10 +863,6 @@ export async function registerVisitor({
         'This email is already registered as a SHELF visitor. Please log in instead.'
       );
     }
-
-    // ------------------------------------------------------------------------
-    // OTHER DATABASE ERROR
-    // ------------------------------------------------------------------------
 
     await safeSignOut();
 
@@ -942,99 +919,99 @@ export async function registerVisitor({
   // --------------------------------------------------------------------------
 
   const {
-  data: emailData,
-  error: emailError,
-} =
-  await supabase.functions.invoke(
-    'send-visitor-otp',
-    {
-      body: {
-        visitorId,
-      },
-    }
-  );
+    data: emailData,
+    error: emailError,
+  } =
+    await supabase.functions.invoke(
+      'send-visitor-otp',
+      {
+        body: {
+          visitorId,
+        },
+      }
+    );
 
-if (emailError) {
-  console.error(
-    'SEND VISITOR OTP ERROR:',
-    emailError
-  );
+  if (emailError) {
+    console.error(
+      'SEND VISITOR OTP ERROR:',
+      emailError
+    );
 
-  console.error(
-    'SEND VISITOR OTP ERROR CONTEXT:',
-    {
-      name: emailError?.name,
-      message: emailError?.message,
-      context: emailError?.context,
-    }
-  );
+    console.error(
+      'SEND VISITOR OTP ERROR CONTEXT:',
+      {
+        name: emailError?.name,
+        message: emailError?.message,
+        context: emailError?.context,
+      }
+    );
 
-  let detailedMessage =
-    'Your registration was created, but we could not send the verification email. Please try again.';
+    let detailedMessage =
+      'Your registration was created, but we could not send the verification email. Please try again.';
 
-  try {
-    const response =
-      emailError?.context;
+    try {
+      const response =
+        emailError?.context;
 
-    if (response) {
-      const responseText =
-        typeof response?.text === 'function'
-          ? await response.text()
-          : null;
+      if (response) {
+        const responseText =
+          typeof response?.text === 'function'
+            ? await response.text()
+            : null;
 
-      console.error(
-        'SEND VISITOR OTP RAW RESPONSE:',
-        responseText
-      );
+        console.error(
+          'SEND VISITOR OTP RAW RESPONSE:',
+          responseText
+        );
 
-      if (responseText) {
-        try {
-          const parsed =
-            JSON.parse(responseText);
+        if (responseText) {
+          try {
+            const parsed =
+              JSON.parse(responseText);
 
-          console.error(
-            'SEND VISITOR OTP RESPONSE JSON:',
-            parsed
-          );
+            console.error(
+              'SEND VISITOR OTP RESPONSE JSON:',
+              parsed
+            );
 
-          if (parsed?.error) {
-            detailedMessage =
-              String(parsed.error);
-          } else if (parsed?.message) {
-            detailedMessage =
-              String(parsed.message);
-          }
-        } catch {
-          if (responseText.trim()) {
-            detailedMessage =
-              responseText.trim();
+            if (parsed?.error) {
+              detailedMessage =
+                String(parsed.error);
+            } else if (parsed?.message) {
+              detailedMessage =
+                String(parsed.message);
+            }
+          } catch {
+            if (responseText.trim()) {
+              detailedMessage =
+                responseText.trim();
+            }
           }
         }
       }
+    } catch (readError) {
+      console.error(
+        'Could not read Edge Function error response:',
+        readError
+      );
     }
-  } catch (readError) {
-    console.error(
-      'Could not read Edge Function error response:',
-      readError
+
+    throw new Error(
+      detailedMessage
     );
   }
 
-  throw new Error(
-    detailedMessage
-  );
-}
-
-if (
-  emailData &&
-  typeof emailData === 'object' &&
-  emailData.success === false
-) {
-  throw new Error(
-    emailData.error ||
-      emailData.message ||
-      'Your registration was created, but we could not send the verification email. Please try again.'
-  );
-}
+  if (
+    emailData &&
+    typeof emailData === 'object' &&
+    emailData.success === false
+  ) {
+    throw new Error(
+      emailData.error ||
+        emailData.message ||
+        'Your registration was created, but we could not send the verification email. Please try again.'
+    );
+  }
 
   // --------------------------------------------------------------------------
   // 7. RETURN OTP REGISTRATION SESSION
@@ -1044,6 +1021,7 @@ if (
     visitorId,
   };
 }
+
 // ============================================================================
 // RESEND VISITOR OTP
 // ============================================================================
@@ -1217,9 +1195,9 @@ export async function loginVisitor({
     );
   }
 
-  // ==========================================================================
+  // ========================================================================
   // QR LOGIN
-  // ==========================================================================
+  // ========================================================================
 
   if (
     isValidShelfQr(
@@ -1287,9 +1265,9 @@ export async function loginVisitor({
     };
   }
 
-  // ==========================================================================
+  // ========================================================================
   // EMAIL + PASSWORD LOGIN
-  // ==========================================================================
+  // ========================================================================
 
   if (!normalizedPassword) {
     throw new Error(
@@ -1365,9 +1343,9 @@ export async function loginVisitor({
     );
   }
 
-  // ==========================================================================
+  // ========================================================================
   // LOAD VISITOR PROFILE
-  // ==========================================================================
+  // ========================================================================
 
   const {
     data: visitor,
@@ -1646,9 +1624,9 @@ export async function loginStaffAccount(
     );
   }
 
-  // ==========================================================================
+  // ========================================================================
   // LOAD STAFF PROFILE
-  // ==========================================================================
+  // ========================================================================
 
   const {
     data: profile,
@@ -1867,7 +1845,7 @@ export async function scanAttendance(
 }
 
 // ============================================================================
-// BOOK INVENTORY — ADD BOOK
+// BOOK INVENTORY — ADD LIBRARY BOOK
 // ============================================================================
 
 export async function addBook(
@@ -1957,6 +1935,24 @@ export async function addBook(
             book?.coverUrl
           ) ||
           DEFAULT_COVER_URL,
+
+        book_type:
+          'library',
+
+        owner_visitor_id:
+          null,
+
+        lending_enabled:
+          false,
+
+        condition:
+          null,
+
+        lending_period_days:
+          null,
+
+        handover_location:
+          null,
       })
       .select()
       .single();
@@ -1966,6 +1962,235 @@ export async function addBook(
   }
 
   return mapBook(data);
+}
+
+// ============================================================================
+// PERSONAL BOOK — ADD
+// ============================================================================
+//
+// Creates a visitor-owned book through:
+//
+//   add_personal_book(
+//      p_visitor_id,
+//      p_title,
+//      p_author,
+//      p_category,
+//      p_isbn,
+//      p_summary,
+//      p_condition,
+//      p_lending_period_days,
+//      p_handover_location,
+//      p_lending_enabled
+//   )
+//
+// No cover upload is used for personal books.
+// cover_url remains NULL.
+//
+// ============================================================================
+
+export async function addPersonalBook({
+  visitorId,
+  title,
+  author,
+  category = null,
+  isbn = null,
+  summary = null,
+  condition = 'Good',
+  lendingPeriodDays = 7,
+  handoverLocation = null,
+  lendingEnabled = true,
+}) {
+  const normalizedVisitorId =
+    normalizeText(visitorId);
+
+  const normalizedTitle =
+    normalizeText(title);
+
+  const normalizedAuthor =
+    normalizeText(author);
+
+  const normalizedCategory =
+    normalizeText(category) || null;
+
+  const normalizedIsbn =
+    normalizeText(isbn) || null;
+
+  const normalizedSummary =
+    normalizeText(summary) || null;
+
+  const normalizedCondition =
+    normalizeText(condition) || 'Good';
+
+  const normalizedHandoverLocation =
+    normalizeText(handoverLocation) || null;
+
+  const normalizedLendingPeriod =
+    Number(lendingPeriodDays);
+
+  const normalizedLendingEnabled =
+    lendingEnabled !== false;
+
+  // --------------------------------------------------------------------------
+  // VALIDATE VISITOR
+  // --------------------------------------------------------------------------
+
+  if (!normalizedVisitorId) {
+    throw new Error(
+      'Visitor ID is required.'
+    );
+  }
+
+  if (!isValidUuid(normalizedVisitorId)) {
+    throw new Error(
+      'Invalid visitor ID.'
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // VALIDATE TITLE
+  // --------------------------------------------------------------------------
+
+  if (!normalizedTitle) {
+    throw new Error(
+      'Book title is required.'
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // VALIDATE AUTHOR
+  // --------------------------------------------------------------------------
+
+  if (!normalizedAuthor) {
+    throw new Error(
+      'Book author is required.'
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // VALIDATE CONDITION
+  // --------------------------------------------------------------------------
+
+  if (
+    !PERSONAL_BOOK_CONDITIONS.includes(
+      normalizedCondition
+    )
+  ) {
+    throw new Error(
+      'Invalid book condition.'
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // VALIDATE LENDING PERIOD
+  // --------------------------------------------------------------------------
+
+  if (
+    !Number.isInteger(
+      normalizedLendingPeriod
+    ) ||
+    normalizedLendingPeriod <
+      PERSONAL_BOOK_MIN_LENDING_DAYS ||
+    normalizedLendingPeriod >
+      PERSONAL_BOOK_MAX_LENDING_DAYS
+  ) {
+    throw new Error(
+      `Lending period must be between ${PERSONAL_BOOK_MIN_LENDING_DAYS} and ${PERSONAL_BOOK_MAX_LENDING_DAYS} days.`
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // VALIDATE HANDOVER LOCATION
+  // --------------------------------------------------------------------------
+
+  if (
+    normalizedLendingEnabled &&
+    !normalizedHandoverLocation
+  ) {
+    throw new Error(
+      'Handover location is required when lending is enabled.'
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // CALL DATABASE RPC
+  // --------------------------------------------------------------------------
+
+  const {
+    data,
+    error,
+  } =
+    await supabase.rpc(
+      'add_personal_book',
+      {
+        p_visitor_id:
+          normalizedVisitorId,
+
+        p_title:
+          normalizedTitle,
+
+        p_author:
+          normalizedAuthor,
+
+        p_category:
+          normalizedCategory,
+
+        p_isbn:
+          normalizedIsbn,
+
+        p_summary:
+          normalizedSummary,
+
+        p_condition:
+          normalizedCondition,
+
+        p_lending_period_days:
+          normalizedLendingPeriod,
+
+        p_handover_location:
+          normalizedHandoverLocation,
+
+        p_lending_enabled:
+          normalizedLendingEnabled,
+      }
+    );
+
+  if (error) {
+    console.error(
+      'ADD PERSONAL BOOK RPC ERROR:',
+      {
+        code:
+          error?.code,
+
+        message:
+          error?.message,
+
+        details:
+          error?.details,
+
+        hint:
+          error?.hint,
+
+        visitorId:
+          normalizedVisitorId,
+      }
+    );
+
+    throw cleanErr(
+      error,
+      'Unable to add the personal book.'
+    );
+  }
+
+  const row =
+    firstRow(data);
+
+  if (!row?.id) {
+    throw new Error(
+      'The personal book was not created.'
+    );
+  }
+
+  return mapBook(row);
 }
 
 // ============================================================================
@@ -2092,6 +2317,24 @@ export async function addBooksBulk(
             normalizeText(
               normalized.cover_url
             ) || DEFAULT_COVER_URL,
+
+          book_type:
+            'library',
+
+          owner_visitor_id:
+            null,
+
+          lending_enabled:
+            false,
+
+          condition:
+            null,
+
+          lending_period_days:
+            null,
+
+          handover_location:
+            null,
         };
       }
     );
@@ -2139,22 +2382,44 @@ export async function updateBook(
 
   const dbPatch = {};
 
+  // --------------------------------------------------------------------------
+  // STANDARD BOOK FIELDS
+  // --------------------------------------------------------------------------
+
   if (
     patch?.title !== undefined
   ) {
-    dbPatch.title =
+    const title =
       normalizeText(
         patch.title
       );
+
+    if (!title) {
+      throw new Error(
+        'Book title is required.'
+      );
+    }
+
+    dbPatch.title =
+      title;
   }
 
   if (
     patch?.author !== undefined
   ) {
-    dbPatch.author =
+    const author =
       normalizeText(
         patch.author
       );
+
+    if (!author) {
+      throw new Error(
+        'Book author is required.'
+      );
+    }
+
+    dbPatch.author =
+      author;
   }
 
   if (
@@ -2163,7 +2428,7 @@ export async function updateBook(
     dbPatch.category =
       normalizeText(
         patch.category
-      );
+      ) || null;
   }
 
   if (
@@ -2269,13 +2534,137 @@ export async function updateBook(
       ) || DEFAULT_COVER_URL;
   }
 
+  // --------------------------------------------------------------------------
+  // PERSONAL BOOK FIELDS
+  // --------------------------------------------------------------------------
+
+  if (
+    patch?.bookType !== undefined
+  ) {
+    const bookType =
+      normalizeText(
+        patch.bookType
+      ).toLowerCase();
+
+    if (
+      bookType !== 'library' &&
+      bookType !== 'personal'
+    ) {
+      throw new Error(
+        'Invalid book type.'
+      );
+    }
+
+    dbPatch.book_type =
+      bookType;
+  }
+
+  if (
+    patch?.ownerVisitorId !== undefined
+  ) {
+    const ownerVisitorId =
+      normalizeText(
+        patch.ownerVisitorId
+      );
+
+    if (
+      ownerVisitorId &&
+      !isValidUuid(
+        ownerVisitorId
+      )
+    ) {
+      throw new Error(
+        'Invalid owner visitor ID.'
+      );
+    }
+
+    dbPatch.owner_visitor_id =
+      ownerVisitorId || null;
+  }
+
+  if (
+    patch?.lendingEnabled !== undefined
+  ) {
+    dbPatch.lending_enabled =
+      Boolean(
+        patch.lendingEnabled
+      );
+  }
+
+  if (
+    patch?.condition !== undefined
+  ) {
+    const condition =
+      normalizeText(
+        patch.condition
+      );
+
+    if (
+      condition &&
+      !PERSONAL_BOOK_CONDITIONS.includes(
+        condition
+      )
+    ) {
+      throw new Error(
+        'Invalid book condition.'
+      );
+    }
+
+    dbPatch.condition =
+      condition || null;
+  }
+
+  if (
+    patch?.lendingPeriodDays !== undefined
+  ) {
+    const lendingPeriodDays =
+      Number(
+        patch.lendingPeriodDays
+      );
+
+    if (
+      !Number.isInteger(
+        lendingPeriodDays
+      ) ||
+      lendingPeriodDays <
+        PERSONAL_BOOK_MIN_LENDING_DAYS ||
+      lendingPeriodDays >
+        PERSONAL_BOOK_MAX_LENDING_DAYS
+    ) {
+      throw new Error(
+        `Lending period must be between ${PERSONAL_BOOK_MIN_LENDING_DAYS} and ${PERSONAL_BOOK_MAX_LENDING_DAYS} days.`
+      );
+    }
+
+    dbPatch.lending_period_days =
+      lendingPeriodDays;
+  }
+
+  if (
+    patch?.handoverLocation !== undefined
+  ) {
+    dbPatch.handover_location =
+      normalizeText(
+        patch.handoverLocation
+      ) || null;
+  }
+
+  // --------------------------------------------------------------------------
+  // NO CHANGES
+  // --------------------------------------------------------------------------
+
   if (
     Object.keys(dbPatch).length === 0
   ) {
-    return;
+    return null;
   }
 
+  // --------------------------------------------------------------------------
+  // UPDATE DATABASE
+  // --------------------------------------------------------------------------
+
   const {
+    data,
     error,
   } =
     await supabase
@@ -2284,11 +2673,15 @@ export async function updateBook(
       .eq(
         'id',
         normalizedBookId
-      );
+      )
+      .select()
+      .single();
 
   if (error) {
     throw cleanErr(error);
   }
+
+  return mapBook(data);
 }
 
 // ============================================================================
@@ -2441,6 +2834,24 @@ export async function loadSampleCatalog(
                 doc.cover_i
                   ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`
                   : DEFAULT_COVER_URL,
+
+              book_type:
+                'library',
+
+              owner_visitor_id:
+                null,
+
+              lending_enabled:
+                false,
+
+              condition:
+                null,
+
+              lending_period_days:
+                null,
+
+              handover_location:
+                null,
             };
           }
         );
@@ -2487,11 +2898,13 @@ export async function loadSampleCatalog(
 // ============================================================================
 // BORROW REQUEST
 // ============================================================================
+//
 // Creates the request through the PostgreSQL RPC:
 //
 //   request_borrow(p_visitor_id, p_book_id)
 //
 // The database remains responsible for the atomic borrow rules.
+//
 // ============================================================================
 
 export async function requestBorrow(
