@@ -3016,18 +3016,28 @@ const handleConfirmCommunityBookReturn = async (request) => {
                             <span className="rounded bg-violet-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-violet-700">
                               Community Request
                             </span>
-                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
-  status === 'approved'
-    ? 'bg-emerald-100 text-emerald-700'
-    : status === 'rejected'
-      ? 'bg-red-100 text-red-700'
-      : 'bg-amber-100 text-amber-700'
-}`}>
+                            <span
+  className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+    status === 'approved'
+      ? 'bg-emerald-100 text-emerald-700'
+      : status === 'borrowed'
+        ? 'bg-blue-100 text-blue-700'
+        : status === 'returned'
+          ? 'bg-slate-100 text-slate-700'
+          : status === 'rejected'
+            ? 'bg-red-100 text-red-700'
+            : 'bg-amber-100 text-amber-700'
+  }`}
+>
   {status === 'approved'
     ? 'Approved'
-    : status === 'rejected'
-      ? 'Rejected'
-      : 'Pending'}
+    : status === 'borrowed'
+      ? 'Borrowed'
+      : status === 'returned'
+        ? 'Returned'
+        : status === 'rejected'
+          ? 'Rejected'
+          : 'Pending'}
 </span>
                           </div>
 
