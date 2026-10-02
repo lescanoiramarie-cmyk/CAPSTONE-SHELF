@@ -67,7 +67,6 @@ export function LibraryProvider({ children }) {
   // 1. Try the SHELF local visitor session first.
   //    QR/local visitor login stores the visitor identity here.
   // ------------------------------------------------------------------------
-
   try {
     const rawSession =
       localStorage.getItem('shelf_ilms_session_v1');
@@ -107,7 +106,6 @@ export function LibraryProvider({ children }) {
   // ------------------------------------------------------------------------
   // 2. Fallback to Supabase Auth.
   // ------------------------------------------------------------------------
-
   try {
     const {
       data: authData,
@@ -146,7 +144,6 @@ export function LibraryProvider({ children }) {
   // ------------------------------------------------------------------------
   // 3. No visitor identity available.
   // ------------------------------------------------------------------------
-
   console.warn(
     'SHELF — NO CURRENT VISITOR ID FOUND.'
   );
@@ -154,39 +151,6 @@ export function LibraryProvider({ children }) {
   return null;
 }, []);
   
-    // ------------------------------------------------------------------------
-    // Fallback: SHELF local QR session.
-    // ------------------------------------------------------------------------
-
-    try {
-      const rawSession =
-        globalThis.localStorage?.getItem(
-          'shelf_ilms_session_v1'
-        );
-
-      if (!rawSession) {
-        return null;
-      }
-
-      const parsedSession =
-        JSON.parse(rawSession);
-
-      return (
-        parsedSession?.user?.id ||
-        parsedSession?.visitor?.id ||
-        parsedSession?.id ||
-        null
-      );
-    } catch (error) {
-      console.warn(
-        'SHELF local visitor session could not be read:',
-        error
-      );
-
-      return null;
-    }
-  }, []);
-
  // ==========================================================================
 // LOAD ALL SHELF DATA
 // ==========================================================================
