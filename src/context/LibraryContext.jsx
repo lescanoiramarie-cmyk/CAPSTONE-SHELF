@@ -643,29 +643,27 @@ export function LibraryProvider({ children }) {
   // Approve community book request
   // --------------------------------------------------------------------------
 
-  const approveCommunityBookRequest =
-    useMemo(
-      () =>
-        withRefresh(
-          store.approveCommunityBookRequest,
-          'approveCommunityBookRequest'
-        ),
-      [withRefresh]
-    );
+  const approveCommunityBookRequest = useMemo(
+  () =>
+    withRefresh(
+      store.approveCommunityBookRequest,
+      'approveCommunityBookRequest'
+    ),
+  [withRefresh]
+);
 
   // --------------------------------------------------------------------------
   // Reject community book request
   // --------------------------------------------------------------------------
 
-  const rejectCommunityBookRequest =
-    useMemo(
-      () =>
-        withRefresh(
-          store.rejectCommunityBookRequest,
-          'rejectCommunityBookRequest'
-        ),
-      [withRefresh]
-    );
+const rejectCommunityBookRequest = useMemo(
+  () =>
+    withRefresh(
+      store.rejectCommunityBookRequest,
+      'rejectCommunityBookRequest'
+    ),
+  [withRefresh]
+);
 
   // ==========================================================================
   // BORROW / RESERVATION
