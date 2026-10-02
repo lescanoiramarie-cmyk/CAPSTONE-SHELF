@@ -3004,7 +3004,9 @@ const handleConfirmCommunityBookReturn = async (request) => {
             ) : (
               <div className="divide-y divide-slate-100">
                 {ownerCommunityRequests.map((request) => {
-                  const status = String(request.status || '').toLowerCase();
+                  const status = String(request?.status ?? '')
+  .trim()
+  .toLowerCase();
                   const isPending = status === 'pending';
                   const isProcessing = processingCommunityRequestId === request.id;
 
@@ -3074,7 +3076,11 @@ const handleConfirmCommunityBookReturn = async (request) => {
                           )}
                         </div>
 
-                        {isPending && (
+                        {/* ================================================================
+    COMMUNITY REQUEST ACTIONS
+    ================================================================ */}
+
+{isPending && (
   <div className="flex flex-col sm:flex-row gap-2 lg:min-w-[230px] lg:justify-end">
     <button
       type="button"
@@ -3103,30 +3109,28 @@ const handleConfirmCommunityBookReturn = async (request) => {
 )}
 
 {status === 'approved' && (
-  <>
+  <div className="flex flex-col gap-2 lg:min-w-[230px] lg:items-end">
     <div className="rounded-lg bg-yellow-300 px-4 py-2 text-xs font-black text-black">
       APPROVED ACTION AREA IS RENDERING
     </div>
 
-    <div className="flex flex-col gap-2 lg:min-w-[230px] lg:items-end">
-      <button
-        type="button"
-        disabled={Boolean(processingCommunityRequestId)}
-        onClick={() =>
-          handleConfirmCommunityBookPickup(request)
-        }
-        className="rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {isProcessing
-          ? 'Processing...'
-          : 'Confirm Handover'}
-      </button>
+    <button
+      type="button"
+      disabled={Boolean(processingCommunityRequestId)}
+      onClick={() =>
+        handleConfirmCommunityBookPickup(request)
+      }
+      className="rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      {isProcessing
+        ? 'Processing...'
+        : 'Confirm Handover'}
+    </button>
 
-      <p className="text-[10px] text-slate-400 text-right">
-        Confirm this after the book has been handed to the requester.
-      </p>
-    </div>
-  </>
+    <p className="text-[10px] text-slate-400 text-right">
+      Confirm this after the book has been handed to the requester.
+    </p>
+  </div>
 )}
 
 {status === 'borrowed' && (
