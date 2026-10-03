@@ -105,6 +105,22 @@ const STATUS_LABELS = {
   expired: 'Expired (Not Picked Up)',
 };
 
+const OWNER_COMMUNITY_REQUEST_FILTERS = [
+  { key: 'all', label: 'All requests' },
+  { key: 'pending', label: 'Pending approval', status: 'pending' },
+  { key: 'to-confirm', label: 'To confirm', status: 'approved' },
+  { key: 'borrowed', label: 'Borrowed', status: 'borrowed' },
+  { key: 'rejected', label: 'Rejected', status: 'rejected' },
+  { key: 'returned', label: 'Returned', status: 'returned' },
+  { key: 'cancelled', label: 'Cancelled', status: 'cancelled' },
+];
+
+function getOwnerCommunityRequestStatus(request) {
+  return String(request?.status ?? '')
+    .trim()
+    .toLowerCase();
+}
+
 // =========================================================
 // PERSONAL BOOK CONSTANTS
 // =========================================================
@@ -227,6 +243,9 @@ export default function OPACCatalog({
   const [ownerCommunityRequests, setOwnerCommunityRequests] =
     useState([]);
 
+  const [ownerCommunityRequestFilter, setOwnerCommunityRequestFilter] =
+    useState('all');
+
   const [loadingOwnerCommunityRequests, setLoadingOwnerCommunityRequests] =
     useState(false);
 
@@ -244,6 +263,35 @@ export default function OPACCatalog({
 
   const [communityRequestNotice, setCommunityRequestNotice] =
     useState('');
+
+  const ownerCommunityRequestCounts = useMemo(
+    () =>
+      ownerCommunityRequests.reduce((counts, request) => {
+        const status = getOwnerCommunityRequestStatus(request);
+        counts[status] = (counts[status] || 0) + 1;
+        return counts;
+      }, {}),
+    [ownerCommunityRequests]
+  );
+
+  const filteredOwnerCommunityRequests = useMemo(() => {
+    if (ownerCommunityRequestFilter === 'all') {
+      return ownerCommunityRequests;
+    }
+
+    const selectedFilter =
+      OWNER_COMMUNITY_REQUEST_FILTERS.find(
+        (filter) => filter.key === ownerCommunityRequestFilter
+      );
+
+    return selectedFilter?.status
+      ? ownerCommunityRequests.filter(
+          (request) =>
+            getOwnerCommunityRequestStatus(request) ===
+            selectedFilter.status
+        )
+      : ownerCommunityRequests;
+  }, [ownerCommunityRequestFilter, ownerCommunityRequests]);
 
   const [showAddPersonalBook, setShowAddPersonalBook] =
     useState(false);
@@ -1163,6 +1211,28 @@ const myRequests = useMemo(() => {
               request.ownerResponse ??
               null,
 
+            borrowDate:
+              request.borrow_date ??
+              request.borrowDate ??
+              null,
+
+            dueDate:
+              request.due_date ??
+              request.dueDate ??
+              null,
+
+            returnDate:
+              request.return_date ??
+              request.returnDate ??
+              null,
+
+            fineAmount:
+              Number(
+                request.fine_amount ??
+                  request.fineAmount ??
+                  0
+              ) || 0,
+
             approvedAt:
               request.approved_at ??
               request.approvedAt ??
@@ -1557,11 +1627,14 @@ const myRequests = useMemo(() => {
 
     try {
       const requests = await fetchOwnerCommunityBookRequests(user.id);
-      setOwnerCommunityRequests(
-        Array.isArray(requests) ? requests : []
-      );
+      const refreshedRequests = Array.isArray(requests)
+        ? requests
+        : [];
+      setOwnerCommunityRequests(refreshedRequests);
+      return refreshedRequests;
     } catch (error) {
       console.error('Reload owner community requests error:', error);
+      throw error;
     }
   };
 
@@ -1704,17 +1777,30 @@ const handleConfirmCommunityBookPickup = async (request) => {
         user.id
       );
 
-    if (!result?.id) {
+    const refreshedRequests =
+      await reloadOwnerCommunityRequests();
+    const refreshedRequest =
+      refreshedRequests?.find(
+        (ownerRequest) =>
+          ownerRequest.id === request.id
+      );
+    const confirmedStatus = String(
+      refreshedRequest?.status ??
+        result?.status ??
+        ''
+    )
+      .trim()
+      .toLowerCase();
+
+    if (confirmedStatus !== 'borrowed') {
       throw new Error(
-        'The community book handover could not be confirmed.'
+        'The handover was not confirmed. The request is still awaiting handover.'
       );
     }
 
     setCommunityRequestNotice(
       `"${request.bookTitle}" has been marked as borrowed.`
     );
-
-    await reloadOwnerCommunityRequests();
   } catch (error) {
     console.error(
       'Confirm community book pickup error:',
@@ -3118,6 +3204,52 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
             )}
 
+            {!loadingOwnerCommunityRequests &&
+              ownerCommunityRequests.length > 0 && (
+                <div
+                  className="flex gap-2 overflow-x-auto border-b border-slate-100 px-5 py-3"
+                  aria-label="Filter community book requests"
+                >
+                  {OWNER_COMMUNITY_REQUEST_FILTERS.map((filter) => {
+                    const count =
+                      filter.key === 'all'
+                        ? ownerCommunityRequests.length
+                        : ownerCommunityRequestCounts[
+                            filter.status
+                          ] || 0;
+                    const isSelected =
+                      ownerCommunityRequestFilter === filter.key;
+
+                    return (
+                      <button
+                        key={filter.key}
+                        type="button"
+                        aria-pressed={isSelected}
+                        onClick={() =>
+                          setOwnerCommunityRequestFilter(filter.key)
+                        }
+                        className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                          isSelected
+                            ? 'border-violet-600 bg-violet-600 text-white'
+                            : 'border-slate-200 bg-white text-slate-600 hover:border-violet-300 hover:text-violet-700'
+                        }`}
+                      >
+                        {filter.label}
+                        <span
+                          className={`ml-1.5 ${
+                            isSelected
+                              ? 'text-violet-100'
+                              : 'text-slate-400'
+                          }`}
+                        >
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
             {/* LOADING */}
 
             {loadingOwnerCommunityRequests ? (
@@ -3157,28 +3289,21 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
               /* REQUEST LIST */
 
-              <div className="divide-y divide-slate-100">
+              filteredOwnerCommunityRequests.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-500">
+                  No requests in this category.
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
 
-                {ownerCommunityRequests.map((request) => {
+                {filteredOwnerCommunityRequests.map((request) => {
 
-                  const status = String(
-                    request?.status ?? ''
-                  )
-                    .trim()
-                    .toLowerCase();
+                  const status =
+                    getOwnerCommunityRequestStatus(request);
 
                   const isProcessing =
                     processingCommunityRequestId ===
                     request.id;
-
-                  console.log(
-                    'SHELF COMMUNITY REQUEST:',
-                    request.id,
-                    'STATUS:',
-                    request.status,
-                    'NORMALIZED:',
-                    status
-                  );
 
                   return (
 
@@ -3221,10 +3346,6 @@ const handleConfirmCommunityBookReturn = async (request) => {
                                   : status === 'rejected'
                                     ? 'Rejected'
                                     : 'Pending'}
-                          </span>
-                            {/* TEMPORARY DEBUG */}
-<span className="rounded bg-red-100 px-2 py-1 text-[10px] font-bold text-red-700">
-  DEBUG: {JSON.stringify(request?.status)}
                           </span>
 
                         </div>
@@ -3436,6 +3557,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
               </div>
 
+              )
             )}
 
           </div>
@@ -3709,7 +3831,6 @@ const handleConfirmCommunityBookReturn = async (request) => {
                                   ] ||
                                   request.status ||
                                   'Pending'
-                          )
                         : STATUS_LABELS[
                             request.status
                           ] ||
@@ -3770,10 +3891,38 @@ const handleConfirmCommunityBookReturn = async (request) => {
                       )}
 
                       {request.status ===
+                        'borrowed' && (
+                        <div className="space-y-1 font-semibold text-blue-700">
+                          <p>
+                            This book is borrowed from{' '}
+                            {request.ownerName ||
+                              'the owner'}.
+                          </p>
+                          {request.dueDate && (
+                            <p>
+                              Please return it by{' '}
+                              {formatDate(request.dueDate)}.
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {request.status ===
                         'rejected' && (
                         <p className="font-semibold text-red-600">
                           Your request was rejected
                           by the book owner.
+                        </p>
+                      )}
+
+                      {request.status ===
+                        'returned' && (
+                        <p className="font-semibold text-slate-600">
+                          {request.returnDate
+                            ? `Returned on ${formatDate(
+                                request.returnDate
+                              )}.`
+                            : 'This community book has been returned to the owner.'}
                         </p>
                       )}
 
@@ -3938,6 +4087,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
   )}
 
 </div>
+      )}
       {/* =====================================================
           REJECT COMMUNITY REQUEST MODAL
       ====================================================== */}

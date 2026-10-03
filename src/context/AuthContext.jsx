@@ -70,6 +70,8 @@ export const AuthProvider = ({ children }) => {
           SESSION_KEY
         );
       }
+
+      notifyVisitorSessionChanged();
     } catch (error) {
       console.error(
         'Failed to save SHELF session:',
@@ -241,8 +243,6 @@ export const AuthProvider = ({ children }) => {
 
       setUser(visitorSession);
 
-notifyVisitorSessionChanged();
-
 return visitor;
     } catch (error) {
       console.error(
@@ -269,10 +269,9 @@ return visitor;
         'Visitor information is required.'
       );
     }
-
     const visitorSession =
       createVisitorSession(visitor);
-notifyVisitorSessionChanged();
+      createVisitorSession(visitor);
     setUser(visitorSession);
 
     return visitorSession;
@@ -485,7 +484,6 @@ notifyVisitorSessionChanged();
           createVisitorSession(visitor);
 
         setUser(visitorSession);
-        notifyVisitorSessionChanged();
 
         return {
           success: true,
@@ -535,7 +533,6 @@ notifyVisitorSessionChanged();
           createVisitorSession(visitor);
 
         setUser(visitorSession);
-        notifyVisitorSessionChanged();
 
 
         return {

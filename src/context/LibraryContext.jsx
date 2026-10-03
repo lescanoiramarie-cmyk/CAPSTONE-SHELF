@@ -76,16 +76,19 @@ export function LibraryProvider({ children }) {
           JSON.parse(rawSession);
 
         const localVisitorId =
-          parsedSession?.user?.id ||
-          parsedSession?.user?.visitorId ||
-          parsedSession?.user?.visitor_id ||
-          parsedSession?.visitor?.id ||
-          parsedSession?.visitor?.visitorId ||
-          parsedSession?.visitor?.visitor_id ||
-          parsedSession?.id ||
-          parsedSession?.visitorId ||
-          parsedSession?.visitor_id ||
-          null;
+          parsedSession?.role &&
+          parsedSession.role !== 'visitor'
+            ? null
+            : parsedSession?.user?.id ||
+              parsedSession?.user?.visitorId ||
+              parsedSession?.user?.visitor_id ||
+              parsedSession?.visitor?.id ||
+              parsedSession?.visitor?.visitorId ||
+              parsedSession?.visitor?.visitor_id ||
+              parsedSession?.id ||
+              parsedSession?.visitorId ||
+              parsedSession?.visitor_id ||
+              null;
 
         if (localVisitorId) {
           console.log(

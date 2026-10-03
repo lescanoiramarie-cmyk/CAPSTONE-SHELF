@@ -94,6 +94,26 @@ Deploy `visitor-qr-login` with `supabase functions deploy visitor-qr-login` and
 set the Edge Function secret `APP_ORIGIN` (or comma-separated `APP_ORIGINS`) to
 the exact deployed frontend origin so QR sign-in passes CORS.
 
+### Community book return reminders
+
+Borrowers see an in-app reminder on the Visitor Dashboard starting two days
+before a community book is due, on the due date, and while it is overdue.
+Deploy `send-due-date-notifications` to email the same reminders to borrowers:
+
+1. Apply the `20261003000000_community_due_date_notifications.sql`,
+   `20261003000100_community_return_reminder_schedule.sql`, and
+   `20261003000200_community_borrower_transaction_details.sql` migrations.
+2. Add `shelf_supabase_url` and `due_notification_secret` to Supabase Vault.
+   Set `DUE_NOTIFICATION_SECRET` to the same secret using
+   `supabase secrets set DUE_NOTIFICATION_SECRET=<secret>`.
+3. Set `RESEND_API_KEY` as an Edge Function secret and deploy with
+   `supabase functions deploy send-due-date-notifications`.
+
+The scheduled job runs daily at 00:00 UTC (08:00 Philippine time). It also
+sends the existing reminders for regular library loans. Community-book return
+requests are read through `fetch_my_community_book_requests`; each reminder is
+logged once per request, reminder type, and date.
+
 ### Auth-backed staff provisioning
 
 Staff sign-in and authorization use Supabase Auth and `staff_profiles`.

@@ -1,4 +1,4 @@
--- SHELF ILMS security and feature remediation.
+-- Version: 20261002000000. SHELF ILMS security and feature remediation.
 -- Apply after the base schema. Review existing auth/provider configuration first.
 
 alter table public.visitors

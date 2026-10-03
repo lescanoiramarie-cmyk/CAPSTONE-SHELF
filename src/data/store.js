@@ -710,13 +710,16 @@ export async function fetchBorrowRequests() {
       !normalizedVisitorId
     ) {
       const localVisitorId =
-        localSession?.visitor?.id ||
-        localSession?.visitor?.visitorId ||
-        localSession?.user?.visitorId ||
-        localSession?.user?.visitor_id ||
-        localSession?.user?.id ||
-        localSession?.id ||
-        null;
+        localSession?.role &&
+        localSession.role !== 'visitor'
+          ? null
+          : localSession?.visitor?.id ||
+            localSession?.visitor?.visitorId ||
+            localSession?.user?.visitorId ||
+            localSession?.user?.visitor_id ||
+            localSession?.user?.id ||
+            localSession?.id ||
+            null;
 
       if (
         localVisitorId &&

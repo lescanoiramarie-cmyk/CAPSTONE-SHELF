@@ -4,6 +4,7 @@ import {
   BookMarked,
   BookOpen,
   CalendarDays,
+  AlertTriangle,
   Bookmark,
   CircleHelp,
   CircleDollarSign,
@@ -76,6 +77,42 @@ function getStatusClass(status) {
     default:
       return 'bg-slate-100 text-slate-600';
   }
+}
+
+function getCommunityReturnReminder(dueDate) {
+  const due = new Date(dueDate);
+
+  if (Number.isNaN(due.getTime())) {
+    return null;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  due.setHours(0, 0, 0, 0);
+
+  const daysUntilDue = Math.ceil(
+    (due.getTime() - today.getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
+
+  if (daysUntilDue < 0) {
+    return {
+      label: `Overdue by ${Math.abs(daysUntilDue)} day${
+        Math.abs(daysUntilDue) === 1 ? '' : 's'
+      }`,
+      urgent: true,
+    };
+  }
+
+  if (daysUntilDue === 0) {
+    return { label: 'Due today', urgent: true };
+  }
+
+  if (daysUntilDue <= 2) {
+    return { label: 'Due soon', urgent: false };
+  }
+
+  return null;
 }
 
 export default function VisitorDashboard() {
@@ -302,6 +339,23 @@ export default function VisitorDashboard() {
         new Date(a.requestDate || 0)
     );
 
+  const communityReturnReminders = myTransactions
+    .filter(
+      (transaction) =>
+        (transaction.isCommunityBook === true ||
+          transaction.requestType === 'community') &&
+        String(transaction.status || '').toLowerCase() ===
+          'borrowed' &&
+        transaction.dueDate
+    )
+    .map((transaction) => ({
+      ...transaction,
+      reminder: getCommunityReturnReminder(
+        transaction.dueDate
+      ),
+    }))
+    .filter((transaction) => transaction.reminder);
+
   // =========================================================
   // LIBRARY NAME
   // =========================================================
@@ -415,6 +469,56 @@ export default function VisitorDashboard() {
             },
           ]}
         />
+
+        {communityReturnReminders.length > 0 && (
+          <section
+            aria-label="Community book return reminders"
+            className="rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-sm dark:border-amber-700 dark:bg-amber-950/40"
+          >
+            <div className="flex items-start gap-3">
+              <AlertTriangle
+                size={20}
+                className="mt-0.5 shrink-0 text-amber-700 dark:text-amber-300"
+                aria-hidden="true"
+              />
+              <div className="min-w-0 flex-1">
+                <h2 className="text-sm font-bold text-amber-900 dark:text-amber-200">
+                  Community book return reminder
+                </h2>
+                <ul className="mt-2 space-y-2">
+                  {communityReturnReminders.map((transaction) => (
+                    <li
+                      key={transaction.id}
+                      className="text-xs text-amber-900 dark:text-amber-100"
+                    >
+                      <span className="font-semibold">
+                        {transaction.bookTitle || 'Community book'}
+                      </span>
+                      {' — '}
+                      {transaction.reminder.label}. Please return it to
+                      {' '}
+                      {transaction.ownerName || 'the owner'} by
+                      {' '}
+                      {formatDateTime(transaction.dueDate)}.
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTab('myBorrows');
+                    document
+                      .getElementById('visitor-catalog')
+                      ?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="mt-3 text-xs font-bold text-amber-900 underline hover:no-underline dark:text-amber-200"
+                >
+                  View my requests and borrows
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* =================================================
             PRIMARY NAVIGATION

@@ -1,4 +1,4 @@
--- Keep visitor QR passes unavailable until Supabase Auth confirms the email.
+-- Version: 20261002000100. Keep visitor QR passes unavailable until Supabase Auth confirms the email.
 
 alter table public.visitors
   add column if not exists is_active boolean not null default true;
