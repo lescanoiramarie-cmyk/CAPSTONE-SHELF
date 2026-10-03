@@ -2432,6 +2432,7 @@ export async function addPersonalBook({
   summary = null,
   condition = 'Good',
   lendingPeriodDays = 7,
+  totalCopies = 1,
   handoverMethod = 'arrange_with_owner',
   handoverDetails = null,
   lendingEnabled = true,
@@ -2470,6 +2471,9 @@ export async function addPersonalBook({
 
   const normalizedLendingPeriod =
     Number(lendingPeriodDays);
+
+  const normalizedTotalCopies =
+    Number(totalCopies);
 
   const normalizedLendingEnabled =
     lendingEnabled !== false;
@@ -2523,6 +2527,17 @@ export async function addPersonalBook({
   ) {
     throw new Error(
       `Lending period must be between ${PERSONAL_BOOK_MIN_LENDING_DAYS} and ${PERSONAL_BOOK_MAX_LENDING_DAYS} days.`
+    );
+  }
+
+  if (
+    !Number.isInteger(
+      normalizedTotalCopies
+    ) ||
+    normalizedTotalCopies < 1
+  ) {
+    throw new Error(
+      'Copy count must be a whole number of at least 1.'
     );
   }
 
@@ -2584,6 +2599,9 @@ export async function addPersonalBook({
 
         p_lending_enabled:
           normalizedLendingEnabled,
+
+        p_total_copies:
+          normalizedTotalCopies,
       }
     );
 

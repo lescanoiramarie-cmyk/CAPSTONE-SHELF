@@ -103,6 +103,9 @@ Deploy `send-due-date-notifications` to email the same reminders to borrowers:
 1. Apply the `20261003000000_community_due_date_notifications.sql`,
    `20261003000100_community_return_reminder_schedule.sql`, and
    `20261003000200_community_borrower_transaction_details.sql` migrations.
+   Apply `20261003000300_community_book_copy_inventory.sql` to enable visitor
+   copy counts and automatic availability updates when a community book is
+   handed over or returned.
 2. Add `shelf_supabase_url` and `due_notification_secret` to Supabase Vault.
    Set `DUE_NOTIFICATION_SECRET` to the same secret using
    `supabase secrets set DUE_NOTIFICATION_SECRET=<secret>`.

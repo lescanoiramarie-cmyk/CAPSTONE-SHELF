@@ -121,6 +121,48 @@ function getOwnerCommunityRequestStatus(request) {
     .toLowerCase();
 }
 
+function getPersonalBookCopyAvailability(book) {
+  const totalCopiesValue = Number(book?.totalCopies);
+  const totalCopies =
+    Number.isInteger(totalCopiesValue) && totalCopiesValue > 0
+      ? totalCopiesValue
+      : 1;
+  const availableCopiesValue =
+    book?.availableCopies == null
+      ? totalCopies
+      : Number(book.availableCopies);
+  const availableCopies = Number.isFinite(availableCopiesValue)
+    ? Math.min(
+        totalCopies,
+        Math.max(0, Math.trunc(availableCopiesValue))
+      )
+    : totalCopies;
+
+  return {
+    totalCopies,
+    availableCopies,
+    borrowedCopies: totalCopies - availableCopies,
+  };
+}
+
+function getPersonalBookAvailabilityLabel(book) {
+  const {
+    totalCopies,
+    availableCopies,
+    borrowedCopies,
+  } = getPersonalBookCopyAvailability(book);
+
+  if (availableCopies === 0) {
+    return 'Borrowed · Unavailable';
+  }
+
+  if (borrowedCopies > 0) {
+    return `${availableCopies} of ${totalCopies} available · ${borrowedCopies} borrowed`;
+  }
+
+  return `${totalCopies} ${totalCopies === 1 ? 'copy' : 'copies'} available`;
+}
+
 // =========================================================
 // PERSONAL BOOK CONSTANTS
 // =========================================================
@@ -311,6 +353,7 @@ export default function OPACCatalog({
       isbn: '',
       summary: '',
       condition: 'Good',
+      totalCopies: 1,
       lendingPeriodDays: 7,
       handoverMethod: 'arrange_with_owner',
       handoverDetails: '',
@@ -576,6 +619,7 @@ if (!cancelled) {
       handoverMethod: 'arrange_with_owner',
       handoverDetails: '',
       lendingEnabled: true,
+      totalCopies: 1,
     });
   };
 
@@ -622,6 +666,8 @@ if (!cancelled) {
       Number(
         personalBookForm.lendingPeriodDays
       );
+    const totalCopies =
+      Number(personalBookForm.totalCopies);
 
     if (!title) {
       setNotice(
@@ -633,6 +679,16 @@ if (!cancelled) {
     if (!author) {
       setNotice(
         'Book author is required.'
+      );
+      return;
+    }
+
+    if (
+      !Number.isInteger(totalCopies) ||
+      totalCopies < 1
+    ) {
+      setNotice(
+        'Copy count must be a whole number of at least 1.'
       );
       return;
     }
@@ -687,6 +743,7 @@ if (!cancelled) {
           summary: summary || null,
           condition:
             personalBookForm.condition,
+          totalCopies,
           lendingPeriodDays,
           handoverMethod:
             handoverMethod || 'arrange_with_owner',
@@ -1575,6 +1632,16 @@ const myRequests = useMemo(() => {
       return;
     }
 
+    if (
+      getPersonalBookCopyAvailability(book)
+        .availableCopies === 0
+    ) {
+      setNotice(
+        'This community book is currently borrowed and unavailable.'
+      );
+      return;
+    }
+
     if (book.lendingEnabled === false) {
       setNotice('This community book is not currently available for lending.');
       return;
@@ -2124,8 +2191,15 @@ const handleConfirmCommunityBookReturn = async (request) => {
                 </span>
 
                 {book.lendingEnabled ? (
-                  <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 px-2 py-1 rounded">
-                    Available for Lending
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded ${
+                      getPersonalBookCopyAvailability(book)
+                        .availableCopies > 0
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-amber-100 text-amber-700'
+                    }`}
+                  >
+                    {getPersonalBookAvailabilityLabel(book)}
                   </span>
                 ) : (
                   <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-1 rounded">
@@ -2196,6 +2270,15 @@ const handleConfirmCommunityBookReturn = async (request) => {
               <p className="font-semibold text-slate-700 font-mono">
                 {book.isbn ||
                   'N/A'}
+              </p>
+            </div>
+
+            <div className="bg-slate-50 rounded-lg p-3">
+              <p className="text-slate-400">
+                Copies
+              </p>
+              <p className="font-semibold text-slate-700">
+                {getPersonalBookAvailabilityLabel(book)}
               </p>
             </div>
 
@@ -2272,8 +2355,15 @@ const handleConfirmCommunityBookReturn = async (request) => {
                   Community Book
                 </span>
 
-                <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 px-2 py-1 rounded">
-                  Lending Enabled
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded ${
+                    getPersonalBookCopyAvailability(book)
+                      .availableCopies > 0
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-amber-100 text-amber-700'
+                  }`}
+                >
+                  {getPersonalBookAvailabilityLabel(book)}
                 </span>
 
               </div>
@@ -3095,7 +3185,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
            MY PERSONAL BOOKS
         ====================================================== */
 
-        <section className="space-y-5">
+        <section className="flex flex-col gap-5">
 
           {/* =====================================================
               PERSONAL BOOK HEADER
@@ -3151,7 +3241,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
               COMMUNITY BOOK REQUESTS FOR THIS OWNER
           ====================================================== */}
 
-          <div className="rounded-xl border border-violet-200 bg-white shadow-sm overflow-hidden">
+          <div className="order-3 rounded-xl border border-violet-200 bg-white shadow-sm overflow-hidden">
 
             {/* HEADER */}
 
@@ -3568,7 +3658,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
           {personalBookError && (
 
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
+            <div className="order-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
               {personalBookError}
             </div>
 
@@ -3580,7 +3670,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
           {loadingPersonalBooks ? (
 
-            <div className="rounded-xl border border-slate-200 bg-white p-10 text-center">
+            <div className="order-2 rounded-xl border border-slate-200 bg-white p-10 text-center">
 
               <p className="text-sm text-slate-500">
                 Loading your personal books...
@@ -3590,7 +3680,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
           ) : filteredPersonalBooks.length === 0 ? (
 
-            <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
+            <div className="order-2 rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
 
               <UserRound
                 size={32}
@@ -3629,7 +3719,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
           ) : (
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="order-2 grid grid-cols-1 md:grid-cols-2 gap-5">
 
               {filteredPersonalBooks.map(
                 renderPersonalBookCard
@@ -4392,6 +4482,33 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
                   </div>
 
+                  <div>
+
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Number of Copies *
+                    </label>
+
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={personalBookForm.totalCopies}
+                      onChange={(event) =>
+                        updatePersonalBookForm(
+                          'totalCopies',
+                          event.target.value
+                        )
+                      }
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                      required
+                    />
+
+                    <p className="mt-1 text-[10px] text-slate-400">
+                      Enter how many copies you own. Borrowed copies will be marked unavailable.
+                    </p>
+
+                  </div>
+
                   <div className="md:col-span-2">
 
                     <label className="block text-xs font-bold text-slate-700 mb-1.5">
@@ -4784,6 +4901,20 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
                   </div>
 
+                  <div>
+
+                    <p className="text-[10px] text-violet-500 uppercase font-bold">
+                      Copies
+                    </p>
+
+                    <p className="text-xs font-semibold text-slate-700">
+                      {getPersonalBookAvailabilityLabel(
+                        selectedBook
+                      )}
+                    </p>
+
+                  </div>
+
                   <div className="sm:col-span-2">
 
                     <p className="text-[10px] text-violet-500 uppercase font-bold">
@@ -4947,11 +5078,16 @@ const handleConfirmCommunityBookReturn = async (request) => {
     <button
       type="button"
       onClick={() => handleRequestCommunityBook(selectedBook)}
-      disabled={submittingCommunityRequest}
+      disabled={
+        submittingCommunityRequest ||
+        getPersonalBookCopyAvailability(selectedBook).availableCopies === 0
+      }
       className="w-full rounded-lg bg-violet-600 text-white py-2.5 text-sm font-bold hover:bg-violet-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
     >
       {submittingCommunityRequest
         ? 'Submitting Request...'
+        : getPersonalBookCopyAvailability(selectedBook).availableCopies === 0
+          ? 'Borrowed — Unavailable'
         : 'Request Community Book'}
     </button>
 
@@ -4963,6 +5099,11 @@ const handleConfirmCommunityBookReturn = async (request) => {
     ) : selectedBook.lendingEnabled === false ? (
       <p className="text-xs text-slate-500 text-center">
         This book is not currently available for community lending.
+      </p>
+    ) : getPersonalBookCopyAvailability(selectedBook)
+        .availableCopies === 0 ? (
+      <p className="text-xs text-amber-700 text-center">
+        All copies are currently borrowed. Please check again after they are returned.
       </p>
     ) : (
       <p className="text-[10px] text-slate-400 text-center">
