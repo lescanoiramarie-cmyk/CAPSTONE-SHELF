@@ -29,7 +29,10 @@ export default function BookInventory() {
     libraryId: isSubAdmin ? subAdminLibraryId : (libraries[0]?.id || '') 
   });
   const [editingId, setEditingId] = useState(null);
+  const [editingUpdatedAt, setEditingUpdatedAt] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [mutationError, setMutationError] = useState('');
   const [search, setSearch] = useState('');
   const [loadingApiBooks, setLoadingApiBooks] = useState(false);
   const [apiBooksError, setApiBooksError] = useState('');
@@ -48,6 +51,8 @@ export default function BookInventory() {
 
   const startAdd = () => {
     setEditingId(null);
+    setEditingUpdatedAt(null);
+    setMutationError('');
     setForm({ 
       ...emptyForm, 
       libraryId: isSubAdmin ? subAdminLibraryId : (libraries[0]?.id || '') 
@@ -57,6 +62,8 @@ export default function BookInventory() {
 
   const startEdit = (book) => {
     setEditingId(book.id);
+    setEditingUpdatedAt(book.updatedAt);
+    setMutationError('');
     setForm({
       title: book.title,
       author: book.author,
@@ -71,28 +78,40 @@ export default function BookInventory() {
     setShowForm(true);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setMutationError('');
+    setSaving(true);
     // Force sub-admin to always save under their own assigned library
     const finalLibraryId = isSubAdmin ? subAdminLibraryId : form.libraryId;
 
-    if (editingId) {
-      const book = books.find((b) => b.id === editingId);
-      const copiesDiff = Number(form.totalCopies) - book.totalCopies;
-      updateBook(editingId, {
-        ...form,
-        libraryId: finalLibraryId,
-        totalCopies: Number(form.totalCopies),
-        availableCopies: Math.max(0, book.availableCopies + copiesDiff),
-      });
-    } else {
-      addBook({
-        ...form,
-        libraryId: finalLibraryId,
-      });
+    try {
+      if (editingId) {
+        await updateBook(editingId, {
+          ...form,
+          libraryId: finalLibraryId,
+          totalCopies: Number(form.totalCopies),
+          updatedAt: editingUpdatedAt,
+        });
+      } else {
+        await addBook({
+          ...form,
+          libraryId: finalLibraryId,
+        });
+      }
+      setShowForm(false);
+      setEditingId(null);
+      setEditingUpdatedAt(null);
+    } catch (error) {
+      const message = error?.message || 'Unable to save the book.';
+      setMutationError(
+        message.includes('INVENTORY_CONFLICT')
+          ? 'This book or its copy count changed while you were editing. Reload the inventory and review the latest available copies before saving.'
+          : message
+      );
+    } finally {
+      setSaving(false);
     }
-    setShowForm(false);
-    setEditingId(null);
   };
 
   const handleDelete = (book) => {
@@ -220,6 +239,11 @@ export default function BookInventory() {
             className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-3 border border-slate-200 shadow-2xl max-h-[90vh] overflow-y-auto"
           >
             <h3 className="text-sm font-bold text-slate-800">{editingId ? 'Edit Book' : 'Add New Book'}</h3>
+            {mutationError && (
+              <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                {mutationError}
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Title</label>
@@ -284,11 +308,11 @@ export default function BookInventory() {
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setShowForm(false)} className="text-xs font-bold px-4 py-2 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50">
+              <button type="button" onClick={() => { setShowForm(false); setMutationError(''); }} disabled={saving} className="text-xs font-bold px-4 py-2 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50">
                 Cancel
               </button>
-              <button type="submit" className="text-xs font-bold px-4 py-2 rounded-lg bg-[#002046] text-white hover:opacity-90">
-                {editingId ? 'Save Changes' : 'Add Book'}
+              <button type="submit" disabled={saving} className="text-xs font-bold px-4 py-2 rounded-lg bg-[#002046] text-white hover:opacity-90 disabled:opacity-50">
+                {saving ? 'Saving…' : (editingId ? 'Save Changes' : 'Add Book')}
               </button>
             </div>
           </form>

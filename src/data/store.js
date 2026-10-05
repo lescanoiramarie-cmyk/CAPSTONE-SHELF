@@ -13,6 +13,7 @@
 // ============================================================================
 
 import { supabase } from '../lib/supabaseClient.js';
+import { normalizeBookCategory } from '../lib/bookCategory.js';
 
 // ============================================================================
 // COMPATIBILITY CREDENTIAL LISTS
@@ -205,8 +206,11 @@ const isValidUuid = (value) =>
     normalizeText(value)
   );
 
+const isValidVisitorId = (value) =>
+  Boolean(normalizeText(value));
+
 const isValidShelfQr = (value) =>
-  /^SHELF-QR-\d{6}$/i.test(
+  /^SHELF-QR-[A-Z0-9]{6,32}$/i.test(
     normalizeText(value)
   );
 
@@ -257,7 +261,7 @@ const mapBook = (r) => ({
   id: r.id,
   title: r.title,
   author: r.author,
-  category: r.category,
+  category: normalizeBookCategory(r.category),
   isbn: r.isbn,
   shelfLocation: r.shelf_location,
   libraryId: r.library_id,
@@ -266,9 +270,13 @@ const mapBook = (r) => ({
   summary: r.summary,
   coverUrl: r.cover_url,
   createdAt: r.created_at,
+  updatedAt: r.updated_at,
 
   bookType:
     r.book_type || 'library',
+
+  isPublic:
+    r.is_public === true,
 
   ownerVisitorId:
     r.owner_visitor_id || null,
@@ -457,7 +465,7 @@ export async function fetchPersonalBooks(
     return [];
   }
 
-  if (!isValidUuid(normalizedVisitorId)) {
+  if (!isValidVisitorId(normalizedVisitorId)) {
     throw new Error(
       'Invalid visitor ID.'
     );
@@ -507,7 +515,7 @@ export async function fetchCommunityBooks() {
       'personal'
     )
     .eq(
-      'lending_enabled',
+      'is_public',
       true
     )
     .order('created_at', {
@@ -671,7 +679,7 @@ export async function fetchBorrowRequests() {
 
         if (
           visitor?.id &&
-          isValidUuid(
+          isValidVisitorId(
             normalizeText(
               visitor.id
             )
@@ -723,7 +731,7 @@ export async function fetchBorrowRequests() {
 
       if (
         localVisitorId &&
-        isValidUuid(
+        isValidVisitorId(
           normalizeText(
             localVisitorId
           )
@@ -817,7 +825,7 @@ export async function fetchBorrowRequests() {
     // ------------------------------------------------------------------------
 
     else if (
-      isValidUuid(
+      isValidVisitorId(
         normalizedVisitorId
       )
     ) {
@@ -863,7 +871,7 @@ export async function fetchBorrowRequests() {
   let communityRequests = [];
 
   if (
-    isValidUuid(
+    isValidVisitorId(
       normalizedVisitorId
     )
   ) {
@@ -1232,25 +1240,26 @@ export async function getVisitor(
     return null;
   }
 
-  if (!isValidUuid(normalizedVisitorId)) {
+  if (!isValidVisitorId(normalizedVisitorId)) {
     throw new Error(
       'Invalid visitor ID.'
     );
   }
 
-  const {
-    data,
-    error,
-  } = await supabase
+  let visitorQuery = supabase
     .from('visitors')
     .select(
       'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at'
-    )
-    .eq(
-      'id',
-      normalizedVisitorId
-    )
-    .maybeSingle();
+    );
+
+  visitorQuery = isValidUuid(normalizedVisitorId)
+    ? visitorQuery.eq('auth_user_id', normalizedVisitorId)
+    : visitorQuery.eq('id', normalizedVisitorId);
+
+  const {
+    data,
+    error,
+  } = await visitorQuery.maybeSingle();
 
   if (error) {
     throw cleanErr(error);
@@ -1317,6 +1326,15 @@ export async function registerVisitor({
     );
   }
 
+  const registrationNonce =
+    globalThis.crypto?.randomUUID?.();
+
+  if (!registrationNonce) {
+    throw new Error(
+      'Secure visitor registration is unavailable in this browser.'
+    );
+  }
+
   const {
     data: authData,
     error: authError,
@@ -1335,6 +1353,8 @@ export async function registerVisitor({
             normalizedContactNumber,
           address:
             normalizedAddress,
+          registration_nonce:
+            registrationNonce,
         },
       },
     });
@@ -1412,6 +1432,9 @@ export async function registerVisitor({
 
         p_address:
           normalizedAddress,
+
+        p_registration_nonce:
+          registrationNonce,
       }
     );
 
@@ -1445,7 +1468,7 @@ export async function registerVisitor({
       row.visitor_id
     );
 
-  if (!isValidUuid(visitorId)) {
+  if (!isValidVisitorId(visitorId)) {
     await safeSignOut();
 
     throw new Error(
@@ -1512,7 +1535,7 @@ export async function resendOtp(
     );
   }
 
-  if (!isValidUuid(normalizedVisitorId)) {
+  if (!isValidVisitorId(normalizedVisitorId)) {
     throw new Error(
       'Invalid visitor registration session.'
     );
@@ -1589,7 +1612,7 @@ export async function verifyVisitorOtp(
     );
   }
 
-  if (!isValidUuid(normalizedVisitorId)) {
+  if (!isValidVisitorId(normalizedVisitorId)) {
     throw new Error(
       'Invalid visitor registration session.'
     );
@@ -2366,7 +2389,7 @@ export async function addBook(
         title,
         author,
         category:
-          normalizeText(
+          normalizeBookCategory(
             book?.category
           ) || 'General',
         isbn:
@@ -2436,6 +2459,7 @@ export async function addPersonalBook({
   handoverMethod = 'arrange_with_owner',
   handoverDetails = null,
   lendingEnabled = true,
+  isPublic = false,
 }) {
   const normalizedVisitorId =
     normalizeText(visitorId);
@@ -2447,7 +2471,7 @@ export async function addPersonalBook({
     normalizeText(author);
 
   const normalizedCategory =
-    normalizeText(category) || null;
+    normalizeBookCategory(category) || null;
 
   const normalizedIsbn =
     normalizeText(isbn) || null;
@@ -2485,7 +2509,7 @@ export async function addPersonalBook({
   }
 
   if (
-    !isValidUuid(
+    !isValidVisitorId(
       normalizedVisitorId
     )
   ) {
@@ -2602,6 +2626,9 @@ export async function addPersonalBook({
 
         p_total_copies:
           normalizedTotalCopies,
+
+        p_is_public:
+          Boolean(isPublic),
       }
     );
 
@@ -2627,6 +2654,46 @@ export async function addPersonalBook({
   }
 
   return mapBook(row);
+}
+
+export async function setPersonalBookVisibility(
+  visitorId,
+  bookId,
+  isPublic
+) {
+  const normalizedVisitorId =
+    normalizeText(visitorId);
+  const normalizedBookId =
+    normalizeText(bookId);
+
+  if (!normalizedVisitorId || !isValidVisitorId(normalizedVisitorId)) {
+    throw new Error('Invalid visitor ID.');
+  }
+  if (!normalizedBookId) {
+    throw new Error('Book ID is required.');
+  }
+
+  const { error } = await supabase.rpc(
+    'set_personal_book_visibility',
+    {
+      p_visitor_id: normalizedVisitorId,
+      p_book_id: normalizedBookId,
+      p_is_public: Boolean(isPublic),
+    }
+  );
+
+  if (error) {
+    console.error(
+      'SET PERSONAL BOOK VISIBILITY RPC ERROR:',
+      error
+    );
+    throw cleanErr(
+      error,
+      'Unable to update the book visibility.'
+    );
+  }
+
+  return Boolean(isPublic);
 }
 
 // ============================================================================
@@ -2670,7 +2737,7 @@ export async function requestCommunityBook(
   }
 
   if (
-    !isValidUuid(
+    !isValidVisitorId(
       normalizedRequesterId
     )
   ) {
@@ -2682,16 +2749,6 @@ export async function requestCommunityBook(
   if (!normalizedBookId) {
     throw new Error(
       'Book ID is required.'
-    );
-  }
-
-  if (
-    !isValidUuid(
-      normalizedBookId
-    )
-  ) {
-    throw new Error(
-      'Invalid book ID.'
     );
   }
 
@@ -2913,7 +2970,7 @@ export async function fetchOwnerCommunityBookRequests(
     return [];
   }
 
-  if (!isValidUuid(normalizedOwnerVisitorId)) {
+  if (!isValidVisitorId(normalizedOwnerVisitorId)) {
     throw new Error(
       'Invalid owner visitor ID.'
     );
@@ -3015,7 +3072,7 @@ export async function fetchMyCommunityBookRequests(visitorId) {
     return [];
   }
 
-  if (!isValidUuid(normalizedVisitorId)) {
+  if (!isValidVisitorId(normalizedVisitorId)) {
     throw new Error('Invalid visitor ID.');
   }
 
@@ -3088,7 +3145,7 @@ export async function approveCommunityBookRequest(
     );
   }
 
-  if (!isValidUuid(normalizedOwnerVisitorId)) {
+  if (!isValidVisitorId(normalizedOwnerVisitorId)) {
     throw new Error(
       'Invalid owner visitor ID.'
     );
@@ -3173,7 +3230,7 @@ export async function rejectCommunityBookRequest(
     );
   }
 
-  if (!isValidUuid(normalizedOwnerVisitorId)) {
+  if (!isValidVisitorId(normalizedOwnerVisitorId)) {
     throw new Error(
       'Invalid owner visitor ID.'
     );
@@ -3245,7 +3302,7 @@ export async function confirmCommunityBookPickup(
     throw new Error('Owner visitor ID is required.');
   }
 
-  if (!isValidUuid(normalizedOwnerVisitorId)) {
+  if (!isValidVisitorId(normalizedOwnerVisitorId)) {
     throw new Error('Invalid owner visitor ID.');
   }
 
@@ -3293,7 +3350,7 @@ export async function confirmCommunityBookReturn(
     throw new Error('Owner visitor ID is required.');
   }
 
-  if (!isValidUuid(normalizedOwnerVisitorId)) {
+  if (!isValidVisitorId(normalizedOwnerVisitorId)) {
     throw new Error('Invalid owner visitor ID.');
   }
 
@@ -3368,7 +3425,7 @@ export async function cancelCommunityBookRequest(
     );
   }
 
-  if (!isValidUuid(normalizedRequesterId)) {
+  if (!isValidVisitorId(normalizedRequesterId)) {
     throw new Error(
       'Invalid visitor ID.'
     );
@@ -3524,7 +3581,7 @@ export async function addBooksBulk(
           );
 
         const category =
-          normalizeText(
+          normalizeBookCategory(
             normalized.category
           );
 
@@ -3658,13 +3715,12 @@ export async function updateBook(
     );
   }
 
-  if (
-    !isValidUuid(
-      normalizedBookId
-    )
-  ) {
+  const expectedUpdatedAt =
+    normalizeText(patch?.updatedAt);
+
+  if (!expectedUpdatedAt) {
     throw new Error(
-      'Invalid book ID.'
+      'INVENTORY_CONFLICT: reload this book before saving.'
     );
   }
 
@@ -3710,7 +3766,7 @@ export async function updateBook(
     patch?.category !== undefined
   ) {
     dbPatch.category =
-      normalizeText(
+      normalizeBookCategory(
         patch.category
       ) || null;
   }
@@ -3849,7 +3905,7 @@ export async function updateBook(
 
     if (
       ownerVisitorId &&
-      !isValidUuid(
+      !isValidVisitorId(
         ownerVisitorId
       )
     ) {
@@ -3982,21 +4038,25 @@ export async function updateBook(
     data,
     error,
   } =
-    await supabase
-      .from('books')
-      .update(dbPatch)
-      .eq(
-        'id',
-        normalizedBookId
-      )
-      .select()
-      .single();
+    await supabase.rpc(
+      'update_inventory_book',
+      {
+        p_book_id:
+          normalizedBookId,
+
+        p_expected_updated_at:
+          expectedUpdatedAt,
+
+        p_patch:
+          dbPatch,
+      }
+    );
 
   if (error) {
     throw cleanErr(error);
   }
 
-  return mapBook(data);
+  return mapBook(firstRow(data));
 }
 
 // ============================================================================
@@ -4012,16 +4072,6 @@ export async function deleteBook(
   if (!normalizedBookId) {
     throw new Error(
       'Book ID is required.'
-    );
-  }
-
-  if (
-    !isValidUuid(
-      normalizedBookId
-    )
-  ) {
-    throw new Error(
-      'Invalid book ID.'
     );
   }
 
@@ -4126,7 +4176,7 @@ export async function loadSampleCatalog(
                 'Unknown Author',
 
               category:
-                categoryName.toUpperCase(),
+                normalizeBookCategory(categoryName),
 
               isbn:
                 doc.isbn?.[0] ||
@@ -4248,11 +4298,7 @@ export async function requestBorrow(
     );
   }
 
-  if (
-    !isValidUuid(
-      normalizedVisitorId
-    )
-  ) {
+  if (!isValidVisitorId(normalizedVisitorId)) {
     throw new Error(
       'Invalid visitor ID.'
     );
@@ -4261,16 +4307,6 @@ export async function requestBorrow(
   if (!normalizedBookId) {
     throw new Error(
       'Book ID is required.'
-    );
-  }
-
-  if (
-    !isValidUuid(
-      normalizedBookId
-    )
-  ) {
-    throw new Error(
-      'Invalid book ID.'
     );
   }
 

@@ -1369,10 +1369,14 @@ function AdminWorkspace({
         );
 
       if (!response.ok) {
-        throw new Error(
-          `Forecast service returned ${response.status}.`
-        );
-      }
+          const errorResponse =
+            await response.json();
+
+          throw new Error(
+            errorResponse.detail ||
+              `Forecast service returned ${response.status}.`
+          );
+        }
 
       setForecast(
         await response.json()
@@ -2349,15 +2353,40 @@ function AdminWorkspace({
                   )
                 )}
 
-                {forecast?.recommendations?.map(
-                  (item) => (
-                    <p
-                      key={item}
-                      className="mt-2 text-sm text-emerald-800"
-                    >
-                      {item}
-                    </p>
-                  )
+                {forecast?.insights?.length > 0 && (
+                  <div className="mt-4 border-t border-slate-200 pt-3">
+                    <h3 className="text-sm font-bold">
+                      Gemini analytics insights
+                    </h3>
+
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600">
+                      {forecast.insights.map(
+                        (item) => (
+                          <li key={item}>
+                            {item}
+                          </li>
+                        )
+                      )}
+                    </ul>
+                  </div>
+                )}
+
+                {forecast?.recommendations?.length > 0 && (
+                  <div className="mt-4 border-t border-slate-200 pt-3">
+                    <h3 className="text-sm font-bold">
+                      Gemini recommendations
+                    </h3>
+
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-emerald-800">
+                      {forecast.recommendations.map(
+                        (item) => (
+                          <li key={item}>
+                            {item}
+                          </li>
+                        )
+                      )}
+                    </ul>
+                  </div>
                 )}
               </section>
             </aside>

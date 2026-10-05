@@ -3,6 +3,8 @@
 -- ----------------------------------------------------------------------------
 
 create extension if not exists pgcrypto;
+create schema if not exists extensions;
+create extension if not exists postgis with schema extensions;
 
 -- ---------------------------------------------------------------------------
 -- Tables
@@ -19,6 +21,30 @@ create table if not exists libraries (
   is_sample_location boolean default false
 );
 
+do $$
+declare
+  postgis_schema text;
+begin
+  select nsp.nspname into postgis_schema
+  from pg_extension ext
+  join pg_namespace nsp on nsp.oid = ext.extnamespace
+  where ext.extname = 'postgis';
+
+  if postgis_schema is null then
+    raise exception 'PostGIS must be installed to create library geography coordinates.';
+  end if;
+
+  execute format(
+    'alter table public.libraries add column if not exists location %I.geography(Point, 4326)',
+    postgis_schema
+  );
+  execute format(
+    'update public.libraries set location = %1$I.st_setsrid(%1$I.st_makepoint(lng, lat), 4326)::%1$I.geography where location is null and lat between -90 and 90 and lng between -180 and 180',
+    postgis_schema
+  );
+end;
+$$;
+
 create table if not exists books (
   id text primary key default ('BK-' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)),
   title text not null,
@@ -29,8 +55,18 @@ create table if not exists books (
   library_id text references libraries(id) on delete set null,
   total_copies int not null default 1,
   available_copies int not null default 1,
+  book_type text not null default 'library' check (book_type in ('library', 'personal')),
+  is_public boolean not null default false,
+  owner_visitor_id text,
+  lending_enabled boolean not null default false,
+  condition text,
+  lending_period_days integer,
+  handover_location text,
+  handover_method text,
+  handover_details text,
   summary text,
   cover_url text,
+  updated_at timestamptz not null default now(),
   created_at timestamptz default now()
 );
 
@@ -40,12 +76,35 @@ create table if not exists visitors (
   contact_number text,
   email text unique not null,
   address text,
-  password text not null, -- ⚠ plaintext for capstone-demo scope, see note at bottom of file
+  auth_user_id uuid unique references auth.users(id) on delete cascade,
   otp text,
+  otp_expires_at timestamptz,
   otp_verified boolean default false,
+  is_active boolean not null default true,
   qr_code text unique,
   registered_at timestamptz default now()
 );
+
+do $$
+begin
+  alter table public.books
+    drop constraint if exists books_owner_visitor_id_fkey;
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'books'
+      and column_name = 'owner_visitor_id'
+      and data_type <> 'text'
+  ) then
+    alter table public.books
+      alter column owner_visitor_id type text using owner_visitor_id::text;
+  end if;
+  alter table public.books
+    add constraint books_owner_visitor_id_fkey
+    foreign key (owner_visitor_id)
+    references public.visitors(id) on delete cascade not valid;
+end;
+$$;
 
 create table if not exists borrow_requests (
   id text primary key default ('REQ-' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)),
@@ -61,6 +120,29 @@ create table if not exists borrow_requests (
   due_date timestamptz,
   return_date timestamptz,
   fine_amount numeric default 0,
+  confirmed_by text,
+  return_confirmed_by text
+);
+
+create table if not exists community_book_requests (
+  id uuid primary key default gen_random_uuid(),
+  book_id text not null references books(id) on delete cascade,
+  book_title text not null,
+  owner_visitor_id text not null references visitors(id) on delete cascade,
+  owner_name text not null,
+  requester_visitor_id text not null references visitors(id) on delete cascade,
+  requester_name text not null,
+  status text not null default 'pending'
+    check (status in ('pending', 'approved', 'rejected', 'borrowed', 'returned', 'cancelled')),
+  request_date timestamptz not null default now(),
+  approved_at timestamptz,
+  rejected_at timestamptz,
+  owner_response text,
+  pickup_deadline timestamptz,
+  borrow_date timestamptz,
+  due_date timestamptz,
+  return_date timestamptz,
+  fine_amount numeric not null default 0,
   confirmed_by text,
   return_confirmed_by text
 );
@@ -244,6 +326,22 @@ insert into libraries (id, name, campus, address, lat, lng, hours, status, is_sa
   ('bde57b8b-d3b8-4676-823e-7573f80d3a36', 'BatStateU Batangas City Main Campus Library', 'Batangas City (Main Campus)', 'Rizal Avenue Extension, Batangas City, Batangas', 13.7565, 121.0583, '8:00 AM – 5:00 PM (Mon–Fri)', 'Closed', true)
 on conflict (id) do nothing;
 
+do $$
+declare
+  postgis_schema text;
+begin
+  select nsp.nspname into postgis_schema
+  from pg_extension ext
+  join pg_namespace nsp on nsp.oid = ext.extnamespace
+  where ext.extname = 'postgis';
+
+  execute format(
+    'update public.libraries set location = %1$I.st_setsrid(%1$I.st_makepoint(lng, lat), 4326)::%1$I.geography where location is null and lat between -90 and 90 and lng between -180 and 180',
+    postgis_schema
+  );
+end;
+$$;
+
 -- ---------------------------------------------------------------------------
 -- Row Level Security
 -- ---------------------------------------------------------------------------
@@ -270,15 +368,20 @@ drop policy if exists "public write libraries" on libraries;
 create policy "public write libraries" on libraries for all using (true) with check (true);
 
 drop policy if exists "public read books" on books;
-create policy "public read books" on books for select using (true);
+create policy "public read books" on books for select using (
+  book_type <> 'personal'
+  or is_public
+  or exists (
+    select 1
+    from visitors visitor
+    where visitor.id = books.owner_visitor_id
+      and visitor.auth_user_id = auth.uid()
+  )
+);
 drop policy if exists "public write books" on books;
-create policy "public write books" on books for all using (true) with check (true);
 
--- Visitors: only non-sensitive columns are ever selected from the client
--- (see mapVisitor() in src/data/store.js) — password/otp checks happen
--- server-side inside the SECURITY DEFINER functions below, not via a
--- direct table select, so a public select policy here does not leak them
--- through the normal app flow. Still, avoid `select *` on this table.
+-- Visitors: only non-sensitive columns are ever selected from the client;
+-- OTP verification remains server-side.
 drop policy if exists "public read visitors" on visitors;
 create policy "public read visitors" on visitors for select using (true);
 drop policy if exists "public write visitors" on visitors;
@@ -430,34 +533,67 @@ $$;
 -- ============================================================================
 -- RPC functions (SECURITY DEFINER) — these hold the atomic business logic
 -- (queue promotion, pickup expiry, OTP/login checks) so it can't race between
--- two concurrent requests, and so visitor passwords/OTPs are checked
--- server-side rather than fetched to the browser.
+-- two concurrent requests.
 -- ============================================================================
 
-drop function if exists public.register_visitor(text, text, text, text, text);
 drop function if exists public.verify_visitor_otp(text, text);
-drop function if exists public.login_visitor(text, text);
 drop function if exists public.find_visitor_by_qr(text);
 drop function if exists public.scan_attendance(text, text);
 
-create or replace function register_visitor(
-  p_full_name text, p_contact_number text, p_email text, p_address text, p_password text
-) returns table(visitor_id text, otp text) as $$
+create or replace function public.register_visitor(
+  p_auth_user_id uuid,
+  p_full_name text,
+  p_contact_number text,
+  p_email text,
+  p_address text
+) returns table(visitor_id text) as $$
 declare
-  v_id text;
-  v_otp text;
+  auth_email text;
+  auth_role text;
+  visitor_id_value text;
 begin
-  if exists (select 1 from visitors where lower(email) = lower(p_email)) then
-    raise exception 'An account with this email already exists. Please log in instead.';
+  select lower(account.email), account.raw_user_meta_data ->> 'role'
+    into auth_email, auth_role
+  from auth.users account
+  where account.id = p_auth_user_id;
+
+  if auth_email is null
+    or auth_email <> lower(trim(p_email))
+    or auth_role is distinct from 'visitor'
+  then
+    raise exception 'A matching visitor authentication account is required.';
   end if;
-  v_otp := lpad(floor(random() * 900000 + 100000)::text, 6, '0');
-  insert into visitors (full_name, contact_number, email, address, password, otp, otp_verified)
-  values (trim(p_full_name), trim(p_contact_number), trim(p_email), trim(p_address), p_password, v_otp, false)
-  returning id into v_id;
-  return query select v_id, v_otp;
+
+  insert into public.visitors (
+    full_name, contact_number, email, address, otp_verified, qr_code, auth_user_id
+  ) values (
+    trim(p_full_name),
+    nullif(trim(p_contact_number), ''),
+    auth_email,
+    nullif(trim(p_address), ''),
+    false,
+    'SHELF-QR-' || upper(replace(gen_random_uuid()::text, '-', '')),
+    p_auth_user_id
+  )
+  on conflict (email) do update
+  set auth_user_id = excluded.auth_user_id,
+      full_name = excluded.full_name,
+      contact_number = excluded.contact_number,
+      address = excluded.address,
+      qr_code = coalesce(public.visitors.qr_code, excluded.qr_code)
+  where public.visitors.auth_user_id is null
+     or public.visitors.auth_user_id = excluded.auth_user_id
+  returning id into visitor_id_value;
+
+  if visitor_id_value is null then
+    raise exception 'This email is already linked to another visitor account.';
+  end if;
+
+  return query select visitor_id_value;
 end;
 $$ language plpgsql security definer;
-grant execute on function public.register_visitor(text, text, text, text, text) to anon, authenticated;
+revoke all on function public.register_visitor(uuid, text, text, text, text) from public;
+grant execute on function public.register_visitor(uuid, text, text, text, text) to anon, authenticated;
 
 create or replace function resend_otp(p_visitor_id text) returns text as $$
 declare v_otp text;
@@ -485,27 +621,6 @@ begin
 end;
 $$ language plpgsql security definer;
 grant execute on function public.verify_visitor_otp(text, text) to anon, authenticated;
-
-create or replace function login_visitor(p_identifier text, p_password text)
-returns table(id text, full_name text, email text, qr_code text) as $$
-declare v record;
-begin
-  select * into v from visitors
-    where lower(visitors.email) = lower(p_identifier) or visitors.qr_code = p_identifier
-    limit 1;
-  if v.id is null then
-    raise exception 'No account found with that email or QR pass ID. Please register first.';
-  end if;
-  if not v.otp_verified then
-    raise exception 'Please verify your OTP code before logging in.';
-  end if;
-  if v.qr_code is distinct from p_identifier and v.password <> p_password then
-    raise exception 'Incorrect password.';
-  end if;
-  return query select v.id, v.full_name, v.email, v.qr_code;
-end;
-$$ language plpgsql security definer;
-grant execute on function public.login_visitor(text, text) to anon, authenticated;
 
 create or replace function find_visitor_by_qr(p_qr text)
 returns table(id text, full_name text, email text, qr_code text) as $$
@@ -682,12 +797,3 @@ begin
   perform release_copy_and_promote(v_req.book_id);
 end;
 $$ language plpgsql security definer;
-
--- ============================================================================
--- ⚠ Security note (read before a real-world launch, not just a demo/defense):
--- Visitor passwords are stored as plain text in this schema to keep the
--- capstone scope manageable. Before handling real members' data, switch to
--- Supabase Auth (supabase.auth.signUp / signInWithPassword) for visitors, or
--- at minimum hash passwords with pgcrypto's crypt()/gen_salt() inside
--- register_visitor/login_visitor instead of comparing them raw.
--- ============================================================================

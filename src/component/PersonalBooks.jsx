@@ -1,9 +1,17 @@
 import { useEffect, useState } from 'react';
-import { BookMarked, Plus, RefreshCw, X } from 'lucide-react';
+import {
+  BookMarked,
+  Eye,
+  EyeOff,
+  Plus,
+  RefreshCw,
+  X,
+} from 'lucide-react';
 
 import {
   addPersonalBook,
   fetchPersonalBooks,
+  setPersonalBookVisibility,
 } from '../data/store.js';
 
 const CONDITIONS = [
@@ -24,6 +32,7 @@ const INITIAL_FORM = {
   lendingPeriodDays: 7,
   handoverLocation: '',
   lendingEnabled: true,
+  isPublic: false,
 };
 
 function formatDate(value) {
@@ -45,6 +54,7 @@ export default function PersonalBooks({ userId }) {
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [visibilityBookId, setVisibilityBookId] = useState(null);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
 
@@ -248,6 +258,8 @@ export default function PersonalBooks({ userId }) {
           handoverLocation || null,
         lendingEnabled:
           Boolean(form.lendingEnabled),
+        isPublic:
+          Boolean(form.isPublic),
       });
 
       /*
@@ -663,6 +675,45 @@ export default function PersonalBooks({ userId }) {
             {/* COMMUNITY LENDING */}
 
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/50">
+              <fieldset disabled={isSaving}>
+                <legend className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                  Book visibility
+                </legend>
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  {[
+                    { value: true, label: 'Public', Icon: Eye },
+                    { value: false, label: 'Only Me', Icon: EyeOff },
+                  ].map(({ value, label, Icon }) => (
+                    <label
+                      key={label}
+                      className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold ${
+                        form.isPublic === value
+                          ? 'border-[#002046] bg-white text-[#002046] dark:bg-slate-800 dark:text-blue-300'
+                          : 'border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="personal-book-visibility"
+                        checked={form.isPublic === value}
+                        onChange={() => updateForm('isPublic', value)}
+                        className="text-[#002046] focus:ring-[#002046]"
+                      />
+                      <Icon size={15} aria-hidden="true" />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  Public books appear in Community Books. Only Me books are
+                  visible only in your personal collection.
+                </p>
+              </fieldset>
+            </div>
+
+            {/* COMMUNITY LENDING */}
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/50">
               <label className="flex cursor-pointer items-start gap-3">
                 <input
                   type="checkbox"
@@ -683,9 +734,8 @@ export default function PersonalBooks({ userId }) {
                   </span>
 
                   <span className="mt-1 block text-xs leading-5 text-slate-500 dark:text-slate-400">
-                    Other SHELF visitors will be able to
-                    request this book through the community
-                    lending feature.
+                    If this book is Public, other SHELF visitors can request
+                    it through community lending.
                   </span>
                 </span>
               </label>
@@ -835,6 +885,8 @@ export default function PersonalBooks({ userId }) {
             {books.map((book) => {
               const isLendingEnabled =
                 Boolean(book.lendingEnabled);
+              const isUpdatingVisibility =
+                visibilityBookId === book.id;
 
               return (
                 <article
@@ -854,9 +906,66 @@ export default function PersonalBooks({ userId }) {
                       </p>
                     </div>
 
-                    <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-                      Personal
-                    </span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                        {book.isPublic ? 'Public' : 'Only Me'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const nextVisibility = !book.isPublic;
+                          setVisibilityBookId(book.id);
+                          setError('');
+                          setMessage('');
+                          try {
+                            await setPersonalBookVisibility(
+                              userId,
+                              book.id,
+                              nextVisibility
+                            );
+                            setBooks((current) =>
+                              current.map((entry) =>
+                                entry.id === book.id
+                                  ? { ...entry, isPublic: nextVisibility }
+                                  : entry
+                              )
+                            );
+                            setMessage(
+                              `"${book.title}" is now ${
+                                nextVisibility ? 'public' : 'visible only to you'
+                              }.`
+                            );
+                          } catch (visibilityError) {
+                            console.error(
+                              'UPDATE BOOK VISIBILITY ERROR:',
+                              visibilityError
+                            );
+                            setError(
+                              visibilityError?.message ||
+                                'Unable to update book visibility.'
+                            );
+                          } finally {
+                            setVisibilityBookId(null);
+                          }
+                        }}
+                        disabled={isUpdatingVisibility}
+                        aria-label={`Make ${book.title} ${
+                          book.isPublic ? 'private' : 'public'
+                        }`}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+                      >
+                        {book.isPublic ? (
+                          <EyeOff size={13} aria-hidden="true" />
+                        ) : (
+                          <Eye size={13} aria-hidden="true" />
+                        )}
+                        {isUpdatingVisibility
+                          ? 'Saving...'
+                          : book.isPublic
+                            ? 'Make Private'
+                            : 'Make Public'}
+                      </button>
+                    </div>
                   </div>
 
                   {/* DETAILS */}

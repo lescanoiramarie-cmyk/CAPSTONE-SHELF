@@ -1,15 +1,15 @@
-drop function if exists public.fetch_my_community_book_requests(uuid);
+drop function if exists public.fetch_my_community_book_requests(text);
 
 create function public.fetch_my_community_book_requests(
-  p_requester_visitor_id uuid
+  p_requester_visitor_id text
 )
 returns table (
   id uuid,
-  book_id uuid,
+  book_id text,
   book_title text,
-  owner_visitor_id uuid,
+  owner_visitor_id text,
   owner_name text,
-  requester_visitor_id uuid,
+  requester_visitor_id text,
   requester_name text,
   status varchar,
   request_date timestamptz,
@@ -60,5 +60,5 @@ begin
 end;
 $$;
 
-grant execute on function public.fetch_my_community_book_requests(uuid)
+grant execute on function public.fetch_my_community_book_requests(text)
   to anon, authenticated, service_role;

@@ -79,17 +79,20 @@ Both admin dashboards include **Reports & Services**. Sub-admins see only
 their assigned branch; super-admins can select a branch or view the whole
 network. Reports and analytics share date filters, sorting, and CSV/Excel/PDF
 exports. Analytics charts use attendance and borrowing records,
-with demand-based operational suggestions. Visitors can submit feedback and
-questions, receive FAQ answers for common topics, read announcements, and see
-replies from the library team.
+with Gemini-generated operational suggestions. Visitors can submit feedback and
+questions, ask FAQ questions with answers grounded in the published FAQ corpus,
+read announcements, and see replies from the library team. OPAC recommendations
+can also use recent searches saved locally for the signed-in visitor; searches
+are not sent to the analytics service.
 
 Attendance QR scans alternate between check-in and check-out for the active
-branch/day. The security migration adds branch-aware RLS, Auth-linked visitor
-profiles, personal books, reviews, audit logs, and a `pg_cron` job that expires
-24-hour holds every minute. The QR activation follow-up withholds passes until
-email verification and rotates existing passes; visitors should sign in and
-save their refreshed pass after both migrations. Verify the scheduled job
-under Database → Cron.
+branch/day. Visitors show their QR pass to staff for scanning; visitor
+self-service entrance scanning is intentionally not enabled. The security
+migrations add branch-aware RLS, Auth-linked visitor profiles, personal books,
+reviews, audit logs, and a `pg_cron` job that expires 24-hour holds every
+minute. The QR activation follow-up withholds passes until email verification
+and rotates existing passes; visitors should sign in and save their refreshed
+pass after both migrations. Verify the scheduled job under Database → Cron.
 Deploy `visitor-qr-login` with `supabase functions deploy visitor-qr-login` and
 set the Edge Function secret `APP_ORIGIN` (or comma-separated `APP_ORIGINS`) to
 the exact deployed frontend origin so QR sign-in passes CORS.
@@ -105,7 +108,18 @@ Deploy `send-due-date-notifications` to email the same reminders to borrowers:
    `20261003000200_community_borrower_transaction_details.sql` migrations.
    Apply `20261003000300_community_book_copy_inventory.sql` to enable visitor
    copy counts and automatic availability updates when a community book is
-   handed over or returned.
+   handed over or returned. Apply
+   `20261004000000_auth_inventory_geography_fixes.sql` after the earlier
+   migrations; it repairs the Auth registration and visitor-ID contracts,
+   adds/backfills PostGIS geography, and enables conflict-checked inventory
+   updates. Apply `20261005000000_registration_rpc_hardening.sql` to ensure the
+   registration RPC only returns a trigger-created profile ID after validating
+   the sign-up nonce; it does not mutate visitor profiles. Apply
+   `20261006000000_community_book_visibility.sql` to add public/Only Me
+   visibility for community books, owner-only visibility controls, and database
+   policies that prevent private books from appearing to other visitors. Apply
+   `20261007000000_community_request_text_id_rpcs.sql` to align owner request
+   RPCs with text visitor/book IDs and enforce owner authorization.
 2. Add `shelf_supabase_url` and `due_notification_secret` to Supabase Vault.
    Set `DUE_NOTIFICATION_SECRET` to the same secret using
    `supabase secrets set DUE_NOTIFICATION_SECRET=<secret>`.
@@ -151,26 +165,50 @@ Auth-backed super-admin session:
 
 The forecast endpoint consumes branch-scoped aggregate data from the dashboard
 and returns seven daily visitor estimates, ranked category demand, and
-operational recommendations. From PowerShell with Python 3.11 installed:
+Gemini-generated insights and operational recommendations. From PowerShell
+with Python 3.11 installed:
 
 ```powershell
 cd analytics
 py -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-$env:ANALYTICS_ALLOWED_ORIGINS = "http://localhost:5173"
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
+# Open analytics/.env and set GEMINI_API_KEY to your key from
+# https://aistudio.google.com/apikey.
 uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
-Set `VITE_ANALYTICS_API_URL=http://localhost:8000` in the frontend `.env` and
-restart Vite. The service exposes `GET /health` and `POST /forecast`.
+The root `.env.local` sets `VITE_ANALYTICS_API_URL=http://localhost:8000`; restart
+Vite after creating or changing it. The Gemini API key is read only by the
+Python service; never put it in a `VITE_` variable or frontend code. The service
+keeps numeric forecasts in its forecasting model and uses Gemini for analytics
+insights and operational recommendations. It also exposes `POST /faq/answer`
+for FAQ-corpus-grounded answers. `GET /health` reports whether a key is
+configured without exposing it; `POST /forecast` calls Gemini and returns the
+analytics response.
+
+### Database bootstrap and migration safety
+
+For a new database, apply `supabase/schema.sql` first, then apply every
+timestamped migration in order. Before upgrading an existing Supabase project,
+back it up, inspect applied versions with `supabase migration list --linked`,
+and review `supabase db push --dry-run`. The forward-fix migration
+`20261001000000_legacy_uuid_key_compatibility.sql` preserves existing UUID
+book and visitor IDs while converting legacy key columns to the text-ID
+contract expected by the application. The forward-fix migration
+`20261004000000_auth_inventory_geography_fixes.sql` is intended to repair
+already-migrated installations as well as fresh installs; verify PostGIS
+availability. `20261005000000_registration_rpc_hardening.sql` further
+restricts the registration RPC to a nonce-backed, read-only profile lookup.
+Review the migration plan before applying it with `supabase db push`. The
+repository changes do not apply migrations to a remote database automatically.
 
 ## Known simplifications (flagged in-code)
 
 - QR scanning supports both camera decoding (`html5-qrcode`) and manual input.
 - Existing email/branch labels may remain in frontend constants for old UI
    paths, but no staff passwords are stored or used there.
-- `schema.sql` is the initial demo schema and defines permissive policies.
-   Apply `supabase/migrations/20261002_security_features.sql` after it before
-   exposing a deployment.
+- `schema.sql` is the base schema; timestamped migrations must be applied in
+  order before exposing a deployment.
 - Map markers use approximate, clearly-flagged sample coordinates.

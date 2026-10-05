@@ -517,7 +517,7 @@ return visitor;
     // provisioning error.
     // =======================================================
 
-    let visitorError = null;
+    let visitorError;
 
     try {
       const visitor =

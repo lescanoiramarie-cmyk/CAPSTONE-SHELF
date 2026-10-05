@@ -2,7 +2,7 @@
 create table if not exists public.community_due_date_notifications (
   id uuid primary key default gen_random_uuid(),
   community_request_id text not null,
-  visitor_id uuid not null references public.visitors(id) on delete cascade,
+  visitor_id text not null references public.visitors(id) on delete cascade,
   notification_type text not null
     check (notification_type in ('due_soon', 'due_today', 'overdue')),
   notification_date date not null,

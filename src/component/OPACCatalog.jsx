@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/useAuth.js';
 import {
   BookOpen,
+  Eye,
+  EyeOff,
   MapPinned,
   Search,
   X,
   Plus,
-  Library,
   UserRound,
   Users,
   Clock3,
@@ -21,6 +22,7 @@ import {
 import LibraryMap from './LibraryMap.jsx';
 
 import { supabase } from '../lib/supabaseClient.js';
+import { recordVisitorSearch } from '../lib/recommendationEngine.js';
 
 // =========================================================
 // DATE HELPERS
@@ -203,6 +205,7 @@ export default function OPACCatalog({
   requestBorrow,
   cancelBorrowRequest,
   addPersonalBook,
+  setPersonalBookVisibility,
   requestCommunityBook,
   fetchOwnerCommunityBookRequests,
   approveCommunityBookRequest,
@@ -261,22 +264,20 @@ export default function OPACCatalog({
 
   const [submittingCommunityRequest, setSubmittingCommunityRequest] =
     useState(false);
+  const [updatingVisibilityBookId, setUpdatingVisibilityBookId] =
+    useState(null);
 
   // =========================================================
   // PERSONAL / COMMUNITY BOOK STATES
   // =========================================================
 
-  const [loadingPersonalBooks, setLoadingPersonalBooks] =
-    useState(false);
+  const [loadingPersonalBooks] = useState(false);
 
-  const [loadingCommunityBooks, setLoadingCommunityBooks] =
-    useState(false);
+  const [loadingCommunityBooks] = useState(false);
 
-  const [personalBookError, setPersonalBookError] =
-    useState('');
+  const [personalBookError] = useState('');
 
-  const [communityBookError, setCommunityBookError] =
-    useState('');
+  const [communityBookError] = useState('');
 
   // =========================================================
   // COMMUNITY BOOK OWNER REQUEST STATES
@@ -358,6 +359,7 @@ export default function OPACCatalog({
       handoverMethod: 'arrange_with_owner',
       handoverDetails: '',
       lendingEnabled: true,
+      isPublic: false,
     });
 
   // =========================================================
@@ -368,6 +370,9 @@ export default function OPACCatalog({
     useState(null);
 
   const [mapReturnBook, setMapReturnBook] =
+    useState(null);
+
+  const [mapBookContext, setMapBookContext] =
     useState(null);
 
   // =========================================================
@@ -413,11 +418,6 @@ export default function OPACCatalog({
   // LibraryProvider already loads these collections centrally.
   // This component consumes them through useLibraryData().
   // =========================================================
-
-  useEffect(() => {
-    setLoadingPersonalBooks(false);
-    setLoadingCommunityBooks(false);
-  }, [personalBooks, communityBooks]);
 
   // =========================================================
   // LOAD COMMUNITY BOOK REQUESTS FOR THE OWNER
@@ -591,7 +591,7 @@ if (!cancelled) {
     return () => {
       cancelled = true;
     };
-  }, [user?.id]);
+  }, [fetchOwnerCommunityBookRequests, user?.id]);
 
   // =========================================================
   // PERSONAL BOOK FORM HELPERS
@@ -619,6 +619,7 @@ if (!cancelled) {
       handoverMethod: 'arrange_with_owner',
       handoverDetails: '',
       lendingEnabled: true,
+      isPublic: false,
       totalCopies: 1,
     });
   };
@@ -753,6 +754,8 @@ if (!cancelled) {
             Boolean(
               personalBookForm.lendingEnabled
             ),
+          isPublic:
+            Boolean(personalBookForm.isPublic),
         });
 
       if (!createdBook) {
@@ -883,9 +886,11 @@ if (!cancelled) {
       event.preventDefault();
     }
 
-    setSearchTerm(
-      searchInput.trim()
-    );
+    const query = searchInput.trim();
+    setSearchTerm(query);
+    if (activeView === 'catalog' && query) {
+      recordVisitorSearch(user?.id, query);
+    }
   };
 
   const handleSearchInputChange = (
@@ -1405,7 +1410,7 @@ const myRequests = useMemo(() => {
   const filteredPersonalBooks =
     useMemo(() => {
       const term =
-        normalizedSearch;
+        searchTerm.trim().toLowerCase();
 
       if (!term) {
         return personalBooks;
@@ -1436,7 +1441,7 @@ const myRequests = useMemo(() => {
       );
     }, [
       personalBooks,
-      normalizedSearch,
+      searchTerm,
     ]);
 
   // =========================================================
@@ -1446,7 +1451,7 @@ const myRequests = useMemo(() => {
   const filteredCommunityBooks =
     useMemo(() => {
       const term =
-        normalizedSearch;
+        searchTerm.trim().toLowerCase();
 
       if (!term) {
         return communityBooks;
@@ -1477,7 +1482,7 @@ const myRequests = useMemo(() => {
       );
     }, [
       communityBooks,
-      normalizedSearch,
+      searchTerm,
     ]);
 
   // =========================================================
@@ -1995,8 +2000,10 @@ const handleConfirmCommunityBookReturn = async (request) => {
   // =========================================================
 
   const handleViewMap = (
-    libraryId
+    libraryId,
+    inventoryEntry = null
   ) => {
+    setMapBookContext(null);
     const library =
       libraries.find(
         (item) =>
@@ -2029,6 +2036,11 @@ const handleConfirmCommunityBookReturn = async (request) => {
       setMapReturnBook(
         selectedBook
       );
+      setMapBookContext({
+        title: selectedBook.title || 'Untitled Book',
+        totalCopies: Number(inventoryEntry?.totalCopies || 0),
+        availableCopies: Number(inventoryEntry?.availableCopies || 0),
+      });
     }
 
     setMapLibrary(library);
@@ -2046,6 +2058,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
   const handleCloseMap = () => {
     setMapLibrary(null);
+    setMapBookContext(null);
 
     if (mapReturnBook) {
       setSelectedBook(
@@ -2189,6 +2202,9 @@ const handleConfirmCommunityBookReturn = async (request) => {
                 <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 px-2 py-1 rounded">
                   Personal Book
                 </span>
+                <span className="text-[10px] font-bold tracking-wider bg-slate-100 text-slate-700 px-2 py-1 rounded">
+                  {book.isPublic ? 'Public' : 'Only Me'}
+                </span>
 
                 {book.lendingEnabled ? (
                   <span
@@ -2222,11 +2238,63 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
             </div>
 
-            <BookOpen
-              size={22}
-              className="shrink-0 text-slate-400"
-              aria-hidden="true"
-            />
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              {String(book.ownerVisitorId ?? '') === String(user?.id ?? '') && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (updatingVisibilityBookId) return;
+                    const nextVisibility = !book.isPublic;
+                    setUpdatingVisibilityBookId(book.id);
+                    setNotice('');
+                    try {
+                      await setPersonalBookVisibility(
+                        user.id,
+                        book.id,
+                        nextVisibility
+                      );
+                      setNotice(
+                        `"${book.title}" is now ${
+                          nextVisibility ? 'public' : 'visible only to you'
+                        }.`
+                      );
+                    } catch (error) {
+                      console.error(
+                        'UPDATE PERSONAL BOOK VISIBILITY ERROR:',
+                        error
+                      );
+                      setNotice(
+                        error?.message ||
+                          'Unable to update book visibility.'
+                      );
+                    } finally {
+                      setUpdatingVisibilityBookId(null);
+                    }
+                  }}
+                  disabled={updatingVisibilityBookId === book.id}
+                  aria-label={`Make ${book.title} ${
+                    book.isPublic ? 'private' : 'public'
+                  }`}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {book.isPublic ? (
+                    <EyeOff size={13} aria-hidden="true" />
+                  ) : (
+                    <Eye size={13} aria-hidden="true" />
+                  )}
+                  {updatingVisibilityBookId === book.id
+                    ? 'Saving...'
+                    : book.isPublic
+                      ? 'Make Private'
+                      : 'Make Public'}
+                </button>
+              )}
+              <BookOpen
+                size={22}
+                className="text-slate-400"
+                aria-hidden="true"
+              />
+            </div>
 
           </div>
 
@@ -2620,9 +2688,8 @@ const handleConfirmCommunityBookReturn = async (request) => {
               </div>
 
               <LibraryMap
-                lat={mapLibrary.lat}
-                lng={mapLibrary.lng}
-                name={mapLibrary.name}
+                focusBranchId={mapLibrary.id}
+                bookContext={mapBookContext}
               />
 
             </div>
@@ -4541,6 +4608,41 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
               {/* LENDING */}
 
+              <div className="border-t border-slate-200 pt-5 space-y-3">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                  Community Book Visibility
+                </h3>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  {[
+                    { value: true, label: 'Public' },
+                    { value: false, label: 'Only Me' },
+                  ].map(({ value, label }) => (
+                    <label
+                      key={label}
+                      className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold ${
+                        personalBookForm.isPublic === value
+                          ? 'border-[#002046] bg-blue-50 text-[#002046]'
+                          : 'border-slate-200 text-slate-600'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="opac-personal-book-visibility"
+                        checked={personalBookForm.isPublic === value}
+                        onChange={() =>
+                          updatePersonalBookForm('isPublic', value)
+                        }
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Public books appear in Community Books. Only Me books are
+                  visible only in your personal collection.
+                </p>
+              </div>
+
               <div className="border-t border-slate-200 pt-5 space-y-4">
 
                 <div>
@@ -4584,11 +4686,8 @@ const handleConfirmCommunityBookReturn = async (request) => {
                     </p>
 
                     <p className="text-xs text-slate-500 mt-1">
-                      Other visitors may see
-                      this book in Community
-                      Books. Actual borrowing
-                      will require owner
-                      approval.
+                      Visitors can request this book only when it is Public.
+                      Requests still require your approval.
                     </p>
 
                   </div>
@@ -5026,7 +5125,8 @@ const handleConfirmCommunityBookReturn = async (request) => {
                               type="button"
                               onClick={() =>
                                 handleViewMap(
-                                  entry.libraryId
+                                  entry.libraryId,
+                                  entry
                                 )
                               }
                               className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-300 transition"

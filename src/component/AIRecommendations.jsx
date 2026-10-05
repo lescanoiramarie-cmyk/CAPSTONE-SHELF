@@ -1,16 +1,42 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CircleAlert, CircleCheck, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/useAuth.js';
 import { useLibraryData } from '../context/useLibrary.js';
-import { getAIRecommendations } from '../lib/recommendationEngine.js';
+import {
+  getAIRecommendations,
+  getVisitorSearchHistory,
+  VISITOR_SEARCH_HISTORY_EVENT,
+} from '../lib/recommendationEngine.js';
 
 export default function AIRecommendations({ onRequestBorrow }) {
   const { user } = useAuth();
   const { books, borrowRequests } = useLibraryData();
+  const [searchHistory, setSearchHistory] = useState([]);
+
+  useEffect(() => {
+    const refreshSearchHistory = (event) => {
+      if (!event?.detail?.visitorId || event.detail.visitorId === String(user?.id || '')) {
+        setSearchHistory(getVisitorSearchHistory(user?.id));
+      }
+    };
+
+    refreshSearchHistory();
+    globalThis.addEventListener?.(VISITOR_SEARCH_HISTORY_EVENT, refreshSearchHistory);
+    return () =>
+      globalThis.removeEventListener?.(
+        VISITOR_SEARCH_HISTORY_EVENT,
+        refreshSearchHistory
+      );
+  }, [user?.id]);
 
   const { recommendations, topCategories, isColdStart } = useMemo(() => {
-    return getAIRecommendations(borrowRequests, books, user?.id);
-  }, [borrowRequests, books, user?.id]);
+    return getAIRecommendations(
+      borrowRequests,
+      books,
+      user?.id,
+      searchHistory
+    );
+  }, [borrowRequests, books, user?.id, searchHistory]);
 
   if (!recommendations || recommendations.length === 0) {
     return null;
@@ -26,20 +52,20 @@ export default function AIRecommendations({ onRequestBorrow }) {
               <Sparkles size={18} aria-hidden="true" />
             </span>
             <h3 className="text-base font-bold text-white">
-              AI Recommended for You
+              Recommended for You
             </h3>
           </div>
           <p className="text-xs text-slate-300 mt-1">
             {isColdStart
-              ? 'Popular titles across libraries to get you started:'
-              : 'Curated based on your borrowing patterns and preferred categories:'}
+              ? 'Available titles from the catalog to get you started:'
+              : 'Suggested using your borrowing history and recent OPAC searches, when available:'}
           </p>
         </div>
 
         {topCategories.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[10px] uppercase font-bold text-slate-400">
-              Interests:
+              {isColdStart ? 'Categories:' : 'Interests:'}
             </span>
             {topCategories.map((cat) => (
               <span
@@ -61,7 +87,7 @@ export default function AIRecommendations({ onRequestBorrow }) {
             className="bg-white/5 border border-white/10 rounded-xl p-4 flex flex-col justify-between transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/10 hover:shadow-md"
           >
             <div className="space-y-2">
-              <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+              <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded">
                 {book.category || 'General'}
               </span>
 

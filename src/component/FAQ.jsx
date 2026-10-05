@@ -5,6 +5,10 @@ import { FAQS } from '../data/faqData.js';
 export default function FAQ() {
   const [openIndex, setOpenIndex] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [question, setQuestion] = useState('');
+  const [answer, setAnswer] = useState('');
+  const [answerError, setAnswerError] = useState('');
+  const [asking, setAsking] = useState(false);
 
   const toggleAccordion = (id) => {
     setOpenIndex(openIndex === id ? null : id);
@@ -13,6 +17,56 @@ export default function FAQ() {
     item.q.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.a.toLowerCase().includes(searchTerm.toLowerCase())
   ));
+
+  const askQuestion = async (event) => {
+    event.preventDefault();
+    const submittedQuestion = question.trim();
+    if (!submittedQuestion) return;
+
+    const apiUrl = import.meta.env.VITE_ANALYTICS_API_URL;
+    if (!apiUrl) {
+      setAnswerError(
+        'Conversational answers are unavailable: VITE_ANALYTICS_API_URL is not configured.'
+      );
+      setAnswer('');
+      return;
+    }
+
+    setAsking(true);
+    setAnswerError('');
+    setAnswer('');
+    try {
+      const response = await fetch(`${apiUrl.replace(/\/+$/, '')}/faq/answer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: submittedQuestion,
+          faq_corpus: FAQS.flatMap((group) =>
+            group.questions.map((item) => ({
+              question: item.q,
+              answer: item.a,
+            }))
+          ),
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          payload.detail || `The FAQ service returned an error (${response.status}).`
+        );
+      }
+      if (typeof payload.answer !== 'string' || !payload.answer.trim()) {
+        throw new Error('The FAQ service returned an invalid answer.');
+      }
+      setAnswer(payload.answer.trim());
+    } catch (error) {
+      setAnswerError(
+        error.message || 'Unable to get a conversational answer right now.'
+      );
+    } finally {
+      setAsking(false);
+    }
+  };
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -37,6 +91,42 @@ export default function FAQ() {
           />
         </div>
       </div>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h3 className="text-sm font-bold text-slate-800">Ask a question</h3>
+        <p className="mt-1 text-xs text-slate-500">
+          Answers are generated using only the SHELF FAQ information below.
+        </p>
+        <form onSubmit={askQuestion} className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <input
+            type="text"
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            maxLength={500}
+            required
+            aria-label="Ask a question about SHELF"
+            placeholder="Ask in your own words..."
+            className="min-w-0 flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:border-blue-600"
+          />
+          <button
+            type="submit"
+            disabled={asking || !question.trim()}
+            className="rounded-lg bg-[#002046] px-5 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {asking ? 'Finding an answer…' : 'Ask'}
+          </button>
+        </form>
+        {answerError && (
+          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
+            {answerError}
+          </p>
+        )}
+        {answer && (
+          <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm leading-relaxed text-blue-950" role="status">
+            {answer}
+          </div>
+        )}
+      </section>
 
       {/* ACCORDION FAQ CONTENT */}
       <div className="space-y-6">

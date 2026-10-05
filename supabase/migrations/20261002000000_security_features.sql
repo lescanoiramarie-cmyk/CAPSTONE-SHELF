@@ -3,10 +3,73 @@
 
 alter table public.visitors
   add column if not exists auth_user_id uuid unique references auth.users(id) on delete cascade,
-  add column if not exists otp_expires_at timestamptz;
+  add column if not exists otp_expires_at timestamptz,
+  add column if not exists is_active boolean not null default true;
 
 drop function if exists public.register_visitor(text, text, text, text, text);
 drop function if exists public.login_visitor(text, text);
+
+alter table public.books
+  add column if not exists book_type text not null default 'library'
+    check (book_type in ('library', 'personal')),
+  add column if not exists owner_visitor_id text,
+  add column if not exists lending_enabled boolean not null default false,
+  add column if not exists condition text,
+  add column if not exists lending_period_days integer,
+  add column if not exists handover_location text,
+  add column if not exists handover_method text,
+  add column if not exists handover_details text,
+  add column if not exists updated_at timestamptz not null default now();
+
+do $$
+begin
+  alter table public.books
+    drop constraint if exists books_owner_visitor_id_fkey;
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'books'
+      and column_name = 'owner_visitor_id'
+      and data_type <> 'text'
+  ) then
+    alter table public.books
+      alter column owner_visitor_id type text using owner_visitor_id::text;
+  end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'books_owner_visitor_id_fkey'
+      and conrelid = 'public.books'::regclass
+  ) then
+    alter table public.books
+      add constraint books_owner_visitor_id_fkey
+      foreign key (owner_visitor_id)
+      references public.visitors(id) on delete cascade not valid;
+  end if;
+end;
+$$;
+
+create table if not exists public.community_book_requests (
+  id uuid primary key default gen_random_uuid(),
+  book_id text not null references public.books(id) on delete cascade,
+  book_title text not null,
+  owner_visitor_id text not null references public.visitors(id) on delete cascade,
+  owner_name text not null,
+  requester_visitor_id text not null references public.visitors(id) on delete cascade,
+  requester_name text not null,
+  status text not null default 'pending'
+    check (status in ('pending', 'approved', 'rejected', 'borrowed', 'returned', 'cancelled')),
+  request_date timestamptz not null default now(),
+  approved_at timestamptz,
+  rejected_at timestamptz,
+  owner_response text,
+  pickup_deadline timestamptz,
+  borrow_date timestamptz,
+  due_date timestamptz,
+  return_date timestamptz,
+  fine_amount numeric not null default 0,
+  confirmed_by text,
+  return_confirmed_by text
+);
 
 do $$
 begin
@@ -98,6 +161,8 @@ $$;
 revoke all on function public.link_visitor_auth_user() from public, anon, authenticated;
 
 drop trigger if exists on_auth_user_visitor_link on auth.users;
+drop trigger if exists on_auth_user_visitor_link_insert on auth.users;
+drop trigger if exists on_auth_user_visitor_confirm on auth.users;
 create trigger on_auth_user_visitor_link_insert
   after insert on auth.users
   for each row execute function public.link_visitor_auth_user();
@@ -105,6 +170,58 @@ drop trigger if exists on_auth_user_visitor_confirm on auth.users;
 create trigger on_auth_user_visitor_confirm
   after update of email_confirmed_at on auth.users
   for each row execute function public.link_visitor_auth_user();
+
+drop function if exists public.register_visitor(uuid, text, text, text, text);
+drop function if exists public.register_visitor(uuid, text, text, text, text, text);
+create function public.register_visitor(
+  p_auth_user_id uuid,
+  p_full_name text,
+  p_contact_number text,
+  p_email text,
+  p_address text,
+  p_registration_nonce text
+)
+returns table(visitor_id text)
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  auth_metadata jsonb;
+  auth_email text;
+  visitor_id_value text;
+begin
+  select lower(account.email), account.raw_user_meta_data
+    into auth_email, auth_metadata
+  from auth.users account
+  where account.id = p_auth_user_id;
+
+  if auth_email is null
+    or auth_email <> lower(trim(p_email))
+    or auth_metadata ->> 'role' is distinct from 'visitor'
+    or auth_metadata ->> 'registration_nonce' is distinct from p_registration_nonce
+    or auth_metadata ->> 'full_name' is distinct from trim(p_full_name)
+    or auth_metadata ->> 'contact_number' is distinct from nullif(trim(p_contact_number), '')
+    or auth_metadata ->> 'address' is distinct from nullif(trim(p_address), '')
+  then
+    raise exception 'A matching visitor registration proof is required.';
+  end if;
+
+  select visitor.id into visitor_id_value
+  from public.visitors visitor
+  where visitor.auth_user_id = p_auth_user_id
+    and lower(visitor.email) = auth_email;
+
+  if visitor_id_value is null then
+    raise exception 'The visitor profile was not created by the Auth trigger.';
+  end if;
+
+  return query select visitor_id_value;
+end;
+$$;
+revoke all on function public.register_visitor(uuid, text, text, text, text, text) from public;
+grant execute on function public.register_visitor(uuid, text, text, text, text, text)
+  to anon, authenticated;
 
 update public.visitors visitor
 set auth_user_id = account.id,
@@ -116,6 +233,75 @@ where lower(account.email) = lower(visitor.email)
 
 update public.visitors
 set qr_code = 'SHELF-QR-' || upper(replace(gen_random_uuid()::text, '-', ''));
+
+create or replace function public.add_personal_book(
+  p_visitor_id text,
+  p_title text,
+  p_author text,
+  p_category text,
+  p_isbn text,
+  p_summary text,
+  p_condition text,
+  p_lending_period_days integer,
+  p_handover_method text,
+  p_handover_details text,
+  p_lending_enabled boolean
+)
+returns public.books
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  book_row public.books%rowtype;
+begin
+  if auth.uid() is null or not exists (
+    select 1 from public.visitors visitor
+    where visitor.id = p_visitor_id
+      and visitor.auth_user_id = auth.uid()
+      and visitor.otp_verified
+      and visitor.is_active
+  ) then
+    raise exception 'The authenticated, verified visitor account could not be found.';
+  end if;
+
+  if nullif(trim(p_title), '') is null
+    or nullif(trim(p_author), '') is null
+  then
+    raise exception 'Book title and author are required.';
+  end if;
+
+  insert into public.books (
+    title, author, category, isbn, summary, book_type, owner_visitor_id,
+    lending_enabled, condition, lending_period_days, handover_method,
+    handover_details, total_copies, available_copies
+  ) values (
+    trim(p_title),
+    trim(p_author),
+    nullif(trim(p_category), ''),
+    nullif(trim(p_isbn), ''),
+    nullif(trim(p_summary), ''),
+    'personal',
+    p_visitor_id,
+    coalesce(p_lending_enabled, false),
+    nullif(trim(p_condition), ''),
+    p_lending_period_days,
+    nullif(trim(p_handover_method), ''),
+    nullif(trim(p_handover_details), ''),
+    1,
+    1
+  )
+  returning * into book_row;
+
+  return book_row;
+end;
+$$;
+revoke all on function public.add_personal_book(
+  text, text, text, text, text, text, text, integer, text, text, boolean
+) from public;
+grant execute on function public.add_personal_book(
+  text, text, text, text, text, text, text, integer, text, text, boolean
+) to authenticated;
 
 create table if not exists public.book_reviews (
   id uuid primary key default gen_random_uuid(),
@@ -301,6 +487,39 @@ drop policy if exists "public write borrow_requests" on public.borrow_requests;
 drop policy if exists "public read attendance_logs" on public.attendance_logs;
 drop policy if exists "public write attendance_logs" on public.attendance_logs;
 
+do $$
+declare
+  policy_row record;
+begin
+  for policy_row in
+    select policy_table.oid::regclass as table_name,
+      policy.polname as policy_name
+    from pg_policy as policy
+    join pg_class as policy_table
+      on policy_table.oid = policy.polrelid
+    where policy.polrelid = any(array[
+      'public.libraries'::regclass,
+      'public.books'::regclass,
+      'public.visitors'::regclass,
+      'public.borrow_requests'::regclass,
+      'public.attendance_logs'::regclass,
+      'public.announcements'::regclass,
+      'public.visitor_feedback'::regclass,
+      'public.staff_profiles'::regclass,
+      'public.book_reviews'::regclass,
+      'public.personal_books'::regclass,
+      'public.audit_logs'::regclass
+    ])
+  loop
+    execute format(
+      'drop policy %I on %s',
+      policy_row.policy_name,
+      policy_row.table_name
+    );
+  end loop;
+end;
+$$;
+
 create policy "libraries are publicly readable" on public.libraries
   for select to anon, authenticated using (true);
 create policy "superadmins manage libraries" on public.libraries
@@ -434,12 +653,31 @@ grant select, insert, update, delete on public.book_reviews, public.personal_boo
 grant select, insert on public.audit_logs to authenticated;
 grant insert, update, delete on public.books, public.libraries, public.announcements to authenticated;
 
-revoke all on function public.verify_visitor_otp(text, text) from public, anon, authenticated;
-revoke all on function public.resend_otp(text) from public, anon, authenticated;
-revoke all on function public.auto_expire_pickups() from public, anon, authenticated;
-grant execute on function public.auto_expire_pickups() to service_role;
-revoke all on function public.scan_attendance(text, text) from public, anon, authenticated;
-revoke all on function public.release_copy_and_promote(text) from public, anon, authenticated;
+do $$
+declare
+  legacy_function record;
+begin
+  for legacy_function in
+    select procedure_row.oid::regprocedure as signature
+    from pg_proc as procedure_row
+    join pg_namespace as procedure_schema
+      on procedure_schema.oid = procedure_row.pronamespace
+    where procedure_schema.nspname = 'public'
+      and procedure_row.proname in (
+        'verify_visitor_otp',
+        'resend_otp',
+        'auto_expire_pickups',
+        'scan_attendance',
+        'release_copy_and_promote'
+      )
+  loop
+    execute format(
+      'revoke all on function %s from public, anon, authenticated',
+      legacy_function.signature
+    );
+  end loop;
+end;
+$$;
 
 create or replace function public.get_visitor_feedback_replies(p_visitor_id text, p_email text)
 returns table(id uuid, subject text, admin_reply text, replied_at timestamptz)

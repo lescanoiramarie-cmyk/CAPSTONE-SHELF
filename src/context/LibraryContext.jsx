@@ -967,6 +967,15 @@ export function LibraryProvider({ children }) {
     [withRefresh]
   );
 
+  const setPersonalBookVisibility = useMemo(
+    () =>
+      withRefresh(
+        store.setPersonalBookVisibility,
+        'setPersonalBookVisibility'
+      ),
+    [withRefresh]
+  );
+
   // ==========================================================================
   // COMMUNITY BOOK REQUESTS
   // ==========================================================================
@@ -1214,6 +1223,8 @@ export function LibraryProvider({ children }) {
 
       addPersonalBook,
 
+      setPersonalBookVisibility,
+
       requestCommunityBook,
 
       fetchOwnerCommunityBookRequests,
@@ -1291,6 +1302,8 @@ export function LibraryProvider({ children }) {
       loadSampleCatalog,
 
       addPersonalBook,
+
+      setPersonalBookVisibility,
 
       requestCommunityBook,
 

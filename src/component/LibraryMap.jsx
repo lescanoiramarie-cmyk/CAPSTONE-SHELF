@@ -1,18 +1,37 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Clock3, MapPin } from 'lucide-react';
 import {
   MapContainer,
   TileLayer,
   Marker,
   Popup,
+  useMap,
 } from 'react-leaflet';
 
 import { useLibraryData } from '../context/useLibrary.js';
 
 import 'leaflet/dist/leaflet.css';
 
-export default function LibraryMap({ onBrowseLibrary }) {
+function FocusBranch({ library, markerRef }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!library) return;
+    const position = [Number(library.lat), Number(library.lng)];
+    map.setView(position, Math.max(map.getZoom(), 15));
+    markerRef.current?.openPopup();
+  }, [library, map, markerRef]);
+
+  return null;
+}
+
+export default function LibraryMap({
+  onBrowseLibrary,
+  focusBranchId = null,
+  bookContext = null,
+}) {
   const { libraries = [] } = useLibraryData();
+  const focusedMarkerRef = useRef(null);
 
   const [search, setSearch] = useState('');
   const [campusFilter, setCampusFilter] = useState('All');
@@ -65,8 +84,8 @@ export default function LibraryMap({ onBrowseLibrary }) {
         library.campus === campusFilter;
 
       return (
-        matchesSearch &&
-        matchesCampus
+        ((focusBranchId != null && library.id === focusBranchId) ||
+          (matchesSearch && matchesCampus))
       );
     }
   );
@@ -184,10 +203,30 @@ export default function LibraryMap({ onBrowseLibrary }) {
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
 
+              {focusBranchId &&
+                (() => {
+                  const branch = libraries.find(
+                    (library) => library.id === focusBranchId
+                  );
+                  return branch &&
+                    Number.isFinite(Number(branch.lat)) &&
+                    Number.isFinite(Number(branch.lng)) ? (
+                    <FocusBranch
+                      library={branch}
+                      markerRef={focusedMarkerRef}
+                    />
+                  ) : null;
+                })()}
+
               {librariesWithCoordinates.map(
                 (library) => (
                   <Marker
                     key={library.id}
+                    ref={
+                      library.id === focusBranchId
+                        ? focusedMarkerRef
+                        : undefined
+                    }
                     position={[
                       Number(library.lat),
                       Number(library.lng),
@@ -217,6 +256,20 @@ export default function LibraryMap({ onBrowseLibrary }) {
                           <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
                             <Clock3 size={13} aria-hidden="true" /> {library.hours}
                           </p>
+                        )}
+
+                        {focusBranchId != null &&
+                          library.id === focusBranchId &&
+                          bookContext && (
+                          <div className="mt-2 border-t border-slate-200 pt-2">
+                            <p className="text-xs font-bold text-slate-800">
+                              {bookContext.title}
+                            </p>
+                            <p className="text-xs text-slate-600">
+                              {bookContext.availableCopies} available of{' '}
+                              {bookContext.totalCopies} copies
+                            </p>
+                          </div>
                         )}
 
                         {library.status && (
