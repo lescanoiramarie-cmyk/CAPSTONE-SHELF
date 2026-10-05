@@ -1,0 +1,58 @@
+-- ============================================================================
+-- LET VISITORS READ THEIR OWN PROFILE BEFORE VERIFICATION
+--
+-- Error this fixes:
+--
+--   "This account is not registered as a SHELF visitor."
+--
+--   ...after a successful registration, so the account exists but login
+--   cannot see it.
+--
+-- Why it happened:
+--
+-- The visitors SELECT policy, from 20261002000100 line 97, is:
+--
+--   using ((auth_user_id = auth.uid() and otp_verified and is_active)
+--          or public.is_active_staff_for_branch(null))
+--
+-- It requires otp_verified for the visitor's own row. store.loginVisitor()
+-- reads its own row at store.js:2203 to decide whether the account is a SHELF
+-- visitor, and gets zero rows back while unverified. `if (!visitor)` then
+-- throws "This account is not registered as a SHELF visitor." before the
+-- otp_verified check at store.js:2245 is ever reached.
+--
+-- Verified reproduction:
+--
+--   find_unverified_visitor (security definer, bypasses RLS) -> VIS-bc6c9590
+--   same row, same session, through RLS                      -> []
+--
+-- The row exists. RLS hides it. The verification check and the account-exists
+-- check were conflated, so an unverified visitor is told their account does not
+-- exist instead of "verify your code".
+--
+-- Why the gate existed and is only partly removed:
+--
+-- otp_verified does guard something real: the QR pass. A visitor must not read
+-- a QR code before proving they own the email that received the code. The
+-- policy is therefore kept for the sensitive columns and relaxed only for the
+-- existence/identity columns, via two policies:
+--
+--   1. owner reads their own profile regardless of verification, so login can
+--      distinguish "unverified" from "not a visitor" and route correctly.
+--   2. the full row, including qr_code, only once verified and active.
+--
+-- The other policies that require otp_verified (feedback, reviews, requests)
+-- are deliberately left strict: those must not be usable before the email is
+-- proven.
+--
+-- DEFERRED:
+--
+-- The policy body below is reproduced in 20261020000000, which must run first.
+-- At the time this migration was authored, is_active_staff_for_branch had been
+-- destroyed by 20261016000000 and the policy could not be created at all:
+--
+--   ERROR: function public.is_active_staff_for_branch(unknown) does not exist
+--
+-- Applying this file in sequence failed at exactly that statement, so the fix
+-- lives with the function restoration it depends on.
+-- ============================================================================

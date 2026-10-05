@@ -41,9 +41,55 @@ function escapeHtml(value: string) {
 // ============================================================================
 
 function generateOtp(): string {
-  return Math.floor(
-    100000 + Math.random() * 900000,
+  const values =
+    new Uint32Array(1);
+
+  crypto.getRandomValues(
+    values,
+  );
+
+  return (
+    100000 +
+    (values[0] % 900000)
   ).toString();
+}
+
+// ============================================================================
+// AUDIT TRAIL
+//
+// The edge function runs with the service role, so it writes
+// audit rows directly. Failures here must never block the
+// visitor-facing operation, so errors are logged only.
+// ============================================================================
+
+async function writeAuditEvent(
+  admin: ReturnType<typeof createClient>,
+  action: string,
+  details: Record<string, unknown>,
+) {
+  try {
+    const { error } =
+      await admin
+        .from("audit_logs")
+        .insert({
+          actor_id: null,
+          action,
+          branch_id: null,
+          details,
+        });
+
+    if (error) {
+      console.error(
+        `Audit write failed for ${action}:`,
+        error,
+      );
+    }
+  } catch (auditError) {
+    console.error(
+      `Audit write threw for ${action}:`,
+      auditError,
+    );
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -263,47 +309,9 @@ Deno.serve(async (req: Request) => {
             10 * 60 * 1000,
         ).toISOString();
 
-      console.log(
-        "Generated SHELF OTP:",
-        {
-          visitorId,
-          email: visitor.email,
-          expiresAt:
-            otpExpiresAt,
-        },
-      );
-
-      // ------------------------------------------------------------------------
-      // 5. SAVE OTP TO VISITOR
-      // ------------------------------------------------------------------------
-
-      const {
-        error: updateError,
-      } =
-        await supabaseAdmin
-          .from("visitors")
-          .update({
-            otp,
-            otp_expires_at:
-              otpExpiresAt,
-            otp_verified: false,
-          })
-          .eq("id", visitorId);
-
-      if (updateError) {
-        console.error(
-          "Failed to save visitor OTP:",
-          updateError,
-        );
-
-        throw new Error(
-          "Unable to save the verification code.",
-        );
-      }
-
-      // ------------------------------------------------------------------------
-      // 6. PREPARE EMAIL
-      // ------------------------------------------------------------------------
+      // --------------------------------------------------------------
+      // PREPARE EMAIL
+      // --------------------------------------------------------------
 
       const firstName =
         escapeHtml(
@@ -312,9 +320,14 @@ Deno.serve(async (req: Request) => {
             "Visitor",
         );
 
-      // ------------------------------------------------------------------------
-      // 7. SEND OTP THROUGH RESEND
-      // ------------------------------------------------------------------------
+      // --------------------------------------------------------------
+      // SEND OTP THROUGH RESEND
+      //
+      // The code is persisted only after Resend accepts the
+      // message. Saving it first left the visitor holding a
+      // code in the database that was never delivered, and the
+      // code silently changed on every retry.
+      // --------------------------------------------------------------
 
       const resendResponse =
         await fetch(
@@ -433,6 +446,17 @@ Deno.serve(async (req: Request) => {
           },
         );
 
+        await writeAuditEvent(
+          supabaseAdmin,
+          "visitor.otp.email_failed",
+          {
+            visitorId,
+            email: visitor.email,
+            resendStatus:
+              resendResponse.status,
+          },
+        );
+
         return jsonResponse(
           {
             success: false,
@@ -450,9 +474,69 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      // ------------------------------------------------------------------------
-      // 10. SUCCESS
-      // ------------------------------------------------------------------------
+      // ------------------------------------------------------------------
+      // 5. SAVE THE DELIVERED OTP TO THE VISITOR
+      //
+      // Only now that Resend accepted the message. A failure here
+      // means the visitor has a code in their inbox that will not
+      // match, so clear it rather than leaving a stale value.
+      // ------------------------------------------------------------------
+
+      const {
+        error: updateError,
+      } =
+        await supabaseAdmin
+          .from("visitors")
+          .update({
+            otp,
+            otp_expires_at:
+              otpExpiresAt,
+            otp_verified: false,
+            otp_attempts: 0,
+            otp_last_sent_at:
+              new Date().toISOString(),
+          })
+          .eq("id", visitorId);
+
+      if (updateError) {
+        console.error(
+          "Failed to save visitor OTP:",
+          updateError,
+        );
+
+        await writeAuditEvent(
+          supabaseAdmin,
+          "visitor.otp.persist_failed",
+          {
+            visitorId,
+            email: visitor.email,
+          },
+        );
+
+        return jsonResponse(
+          {
+            success: false,
+
+            error:
+              "The verification email was sent but the code could not be saved. Please request a new code.",
+          },
+          500,
+        );
+      }
+
+      await writeAuditEvent(
+        supabaseAdmin,
+        "visitor.otp.sent",
+        {
+          visitorId,
+          email: visitor.email,
+          expiresAt: otpExpiresAt,
+        },
+      );
+
+      // ------------------------------------------------------------------
+      // 6. SUCCESS
+      // ------------------------------------------------------------------
 
       console.log(
         "OTP email sent successfully:",

@@ -242,6 +242,35 @@ function firstRow(data) {
 }
 
 // ============================================================================
+// PASSWORD POLICY
+//
+// Must match both VisitorLogin.jsx and the request-password-reset edge function
+// so a password accepted at reset could not have been rejected at registration,
+// and the reverse.
+// ============================================================================
+
+const PASSWORD_MIN_LENGTH = 12;
+
+const PASSWORD_REQUIREMENT_MESSAGE =
+  'Password must be at least 12 characters and include an uppercase letter, a lowercase letter, a number and a symbol.';
+
+function isPasswordValid(
+  value
+) {
+  const password =
+    asString(value);
+
+  return (
+    password.length >=
+      PASSWORD_MIN_LENGTH &&
+    /[A-Z]/.test(password) &&
+    /[a-z]/.test(password) &&
+    /[0-9]/.test(password) &&
+    /[^A-Za-z0-9]/.test(password)
+  );
+}
+
+// ============================================================================
 // ROW → CAMELCASE MAPPERS
 // ============================================================================
 
@@ -768,7 +797,7 @@ export async function fetchBorrowRequests() {
   // 3. LOAD NORMAL LIBRARY BORROW REQUESTS
   // ==========================================================================
 
-  let normalRequests = [];
+  let normalRequests;
 
   try {
     const {
@@ -785,6 +814,9 @@ export async function fetchBorrowRequests() {
 
     // ------------------------------------------------------------------------
     // AUTHENTICATED SESSION
+    //
+    // RLS on borrow_requests already scopes the result to the
+    // visitor's own rows.
     // ------------------------------------------------------------------------
 
     if (
@@ -821,38 +853,18 @@ export async function fetchBorrowRequests() {
     }
 
     // ------------------------------------------------------------------------
-    // QR / LOCAL SESSION
+    // NO SUPABASE SESSION
+    //
+    // get_visitor_borrow_requests requires auth.uid() to own
+    // the visitor, so it cannot answer for an anonymous
+    // caller. Every visitor path now establishes a Supabase
+    // session, so this only happens if sign-in failed.
     // ------------------------------------------------------------------------
 
-    else if (
-      isValidVisitorId(
-        normalizedVisitorId
-      )
-    ) {
-      const {
-        data,
-        error,
-      } = await supabase.rpc(
-        'get_visitor_borrow_requests',
-        {
-          p_visitor_id:
-            normalizedVisitorId,
-        }
+    else {
+      console.warn(
+        'SHELF — borrow requests skipped: no Supabase session for this visitor.'
       );
-
-      if (error) {
-        throw cleanErr(
-          error,
-          'Unable to load your borrow requests.'
-        );
-      }
-
-      normalRequests =
-        Array.isArray(data)
-          ? data.map(
-              mapBorrowRequest
-            )
-          : [];
     }
 
   } catch (normalError) {
@@ -860,9 +872,12 @@ export async function fetchBorrowRequests() {
       'SHELF — NORMAL BORROW REQUESTS ERROR:',
       normalError
     );
-
-    normalRequests = [];
   }
+
+  const libraryBorrowRequests =
+    Array.isArray(normalRequests)
+      ? normalRequests
+      : [];
 
   // ==========================================================================
   // 4. LOAD COMMUNITY BOOK REQUESTS
@@ -1096,7 +1111,7 @@ export async function fetchBorrowRequests() {
   // ==========================================================================
 
   const mappedNormalRequests =
-    normalRequests
+    libraryBorrowRequests
       .filter(
         (request) =>
           request &&
@@ -1491,32 +1506,137 @@ export async function registerVisitor({
       }
     );
 
-  if (emailError) {
+  // ---------------------------------------------------------
+  // OTP EMAIL DELIVERY FAILURE
+  //
+  // The auth account and visitor profile are already
+  // committed at this point. Leaving them behind strands the
+  // visitor: re-registering fails with "This email is already
+  // registered" and login is blocked on an OTP they never
+  // received. Roll the registration back so the visitor can
+  // simply try again.
+  // ---------------------------------------------------------
+
+  const otpDeliveryError =
+    readFunctionError(
+      emailError,
+      emailData
+    );
+
+  if (otpDeliveryError) {
     console.error(
       'SEND VISITOR OTP ERROR:',
+      otpDeliveryError,
       emailError
     );
 
-    throw new Error(
-      'Your registration was created, but we could not send the verification email. Please try again.'
+    await abortVisitorRegistration(
+      visitorId,
+      registrationNonce
     );
-  }
 
-  if (
-    emailData &&
-    typeof emailData === 'object' &&
-    emailData.success === false
-  ) {
     throw new Error(
-      emailData.error ||
-        emailData.message ||
-        'Your registration was created, but we could not send the verification email. Please try again.'
+      otpDeliveryError
     );
   }
 
   return {
     visitorId,
   };
+}
+
+// ============================================================================
+// ABORT VISITOR REGISTRATION
+// ============================================================================
+
+async function abortVisitorRegistration(
+  visitorId,
+  registrationNonce
+) {
+  try {
+    const { error } =
+      await supabase.rpc(
+        'abort_visitor_registration',
+        {
+          p_visitor_id:
+            visitorId,
+
+          p_registration_nonce:
+            registrationNonce,
+        }
+      );
+
+    if (error) {
+      console.error(
+        'ABORT VISITOR REGISTRATION ERROR:',
+        error
+      );
+    }
+  } catch (abortError) {
+    console.error(
+      'ABORT VISITOR REGISTRATION THREW:',
+      abortError
+    );
+  }
+}
+
+// ============================================================================
+// EDGE FUNCTION ERROR EXTRACTION
+//
+// supabase.functions.invoke returns a non-2xx response through
+// the `error` slot, so the edge function's own `error` field is
+// never read from `data`. Pull it from both places and fall
+// back to a generic message.
+// ============================================================================
+
+function readFunctionError(
+  error,
+  data
+) {
+  const dataMessage =
+    data &&
+    typeof data === 'object' &&
+    data.success === false
+      ? normalizeText(
+          data.error || data.message
+        )
+      : '';
+
+  const errorMessage =
+    normalizeText(
+      error?.message
+    );
+
+  const combined =
+    dataMessage ||
+    errorMessage;
+
+  if (!combined) {
+    return null;
+  }
+
+  const lowerCombined =
+    combined.toLowerCase();
+
+  // Network/CORS failures surface as opaque messages that
+  // would only confuse the visitor.
+  if (
+    lowerCombined.includes(
+      'failed to fetch'
+    ) ||
+    lowerCombined.includes(
+      'networkerror'
+    ) ||
+    lowerCombined.includes(
+      'load failed'
+    )
+  ) {
+    return (
+      'We could not reach the verification email service. Please try again.'
+    );
+  }
+
+  return combined;
 }
 
 // ============================================================================
@@ -1570,25 +1690,79 @@ export async function resendOtp(
       }
     );
 
-  if (emailError) {
-    throw new Error(
-      'A new verification code was generated, but we could not send the email. Please try again.'
+  const otpDeliveryError =
+    readFunctionError(
+      emailError,
+      emailData
     );
-  }
 
-  if (
-    emailData &&
-    typeof emailData === 'object' &&
-    emailData.success === false
-  ) {
+  if (otpDeliveryError) {
     throw new Error(
-      emailData.message ||
-        'A new verification code was generated, but we could not send the email. Please try again.'
+      otpDeliveryError
     );
   }
 
   return {
     success: true,
+  };
+}
+
+// ============================================================================
+// RESEND OTP BY EMAIL
+//
+// Recovery path for visitors stranded by a failed registration,
+// where no registration session is held in this browser.
+// ============================================================================
+
+export async function resendVisitorOtpByEmail(
+  email
+) {
+  const normalizedEmail =
+    normalizeEmail(email);
+
+  if (!normalizedEmail) {
+    throw new Error(
+      'Please enter the email address you registered with.'
+    );
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await supabase.rpc(
+      'find_unverified_visitor',
+      {
+        p_email:
+          normalizedEmail,
+      }
+    );
+
+  if (error) {
+    throw cleanErr(error);
+  }
+
+  const row =
+    firstRow(data);
+
+  if (!row?.visitor_id) {
+    // Never confirm whether an account exists.
+    return {
+      success: true,
+      visitorId: null,
+    };
+  }
+
+  await resendOtp(
+    row.visitor_id
+  );
+
+  return {
+    success: true,
+    visitorId:
+      normalizeText(
+        row.visitor_id
+      ),
   };
 }
 
@@ -1646,9 +1820,19 @@ export async function verifyVisitorOtp(
   const row =
     firstRow(data);
 
+  // verify_visitor_otp returns expected failures as a result row with a null
+  // id and a populated error column, rather than raising. Raising would abort
+  // the transaction and roll back the attempt counter, leaving the 6-digit code
+  // brute-forceable.
+  const verificationError =
+    normalizeText(
+      row?.error
+    );
+
   if (!row?.id) {
     throw new Error(
-      'Verification was unsuccessful. Please request a new code.'
+      verificationError ||
+        'Verification was unsuccessful. Please request a new code.'
     );
   }
 
@@ -1666,6 +1850,354 @@ export async function verifyVisitorOtp(
       row.qr_code,
 
     otpVerified: true,
+  };
+}
+
+// ============================================================================
+// ESTABLISH VISITOR SESSION FROM QR PASS
+//
+// Exchanges a verified visitor QR pass for a real Supabase Auth session using
+// the same visitor-qr-login exchange used by QR sign-in.
+//
+// Registration previously stopped at loginAsVisitorSession(), which only sets
+// local state. Every subsequent RPC then ran as anon, so borrow requests,
+// community requests and audit reads all failed or returned nothing.
+// ============================================================================
+
+export async function establishVisitorSessionFromQr(
+  qrCode
+) {
+  const normalizedQr =
+    normalizeQr(qrCode);
+
+  if (
+    !isValidShelfQr(
+      normalizedQr
+    )
+  ) {
+    throw new Error(
+      'A valid visitor QR pass is required.'
+    );
+  }
+
+  const {
+    data: qrLoginData,
+    error: qrLoginError,
+  } =
+    await supabase.functions.invoke(
+      'visitor-qr-login',
+      {
+        body: {
+          qrCode:
+            normalizedQr,
+        },
+      }
+    );
+
+  if (qrLoginError) {
+    throw new Error(
+      qrLoginData?.error ||
+        cleanErr(
+          qrLoginError,
+          'Unable to start your library session.'
+        ).message
+    );
+  }
+
+  if (!qrLoginData?.tokenHash) {
+    throw new Error(
+      'QR sign-in did not return a valid authentication token.'
+    );
+  }
+
+  const {
+    data: authData,
+    error: authError,
+  } =
+    await supabase.auth.verifyOtp({
+      token_hash:
+        qrLoginData.tokenHash,
+      type: 'magiclink',
+    });
+
+  if (authError) {
+    throw new Error(
+      cleanErr(
+        authError,
+        'Unable to complete your library session.'
+      ).message
+    );
+  }
+
+  const authUserId =
+    normalizeText(
+      authData?.user?.id
+    );
+
+  if (!isValidUuid(authUserId)) {
+    await safeSignOut();
+
+    throw new Error(
+      'Supabase did not return a valid visitor authentication session.'
+    );
+  }
+
+  const {
+    data: visitor,
+    error: visitorError,
+  } =
+    await supabase
+      .from('visitors')
+      .select(
+        'id, full_name, email, otp_verified, qr_code, is_active, auth_user_id'
+      )
+      .eq(
+        'auth_user_id',
+        authUserId
+      )
+      .maybeSingle();
+
+  if (visitorError) {
+    await safeSignOut();
+
+    throw cleanErr(
+      visitorError,
+      'Unable to load the visitor profile.'
+    );
+  }
+
+  if (
+    !visitor ||
+    visitor.qr_code !== normalizedQr ||
+    visitor.is_active !== true ||
+    visitor.otp_verified !== true
+  ) {
+    await safeSignOut();
+
+    throw new Error(
+      'This QR pass could not be used to sign in.'
+    );
+  }
+
+  return {
+    id:
+      visitor.id,
+
+    fullName:
+      visitor.full_name,
+
+    email:
+      visitor.email,
+
+    qrCode:
+      visitor.qr_code,
+  };
+}
+
+// ============================================================================
+// PASSWORD RESET
+//
+// Three steps, all routed through the request-password-reset edge function:
+//
+//   1. requestPasswordResetCode(email)
+//      Emails a 6-digit code. The function answers identically whether or not
+//      the address has an account, so this cannot be used to discover which
+//      emails are registered.
+//
+//   2. verifyPasswordResetCode(email, code)
+//      Checks the code and the attempt limit WITHOUT consuming it.
+//
+//   3. applyPasswordReset(email, code, newPassword)
+//      Exchanges the code for the new password in a single call.
+//
+// The separate verify step exists so the UI can reject a bad code before the
+// visitor bothers typing a new password. It re-verifies on apply, because a
+// client-side check proves nothing: the edge function never trusts a prior
+// verification, and the code is spent only after the password actually changed.
+// ============================================================================
+
+export async function requestPasswordResetCode(
+  email,
+  accountKind = 'visitor'
+) {
+  const normalizedEmail =
+    normalizeEmail(email);
+
+  if (!normalizedEmail) {
+    throw new Error(
+      'Please enter your email address.'
+    );
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await supabase.functions.invoke(
+      'request-password-reset',
+      {
+        body: {
+          operation: 'request',
+          email:
+            normalizedEmail,
+          accountKind,
+        },
+      }
+    );
+
+  const failure =
+    readFunctionError(
+      error,
+      data
+    );
+
+  if (failure) {
+    throw new Error(
+      failure
+    );
+  }
+
+  return {
+    success: true,
+    message:
+      normalizeText(
+        data?.message
+      ) ||
+      'If that address belongs to a SHELF account, a verification code is on its way.',
+  };
+}
+
+export async function verifyPasswordResetCode(
+  email,
+  code
+) {
+  const normalizedEmail =
+    normalizeEmail(email);
+
+  if (!normalizedEmail) {
+    throw new Error(
+      'Please enter your email address.'
+    );
+  }
+
+  const normalizedCode =
+    normalizeText(code);
+
+  if (!/^\d{6}$/.test(normalizedCode)) {
+    throw new Error(
+      'Please enter the complete 6-digit verification code.'
+    );
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await supabase.functions.invoke(
+      'request-password-reset',
+      {
+        body: {
+          operation: 'verify',
+          email:
+            normalizedEmail,
+          code:
+            normalizedCode,
+        },
+      }
+    );
+
+  const failure =
+    readFunctionError(
+      error,
+      data
+    );
+
+  if (failure) {
+    throw new Error(
+      failure
+    );
+  }
+
+  return {
+    success:
+      data?.valid === true,
+  };
+}
+
+export async function applyPasswordReset({
+  email,
+  code,
+  newPassword,
+}) {
+  const normalizedEmail =
+    normalizeEmail(email);
+
+  if (!normalizedEmail) {
+    throw new Error(
+      'Please enter your email address.'
+    );
+  }
+
+  const normalizedCode =
+    normalizeText(code);
+
+  if (!/^\d{6}$/.test(normalizedCode)) {
+    throw new Error(
+      'Please enter the complete 6-digit verification code.'
+    );
+  }
+
+  const normalizedPassword =
+    asString(newPassword);
+
+  if (
+    !isPasswordValid(
+      normalizedPassword
+    )
+  ) {
+    throw new Error(
+      PASSWORD_REQUIREMENT_MESSAGE
+    );
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await supabase.functions.invoke(
+      'request-password-reset',
+      {
+        body: {
+          operation: 'apply',
+          email:
+            normalizedEmail,
+          code:
+            normalizedCode,
+          newPassword:
+            normalizedPassword,
+        },
+      }
+    );
+
+  const failure =
+    readFunctionError(
+      error,
+      data
+    );
+
+  if (failure) {
+    throw new Error(
+      failure
+    );
+  }
+
+  return {
+    success: true,
+    message:
+      normalizeText(
+        data?.message
+      ) ||
+      'Your password has been updated. You can now sign in with your new password.',
   };
 }
 

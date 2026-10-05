@@ -26,3 +26,11 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/send-due-date-notifications/deno.json"
 entrypoint = "./functions/send-due-date-notifications/index.ts"
+
+[functions.request-password-reset]
+enabled = true
+# Called from the unauthenticated login screen, so there is no JWT yet. The
+# function authorizes itself with the service role key and never returns it.
+verify_jwt = false
+import_map = "./functions/request-password-reset/deno.json"
+entrypoint = "./functions/request-password-reset/index.ts"

@@ -186,6 +186,11 @@ export default function VisitorLogin() {
     registerVisitor,
     verifyVisitorOtp,
     resendVisitorOtp,
+    resendVisitorOtpByEmail,
+    establishVisitorSessionFromQr,
+    requestPasswordResetCode,
+    verifyPasswordResetCode,
+    applyPasswordReset,
     login,
     loginVisitor,
     loginAsVisitorSession,
@@ -199,6 +204,70 @@ export default function VisitorLogin() {
   const [error, setError] = useState('');
   const [canResendVisitorOtp, setCanResendVisitorOtp] =
     useState(false);
+
+  const [
+    isResendingVisitorOtp,
+    setIsResendingVisitorOtp,
+  ] = useState(false);
+
+  // =========================================================
+  // FORGOT PASSWORD
+  //
+  // Two steps. The code is emailed, then it is exchanged for a
+  // new password. resetStep moves between them.
+  // =========================================================
+
+  const [
+    resetStep,
+    setResetStep,
+  ] = useState('request');
+
+  const [
+    resetEmail,
+    setResetEmail,
+  ] = useState('');
+
+  const [
+    resetCode,
+    setResetCode,
+  ] = useState('');
+
+  const [
+    resetPassword,
+    setResetPassword,
+  ] = useState('');
+
+  const [
+    resetConfirmPassword,
+    setResetConfirmPassword,
+  ] = useState('');
+
+  const [
+    resetNotice,
+    setResetNotice,
+  ] = useState('');
+
+  const [
+    isResetSubmitting,
+    setIsResetSubmitting,
+  ] = useState(false);
+
+  const [
+    showResetPassword,
+    setShowResetPassword,
+  ] = useState(false);
+
+  const resetPasswordValid =
+    resetPassword.length >= 12 &&
+    /[A-Z]/.test(resetPassword) &&
+    /[a-z]/.test(resetPassword) &&
+    /[0-9]/.test(resetPassword) &&
+    /[^A-Za-z0-9]/.test(resetPassword);
+
+  const resetPasswordsMatch =
+    resetPassword.length > 0 &&
+    resetPassword ===
+      resetConfirmPassword;
 
   const [fieldErrors, setFieldErrors] = useState({
     fullName: '',
@@ -898,6 +967,9 @@ export default function VisitorLogin() {
         ) ||
         lowerMessage.includes(
           'email is not confirmed'
+        ) ||
+        lowerMessage.includes(
+          'verify your otp code before logging in'
         )
       ) {
         setCanResendVisitorOtp(
@@ -905,7 +977,7 @@ export default function VisitorLogin() {
         );
 
         setError(
-          'This visitor account has not confirmed its email. Request a new verification code to continue.'
+          'This visitor account has not completed verification. Request a new verification code to continue.'
         );
       } else {
         setError(message);
@@ -930,13 +1002,55 @@ export default function VisitorLogin() {
 
       setError('');
 
-      setCanResendVisitorOtp(
-        false
+      setIsResendingVisitorOtp(
+        true
       );
 
-      setError(
-        'Please use the verification code from your visitor registration. If you no longer have the registration session, please register again.'
-      );
+      try {
+        const result =
+          await resendVisitorOtpByEmail(
+            email
+          );
+
+        setCanResendVisitorOtp(
+          false
+        );
+
+        // Only route to the code entry screen when a
+        // registration was actually found. The response
+        // is intentionally the same either way so the form
+        // does not reveal which emails are registered.
+        if (result?.visitorId) {
+          setPendingVisitorId(
+            result.visitorId
+          );
+
+          setPendingEmail(email);
+          setOtpInput('');
+          setError('');
+          setView('otp');
+
+          return;
+        }
+
+        setError(
+          'If an unverified registration exists for that address, a new verification code is on its way.'
+        );
+      } catch (err) {
+        console.error(
+          'RESEND UNCONFIRMED VISITOR OTP ERROR:',
+          err
+        );
+
+        setError(
+          err?.message ||
+            'Unable to send a new verification code. Please try again.'
+        );
+      } finally {
+        setIsResendingVisitorOtp(
+          false
+        );
+      }
     };
 
   // =========================================================
@@ -1225,10 +1339,48 @@ export default function VisitorLogin() {
           cleanOtp
         );
 
+      // -----------------------------------------------------
+      // ESTABLISH A REAL SUPABASE SESSION
+      //
+      // The local session below is not enough on its own.
+      // Visitor data is read through RLS policies and
+      // security-definer RPCs that key off auth.uid(), so
+      // without this exchange every request after
+      // registration runs as anon and returns nothing.
+      // -----------------------------------------------------
+
+      let sessionVisitor =
+        visitor;
+
+      if (visitor?.qrCode) {
+        try {
+          sessionVisitor =
+            await establishVisitorSessionFromQr(
+              visitor.qrCode
+            );
+        } catch (sessionError) {
+          console.error(
+            'ESTABLISH VISITOR SESSION ERROR:',
+            sessionError
+          );
+
+          setError(
+            sessionError?.message ||
+              'Your account was verified, but we could not start your library session. Please sign in with your email and password.'
+          );
+
+          setView('login');
+
+          return;
+        }
+      }
+
       setRegisteredVisitor(
-        visitor
+        sessionVisitor ||
+          visitor
       );
 
+      setError('');
       setView('success');
     } catch (err) {
       console.error(
@@ -1278,6 +1430,216 @@ export default function VisitorLogin() {
         setError(
           err?.message ||
             'Unable to resend verification code.'
+        );
+      }
+    };
+
+  // =========================================================
+  // FORGOT PASSWORD
+  // =========================================================
+
+  const handleOpenForgotPassword = () => {
+    // Pre-fill with whatever identifier was typed so the visitor does not
+    // retype an address they already entered.
+    setResetEmail(
+      loginData.identifier
+        .trim()
+        .includes('@')
+        ? loginData.identifier
+            .trim()
+            .toLowerCase()
+        : ''
+    );
+
+    setResetStep('request');
+    setResetCode('');
+    setResetPassword('');
+    setResetConfirmPassword('');
+    setResetNotice('');
+    setError('');
+    setCanResendVisitorOtp(false);
+    setView('forgot');
+  };
+
+  const handleRequestResetCode =
+    async (event) => {
+      event.preventDefault();
+
+      const email =
+        resetEmail
+          .trim()
+          .toLowerCase();
+
+      if (!email.includes('@')) {
+        setError(
+          'Please enter a valid email address.'
+        );
+
+        return;
+      }
+
+      setError('');
+      setResetNotice('');
+      setIsResetSubmitting(
+        true
+      );
+
+      try {
+        const result =
+          await requestPasswordResetCode(
+            email
+          );
+
+        setResetNotice(
+          result?.message ||
+            'If that address belongs to a SHELF account, a verification code is on its way.'
+        );
+
+        // Move to the code step either way. The response is identical for
+        // unknown addresses, so this reveals nothing and still matches what
+        // the visitor was told to expect.
+        setResetStep('verify');
+      } catch (err) {
+        console.error(
+          'REQUEST RESET CODE ERROR:',
+          err
+        );
+
+        setError(
+          err?.message ||
+            'Unable to send the verification code. Please try again.'
+        );
+      } finally {
+        setIsResetSubmitting(
+          false
+        );
+      }
+    };
+
+  const handleVerifyResetCode =
+    async (event) => {
+      event.preventDefault();
+
+      const code =
+        resetCode.trim();
+
+      if (!/^\d{6}$/.test(code)) {
+        setError(
+          'Please enter the complete 6-digit verification code.'
+        );
+
+        return;
+      }
+
+      setError('');
+      setResetNotice('');
+      setIsResetSubmitting(
+        true
+      );
+
+      try {
+        const result =
+          await verifyPasswordResetCode(
+            resetEmail,
+            code
+          );
+
+        if (!result?.success) {
+          setError(
+            'That verification code is not valid or has expired. Please request a new one.'
+          );
+
+          return;
+        }
+
+        setError('');
+        setResetStep('password');
+      } catch (err) {
+        console.error(
+          'VERIFY RESET CODE ERROR:',
+          err
+        );
+
+        setError(
+          err?.message ||
+            'Unable to verify the code. Please try again.'
+        );
+      } finally {
+        setIsResetSubmitting(
+          false
+        );
+      }
+    };
+
+  const handleApplyNewPassword =
+    async (event) => {
+      event.preventDefault();
+
+      if (!resetPasswordValid) {
+        setError(
+          'Password must be at least 12 characters and include an uppercase letter, a lowercase letter, a number and a symbol.'
+        );
+
+        return;
+      }
+
+      if (
+        !resetPasswordsMatch
+      ) {
+        setError(
+          'The passwords do not match.'
+        );
+
+        return;
+      }
+
+      setError('');
+      setIsResetSubmitting(
+        true
+      );
+
+      try {
+        const result =
+          await applyPasswordReset({
+            email:
+              resetEmail,
+            code:
+              resetCode,
+            newPassword:
+              resetPassword,
+          });
+
+        // Drop the credentials immediately so they cannot linger in state
+        // after a successful reset.
+        setResetPassword('');
+        setResetConfirmPassword('');
+        setResetCode('');
+
+        setLoginData({
+          identifier:
+            resetEmail,
+          password: '',
+        });
+
+        setResetNotice(
+          result?.message ||
+            'Your password has been updated. You can now sign in with your new password.'
+        );
+
+        setResetStep('done');
+      } catch (err) {
+        console.error(
+          'APPLY NEW PASSWORD ERROR:',
+          err
+        );
+
+        setError(
+          err?.message ||
+            'Unable to update your password. Please try again.'
+        );
+      } finally {
+        setIsResetSubmitting(
+          false
         );
       }
     };
@@ -1335,6 +1697,15 @@ export default function VisitorLogin() {
     setShowScanner(false);
     setIsRegistering(false);
     setCanResendVisitorOtp(false);
+
+    setResetStep('request');
+    setResetEmail('');
+    setResetCode('');
+    setResetPassword('');
+    setResetConfirmPassword('');
+    setResetNotice('');
+    setIsResetSubmitting(false);
+    setShowResetPassword(false);
   };
 
   // =========================================================
@@ -1414,6 +1785,22 @@ export default function VisitorLogin() {
 
               {view === 'success' &&
                 'Registration Successful'}
+
+              {view === 'forgot' &&
+                resetStep === 'request' &&
+                'Reset Your Password'}
+
+              {view === 'forgot' &&
+                resetStep === 'verify' &&
+                'Enter Verification Code'}
+
+              {view === 'forgot' &&
+                resetStep === 'password' &&
+                'Choose a New Password'}
+
+              {view === 'forgot' &&
+                resetStep === 'done' &&
+                'Password Updated'}
             </h2>
 
             <p className="text-xs text-slate-500">
@@ -1428,6 +1815,22 @@ export default function VisitorLogin() {
 
               {view === 'success' &&
                 'Keep your QR pass private. It signs you in and is used for library attendance and circulation.'}
+
+              {view === 'forgot' &&
+                resetStep === 'request' &&
+                'Enter the email address linked to your account and we will send a verification code.'}
+
+              {view === 'forgot' &&
+                resetStep === 'verify' &&
+                `Enter the 6-digit code sent to ${resetEmail}.`}
+
+              {view === 'forgot' &&
+                resetStep === 'password' &&
+                'Use at least 12 characters with an uppercase letter, a lowercase letter, a number and a symbol.'}
+
+              {view === 'forgot' &&
+                resetStep === 'done' &&
+                'Sign in below with your new password.'}
             </p>
           </div>
 
@@ -1454,9 +1857,14 @@ export default function VisitorLogin() {
                 onClick={
                   handleResendUnconfirmedVisitorOtp
                 }
-                className="w-full text-xs font-semibold text-[#002046] hover:underline"
+                disabled={
+                  isResendingVisitorOtp
+                }
+                className="w-full text-xs font-semibold text-[#002046] hover:underline disabled:opacity-60 disabled:hover:no-underline"
               >
-                Resend Visitor Verification Code
+                {isResendingVisitorOtp
+                  ? 'Sending verification code...'
+                  : 'Resend Visitor Verification Code'}
               </button>
             )}
 
@@ -2247,6 +2655,30 @@ export default function VisitorLogin() {
                     Sign In
                   </button>
 
+                  {/* FORGOT PASSWORD */}
+                  {/*
+                    Only offered for email sign-in. A QR pass has
+                    no password to forget, and the identifier field
+                    accepts either form, so the link is hidden until
+                    an email address has been entered.
+                  */}
+
+                  {loginData.identifier
+                    .trim()
+                    .includes('@') && (
+                    <div className="text-center">
+                      <button
+                        type="button"
+                        onClick={
+                          handleOpenForgotPassword
+                        }
+                        className="text-xs font-semibold text-[#002046] hover:underline"
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
+                  )}
+
                   <div className="relative flex items-center justify-center my-4">
                     <div className="border-t border-slate-200 w-full" />
 
@@ -2332,6 +2764,277 @@ export default function VisitorLogin() {
               )}
             </form>
           )}
+
+          {/* =====================================================
+              FORGOT PASSWORD
+          ===================================================== */}
+
+          {view === 'forgot' &&
+            (resetStep === 'request' ||
+              resetStep === 'verify' ||
+              resetStep === 'password') && (
+              <form
+                onSubmit={
+                  resetStep === 'request'
+                    ? handleRequestResetCode
+                    : resetStep === 'verify'
+                      ? handleVerifyResetCode
+                      : handleApplyNewPassword
+                }
+                className="space-y-4"
+                autoComplete="off"
+              >
+                {/* STEP 1: EMAIL */}
+
+                {resetStep ===
+                  'request' && (
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
+                        Email address
+                      </label>
+
+                      <input
+                        type="email"
+                        name="reset_email"
+                        required
+                        autoComplete="email"
+                        placeholder="email@example.com"
+                        value={
+                          resetEmail
+                        }
+                        onChange={(event) =>
+                          setResetEmail(
+                            event.target
+                              .value
+                          )
+                        }
+                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={
+                        isResetSubmitting
+                      }
+                      className="w-full bg-[#002046] text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isResetSubmitting
+                        ? 'Sending Code...'
+                        : 'Send Verification Code'}
+                    </button>
+                  </>
+                )}
+
+                {/* STEP 2: CODE */}
+
+                {resetStep ===
+                  'verify' && (
+                  <>
+                    {resetNotice && (
+                      <div className="text-xs font-semibold rounded-lg px-3 py-2 bg-blue-50 text-blue-800 border border-blue-200">
+                        {resetNotice}
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
+                        Verification code
+                      </label>
+
+                      <input
+                        type="text"
+                        name="reset_code"
+                        required
+                        inputMode="numeric"
+                        maxLength={6}
+                        autoComplete="one-time-code"
+                        placeholder="000000"
+                        value={
+                          resetCode
+                        }
+                        onChange={(event) =>
+                          setResetCode(
+                            event.target
+                              .value
+                              .replace(
+                                /\D/g,
+                                '',
+                              )
+                          )
+                        }
+                        className="w-full px-4 py-3 border border-slate-300 rounded-lg text-center text-2xl font-bold tracking-[0.5em] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={
+                        isResetSubmitting
+                      }
+                      className="w-full bg-[#002046] text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isResetSubmitting
+                        ? 'Verifying...'
+                        : 'Verify Code'}
+                    </button>
+
+                    <div className="text-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setError('');
+                          setResetCode('');
+                          setResetStep(
+                            'request'
+                          );
+                        }}
+                        className="text-xs font-semibold text-[#002046] hover:underline"
+                      >
+                        Use a different email
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {/* STEP 3: NEW PASSWORD */}
+
+                {resetStep ===
+                  'password' && (
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
+                        New password
+                      </label>
+
+                      <div className="relative">
+                        <input
+                          type={
+                            showResetPassword
+                              ? 'text'
+                              : 'password'
+                          }
+                          name="reset_new_password"
+                          required
+                          autoComplete="new-password"
+                          placeholder="••••••••"
+                          value={
+                            resetPassword
+                          }
+                          onChange={(event) =>
+                            setResetPassword(
+                              event.target
+                                .value
+                            )
+                          }
+                          className="w-full px-4 py-2.5 pr-12 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setShowResetPassword(
+                              !showResetPassword
+                            )
+                          }
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                          aria-label={
+                            showResetPassword
+                              ? 'Hide password'
+                              : 'Show password'
+                          }
+                        >
+                          {showResetPassword
+                            ? (
+                                <EyeOff
+                                  size={18}
+                                />
+                              )
+                            : (
+                                <Eye
+                                  size={18}
+                                />
+                              )}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
+                        Confirm new password
+                      </label>
+
+                      <input
+                        type={
+                          showResetPassword
+                            ? 'text'
+                            : 'password'
+                        }
+                        name="reset_confirm_password"
+                        required
+                        autoComplete="new-password"
+                        placeholder="••••••••"
+                        value={
+                          resetConfirmPassword
+                        }
+                        onChange={(event) =>
+                          setResetConfirmPassword(
+                            event.target
+                              .value
+                          )
+                        }
+                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                      />
+                    </div>
+
+                    {resetPassword.length >
+                      0 &&
+                      !resetPasswordsMatch && (
+                        <p className="text-xs font-semibold text-red-600">
+                          The passwords do not
+                          match.
+                        </p>
+                      )}
+
+                    <button
+                      type="submit"
+                      disabled={
+                        isResetSubmitting
+                      }
+                      className="w-full bg-[#002046] text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isResetSubmitting
+                        ? 'Updating Password...'
+                        : 'Update Password'}
+                    </button>
+                  </>
+                )}
+              </form>
+            )}
+
+          {/* =====================================================
+              FORGOT PASSWORD: DONE
+          ===================================================== */}
+
+          {view === 'forgot' &&
+            resetStep === 'done' && (
+              <>
+                <div className="text-xs font-semibold rounded-lg px-3 py-2 bg-green-50 text-green-800 border border-green-200">
+                  {resetNotice}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetToLogin();
+                  }}
+                  className="w-full bg-[#002046] text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm"
+                >
+                  Back to Sign In
+                </button>
+              </>
+            )}
         </div>
       </div>
     </div>

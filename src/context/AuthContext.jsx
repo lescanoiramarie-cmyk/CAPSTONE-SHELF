@@ -175,6 +175,112 @@ export const AuthProvider = ({ children }) => {
   };
 
   // =========================================================
+  // RESEND VISITOR OTP BY EMAIL
+  //
+  // Recovery path for visitors whose registration email was
+  // never delivered and who therefore have no registration
+  // session to resend against.
+  // =========================================================
+
+  const resendVisitorOtpByEmail = async (
+    email
+  ) => {
+    try {
+      return await store.resendVisitorOtpByEmail(
+        email
+      );
+    } catch (error) {
+      console.error(
+        'Visitor OTP resend by email error:',
+        error
+      );
+
+      throw error;
+    }
+  };
+
+  // =========================================================
+  // ESTABLISH VISITOR SESSION FROM QR PASS
+  // =========================================================
+
+  const establishVisitorSessionFromQr = async (
+    qrCode
+  ) => {
+    try {
+      return await store.establishVisitorSessionFromQr(
+        qrCode
+      );
+    } catch (error) {
+      console.error(
+        'Establish visitor session error:',
+        error
+      );
+
+      throw error;
+    }
+  };
+
+  // =========================================================
+  // PASSWORD RESET
+  //
+  // No session is created by any of these. They run
+  // before sign-in, so there is nothing to establish.
+  // =========================================================
+
+  const requestPasswordResetCode = async (
+    email,
+    accountKind
+  ) => {
+    try {
+      return await store.requestPasswordResetCode(
+        email,
+        accountKind
+      );
+    } catch (error) {
+      console.error(
+        'Request password reset code error:',
+        error
+      );
+
+      throw error;
+    }
+  };
+
+  const verifyPasswordResetCode = async (
+    email,
+    code
+  ) => {
+    try {
+      return await store.verifyPasswordResetCode(
+        email,
+        code
+      );
+    } catch (error) {
+      console.error(
+        'Verify password reset code error:',
+        error
+      );
+
+      throw error;
+    }
+  };
+
+  const applyPasswordReset = async (input) => {
+    try {
+      return await store.applyPasswordReset(
+        input
+      );
+    } catch (error) {
+      console.error(
+        'Apply password reset error:',
+        error
+      );
+
+      throw error;
+    }
+  };
+
+  // =========================================================
   // BUILD VISITOR SESSION
   //
   // Centralized helper so email login, QR login, and
@@ -243,7 +349,7 @@ export const AuthProvider = ({ children }) => {
 
       setUser(visitorSession);
 
-return visitor;
+      return visitor;
     } catch (error) {
       console.error(
         'Visitor login error:',
@@ -259,6 +365,13 @@ return visitor;
   //
   // Used when the application already has verified visitor
   // information, such as after OTP verification or QR flow.
+  //
+  // IMPORTANT:
+  // Establishing a local session is not enough. RLS and the
+  // security-definer RPCs all key off auth.uid(), so without a
+  // real Supabase session every visitor data request runs as
+  // anon and fails. Callers that only have a verified QR pass
+  // should use establishVisitorSessionFromQr() first.
   // =========================================================
 
   const loginAsVisitorSession = (
@@ -271,7 +384,7 @@ return visitor;
     }
     const visitorSession =
       createVisitorSession(visitor);
-      createVisitorSession(visitor);
+
     setUser(visitorSession);
 
     return visitorSession;
@@ -657,6 +770,11 @@ return visitor;
         registerVisitor,
         verifyVisitorOtp,
         resendVisitorOtp,
+        resendVisitorOtpByEmail,
+        establishVisitorSessionFromQr,
+        requestPasswordResetCode,
+        verifyPasswordResetCode,
+        applyPasswordReset,
         loginVisitor,
         loginAsVisitorSession,
 
