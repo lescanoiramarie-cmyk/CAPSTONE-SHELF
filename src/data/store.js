@@ -1699,47 +1699,119 @@ export async function loginVisitor({
         normalizedIdentifier
       );
 
+    const invokeQrLogin = () =>
+      supabase.functions.invoke(
+        'visitor-qr-login',
+        {
+          body: {
+            qrCode: normalizedQr,
+          },
+        }
+      );
+
+    let qrLoginResponse =
+      await invokeQrLogin();
+
+    if (
+      qrLoginResponse.error?.name ===
+      'FunctionsFetchError'
+    ) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, 800)
+      );
+      qrLoginResponse =
+        await invokeQrLogin();
+    }
+
+    const {
+      data: qrLoginData,
+      error: qrLoginError,
+    } = qrLoginResponse;
+
+    if (qrLoginError) {
+      if (
+        qrLoginError.name ===
+        'FunctionsFetchError'
+      ) {
+        throw new Error(
+          'Unable to connect to QR sign-in. Check your internet connection and try again.'
+        );
+      }
+
+      throw new Error(
+        qrLoginData?.error ||
+          cleanErr(
+            qrLoginError,
+            'Unable to verify the visitor QR pass.'
+          ).message
+      );
+    }
+
+    if (!qrLoginData?.tokenHash) {
+      throw new Error(
+        qrLoginData?.error ||
+          'QR sign-in did not return a valid authentication token.'
+      );
+    }
+
+    const {
+      data: authData,
+      error: authError,
+    } = await supabase.auth.verifyOtp({
+      token_hash: qrLoginData.tokenHash,
+      type: 'magiclink',
+    });
+
+    if (authError) {
+      throw new Error(
+        cleanErr(
+          authError,
+          'Unable to complete QR sign-in.'
+        ).message
+      );
+    }
+
+    const authUserId =
+      normalizeText(authData?.user?.id);
+
+    if (!isValidUuid(authUserId)) {
+      await safeSignOut();
+
+      throw new Error(
+        'Supabase did not return a valid visitor authentication session.'
+      );
+    }
+
     const {
       data: visitor,
       error: visitorError,
-    } =
-      await supabase
-        .from('visitors')
-        .select(
-          'id, full_name, email, otp_verified, qr_code, is_active, auth_user_id'
-        )
-        .eq(
-          'qr_code',
-          normalizedQr
-        )
-        .maybeSingle();
+    } = await supabase
+      .from('visitors')
+      .select(
+        'id, full_name, email, otp_verified, qr_code, is_active, auth_user_id'
+      )
+      .eq('auth_user_id', authUserId)
+      .maybeSingle();
 
     if (visitorError) {
+      await safeSignOut();
+
       throw cleanErr(
         visitorError,
-        'Unable to verify the visitor QR pass.'
-      );
-    }
-
-    if (!visitor) {
-      throw new Error(
-        'Visitor QR pass was not found.'
+        'Unable to load the visitor profile.'
       );
     }
 
     if (
-      visitor.is_active === false
-    ) {
-      throw new Error(
-        'This visitor account is currently inactive.'
-      );
-    }
-
-    if (
+      !visitor ||
+      visitor.qr_code !== normalizedQr ||
+      visitor.is_active !== true ||
       visitor.otp_verified !== true
     ) {
+      await safeSignOut();
+
       throw new Error(
-        'Please verify your visitor account before using the QR pass.'
+        'This QR pass could not be used to sign in.'
       );
     }
 

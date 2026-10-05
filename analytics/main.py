@@ -148,9 +148,38 @@ def generate_gemini_analytics(
             )
     except errors.APIError as exc:
         logger.exception("Gemini analytics request failed")
+        status_code = exc.code if isinstance(exc.code, int) else None
+        if status_code == 429:
+            detail = (
+                "Gemini rate limit or quota exceeded (HTTP 429). "
+                "Check the Gemini API quota and billing for the analytics service key."
+            )
+        elif status_code in (400, 404):
+            detail = (
+                f"Gemini rejected the configured model or request (HTTP {status_code}). "
+                "Check GEMINI_MODEL, the analytics service API key, and the model's "
+                "supported request settings in the analytics service logs."
+            )
+        elif status_code in (401, 403):
+            detail = (
+                f"Gemini rejected the analytics service API key or its permissions "
+                f"(HTTP {status_code}). Check GEMINI_API_KEY in the analytics service "
+                "environment and verify that the key is enabled for the Gemini API."
+            )
+        elif status_code is not None and status_code >= 500:
+            detail = (
+                f"Gemini returned a server error (HTTP {status_code}). "
+                "Try the forecast again later and check the analytics service logs."
+            )
+        else:
+            detail = (
+                "Gemini analytics request failed"
+                + (f" (HTTP {status_code})" if status_code is not None else "")
+                + ". Check the analytics service logs."
+            )
         raise HTTPException(
             status_code=502,
-            detail="Gemini analytics request failed. Check the analytics service logs.",
+            detail=detail,
         ) from exc
 
     if not response.text:

@@ -94,8 +94,18 @@ minute. The QR activation follow-up withholds passes until email verification
 and rotates existing passes; visitors should sign in and save their refreshed
 pass after both migrations. Verify the scheduled job under Database → Cron.
 Deploy `visitor-qr-login` with `supabase functions deploy visitor-qr-login` and
-set the Edge Function secret `APP_ORIGIN` (or comma-separated `APP_ORIGINS`) to
-the exact deployed frontend origin so QR sign-in passes CORS.
+set the Edge Function secret `APP_ORIGINS` to every frontend origin that should
+be allowed to use QR sign-in. The function also allows the standard local Vite
+origins (`localhost:5173` and `127.0.0.1:5173`). For the production site:
+
+```bash
+supabase secrets set APP_ORIGINS="https://capstone-shelf.vercel.app"
+supabase functions deploy visitor-qr-login
+```
+
+Replace the production URL with the exact deployed frontend origin if it differs.
+Redeploy the function whenever its CORS allowlist code changes. If using
+`APP_ORIGINS`, it takes precedence over `APP_ORIGIN` for production origins.
 
 ### Community book return reminders
 
@@ -194,6 +204,10 @@ Gemini for analytics insights and operational recommendations. It also exposes
 `POST /faq/answer` for FAQ-corpus-grounded answers. `GET /health` reports
 whether a key is configured without exposing it; `POST /forecast` calls Gemini
 and returns the analytics response.
+If forecasting returns a Gemini error, check the analytics service's runtime
+logs and `/health` response. `geminiConfigured: true` only confirms that a key
+is present; it does not confirm the key is valid, has quota, or can access the
+configured `GEMINI_MODEL`.
 
 #### Deploy the analytics service with Render and Vercel
 

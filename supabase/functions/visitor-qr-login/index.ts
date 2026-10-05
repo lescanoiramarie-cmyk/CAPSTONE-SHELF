@@ -2,11 +2,16 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-const allowedOrigins = (
+const configuredOrigins = (
   Deno.env.get("APP_ORIGINS") ||
   Deno.env.get("APP_ORIGIN") ||
   "http://localhost:5173"
 ).split(",").map((origin) => origin.trim()).filter(Boolean);
+const allowedOrigins = new Set([
+  ...configuredOrigins,
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+]);
 
 function responseHeaders(origin: string) {
   return {
@@ -27,11 +32,11 @@ function respond(origin: string, status: number, body: Record<string, unknown>) 
 
 Deno.serve(async (request: Request) => {
   const requestOrigin = request.headers.get("origin") || "";
-  const origin = allowedOrigins.includes(requestOrigin)
+  const origin = allowedOrigins.has(requestOrigin)
     ? requestOrigin
-    : allowedOrigins[0] || "http://localhost:5173";
+    : configuredOrigins[0] || "http://localhost:5173";
 
-  if (requestOrigin && !allowedOrigins.includes(requestOrigin)) {
+  if (requestOrigin && !allowedOrigins.has(requestOrigin)) {
     return respond(origin, 403, { error: "Origin is not allowed." });
   }
 
