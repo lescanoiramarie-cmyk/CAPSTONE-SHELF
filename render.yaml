@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: shelf-analytics
+    runtime: python
+    plan: free
+    region: singapore
+    rootDir: analytics
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: ANALYTICS_ALLOWED_ORIGINS
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../context/useAuth.js';
 import { useLibraryData, useLibrary } from '../context/useLibrary.js';
 import QrScanner from './QrScanner';
+import VisitorScanDetails from './VisitorScanDetails';
 
 function formatDateTime(iso) {
   return new Date(iso).toLocaleString('en-PH', {
@@ -13,7 +14,8 @@ function formatDateTime(iso) {
 export default function AttendanceScanner() {
   const { user } = useAuth();
   const { attendanceLogs, libraries } = useLibraryData();
-  const { scanAttendance } = useLibrary();
+  const { findVisitorByQr, scanAttendance } = useLibrary();
+  const [scannedVisitor, setScannedVisitor] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -35,8 +37,15 @@ export default function AttendanceScanner() {
   const handleScan = async (code) => {
     setError('');
     setMessage('');
+    setScannedVisitor(null);
     try {
-      const { visitor, log } = await scanAttendance(code, libraryId);
+      const visitor = await findVisitorByQr(code, libraryId);
+      if (!visitor) {
+        throw new Error('QR code not recognized. Please check the visitor pass and try again.');
+      }
+
+      const { log } = await scanAttendance(code, libraryId);
+      setScannedVisitor(visitor);
       setMessage(`${visitor.fullName} checked ${log.action === 'checked_out' ? 'out' : 'in'}.`);
     } catch (scanError) {
       setError(scanError.message || 'Unable to record attendance for this branch.');
@@ -66,6 +75,7 @@ export default function AttendanceScanner() {
             {message}
           </div>
         )}
+        {scannedVisitor && <VisitorScanDetails visitor={scannedVisitor} />}
         {error && (
           <div role="alert" className="text-xs font-semibold bg-red-50 border border-red-200 text-red-800 rounded-lg px-3 py-2">
             {error}

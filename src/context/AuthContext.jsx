@@ -457,7 +457,7 @@ return visitor;
     // =======================================================
     // QR LOGIN
     //
-    // SHELF QR codes such as:
+    // Visitor QR codes such as:
     //
     // SHELF-QR-404725
     //

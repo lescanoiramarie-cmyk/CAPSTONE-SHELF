@@ -817,18 +817,21 @@ begin
   end if;
   select * into v_visitor from public.visitors where qr_code = trim(p_qr);
   if v_visitor.id is null then raise exception 'QR code not recognized.'; end if;
-  select * into v_log from public.attendance_logs
-    where attendance_logs.visitor_id::text = v_visitor.id::text
-      and attendance_logs.library_id::text = p_library_id
-      and attendance_logs.time_in::date = current_date
-      and attendance_logs.checked_out_at is null
-    order by attendance_logs.time_in desc limit 1 for update;
+  select attendance.* into v_log from public.attendance_logs as attendance
+    where attendance.visitor_id::text = v_visitor.id::text
+      and attendance.library_id::text = p_library_id
+      and attendance.time_in::date = current_date
+      and attendance.checked_out_at is null
+    order by attendance.time_in desc limit 1 for update;
   if v_log.id is null then
     insert into public.attendance_logs (visitor_id, visitor_name, library_id)
     values (v_visitor.id, v_visitor.full_name, p_library_id) returning * into v_log;
     v_action := 'checked_in';
   else
-    update public.attendance_logs set checked_out_at = now() where id = v_log.id returning * into v_log;
+    update public.attendance_logs as attendance
+      set checked_out_at = now()
+      where attendance.id = v_log.id
+      returning attendance.* into v_log;
     v_action := 'checked_out';
   end if;
   return query select v_log.id::text, v_visitor.id::text, v_visitor.full_name, v_action;

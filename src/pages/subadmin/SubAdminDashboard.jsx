@@ -11,6 +11,7 @@ import {
   Upload,
   UsersRound,
 } from 'lucide-react';
+import VisitorScanDetails from '../../component/VisitorScanDetails.jsx';
 
 import { useAuth } from '../../context/useAuth.js';
 import { useLibrary, useLibraryData } from '../../context/useLibrary.js';
@@ -481,16 +482,6 @@ function QRBookBorrowing({
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                     Verified Visitor
                   </p>
-
-                  <h3 className="text-xl font-extrabold text-slate-800 mt-1">
-                    {visitor.fullName}
-                  </h3>
-
-                  {visitor.email && (
-                    <p className="text-xs text-slate-500 mt-1">
-                      {visitor.email}
-                    </p>
-                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -507,6 +498,7 @@ function QRBookBorrowing({
                   </button>
                 </div>
               </div>
+              <VisitorScanDetails visitor={visitor} />
             </div>
 
             {/* READY FOR PICKUP */}

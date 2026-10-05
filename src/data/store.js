@@ -210,7 +210,7 @@ const isValidVisitorId = (value) =>
   Boolean(normalizeText(value));
 
 const isValidShelfQr = (value) =>
-  /^SHELF-QR-[A-Z0-9]{6,32}$/i.test(
+  /^SHELF-QR-\d{6}$/i.test(
     normalizeText(value)
   );
 
@@ -1984,8 +1984,14 @@ export async function findVisitorByQr(
     fullName:
       row.full_name,
 
+    contactNumber:
+      row.contact_number,
+
     email:
       row.email,
+
+    address:
+      row.address,
 
     qrCode:
       row.qr_code,

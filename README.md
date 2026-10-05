@@ -179,14 +179,42 @@ if (!(Test-Path .env)) { Copy-Item .env.example .env }
 uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
-The root `.env.local` sets `VITE_ANALYTICS_API_URL=http://localhost:8000`; restart
-Vite after creating or changing it. The Gemini API key is read only by the
-Python service; never put it in a `VITE_` variable or frontend code. The service
-keeps numeric forecasts in its forecasting model and uses Gemini for analytics
-insights and operational recommendations. It also exposes `POST /faq/answer`
-for FAQ-corpus-grounded answers. `GET /health` reports whether a key is
-configured without exposing it; `POST /forecast` calls Gemini and returns the
-analytics response.
+For local development, set
+`VITE_ANALYTICS_API_URL=http://localhost:8000` and restart Vite after changing
+it. For a deployed frontend, deploy this FastAPI service separately and set
+`VITE_ANALYTICS_API_URL` to its public HTTPS base URL in the frontend hosting
+environment before rebuilding/redeploying the frontend. Do not use `localhost`
+for a deployed frontend: it refers to each staff member's own computer, not the
+server running the app. Set `ANALYTICS_ALLOWED_ORIGINS` on the analytics service
+to the exact deployed frontend origin (scheme and host, without a path) so
+browser requests pass CORS. Configure `GEMINI_API_KEY` on the analytics service
+for Gemini-generated insights; never put it in a `VITE_` variable or frontend
+code. The service keeps numeric forecasts in its forecasting model and uses
+Gemini for analytics insights and operational recommendations. It also exposes
+`POST /faq/answer` for FAQ-corpus-grounded answers. `GET /health` reports
+whether a key is configured without exposing it; `POST /forecast` calls Gemini
+and returns the analytics response.
+
+#### Deploy the analytics service with Render and Vercel
+
+The repository root includes `render.yaml` for the analytics web service:
+
+1. In Render, create a **Blueprint** from this GitHub repository and deploy the
+   `shelf-analytics` service defined in `render.yaml`.
+2. Set `ANALYTICS_ALLOWED_ORIGINS` to the exact Vercel site origin, for example
+   `https://your-project.vercel.app` (no trailing slash or path). Add any other
+   required Vercel preview origins as a comma-separated list.
+3. Set `GEMINI_API_KEY` in the Render service environment settings. Keep it
+   private; do not add it to Vercel or commit it to the repository.
+4. Wait for Render's `/health` check to pass and copy the service's public HTTPS
+   URL.
+5. In Vercel, open the project settings, add `VITE_ANALYTICS_API_URL` with that
+   Render URL for the Production environment, then redeploy the frontend.
+   Configure Preview too if preview deployments need forecasting, and include
+   each preview origin in `ANALYTICS_ALLOWED_ORIGINS`.
+
+Render's free web service may sleep when idle, so the first request after a
+period of inactivity can take longer while the service starts.
 
 ### Database bootstrap and migration safety
 

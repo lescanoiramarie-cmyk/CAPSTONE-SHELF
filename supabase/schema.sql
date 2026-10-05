@@ -81,9 +81,30 @@ create table if not exists visitors (
   otp_expires_at timestamptz,
   otp_verified boolean default false,
   is_active boolean not null default true,
-  qr_code text unique,
+  qr_code text unique check (qr_code is null or qr_code ~ '^SHELF-QR-[0-9]{6}$'),
   registered_at timestamptz default now()
 );
+
+create or replace function public.generate_visitor_qr_code()
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  qr_value text;
+begin
+  perform pg_advisory_xact_lock(hashtext('public.visitors.qr_code'));
+  loop
+    qr_value := 'SHELF-QR-' || floor(random() * 900000 + 100000)::text;
+    exit when not exists (
+      select 1 from public.visitors where qr_code = qr_value
+    );
+  end loop;
+  return qr_value;
+end;
+$$;
+revoke all on function public.generate_visitor_qr_code() from public, anon, authenticated;
 
 do $$
 begin
@@ -452,12 +473,12 @@ begin
     raise exception 'QR code not recognized. Please check the pass and try again.';
   end if;
 
-  select * into v_log from attendance_logs
-    where attendance_logs.visitor_id = v_visitor.id
-      and attendance_logs.library_id = p_library_id
-      and attendance_logs.time_in::date = current_date
-      and attendance_logs.checked_out_at is null
-    order by attendance_logs.time_in desc
+  select * into v_log from attendance_logs as attendance
+    where attendance.visitor_id = v_visitor.id
+      and attendance.library_id = p_library_id
+      and attendance.time_in::date = current_date
+      and attendance.checked_out_at is null
+    order by attendance.time_in desc
     limit 1 for update;
 
   if v_log.id is null then
@@ -466,8 +487,8 @@ begin
       returning * into v_log;
     v_action := 'checked_in';
   else
-    update attendance_logs set checked_out_at = now()
-      where attendance_logs.id = v_log.id
+    update attendance_logs as attendance set checked_out_at = now()
+      where attendance.id = v_log.id
       returning * into v_log;
     v_action := 'checked_out';
   end if;
@@ -572,7 +593,7 @@ begin
     auth_email,
     nullif(trim(p_address), ''),
     false,
-    'SHELF-QR-' || upper(replace(gen_random_uuid()::text, '-', '')),
+    public.generate_visitor_qr_code(),
     p_auth_user_id
   )
   on conflict (email) do update
@@ -614,7 +635,7 @@ begin
   if not exists (select 1 from visitors where visitors.id = p_visitor_id and visitors.otp = p_code) then
     raise exception 'Incorrect OTP code. Please try again.';
   end if;
-  v_qr := 'SHELF-QR-' || floor(random() * 900000 + 100000)::text;
+  v_qr := public.generate_visitor_qr_code();
   update visitors set otp_verified = true, qr_code = v_qr, otp = null where visitors.id = p_visitor_id;
   return query select visitors.id, visitors.full_name, visitors.email, visitors.qr_code
     from visitors where visitors.id = p_visitor_id;

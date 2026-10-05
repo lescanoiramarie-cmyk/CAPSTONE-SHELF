@@ -2166,7 +2166,7 @@ export default function VisitorLogin() {
                       name="visitor_login_identifier"
                       required
                       autoComplete="off"
-                      placeholder="email@example.com or SHELF-QR-XXXXXX"
+                      placeholder="email@example.com or SHELF-QR-123456"
                       value={
                         loginData.identifier
                       }

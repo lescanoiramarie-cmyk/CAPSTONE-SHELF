@@ -245,7 +245,7 @@ export default function QrScanner({
               .filter((v) => v.otpVerified)
               .map((v) => (
                 <option key={v.id} value={v.qrCode}>
-                  {v.fullName} — {v.qrCode}
+                  {v.fullName}
                 </option>
               ))}
           </select>

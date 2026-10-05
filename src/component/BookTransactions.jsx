@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../context/useAuth.js';
 import { useLibraryData, useLibrary } from '../context/useLibrary.js';
 import QrScanner from './QrScanner';
+import VisitorScanDetails from './VisitorScanDetails';
 
 function formatDateTime(iso) {
   if (!iso) return '—';
@@ -117,6 +118,7 @@ export default function BookTransactions() {
             <h3 className="text-sm font-bold text-slate-800">
               Step 2 — Confirm {mode === 'borrowing' ? 'Borrowing' : 'Return'} for {scannedVisitor.fullName}
             </h3>
+            <VisitorScanDetails visitor={scannedVisitor} />
 
             {visitorRequests.length === 0 ? (
               <p className="text-xs text-slate-500">

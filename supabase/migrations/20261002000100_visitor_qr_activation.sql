@@ -311,13 +311,13 @@ begin
     raise exception 'QR code is invalid, unverified, or inactive.';
   end if;
 
-  select * into v_log
-  from public.attendance_logs
-  where visitor_id::text = v_visitor.id::text
-    and library_id::text = p_library_id
-    and time_in::date = current_date
-    and checked_out_at is null
-  order by time_in desc
+  select attendance.* into v_log
+  from public.attendance_logs as attendance
+  where attendance.visitor_id::text = v_visitor.id::text
+    and attendance.library_id::text = p_library_id
+    and attendance.time_in::date = current_date
+    and attendance.checked_out_at is null
+  order by attendance.time_in desc
   limit 1
   for update;
 
@@ -335,10 +335,10 @@ begin
     ) into v_log using v_visitor.id, v_visitor.full_name, p_library_id;
     v_action := 'checked_in';
   else
-    update public.attendance_logs
+    update public.attendance_logs as attendance
        set checked_out_at = now()
-     where id::text = v_log.id::text
-     returning * into v_log;
+     where attendance.id::text = v_log.id::text
+     returning attendance.* into v_log;
     v_action := 'checked_out';
   end if;
 

@@ -773,7 +773,7 @@ export default function VisitorLogin() {
                     <input
                       type="text"
                       required
-                      placeholder="email@example.com or SHELF-QR-XXXXXX"
+                      placeholder="email@example.com or SHELF-QR-123456"
                       value={loginData.identifier}
                       onChange={(e) =>
                         setLoginData({

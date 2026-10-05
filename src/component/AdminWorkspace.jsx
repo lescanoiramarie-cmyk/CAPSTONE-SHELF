@@ -1369,22 +1369,29 @@ function AdminWorkspace({
         );
 
       if (!response.ok) {
-          const errorResponse =
-            await response.json();
+        const errorResponse =
+          await response.json().catch(() => ({}));
 
-          throw new Error(
-            errorResponse.detail ||
-              `Forecast service returned ${response.status}.`
-          );
-        }
+        throw new Error(
+          errorResponse.detail ||
+            `Forecast service returned ${response.status}.`
+        );
+      }
 
       setForecast(
         await response.json()
       );
     } catch (forecastError) {
+      const errorMessage =
+        forecastError instanceof Error
+          ? forecastError.message
+          : '';
+
       setError(
-        forecastError.message ||
-          'Forecast request failed.'
+        forecastError instanceof TypeError &&
+          /fetch/i.test(errorMessage)
+          ? 'Unable to reach the forecast service. For a deployed site, VITE_ANALYTICS_API_URL must point to a publicly reachable HTTPS service, and that service must allow this site in ANALYTICS_ALLOWED_ORIGINS. A localhost URL only works when the analytics service is running on this same computer.'
+          : errorMessage || 'Forecast request failed.'
       );
     } finally {
       setForecastLoading(false);
