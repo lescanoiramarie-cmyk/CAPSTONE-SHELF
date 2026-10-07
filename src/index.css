@@ -10,6 +10,10 @@
   --color-shelf-border: #e2e8f0;
 }
 
+.book-card-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+}
+
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {

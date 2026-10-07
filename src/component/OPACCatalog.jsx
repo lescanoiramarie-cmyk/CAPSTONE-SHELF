@@ -2973,7 +2973,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="book-card-grid grid gap-6">
 
               {filteredBooks.map(
                 (book) => (
@@ -3234,7 +3234,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
           ) : (
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="book-card-grid grid gap-5">
 
               {filteredCommunityBooks.map(
                 renderCommunityBookCard
@@ -3786,7 +3786,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
           ) : (
 
-            <div className="order-2 grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="book-card-grid order-2 grid gap-5">
 
               {filteredPersonalBooks.map(
                 renderPersonalBookCard
