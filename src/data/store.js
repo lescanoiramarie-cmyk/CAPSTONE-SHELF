@@ -1285,6 +1285,47 @@ export async function getVisitor(
     : null;
 }
 
+const resolveVisitorAuthUserId = async (
+  visitorId
+) => {
+  const normalizedVisitorId =
+    normalizeText(visitorId);
+
+  if (!normalizedVisitorId) {
+    throw new Error(
+      'Visitor ID is required to resolve the authentication user ID.'
+    );
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from('visitors')
+      .select('auth_user_id')
+      .eq('id', normalizedVisitorId)
+      .maybeSingle();
+
+  if (error) {
+    throw cleanErr(
+      error,
+      'Unable to resolve the visitor authentication user ID.'
+    );
+  }
+
+  const authUserId =
+    normalizeText(data?.auth_user_id);
+
+  if (!isValidUuid(authUserId)) {
+    throw new Error(
+      'The visitor profile does not have a valid authentication user ID.'
+    );
+  }
+
+  return authUserId;
+};
+
 // ============================================================================
 // VISITOR REGISTRATION
 // ============================================================================
@@ -1870,15 +1911,22 @@ export async function establishVisitorSessionFromQr(
   const normalizedQr =
     normalizeQr(qrCode);
 
-  if (
-    !isValidShelfQr(
-      normalizedQr
-    )
-  ) {
-    throw new Error(
-      'A valid visitor QR pass is required.'
-    );
-  }
+    if (
+      lowerMessage.includes(
+        'uuid'
+      )
+    ) {
+      throw new Error(
+        'The visitor or book ID is invalid. ' +
+          'Visitor: ' +
+          normalizedVisitorId +
+          ', Book: ' +
+          normalizedBookId +
+          ', Resolved visitor auth_user_id: ' +
+          resolvedVisitorId +
+          '. Please check the browser console for the full Supabase error.'
+      );
+    }
 
   const {
     data: qrLoginData,
@@ -3362,6 +3410,13 @@ export async function requestCommunityBook(
     );
   }
 
+  const resolvedRequesterId =
+    isValidUuid(normalizedRequesterId)
+      ? normalizedRequesterId
+      : await resolveVisitorAuthUserId(
+          normalizedRequesterId
+        );
+
   const {
     data,
     error,
@@ -3370,7 +3425,7 @@ export async function requestCommunityBook(
       'request_community_book',
       {
         p_requester_visitor_id:
-          normalizedRequesterId,
+          resolvedRequesterId,
 
         p_book_id:
           normalizedBookId,
@@ -3379,28 +3434,18 @@ export async function requestCommunityBook(
 
   if (error) {
     console.error(
-      'COMMUNITY BOOK REQUEST RPC ERROR:',
-      {
-        code:
-          error?.code,
-
-        message:
-          error?.message,
-
-        details:
-          error?.details,
-
-        hint:
-          error?.hint,
-
-        requesterVisitorId:
-          normalizedRequesterId,
-
-        bookId:
-          normalizedBookId,
-      }
-    );
-
+  'COMMUNITY BOOK REQUEST RPC ERROR:',
+  [
+    `code=${String(error?.code ?? '')}`,
+    `message=${String(error?.message ?? '')}`,
+    `details=${String(error?.details ?? '')}`,
+    `hint=${String(error?.hint ?? '')}`,
+    `requesterVisitorId=${String(normalizedRequesterId ?? '')}`,
+    `resolvedRequesterId=${String(resolvedRequesterId ?? '')}`,
+    `bookId=${String(normalizedBookId ?? '')}`,
+    `bookIdType=${typeof normalizedBookId}`,
+  ].join('\n')
+);
     const message =
       normalizeText(
         error?.message
@@ -3944,38 +3989,69 @@ export async function confirmCommunityBookReturn(
   requestId,
   ownerVisitorId
 ) {
-  const normalizedRequestId = normalizeText(requestId);
+  const normalizedRequestId =
+    normalizeText(requestId);
+
   const normalizedOwnerVisitorId =
     normalizeText(ownerVisitorId);
 
   if (!normalizedRequestId) {
-    throw new Error('Community book request ID is required.');
+    throw new Error(
+      'Community book request ID is required.'
+    );
   }
 
   if (!isValidUuid(normalizedRequestId)) {
-    throw new Error('Invalid community book request ID.');
+    throw new Error(
+      'Invalid community book request ID.'
+    );
   }
 
   if (!normalizedOwnerVisitorId) {
-    throw new Error('Owner visitor ID is required.');
+    throw new Error(
+      'Owner visitor ID is required.'
+    );
   }
 
   if (!isValidVisitorId(normalizedOwnerVisitorId)) {
-    throw new Error('Invalid owner visitor ID.');
+    throw new Error(
+      'Invalid owner visitor ID.'
+    );
   }
 
-  const { data, error } = await supabase.rpc(
+  const {
+    data,
+    error,
+  } = await supabase.rpc(
     'confirm_community_book_return',
     {
-      p_request_id: normalizedRequestId,
-      p_owner_visitor_id: normalizedOwnerVisitorId,
+      p_request_id:
+        normalizedRequestId,
+
+      p_owner_visitor_id:
+        normalizedOwnerVisitorId,
     }
   );
 
   if (error) {
+    const returnRpcError = [
+      `code=${String(error?.code ?? '')}`,
+      `message=${String(error?.message ?? '')}`,
+      `details=${String(error?.details ?? '')}`,
+      `hint=${String(error?.hint ?? '')}`,
+      `requestId=${String(
+        normalizedRequestId ?? ''
+      )}`,
+      `requestIdType=${typeof normalizedRequestId}`,
+      `ownerVisitorId=${String(
+        normalizedOwnerVisitorId ?? ''
+      )}`,
+      `ownerVisitorIdType=${typeof normalizedOwnerVisitorId}`,
+    ].join('\n');
+
     console.error(
-      'CONFIRM COMMUNITY BOOK RETURN RPC ERROR:',
-      error
+      'CONFIRM COMMUNITY BOOK RETURN RPC ERROR:\n' +
+        returnRpcError
     );
 
     throw cleanErr(
@@ -3984,7 +4060,18 @@ export async function confirmCommunityBookReturn(
     );
   }
 
-  return firstRow(data);
+  /*
+    confirm_community_book_return()
+    intentionally returns VOID.
+
+    The RPC succeeding is enough to confirm
+    that the return was processed.
+  */
+  return {
+    success: true,
+    requestId:
+      normalizedRequestId,
+  };
 }
 
 // ============================================================================
@@ -4920,6 +5007,13 @@ export async function requestBorrow(
     );
   }
 
+  const resolvedVisitorId =
+    isValidUuid(normalizedVisitorId)
+      ? normalizedVisitorId
+      : await resolveVisitorAuthUserId(
+          normalizedVisitorId
+        );
+
   const {
     data,
     error,
@@ -4928,7 +5022,7 @@ export async function requestBorrow(
       'request_borrow',
       {
         p_visitor_id:
-          normalizedVisitorId,
+          resolvedVisitorId,
 
         p_book_id:
           normalizedBookId,
@@ -5105,13 +5199,27 @@ export async function requestBorrow(
       )
     ) {
       throw new Error(
-        'The visitor or book ID is invalid.'
+        'The visitor or book ID is invalid. ' +
+          'Visitor: ' +
+          normalizedVisitorId +
+          ', Book: ' +
+          normalizedBookId +
+          ', Resolved visitor auth_user_id: ' +
+          resolvedVisitorId +
+          '. Supabase error: ' +
+          message +
+          '. Check DevTools Network for full error.'
       );
     }
 
     throw cleanErr(
       error,
-      'Unable to create the borrow request. Please try again.'
+      'Unable to create the borrow request. Please try again. ' +
+        'Visitor: ' +
+        normalizedVisitorId +
+        ', Book: ' +
+        normalizedBookId +
+        '. Check DevTools Network for full error.'
     );
   }
 
