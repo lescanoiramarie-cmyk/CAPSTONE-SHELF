@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/useAuth.js';
 import {
   BookOpen,
@@ -29,7 +29,7 @@ import { recordVisitorSearch } from '../lib/recommendationEngine.js';
 // =========================================================
 
 function formatDateTime(iso) {
-  if (!iso) return '—';
+  if (!iso) return 'â€”';
 
   return new Date(iso).toLocaleString('en-PH', {
     dateStyle: 'medium',
@@ -38,7 +38,7 @@ function formatDateTime(iso) {
 }
 
 function formatDate(iso) {
-  if (!iso) return '—';
+  if (!iso) return 'â€”';
 
   return new Date(iso).toLocaleDateString('en-PH', {
     dateStyle: 'medium',
@@ -155,11 +155,11 @@ function getPersonalBookAvailabilityLabel(book) {
   } = getPersonalBookCopyAvailability(book);
 
   if (availableCopies === 0) {
-    return 'Borrowed · Unavailable';
+    return 'Borrowed Â· Unavailable';
   }
 
   if (borrowedCopies > 0) {
-    return `${availableCopies} of ${totalCopies} available · ${borrowedCopies} borrowed`;
+    return `${availableCopies} of ${totalCopies} available Â· ${borrowedCopies} borrowed`;
   }
 
   return `${totalCopies} ${totalCopies === 1 ? 'copy' : 'copies'} available`;
@@ -561,7 +561,7 @@ if (!cancelled) {
       : [];
 
   console.log(
-    'SHELF — NORMALIZED OWNER COMMUNITY REQUESTS:',
+    'SHELF â€” NORMALIZED OWNER COMMUNITY REQUESTS:',
     normalizedRequests
   );
 
@@ -1134,6 +1134,34 @@ if (!cancelled) {
       }
     );
 
+    console.log('OPAC FILTER DEBUG:', {
+  activeView,
+
+  booksCount: books?.length,
+
+  filteredBooksCount:
+    filteredBooks?.length,
+
+  selectedCategory,
+
+  selectedLibrary,
+
+  libraryFilter,
+
+  selectedAvailability,
+
+  normalizedSearch,
+
+  books: books?.map((book) => ({
+    id: book?.id,
+    title: book?.title,
+    libraryId: book?.libraryId,
+    category: book?.category,
+    availableCopies:
+      book?.availableCopies,
+    bookType: book?.bookType,
+  })),
+});
  // =========================================================
 // MY REQUESTS
 // =========================================================
@@ -1368,7 +1396,7 @@ const myRequests = useMemo(() => {
   // ========================================================================
 
   console.log(
-    'SHELF — REQUESTS & BORROWS:',
+    'SHELF â€” REQUESTS & BORROWS:',
     {
       normalRequests:
         normalRequests.length,
@@ -1505,14 +1533,15 @@ const myRequests = useMemo(() => {
         return;
       }
 
-      // Personal books are intentionally not processed
-      // by the normal library borrow RPC yet.
+      // Personal (community) books are visitor-owned and require owner
+      // approval first, so they are routed through requestCommunityBook()
+      // instead of the library borrow RPC.
       if (
         bookEntry.bookType ===
         'personal'
       ) {
         setNotice(
-          'Community book borrowing will be available after the owner approval workflow is enabled.'
+          'This is a community book. Use the "Request Community Book" button below to send it to the owner for approval.'
         );
         return;
       }
@@ -1575,7 +1604,7 @@ const myRequests = useMemo(() => {
             )
           ) {
             setNotice(
-              `"${bookEntry.title}" is currently unavailable at this branch — you are #${queuePosition} in the reservation queue.`
+              `"${bookEntry.title}" is currently unavailable at this branch â€” you are #${queuePosition} in the reservation queue.`
             );
           } else {
             setNotice(
@@ -1624,8 +1653,13 @@ const myRequests = useMemo(() => {
       return;
     }
 
-    if (book.bookType !== 'personal') {
-      setNotice('This is not a community book.');
+if (
+      book.bookType !==
+      'personal'
+    ) {
+      setNotice(
+        'This is not a community book.'
+      );
       return;
     }
 
@@ -1665,11 +1699,47 @@ const myRequests = useMemo(() => {
     setSubmittingCommunityRequest(true);
     setNotice('');
 
-    try {
+        try {
+      console.log(
+  'COMMUNITY BOOK REQUEST DEBUG:',
+  JSON.stringify(
+    {
+      bookId: book?.id,
+      bookIdType: typeof book?.id,
+
+      bookTitle: book?.title,
+
+      bookType: book?.bookType,
+
+      ownerVisitorId:
+        book?.ownerVisitorId,
+
+      lendingEnabled:
+        book?.lendingEnabled,
+
+      userId:
+        user?.id,
+
+      userIdType:
+        typeof user?.id,
+
+      fullBookObject:
+        book,
+
+      fullUserObject:
+        user,
+    },
+    null,
+    2
+  )
+);
+
       const request = await requestCommunityBook(user.id, book.id);
 
       if (!request?.id) {
-        throw new Error('The community book request was not created. Please try again.');
+        throw new Error(
+          'The community book request was not created. Please try again.'
+        );
       }
 
       setNotice(
@@ -1686,7 +1756,7 @@ const myRequests = useMemo(() => {
     } finally {
       setSubmittingCommunityRequest(false);
     }
-  };
+    };
 
   // =========================================================
   // OWNER COMMUNITY BOOK REQUEST ACTIONS
@@ -1919,7 +1989,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
         user.id
       );
 
-    if (!result?.id) {
+    if (!result?.success) {
       throw new Error(
         'The community book return could not be confirmed.'
       );
@@ -2650,9 +2720,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
       {activeView ===
       'catalog' ? (
-        <div className="space-y-6">
-
-          {/* MAP DISPLAY */}
+        <div className="space-y-6">{/* MAP DISPLAY */}
 
           {mapLibrary && (
             <div
@@ -2991,7 +3059,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                       book.title ||
                       'Untitled Book'
                     }`}
-                    className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between text-left"
+                    className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between text-left min-h-[320px]"
                   >
 
                     <div className="p-4 flex gap-4">
@@ -3005,7 +3073,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                           book.title ||
                           'Book cover'
                         }
-                        className="w-24 h-32 object-cover rounded-md border border-slate-200 bg-slate-50"
+                        className="w-20 h-28 object-cover rounded-md border border-slate-200 bg-slate-50"
                         onError={(
                           event
                         ) => {
@@ -3552,7 +3620,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                       </div>
 
                       {/* =====================================================
-                          PENDING — APPROVE / REJECT
+                          PENDING â€” APPROVE / REJECT
                       ====================================================== */}
 
                       {status === 'pending' && (
@@ -3600,7 +3668,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                       )}
 
                       {/* =====================================================
-                          APPROVED — CONFIRM HANDOVER
+                          APPROVED â€” CONFIRM HANDOVER
                       ====================================================== */}
 
                       {status === 'approved' && (
@@ -3612,7 +3680,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                             <span className="inline-flex h-2.5 w-2.5 rounded-full bg-blue-600" />
 
                             <p className="text-xs font-black uppercase tracking-wider text-blue-800">
-                              Approved — Awaiting Handover
+                              Approved â€” Awaiting Handover
                             </p>
 
                           </div>
@@ -3647,7 +3715,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                       )}
 
                       {/* =====================================================
-                          BORROWED — CONFIRM RETURN
+                          BORROWED â€” CONFIRM RETURN
                       ====================================================== */}
 
                       {status === 'borrowed' && (
@@ -4021,7 +4089,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                           ? formatDateTime(
                               request.requestDate
                             )
-                          : '—'}
+                          : 'â€”'}
                       </p>
 
                       {request.ownerName && (
@@ -4199,7 +4267,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                       : 'text-slate-500'
                   }`}
                 >
-                  ₱
+                  â‚±
                   {currentFine.toFixed(
                     2
                   )}
@@ -4736,7 +4804,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                       </div>
 
                       <p className="text-[10px] text-slate-400 mt-1">
-                        Allowed: 1–30 days
+                        Allowed: 1â€“30 days
                       </p>
 
                     </div>
@@ -5187,7 +5255,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
       {submittingCommunityRequest
         ? 'Submitting Request...'
         : getPersonalBookCopyAvailability(selectedBook).availableCopies === 0
-          ? 'Borrowed — Unavailable'
+          ? 'Borrowed â€” Unavailable'
         : 'Request Community Book'}
     </button>
 
@@ -5220,7 +5288,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
               <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
 
                 <span>
-                  ⭐ Ratings & Reviews
+                  â­ Ratings & Reviews
                 </span>
 
                 <span className="text-slate-400 normal-case font-normal">
@@ -5272,29 +5340,29 @@ const handleConfirmCommunityBookReturn = async (request) => {
                     >
 
                       <option value="5">
-                        ⭐⭐⭐⭐⭐
+                        â­â­â­â­â­
                         {' '}
                         (5/5)
                       </option>
 
                       <option value="4">
-                        ⭐⭐⭐⭐
+                        â­â­â­â­
                         {' '}
                         (4/5)
                       </option>
 
                       <option value="3">
-                        ⭐⭐⭐
+                        â­â­â­
                         {' '}
                         (3/5)
                       </option>
 
                       <option value="2">
-                        ⭐⭐ (2/5)
+                        â­â­ (2/5)
                       </option>
 
                       <option value="1">
-                        ⭐ (1/5)
+                        â­ (1/5)
                       </option>
 
                     </select>
@@ -5374,7 +5442,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                           </span>
 
                           <span className="text-amber-500 font-bold">
-                            {'⭐'.repeat(
+                            {'â­'.repeat(
                               Math.max(
                                 0,
                                 Math.min(
@@ -5436,7 +5504,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                   }{' '}
                   hours or they're released
                   automatically. Overdue
-                  books are charged ₱10 per
+                  books are charged â‚±10 per
                   overdue day.
                 </>
               )}
@@ -5450,4 +5518,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
     </div>
   );
-}
+  };
+
+
+
