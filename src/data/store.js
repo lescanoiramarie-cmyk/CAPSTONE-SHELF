@@ -1911,23 +1911,6 @@ export async function establishVisitorSessionFromQr(
   const normalizedQr =
     normalizeQr(qrCode);
 
-    if (
-      lowerMessage.includes(
-        'uuid'
-      )
-    ) {
-      throw new Error(
-        'The visitor or book ID is invalid. ' +
-          'Visitor: ' +
-          normalizedVisitorId +
-          ', Book: ' +
-          normalizedBookId +
-          ', Resolved visitor auth_user_id: ' +
-          resolvedVisitorId +
-          '. Please check the browser console for the full Supabase error.'
-      );
-    }
-
   const {
     data: qrLoginData,
     error: qrLoginError,
@@ -3242,6 +3225,14 @@ export async function addPersonalBook({
     );
   }
 
+  // ADD THIS RESOLUTION STEP:
+  const resolvedVisitorId =
+    isValidUuid(normalizedVisitorId)
+      ? normalizedVisitorId
+      : await resolveVisitorAuthUserId(
+          normalizedVisitorId
+        );
+
   const {
     data,
     error,
@@ -3250,16 +3241,13 @@ export async function addPersonalBook({
       'add_personal_book',
       {
         p_visitor_id:
-          normalizedVisitorId,
+          resolvedVisitorId, // <-- Use resolved UUID here
 
         p_title:
           normalizedTitle,
 
         p_author:
           normalizedAuthor,
-
-        p_category:
-          normalizedCategory,
 
         p_isbn:
           normalizedIsbn,
