@@ -4267,7 +4267,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                       : 'text-slate-500'
                   }`}
                 >
-                  â‚±
+                  {"\u20B1"}
                   {currentFine.toFixed(
                     2
                   )}
