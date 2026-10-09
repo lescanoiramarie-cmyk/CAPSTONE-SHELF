@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import Draggable from 'react-draggable';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   BookMarked,
@@ -6,16 +7,14 @@ import {
   CalendarDays,
   AlertTriangle,
   Bookmark,
-  CircleHelp,
   CircleDollarSign,
   LogOut,
   MapPinned,
   Megaphone,
-  Menu,
+  MessageCircle,
   Moon,
   QrCode,
   Search,
-  Settings,
   Sun,
   UserRound,
   UsersRound,
@@ -24,6 +23,7 @@ import {
 
 import { useAuth } from '../../context/useAuth.js';
 import { useLibraryData } from '../../context/useLibrary.js';
+import { supabase } from '../../lib/supabaseClient.js';
 
 import OPACCatalog from '../../component/OPACCatalog.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
@@ -131,6 +131,13 @@ export default function VisitorDashboard() {
   const [isSavingQr, setIsSavingQr] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [menuSection, setMenuSection] = useState('profile');
+  const [isFaqOpen, setIsFaqOpen] = useState(false);
+  const faqDragRef = useRef(null);
+
+  const [announcements, setAnnouncements] = useState([]);
+  const [announcementIndex, setAnnouncementIndex] = useState(0);
+  const [isAnnouncementOpen, setIsAnnouncementOpen] = useState(false);
+
 
   const [isDarkAppearance, setIsDarkAppearance] = useState(() => {
     try {
@@ -152,6 +159,47 @@ export default function VisitorDashboard() {
       // Appearance still applies for this session.
     }
   }, [isDarkAppearance]);
+
+      // LOAD LATEST PUBLISHED ANNOUNCEMENT
+    
+      useEffect(() => {
+        let active = true;
+
+        async function loadAnnouncements() {
+          if (!supabase) return;
+
+          try {
+            const { data, error } = await supabase
+              .from('announcements')
+              .select('id, title, message, created_at')
+              .eq('published', true)
+              .order('created_at', { ascending: false });
+
+            if (!active) return;
+
+            if (error) {
+              console.error('Unable to load announcements:', error.message);
+              return;
+            }
+
+            const items = data || [];
+            setAnnouncements(items);
+            setAnnouncementIndex(0);
+            setIsAnnouncementOpen(items.length > 0);
+          } catch (error) {
+            if (active) {
+              console.error('Announcement loading failed:', error);
+            }
+          }
+        }
+
+        loadAnnouncements();
+
+        return () => {
+          active = false;
+        };
+      }, []);
+
 
   // =========================================================
   // QR CODE REFERENCE
@@ -385,46 +433,205 @@ export default function VisitorDashboard() {
         isDarkAppearance ? 'dark bg-slate-900 text-slate-100' : ''
       }`}
     >
+
+      
+            {/* ANNOUNCEMENT POPUP */}
+            {isAnnouncementOpen && announcements[announcementIndex] && (
+              <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+                <button
+                  type="button"
+                  className="absolute inset-0 bg-slate-950/60"
+                  onClick={() => setIsAnnouncementOpen(false)}
+                  aria-label="Close announcement"
+                />
+
+                <section
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="visitor-announcement-title"
+                  className="relative z-10 w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-800"
+                >
+                  <div className="flex items-center justify-between gap-3 bg-[#002046] px-5 py-4 text-white">
+                    <div className="flex items-center gap-3">
+                      <Megaphone size={22} aria-hidden="true" />
+                      <h2
+                        id="visitor-announcement-title"
+                        className="text-lg font-bold"
+                      >
+                        Library Announcement
+                      </h2>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsAnnouncementOpen(false)}
+                      className="rounded-lg p-2 transition hover:bg-white/15"
+                      aria-label="Close announcement"
+                    >
+                      <X size={20} aria-hidden="true" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-3 p-5">
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                      {announcements[announcementIndex].title}
+                    </h3>
+
+                    <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-600 dark:text-slate-300">
+                      {announcements[announcementIndex].message}
+                    </p>
+
+                    <p className="text-xs text-slate-400">
+                      {formatDateTime(
+                        announcements[announcementIndex].created_at
+                      )}
+                    </p>
+
+                    {/* ANNOUNCEMENT NAVIGATION */}
+                    <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-4 dark:border-slate-700">
+                      <button
+                        type="button"
+                        disabled={announcementIndex === 0}
+                        onClick={() =>
+                          setAnnouncementIndex((index) => index - 1)
+                        }
+                        className="rounded-lg border border-slate-300 px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600"
+                      >
+                        Previous
+                      </button>
+
+                      <span className="text-xs text-slate-500 dark:text-slate-300">
+                        {announcementIndex + 1} of {announcements.length}
+                      </span>
+
+                      {announcementIndex < announcements.length - 1 ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setAnnouncementIndex((index) => index + 1)
+                          }
+                          className="rounded-lg bg-[#002046] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#003366]"
+                        >
+                          Next
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setIsAnnouncementOpen(false)}
+                          className="rounded-lg bg-[#002046] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#003366]"
+                        >
+                          Got it
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </section>
+              </div>
+            )}
+
+
       {/* =====================================================
           HEADER
       ====================================================== */}
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#002046] px-4 py-3 text-white shadow-md sm:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
 
-      <header className="bg-[#002046] text-white px-4 sm:px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-md">
-        <div className="flex items-center gap-3">
-          <span className="font-extrabold text-lg tracking-wider">
-            SHELF ILMS
-          </span>
+          {/* LEFT: LOGO AND PORTAL LABEL */}
+          <div className="flex shrink-0 items-center gap-3">
+            <span className="text-lg font-extrabold tracking-wider">
+              SHELF ILMS
+            </span>
 
-          <span className="bg-white/10 text-xs px-2.5 py-1 rounded-full border border-white/20">
-            Visitor Portal
-          </span>
-        </div>
+            <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-xs">
+              Visitor Portal
+            </span>
+          </div>
 
-        <div className="flex items-center justify-between w-full sm:w-auto gap-4">
-          <span className="text-xs text-slate-300">
-            Welcome, <b>{user?.name || 'Visitor'}</b>
-          </span>
+          {/* RIGHT: WELCOME AND USER CONTROLS */}
+          <div className="flex flex-wrap items-center justify-start gap-2 sm:ml-auto sm:justify-end sm:gap-3">
 
-          <button
-            type="button"
-            onClick={() => {
-              setMenuSection('profile');
-              setIsMenuOpen(true);
-            }}
-            className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg border border-white/20 transition"
-            aria-label="Open visitor menu"
-            title="Open visitor menu"
-          >
-            <Menu size={18} aria-hidden="true" />
-          </button>
+            {/* WELCOME */}
+            <span className="mr-1 text-xs text-slate-300">
+              Welcome, <b>{user?.name || 'Visitor'}</b>
+            </span>
+
+            {/* PROFILE */}
+            <button
+              type="button"
+              onClick={() => {
+                setMenuSection('profile');
+                setIsMenuOpen(true);
+              }}
+              className="flex items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-white transition hover:bg-white/20"
+              aria-label="Open profile"
+              title="Profile"
+            >
+              <UserRound size={18} aria-hidden="true" />
+              <span className="text-xs font-semibold">Profile</span>
+            </button>
+
+            {/* DARK MODE */}
+            <button
+              type="button"
+              onClick={() => setIsDarkAppearance((prev) => !prev)}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+              aria-label={
+                isDarkAppearance
+                  ? 'Switch to light mode'
+                  : 'Switch to dark mode'
+              }
+              aria-pressed={isDarkAppearance}
+              title={
+                isDarkAppearance
+                  ? 'Switch to light mode'
+                  : 'Switch to dark mode'
+              }
+            >
+              {isDarkAppearance ? (
+                <Sun size={18} aria-hidden="true" />
+              ) : (
+                <Moon size={18} aria-hidden="true" />
+              )}
+
+              <span className="text-xs font-semibold">
+                {isDarkAppearance ? 'Light Mode' : 'Dark Mode'}
+              </span>
+
+              <span
+                aria-hidden="true"
+                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+                  isDarkAppearance ? 'bg-blue-500' : 'bg-slate-400'
+                }`}
+              >
+                <span
+                  className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                    isDarkAppearance ? 'translate-x-4' : 'translate-x-1'
+                  }`}
+                />
+              </span>
+            </button>
+
+            {/* SIGN OUT */}
+            <button
+              type="button"
+              onClick={logout}
+              className="flex items-center gap-2 rounded-lg border border-red-300/40 bg-red-500/10 px-3 py-2 text-red-200 transition hover:bg-red-500/20"
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <LogOut size={18} aria-hidden="true" />
+              <span className="text-xs font-semibold">Sign Out</span>
+            </button>
+
+          </div>
         </div>
       </header>
 
       {/* =====================================================
           MAIN CONTENT
       ====================================================== */}
+        <main className="mx-auto max-w-7xl space-y-7 px-4 py-6 sm:px-6 sm:py-8 lg:space-y-8">
 
-      <main className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
         {/* =================================================
             PAGE HEADER
         ================================================== */}
@@ -523,67 +730,38 @@ export default function VisitorDashboard() {
         {/* =================================================
             PRIMARY NAVIGATION
         ================================================== */}
-
         <nav
           aria-label="Visitor dashboard"
-          className="flex border-b border-slate-200 dark:border-slate-700 gap-6 overflow-x-auto whitespace-nowrap pb-1"
+          className="sticky top-[76px] z-30 -mx-4 flex gap-2 overflow-x-auto border-b border-slate-200 bg-[#f8fafc]/95 px-4 pb-3 pt-2 backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/95 sm:top-[80px] sm:mx-0 sm:rounded-2xl sm:border sm:p-3"
         >
           {[
-            {
-              id: 'catalog',
-              label: 'Catalog',
-              Icon: BookOpen,
-            },
-            {
-              id: 'categories',
-              label: 'Book Categories',
-              Icon: Bookmark,
-            },
-            {
-              id: 'communityBooks',
-              label: 'Community Books',
-              Icon: UsersRound,
-            },
-            {
-              id: 'personalBooks',
-              label: 'My Personal Books',
-              Icon: BookMarked,
-            },
-            {
-              id: 'myBorrows',
-              label: 'My Requests & Borrows',
-              Icon: CalendarDays,
-            },
-            {
-              id: 'map',
-              label: 'Library Map',
-              Icon: MapPinned,
-            },
-            {
-              id: 'services',
-              label: 'Announcements & Feedback',
-              Icon: Megaphone,
-            },
-          ].map(({ Icon, ...tabItem }) => (
+            { id: 'catalog', label: 'Catalog', Icon: BookOpen },
+            { id: 'categories', label: 'Book Categories', Icon: Bookmark },
+            { id: 'communityBooks', label: 'Community Books', Icon: UsersRound },
+            { id: 'personalBooks', label: 'My Personal Books', Icon: BookMarked },
+            { id: 'myBorrows', label: 'My Requests & Borrows', Icon: CalendarDays },
+            { id: 'map', label: 'Library Map', Icon: MapPinned },
+            { id: 'services', label: 'Announcements & Feedback', Icon: Megaphone },
+          ].map(({ id, label, Icon }) => (
             <button
+              key={id}
               type="button"
-              key={tabItem.id}
               onClick={() => {
-                setTab(tabItem.id);
+                setTab(id);
 
-                if (tabItem.id === 'catalog') {
+                if (id === 'catalog') {
                   setCatalogResetKey((key) => key + 1);
                 }
               }}
-              className={`pb-3 text-sm font-bold transition flex-shrink-0 flex items-center gap-1.5 ${
-                tab === tabItem.id
-                  ? 'text-amber-700 dark:text-amber-400 border-b-2 border-amber-500'
-                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition sm:px-4 sm:text-sm ${
+                tab === id
+                  ? 'bg-[#002046] text-white shadow-sm dark:bg-blue-600'
+                  : 'border border-transparent text-slate-600 hover:border-slate-200 hover:bg-white hover:text-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-white'
               }`}
-              aria-current={tab === tabItem.id ? 'page' : undefined}
+              aria-current={tab === id ? 'page' : undefined}
             >
-              <Icon size={16} aria-hidden="true" />
-              {tabItem.label}
+              <Icon size={17} aria-hidden="true" />
+              <span>{label}</span>
             </button>
           ))}
         </nav>
@@ -719,45 +897,34 @@ export default function VisitorDashboard() {
 
             {/* MENU SECTIONS */}
 
-            <nav
-              className="grid grid-cols-3 border-b border-slate-200 dark:border-slate-700"
-              aria-label="Visitor menu sections"
-            >
-              {[
-                {
-                  id: 'profile',
-                  label: 'Profile',
-                  Icon: UserRound,
-                },
-                {
-                  id: 'faq',
-                  label: 'FAQ',
-                  Icon: CircleHelp,
-                },
-                {
-                  id: 'settings',
-                  label: 'Settings',
-                  Icon: Settings,
-                },
-              ].map(({ id, label, Icon }) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setMenuSection(id)}
-                  aria-current={
-                    menuSection === id ? 'page' : undefined
-                  }
-                  className={`flex flex-col items-center gap-1 border-b-2 px-2 py-3 text-xs font-semibold ${
-                    menuSection === id
-                      ? 'border-[#002046] text-[#002046] dark:border-blue-400 dark:text-blue-400'
-                      : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                  }`}
-                >
-                  <Icon size={18} aria-hidden="true" />
-                  {label}
-                </button>
-              ))}
-            </nav>
+            {/* MENU SECTIONS */}
+<nav
+  className="grid grid-cols-1 border-b border-slate-200 dark:border-slate-700"
+  aria-label="Visitor menu sections"
+>
+  {[
+    {
+      id: 'profile',
+      label: 'Profile',
+      Icon: UserRound,
+    },
+  ].map(({ id, label, Icon }) => (
+    <button
+      key={id}
+      type="button"
+      onClick={() => setMenuSection(id)}
+      aria-current={menuSection === id ? 'page' : undefined}
+      className={`flex items-center justify-center gap-2 border-b-2 px-2 py-3 text-xs font-semibold ${
+        menuSection === id
+          ? 'border-[#002046] text-[#002046] dark:border-blue-400 dark:text-blue-400'
+          : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+      }`}
+    >
+      <Icon size={18} aria-hidden="true" />
+      {label}
+    </button>
+  ))}
+</nav>
 
             {/* MENU CONTENT */}
 
@@ -1079,86 +1246,77 @@ export default function VisitorDashboard() {
                   </section>
                 </div>
               )}
-
-              {/* =================================================
-                  FAQ
-              ================================================== */}
-
-              {menuSection === 'faq' && <FAQ />}
-
-              {/* =================================================
-                  SETTINGS
-              ================================================== */}
-
-              {menuSection === 'settings' && (
-                <div className="space-y-6">
-                  <section className="space-y-3">
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                      Appearance Settings
-                    </h3>
-
-                    <div className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-                      <div className="flex items-center gap-2">
-                        {isDarkAppearance ? (
-                          <Moon
-                            size={18}
-                            className="text-slate-400"
-                          />
-                        ) : (
-                          <Sun
-                            size={18}
-                            className="text-amber-500"
-                          />
-                        )}
-
-                        <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                          Dark Mode
-                        </span>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setIsDarkAppearance((prev) => !prev)
-                        }
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          isDarkAppearance
-                            ? 'bg-[#002046] dark:bg-blue-600'
-                            : 'bg-slate-300'
-                        }`}
-                        aria-label={
-                          isDarkAppearance
-                            ? 'Disable dark mode'
-                            : 'Enable dark mode'
-                        }
-                      >
-                        <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            isDarkAppearance
-                              ? 'translate-x-6'
-                              : 'translate-x-1'
-                          }`}
-                        />
-                      </button>
-                    </div>
-                  </section>
-
-                  <section className="pt-4 border-t border-slate-200 dark:border-slate-700">
-                    <button
-                      type="button"
-                      onClick={logout}
-                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-50 dark:bg-red-950/40 p-2.5 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition"
-                    >
-                      <LogOut size={16} aria-hidden="true" />
-                      Sign out of Visitor Account
-                    </button>
-                  </section>
-                </div>
-              )}
             </div>
           </aside>
         </div>
       )}
+
+      {/* Floating FAQ Chatbot */}
+      <Draggable
+        nodeRef={faqDragRef}
+        handle=".faq-drag-handle, .faq-floating-button"
+        bounds="body"
+      >
+        <div
+          ref={faqDragRef}
+          className="fixed bottom-5 right-5 z-[100] w-fit"
+        >
+          {/* FAQ Chatbot Window */}
+          {isFaqOpen && (
+            <div className="mb-4 w-[min(92vw,400px)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800">
+              {/* Draggable Header */}
+              <div className="faq-drag-handle flex cursor-move items-center justify-between gap-3 bg-[#002046] px-4 py-3 text-white">
+                <div className="min-w-0">
+                  <h3 className="font-bold">
+                    SHELF FAQ Assistant
+                  </h3>
+
+                  <p className="text-xs text-slate-200">
+                    Ask questions about SHELF and library services
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsFaqOpen(false)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                  aria-label="Close FAQ chatbot"
+                  title="Close chatbot"
+                >
+                  <X size={20} aria-hidden="true" />
+                </button>
+              </div>
+
+              {/* FAQ Content */}
+              <div className="max-h-[70vh] overflow-y-auto bg-white p-3 dark:bg-slate-800">
+                <FAQ />
+              </div>
+            </div>
+          )}
+
+          {/* Floating Chatbot Button */}
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setIsFaqOpen((open) => !open)}
+              className="faq-floating-button flex h-14 w-14 items-center justify-center rounded-full bg-[#002046] text-white shadow-xl transition hover:scale-105 hover:bg-blue-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-300"
+              aria-label={
+                isFaqOpen
+                  ? 'Close FAQ chatbot'
+                  : 'Open FAQ chatbot'
+              }
+              aria-expanded={isFaqOpen}
+              title="SHELF FAQ Assistant"
+            >
+              {isFaqOpen ? (
+                <X size={24} aria-hidden="true" />
+              ) : (
+                <MessageCircle size={24} aria-hidden="true" />
+              )}
+            </button>
+          </div>
+        </div>
+      </Draggable>
     </div>
   );
 }

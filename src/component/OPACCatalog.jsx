@@ -222,6 +222,7 @@ export default function OPACCatalog({
 
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState('title-asc');
 
   const [categorySelection, setCategorySelection] = useState({
     resetKey: catalogResetKey,
@@ -1125,6 +1126,7 @@ if (!cancelled) {
             'Unavailable' &&
             !isAvailable);
 
+        
         return (
           matchesSearch &&
           matchesCategory &&
@@ -1132,7 +1134,57 @@ if (!cancelled) {
           matchesAvailability
         );
       }
-    );
+    ).sort((a, b) => {
+      switch (sortBy) {
+        case 'title-asc':
+          return String(a.title || '').localeCompare(
+            String(b.title || ''),
+            undefined,
+            { sensitivity: 'base' }
+          );
+
+        case 'title-desc':
+          return String(b.title || '').localeCompare(
+            String(a.title || ''),
+            undefined,
+            { sensitivity: 'base' }
+          );
+
+        case 'author-asc':
+          return String(a.author || '').localeCompare(
+            String(b.author || ''),
+            undefined,
+            { sensitivity: 'base' }
+          );
+
+        case 'author-desc':
+          return String(b.author || '').localeCompare(
+            String(a.author || ''),
+            undefined,
+            { sensitivity: 'base' }
+          );
+
+        case 'newest':
+          return new Date(b.createdAt || b.created_at || 0).getTime() -
+            new Date(a.createdAt || a.created_at || 0).getTime();
+
+        case 'oldest':
+          return new Date(a.createdAt || a.created_at || 0).getTime() -
+            new Date(b.createdAt || b.created_at || 0).getTime();
+
+        case 'available':
+          return Number(b.availableCopies || 0) -
+            Number(a.availableCopies || 0);
+
+        case 'unavailable':
+          return Number(a.availableCopies || 0) -
+            Number(b.availableCopies || 0);
+
+        default:
+          return 0;
+      }
+    });
+
 
     console.log('OPAC FILTER DEBUG:', {
   activeView,
@@ -2806,6 +2858,26 @@ const handleConfirmCommunityBookReturn = async (request) => {
               </button>
             )}
 
+            
+            <select
+              value={sortBy}
+              onChange={(event) =>
+                setSortBy(event.target.value)
+              }
+              aria-label="Sort catalog books"
+              className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none"
+            >
+              <option value="title-asc">Title (A–Z)</option>
+              <option value="title-desc">Title (Z–A)</option>
+              <option value="author-asc">Author (A–Z)</option>
+              <option value="author-desc">Author (Z–A)</option>
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="available">Most Available</option>
+              <option value="unavailable">Least Available</option>
+            </select>
+
+
             {!libraryFilter && (
               <select
                 value={
@@ -3059,7 +3131,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                       book.title ||
                       'Untitled Book'
                     }`}
-                    className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between text-left min-h-[320px]"
+                    className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between text-left"
                   >
 
                     <div className="p-4 flex gap-4">

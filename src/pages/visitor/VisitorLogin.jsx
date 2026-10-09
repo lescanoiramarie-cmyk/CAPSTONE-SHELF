@@ -7,6 +7,7 @@ import {
   EyeOff,
   Camera,
   Upload,
+  ArrowLeft,
 } from 'lucide-react';
 
 import { useAuth } from '../../context/useAuth.js';
@@ -1709,6 +1710,16 @@ export default function VisitorLogin() {
   };
 
   // =========================================================
+  // BACK BUTTON
+  // =========================================================
+
+  const handleBack = () => {
+  setError('');
+  setCanResendVisitorOtp(false);
+  setView('login');
+};
+
+  // =========================================================
   // UI
   // =========================================================
 
@@ -1767,8 +1778,22 @@ export default function VisitorLogin() {
           RIGHT PANEL
       ===================================================== */}
 
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-8 lg:p-12 overflow-y-auto">
+      <div className="relative w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-8 lg:p-12 overflow-y-auto">
         <div className="w-full max-w-md bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-slate-200 space-y-6 my-auto">
+          {view === 'register' && (
+  <div className="sticky top-0 z-20 -mt-1 flex justify-start bg-white pb-1">
+    <button
+      type="button"
+      onClick={handleBack}
+      className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-[#002046]"
+      aria-label="Go back"
+      title="Go back"
+    >
+      <ArrowLeft size={16} aria-hidden="true" />
+      Back
+    </button>
+  </div>
+)}
 
           {/* HEADER */}
 

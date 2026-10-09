@@ -201,6 +201,44 @@ def generate_gemini_analytics(
         ) from exc
 
 
+SHELF_TOPIC_KEYWORDS = {
+    "shelf", "library", "libraries", "librarian", "books", "book",
+    "borrow", "borrowing", "return", "returning", "renewal", "renew",
+    "reservation", "reserve", "catalog", "opac", "isbn",
+    "qr", "attendance", "visitor", "visitors", "account", "login",
+    "register", "registration", "password", "otp", "fine", "due date",
+    "overdue", "availability", "available", "unavailable", "branch",
+    "branches", "opening hours", "operating hours", "recommendation",
+    "recommendations", "feedback", "transaction", "transactions",
+    "inventory", "search books", "book request", "pickup"
+}
+
+
+def is_shelf_related(question: str, faq_corpus: list[FAQEntry]) -> bool:
+    normalized_question = question.lower()
+    words = set(normalized_question.replace("-", " ").replace("?", " ").split())
+
+    # Allow questions that clearly match an existing FAQ question.
+    for item in faq_corpus:
+        faq_words = set(
+            item.question.lower().replace("-", " ").replace("?", " ").split()
+        )
+        meaningful_words = {
+            word.strip(".,!():;")
+            for word in faq_words
+            if len(word.strip(".,!():;")) > 3
+        }
+        if meaningful_words and len(words.intersection(meaningful_words)) >= 2:
+            return True
+
+    # Check for recognized SHELF and library-related terms.
+    padded_question = f" {normalized_question} "
+    return any(
+        keyword in words or f" {keyword} " in padded_question
+        for keyword in SHELF_TOPIC_KEYWORDS
+    )
+
+
 def generate_gemini_faq_answer(request: FAQAnswerRequest) -> FAQAnswer:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -269,9 +307,20 @@ def health():
     }
 
 
+
 @app.post("/faq/answer", response_model=FAQAnswer)
 def answer_faq(request: FAQAnswerRequest):
+    if not is_shelf_related(request.question, request.faq_corpus):
+        return FAQAnswer(
+            answer=(
+                "Sorry, I can only answer questions about SHELF and library "
+                "services. Please ask me about book borrowing, returns, "
+                "reservations, QR attendance, accounts, or the library catalog."
+            )
+        )
+
     return generate_gemini_faq_answer(request)
+
 
 
 @app.post("/forecast")

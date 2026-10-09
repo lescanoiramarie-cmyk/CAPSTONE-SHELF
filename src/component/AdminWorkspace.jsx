@@ -1007,98 +1007,81 @@ function AdminWorkspace({
    * =========================================================================
    */
 
-  const handleAnnouncementSave =
-    async (event) => {
-      event.preventDefault();
+  
+const handleAnnouncementSave = async (event) => {
+  event.preventDefault();
 
-      setError('');
+  setError('');
+  setMessage('');
 
-      const values = {
-        title:
-          announcementForm.title.trim(),
+  if (!supabase) {
+    setError('Supabase connection is unavailable.');
+    return;
+  }
 
-        message:
-          announcementForm.message.trim(),
+  const title = announcementForm.title.trim();
+  const messageText = announcementForm.message.trim();
 
-        created_by:
-          user?.name ||
-          user?.email,
-      };
+  if (!title || !messageText) {
+    setError('Please enter both the title and message.');
+    return;
+  }
 
-      const result =
-        editingAnnouncementId
-          ? await supabase
-              .from('announcements')
-              .update({
-                ...values,
-                updated_at:
-                  new Date().toISOString(),
-              })
-              .eq(
-                'id',
-                editingAnnouncementId
-              )
-          : await supabase
-              .from('announcements')
-              .insert(values);
-
-      if (result.error) {
-        setError(
-          result.error.message
-        );
-
-        return;
-      }
-
-      setAnnouncementForm({
-        title: '',
-        message: '',
-      });
-
-      setEditingAnnouncementId(
-        null
-      );
-
-      setMessage(
-        'Announcement saved.'
-      );
-
-      setTab('announcements');
-
-      const { data } =
-        await supabase
-          .from('announcements')
-          .select('*')
-          .order('created_at', {
-            ascending: false,
-          });
-
-      setAnnouncements(
-        data || []
-      );
+  try {
+    const values = {
+      title,
+      message: messageText,
+      created_by: user?.name || user?.email || 'Admin',
+      published: true,
     };
 
-  const handleAnnouncementEdit = (
-    announcement
-  ) => {
+    const result = editingAnnouncementId
+      ? await supabase
+          .from('announcements')
+          .update({
+            ...values,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', editingAnnouncementId)
+      : await supabase
+          .from('announcements')
+          .insert(values);
+
+    if (result.error) {
+      setError(`Unable to publish announcement: ${result.error.message}`);
+      return;
+    }
+
+    const { data, error: fetchError } = await supabase
+      .from('announcements')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (fetchError) {
+      setError(
+        `Announcement was saved, but the list could not refresh: ${fetchError.message}`
+      );
+      return;
+    }
+
+    setAnnouncements(data || []);
+
     setAnnouncementForm({
-      title:
-        announcement.title ||
-        '',
-      message:
-        announcement.message ||
-        '',
+      title: '',
+      message: '',
     });
 
-    setEditingAnnouncementId(
-      announcement.id
+    setEditingAnnouncementId(null);
+
+    setMessage('Announcement published successfully.');
+    setTab('announcements');
+  } catch (error) {
+    setError(
+      error?.message || 'An unexpected error occurred while publishing.'
     );
+  }
+};
 
-    globalThis.scrollTo({
-      top: 0,
-      behavior: 'smooth',
-    });
-  };
 
   const handleAnnouncementDelete =
     async (id) => {

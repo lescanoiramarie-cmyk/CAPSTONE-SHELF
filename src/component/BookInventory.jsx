@@ -34,6 +34,7 @@ export default function BookInventory() {
   const [saving, setSaving] = useState(false);
   const [mutationError, setMutationError] = useState('');
   const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState('title-asc');
   const [loadingApiBooks, setLoadingApiBooks] = useState(false);
   const [apiBooksError, setApiBooksError] = useState('');
 
@@ -42,12 +43,66 @@ export default function BookInventory() {
     ? books.filter((b) => b.libraryId === subAdminLibraryId) 
     : books;
 
-  const filtered = scopedBooks.filter(
-    (b) =>
-      b.title.toLowerCase().includes(search.toLowerCase()) ||
-      b.author.toLowerCase().includes(search.toLowerCase()) ||
-      b.isbn.includes(search)
-  );
+  const filtered = scopedBooks
+  .filter((b) => {
+    const query = search.trim().toLowerCase();
+
+    return (
+      String(b.title || '').toLowerCase().includes(query) ||
+      String(b.author || '').toLowerCase().includes(query) ||
+      String(b.isbn || '').toLowerCase().includes(query)
+    );
+  })
+  .sort((a, b) => {
+    switch (sortBy) {
+      case 'title-asc':
+        return String(a.title || '').localeCompare(
+          String(b.title || ''),
+          undefined,
+          { sensitivity: 'base' }
+        );
+
+      case 'title-desc':
+        return String(b.title || '').localeCompare(
+          String(a.title || ''),
+          undefined,
+          { sensitivity: 'base' }
+        );
+
+      case 'author-asc':
+        return String(a.author || '').localeCompare(
+          String(b.author || ''),
+          undefined,
+          { sensitivity: 'base' }
+        );
+
+      case 'author-desc':
+        return String(b.author || '').localeCompare(
+          String(a.author || ''),
+          undefined,
+          { sensitivity: 'base' }
+        );
+
+      case 'newest':
+        return new Date(b.createdAt || b.created_at || 0).getTime() -
+          new Date(a.createdAt || a.created_at || 0).getTime();
+
+      case 'oldest':
+        return new Date(a.createdAt || a.created_at || 0).getTime() -
+          new Date(b.createdAt || b.created_at || 0).getTime();
+
+      case 'available':
+        return Number(b.availableCopies || 0) -
+          Number(a.availableCopies || 0);
+
+      case 'unavailable':
+        return Number(a.availableCopies || 0) -
+          Number(b.availableCopies || 0);
+
+      default:
+        return 0;
+    }
+  });
 
   const startAdd = () => {
     setEditingId(null);
@@ -143,33 +198,54 @@ export default function BookInventory() {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-3 justify-between">
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search inventory…"
-          className="flex-1 max-w-sm px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
-        />
-        <div className="flex gap-2">
-          {isSubAdmin && (
-            <button
-              type="button"
-              onClick={handleLoadApiBooks}
-              disabled={loadingApiBooks || !subAdminLibraryId}
-              className="text-xs font-bold px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition disabled:opacity-50"
-            >
-              {loadingApiBooks ? 'Loading API Books...' : 'Load 100+ API Books'}
-            </button>
-          )}
-          <button
-            onClick={startAdd}
-            className="text-xs font-bold px-4 py-2.5 rounded-lg bg-[#002046] text-white hover:opacity-90 transition"
-          >
-            <Plus size={15} className="mr-1 inline-block align-[-3px]" aria-hidden="true" /> Add Book
-          </button>
-        </div>
-      </div>
+      
+<div className="flex flex-col sm:flex-row gap-3 justify-between">
+  <input
+    type="text"
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    placeholder="Search inventory…"
+    className="flex-1 max-w-sm px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+  />
+
+  {/* Sort Books */}
+  <select
+    value={sortBy}
+    onChange={(e) => setSortBy(e.target.value)}
+    aria-label="Sort books"
+    className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+  >
+    <option value="title-asc">Title (A–Z)</option>
+    <option value="title-desc">Title (Z–A)</option>
+    <option value="author-asc">Author (A–Z)</option>
+    <option value="author-desc">Author (Z–A)</option>
+    <option value="newest">Newest First</option>
+    <option value="oldest">Oldest First</option>
+    <option value="available">Most Available</option>
+    <option value="unavailable">Least Available</option>
+  </select>
+
+  <div className="flex gap-2">
+    {isSubAdmin && (
+      <button
+        type="button"
+        onClick={handleLoadApiBooks}
+        disabled={loadingApiBooks || !subAdminLibraryId}
+        className="text-xs font-bold px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition disabled:opacity-50"
+      >
+        {loadingApiBooks ? 'Loading API Books...' : 'Load 100+ API Books'}
+      </button>
+    )}
+
+    <button
+      onClick={startAdd}
+      className="text-xs font-bold px-4 py-2.5 rounded-lg bg-[#002046] text-white hover:opacity-90 transition"
+    >
+      <Plus size={15} className="mr-1 inline-block align-[-3px]" aria-hidden="true" /> Add Book
+    </button>
+  </div>
+</div>
+
 
       {apiBooksError && (
         <p role="alert" className="text-xs text-red-600">

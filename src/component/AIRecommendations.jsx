@@ -52,20 +52,20 @@ export default function AIRecommendations({ onRequestBorrow }) {
               <Sparkles size={18} aria-hidden="true" />
             </span>
             <h3 className="text-base font-bold text-white">
-              Recommended for You
+              {isColdStart ? 'Popular for SHELF Visitors' : 'Recommended for You'}
             </h3>
           </div>
           <p className="text-xs text-slate-300 mt-1">
             {isColdStart
-              ? 'Available titles from the catalog to get you started:'
-              : 'Suggested using your borrowing history and recent OPAC searches, when available:'}
+              ? 'Popular across SHELF activity, based on aggregated borrowing and available search trends:'
+              : 'Personalized from your own borrowing history and recent OPAC searches:'}
           </p>
         </div>
 
         {topCategories.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[10px] uppercase font-bold text-slate-400">
-              {isColdStart ? 'Categories:' : 'Interests:'}
+              {isColdStart ? 'Popular categories:' : 'Your interests:'}
             </span>
             {topCategories.map((cat) => (
               <span
