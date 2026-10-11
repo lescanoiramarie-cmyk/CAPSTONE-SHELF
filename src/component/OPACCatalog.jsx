@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/useAuth.js';
 import {
   BookOpen,
@@ -194,6 +194,7 @@ export default function OPACCatalog({
 
   const {
   books = [],
+  externalCatalogBooks = [],
   borrowRequests = [],
   libraries = [],
   personalBooks = [],
@@ -215,7 +216,7 @@ export default function OPACCatalog({
   PICKUP_WINDOW_HOURS,
   BORROW_PERIOD_DAYS,
 } = useLibrary();
-  
+
   // =========================================================
   // SEARCH / FILTER STATES
   // =========================================================
@@ -1042,99 +1043,350 @@ if (!cancelled) {
       );
     }
   };
-
+    // =========================================================
+  // FILTER BOOKS — PHYSICAL INVENTORY + EXTERNAL DISCOVERY
   // =========================================================
-  // FILTER BOOKS
-  // =========================================================
 
-  const normalizedSearch =
-    searchTerm
-      .trim()
-      .toLowerCase();
+  const normalizedSearch = searchTerm.trim().toLowerCase();
 
-  const filteredBooks =
-    books.filter(
-      (book) => {
-        const title =
-          String(
-            book.title || ''
-          ).toLowerCase();
+  const normalizeMatchText = (value) =>
+    String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
 
-        const author =
-          String(
-            book.author || ''
-          ).toLowerCase();
+  // Physical inventory remains the source of borrowable copies.
+  const physicalIsbns = new Set(
+    books
+      .map((book) =>
+        String(book.isbn || '').replace(/\D/g, '')
+      )
+      .filter(Boolean)
+  );
 
-        const isbn =
-          String(
-            book.isbn || ''
-          ).toLowerCase();
+  const physicalTitleAuthor = new Set(
+    books.map(
+      (book) =>
+        `${normalizeMatchText(book.title)}|${normalizeMatchText(book.author)}`
+    )
+  );
 
-        const category =
-          String(
-            book.category || ''
-          ).toLowerCase();
+  const physicalTitles = new Set(
+    books
+      .map((book) => normalizeMatchText(book.title))
+      .filter(Boolean)
+  );
 
-        const matchesSearch =
-          normalizedSearch === '' ||
-          title.includes(
-            normalizedSearch
-          ) ||
-          author.includes(
-            normalizedSearch
-          ) ||
-          isbn.includes(
-            normalizedSearch
-          ) ||
-          category.includes(
-            normalizedSearch
+  // External books are shown only in the main OPAC catalog.
+  // Do not show an external duplicate when a physical copy exists.
+  const externalDiscoveryBooks =
+    activeView === 'catalog'
+      ? externalCatalogBooks.filter((book) => {
+          const isbn = String(book.isbn || '').replace(/\D/g, '');
+          const title = normalizeMatchText(book.title);
+          const author = normalizeMatchText(book.author);
+          const titleAuthor = `${title}|${author}`;
+
+          const matchesPhysicalIsbn =
+            isbn && physicalIsbns.has(isbn);
+
+          const matchesPhysicalTitleAuthor =
+            title &&
+            author &&
+            physicalTitleAuthor.has(titleAuthor);
+
+          const matchesPhysicalTitleWithoutAuthor =
+            title &&
+            !author &&
+            physicalTitles.has(title);
+
+          return !(
+            matchesPhysicalIsbn ||
+            matchesPhysicalTitleAuthor ||
+            matchesPhysicalTitleWithoutAuthor
           );
+        })
+      : [];
 
-        const matchesCategory =
-          selectedCategory ===
-            'All' ||
-          String(
-            book.category ||
-              'Uncategorized'
-          )
-            .trim()
-            .toLocaleLowerCase() ===
-            selectedCategory.toLocaleLowerCase();
 
-        const matchesLibrary =
-          libraryFilter
-            ? book.libraryId ===
-              libraryFilter
-            : selectedLibrary ===
-                'All' ||
-              book.libraryId ===
-                selectedLibrary;
+const normalizeCatalogValue = (value) =>
+  String(value ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
 
-        const isAvailable =
-          Number(
-            book.availableCopies ||
-              0
-          ) > 0;
+const normalizeCatalogIsbn = (value) =>
+  String(value ?? '')
+    .replace(/[^0-9]/g, '');
 
-        const matchesAvailability =
-          selectedAvailability ===
-            'All' ||
-          (selectedAvailability ===
-            'Available' &&
-            isAvailable) ||
-          (selectedAvailability ===
-            'Unavailable' &&
-            !isAvailable);
 
-        
-        return (
-          matchesSearch &&
-          matchesCategory &&
-          matchesLibrary &&
-          matchesAvailability
-        );
-      }
-    ).sort((a, b) => {
+const targetDuplicateTitle =
+  normalizeCatalogValue('Essentials of Bridge Engineering');
+
+const targetDuplicateRecords = books.filter(
+  (book) =>
+    normalizeCatalogValue(book.title) ===
+    targetDuplicateTitle
+);
+
+console.log(
+  'SHELF TARGET BOOK RECORDS:',
+  JSON.stringify(
+    targetDuplicateRecords.map((book) => ({
+      id: book.id,
+      title: book.title,
+      author: book.author,
+      isbn: book.isbn,
+      libraryId: book.libraryId,
+      libraryName: book.libraryName,
+      totalCopies: book.totalCopies,
+      availableCopies: book.availableCopies,
+      rawLibraryFields: Object.fromEntries(
+        Object.entries(book).filter(([key]) =>
+          /library|branch|location/i.test(key)
+        )
+      ),
+    })),
+    null,
+    2
+  )
+);
+
+
+const physicalBookGroups = new Map();
+
+for (const book of books) {
+  const title = normalizeCatalogValue(book.title);
+  const author = normalizeCatalogValue(book.author);
+  const isbn = normalizeCatalogIsbn(book.isbn);
+  const libraryId = normalizeCatalogValue(book.libraryId);
+
+  // Kung kulang ang title, author, o branch identity,
+  // panatilihin ang record bilang sariling card.
+  if (!title || !author || !libraryId) {
+    physicalBookGroups.set(`unique:${String(book.id)}`, book);
+    continue;
+  }
+
+  // Kung may ISBN, kailangan itong tumugma.
+  // Kung parehong walang ISBN, gamitin ang title,
+  // author, at branch para makilala ang duplicate.
+  const key = [
+    libraryId,
+    title,
+    author,
+    isbn ? `isbn:${isbn}` : 'no-isbn',
+  ].join('::');
+
+  const existing = physicalBookGroups.get(key);
+
+  if (!existing) {
+    physicalBookGroups.set(key, book);
+    continue;
+  }
+
+  // Piliin ang record na may mas maraming available copies
+  // para sa display. Hindi ito nag-a-update sa database.
+  const existingAvailable = Number(
+    existing.availableCopies ??
+      existing.available_copies ??
+      0
+  );
+
+  const currentAvailable = Number(
+    book.availableCopies ??
+      book.available_copies ??
+      0
+  );
+
+  if (currentAvailable > existingAvailable) {
+    physicalBookGroups.set(key, book);
+  }
+}
+
+const deduplicatedPhysicalBooks = [
+  ...physicalBookGroups.values(),
+];
+
+
+const targetTitle = normalizeCatalogValue(
+  'Essentials of bridge engineering'
+);
+
+console.log(
+  'SHELF TARGET AFTER DEDUP:',
+  deduplicatedPhysicalBooks
+    .filter(
+      (book) =>
+        normalizeCatalogValue(book.title) === targetTitle &&
+        normalizeCatalogValue(book.author) ===
+          normalizeCatalogValue('D. Johnson Victor')
+    )
+    .map((book) => ({
+      id: book.id,
+      title: book.title,
+      author: book.author,
+      isbn: book.isbn,
+      libraryId: book.libraryId,
+      availableCopies: book.availableCopies,
+    }))
+);
+
+const duplicateTitleBranchGroups = new Map();
+
+for (const book of deduplicatedPhysicalBooks) {
+  const title = String(book.title || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+
+  const libraryId = String(book.libraryId || '');
+
+  if (!title || !libraryId) continue;
+
+  const key = `${title}::${libraryId}`;
+
+  if (!duplicateTitleBranchGroups.has(key)) {
+    duplicateTitleBranchGroups.set(key, []);
+  }
+
+  duplicateTitleBranchGroups.get(key).push({
+    id: book.id,
+    title: book.title,
+    author: book.author,
+    isbn: book.isbn,
+    libraryId: book.libraryId,
+    libraryName: book.libraryName,
+    totalCopies: book.totalCopies,
+    availableCopies: book.availableCopies,
+    external: book.isExternalCatalog,
+  });
+}
+
+const remainingDuplicates = [
+  ...duplicateTitleBranchGroups.entries(),
+]
+  .filter(([, entries]) => entries.length > 1)
+  .map(([key, entries]) => ({ key, entries }));
+
+console.log(
+  'SHELF REMAINING PHYSICAL DUPLICATES:',
+  JSON.stringify(remainingDuplicates, null, 2)
+);
+
+
+console.group('SHELF OPAC DUPLICATE DIAGNOSTIC');
+
+console.log('Physical books received:', books.length);
+console.log(
+  'Physical books after deduplication:',
+  deduplicatedPhysicalBooks.length
+);
+
+const diagnosticGroups = new Map();
+
+for (const [key, entries] of diagnosticGroups) {
+  if (
+    key.includes('essentials of bridge engineering') &&
+    entries.length > 1
+  ) {
+    console.log(
+      'ESSENTIALS OF BRIDGE ENGINEERING - DUPLICATE DETAILS:',
+      entries.map((book) => ({
+        id: book.id,
+        title: book.title,
+        author: book.author,
+        isbn: book.isbn,
+        libraryId: book.libraryId,
+        totalCopies: book.totalCopies,
+        availableCopies: book.availableCopies,
+        external: book.isExternalCatalog,
+      }))
+    );
+  }
+}
+
+console.groupEnd();
+
+const catalogSourceBooks = [
+  ...deduplicatedPhysicalBooks,
+  ...externalDiscoveryBooks,
+];
+
+
+console.log('SHELF CATALOG SOURCE BREAKDOWN', {
+  physicalReceived: books.length,
+  physicalAfterDedup: deduplicatedPhysicalBooks.length,
+  externalDiscoveryCount: externalDiscoveryBooks.length,
+  catalogSourceCount: catalogSourceBooks.length,
+});
+
+
+console.log(
+  'SHELF EXTERNAL DISCOVERY BOOK DETAILS',
+  JSON.stringify(
+    externalDiscoveryBooks.map((book) => ({
+      id: book.id,
+      title: book.title,
+      author: book.author,
+      isbn: book.isbn,
+      libraryId: book.libraryId,
+      libraryName: book.libraryName,
+      external: book.isExternalCatalog,
+    })),
+    null,
+    2
+  )
+);
+
+
+  const filteredBooks = catalogSourceBooks
+    .filter((book) => {
+      const isExternal = book.isExternalCatalog === true;
+
+      const title = String(book.title || '').toLowerCase();
+      const author = String(book.author || '').toLowerCase();
+      const isbn = String(book.isbn || '').toLowerCase();
+      const category = String(book.category || '').toLowerCase();
+
+      const matchesSearch =
+        normalizedSearch === '' ||
+        title.includes(normalizedSearch) ||
+        author.includes(normalizedSearch) ||
+        isbn.includes(normalizedSearch) ||
+        category.includes(normalizedSearch);
+
+      const matchesCategory =
+        selectedCategory === 'All' ||
+        String(book.category || 'Uncategorized')
+          .trim()
+          .toLowerCase() === selectedCategory.toLowerCase();
+
+      // External catalog records are global discovery records,
+      // not records assigned to a specific library branch.
+      const matchesLibrary = isExternal
+        ? true
+        : libraryFilter
+          ? book.libraryId === libraryFilter
+          : selectedLibrary === 'All' ||
+            book.libraryId === selectedLibrary;
+
+      const isAvailable =
+        !isExternal &&
+        Number(book.availableCopies || 0) > 0;
+
+      const matchesAvailability =
+        selectedAvailability === 'All' ||
+        (selectedAvailability === 'Available' && isAvailable) ||
+        (selectedAvailability === 'Unavailable' && !isAvailable);
+
+      return (
+        matchesSearch &&
+        matchesCategory &&
+        matchesLibrary &&
+        matchesAvailability
+      );
+    })
+    .sort((a, b) => {
       switch (sortBy) {
         case 'title-asc':
           return String(a.title || '').localeCompare(
@@ -1165,20 +1417,28 @@ if (!cancelled) {
           );
 
         case 'newest':
-          return new Date(b.createdAt || b.created_at || 0).getTime() -
-            new Date(a.createdAt || a.created_at || 0).getTime();
+          return (
+            new Date(b.createdAt || b.created_at || 0).getTime() -
+            new Date(a.createdAt || a.created_at || 0).getTime()
+          );
 
         case 'oldest':
-          return new Date(a.createdAt || a.created_at || 0).getTime() -
-            new Date(b.createdAt || b.created_at || 0).getTime();
+          return (
+            new Date(a.createdAt || a.created_at || 0).getTime() -
+            new Date(b.createdAt || b.created_at || 0).getTime()
+          );
 
         case 'available':
-          return Number(b.availableCopies || 0) -
-            Number(a.availableCopies || 0);
+          return (
+            Number(b.availableCopies || 0) -
+            Number(a.availableCopies || 0)
+          );
 
         case 'unavailable':
-          return Number(a.availableCopies || 0) -
-            Number(b.availableCopies || 0);
+          return (
+            Number(a.availableCopies || 0) -
+            Number(b.availableCopies || 0)
+          );
 
         default:
           return 0;
@@ -1482,7 +1742,7 @@ const myRequests = useMemo(() => {
   user?.fullName,
   user?.full_name,
 ]);
-  
+
   // =========================================================
   // PERSONAL BOOK SEARCH
   // =========================================================
@@ -1581,6 +1841,13 @@ const myRequests = useMemo(() => {
       if (!bookEntry?.id) {
         setNotice(
           'Unable to identify the selected book.'
+        );
+        return;
+      }
+
+      if (bookEntry.isExternalCatalog) {
+        setNotice(
+          'This book is listed in the external catalog and is not available for borrowing through SHELF.'
         );
         return;
       }
@@ -2066,7 +2333,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
     setProcessingCommunityRequestId(null);
   }
 };
-  
+
   // =========================================================
   // CANCEL REQUEST
   // =========================================================
@@ -2194,99 +2461,70 @@ const handleConfirmCommunityBookReturn = async (request) => {
   // =========================================================
   // FIND PARTNER LIBRARY ENTRIES
   // =========================================================
+  const getPartnerLibraryEntries = (book) => {
+    if (!book) return [];
 
-  const getPartnerLibraryEntries =
-    (book) => {
-      if (!book) {
-        return [];
+    const normalize = (value) =>
+      String(value ?? '')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .toLowerCase();
+
+    const normalizeIsbn = (value) =>
+      String(value ?? '')
+        .replace(/[^a-z0-9]/gi, '')
+        .toLowerCase();
+
+    const selectedIsbn = normalizeIsbn(book.isbn);
+    const selectedTitle = normalize(book.title);
+    const selectedAuthor = normalize(book.author);
+
+    const matchingEntries = books.filter((entry) => {
+      if (!entry?.id || !entry?.libraryId) return false;
+
+      if (Number(entry.totalCopies ?? 0) <= 0) return false;
+
+      const entryIsbn = normalizeIsbn(entry.isbn);
+
+      const sameBook =
+        selectedIsbn && entryIsbn
+          ? selectedIsbn === entryIsbn
+          : selectedTitle === normalize(entry.title) &&
+            selectedAuthor === normalize(entry.author);
+
+      return sameBook;
+    });
+
+    // Show only one location entry per library branch.
+    // Prefer an entry that currently has available copies.
+    const entriesByLibrary = new Map();
+
+    for (const entry of matchingEntries) {
+      const libraryKey = String(entry.libraryId);
+      const existing = entriesByLibrary.get(libraryKey);
+
+      if (!existing) {
+        entriesByLibrary.set(libraryKey, entry);
+        continue;
       }
 
-      const normalizedIsbn =
-        String(
-          book.isbn || ''
+      const existingAvailable = Number(existing.availableCopies ?? 0);
+      const currentAvailable = Number(entry.availableCopies ?? 0);
+
+      if (
+        currentAvailable > existingAvailable ||
+        (
+          currentAvailable === existingAvailable &&
+          Number(entry.totalCopies ?? 0) >
+            Number(existing.totalCopies ?? 0)
         )
-          .replace(
-            /[^a-z0-9]/gi,
-            ''
-          )
-          .toLowerCase();
+      ) {
+        entriesByLibrary.set(libraryKey, entry);
+      }
+    }
 
-      const normalizedTitle =
-        String(
-          book.title || ''
-        )
-          .trim()
-          .replace(
-            /\s+/g,
-            ' '
-          )
-          .toLowerCase();
-
-      const normalizedAuthor =
-        String(
-          book.author || ''
-        )
-          .trim()
-          .replace(
-            /\s+/g,
-            ' '
-          )
-          .toLowerCase();
-
-      return books.filter(
-        (entry) => {
-          const hasInventory =
-            Number(
-              entry.totalCopies ||
-                0
-            ) > 0 &&
-            entry.libraryId;
-
-          const entryIsbn =
-            String(
-              entry.isbn || ''
-            )
-              .replace(
-                /[^a-z0-9]/gi,
-                ''
-              )
-              .toLowerCase();
-
-          const sameBook =
-            normalizedIsbn &&
-            entryIsbn
-              ? normalizedIsbn ===
-                entryIsbn
-              : normalizedTitle ===
-                  String(
-                    entry.title ||
-                      ''
-                  )
-                    .trim()
-                    .replace(
-                      /\s+/g,
-                      ' '
-                    )
-                    .toLowerCase() &&
-                normalizedAuthor ===
-                  String(
-                    entry.author ||
-                      ''
-                  )
-                    .trim()
-                    .replace(
-                      /\s+/g,
-                      ' '
-                    )
-                    .toLowerCase();
-
-          return (
-            hasInventory &&
-            sameBook
-          );
-        }
-      );
-    };
+    return [...entriesByLibrary.values()];
+  };
 
   // =========================================================
   // PERSONAL BOOK HANDOVER LABEL
@@ -2858,7 +3096,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
               </button>
             )}
 
-            
+
             <select
               value={sortBy}
               onChange={(event) =>
@@ -5194,11 +5432,36 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
             </div>
 
+            {/* I-PASTE DITO ANG EXTERNAL CATALOG NOTICE */}
+              {selectedBook.isExternalCatalog && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2">
+                  <p className="text-sm font-bold text-amber-900">
+                    External Catalog — Not Available for Borrowing
+                  </p>
+
+                  <p className="text-xs text-amber-800">
+                    This book was discovered through an external catalog.
+                    SHELF does not have a confirmed physical copy for this entry.
+                  </p>
+
+                  {selectedBook.sourceUrl && (
+                    <a
+                      href={selectedBook.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block text-sm font-bold text-blue-700 underline hover:text-blue-900"
+                    >
+                      View book on Open Library
+                    </a>
+                  )}
+                </div>
+              )}
+
             {/* LIBRARY LOCATIONS FOR REGULAR BOOKS */}
 
-            {selectedBook.bookType !==
-              'personal' && (
-              <div className="space-y-3 pt-2">
+            {selectedBook.bookType !== 'personal' &&
+              !selectedBook.isExternalCatalog && (
+                <div className="space-y-3 pt-2">
 
                 <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                   Available Library Locations:

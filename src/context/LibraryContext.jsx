@@ -33,13 +33,13 @@ import { LibraryContext } from './libraryContext.js';
 
 const emptyData = {
   books: [],
+  externalCatalogBooks: [],
   libraries: [],
   visitors: [],
   borrowRequests: [],
   attendanceLogs: [],
   personalBooks: [],
   communityBooks: [],
-
   myCommunityBookRequests: [],
   ownerCommunityBookRequests: [],
 };
@@ -180,6 +180,7 @@ export function LibraryProvider({ children }) {
 
       const [
         books,
+        externalCatalogBooks,
         libraries,
         visitors,
         normalBorrowRequests,
@@ -187,15 +188,11 @@ export function LibraryProvider({ children }) {
         communityBooks,
       ] = await Promise.all([
         store.fetchBooks(),
-
+        store.fetchExternalCatalogBooks(),
         store.fetchLibraries(),
-
         store.fetchVisitors(),
-
         store.fetchBorrowRequests(),
-
         store.fetchAttendanceLogs(),
-
         store.fetchCommunityBooks(),
       ]);
 
@@ -536,6 +533,10 @@ console.log(
       // ----------------------------------------------------------------------
 
       setData({
+        externalCatalogBooks: Array.isArray(externalCatalogBooks)
+          ? externalCatalogBooks
+            : [],
+
         books:
           Array.isArray(books)
             ? books
@@ -954,14 +955,14 @@ console.log(
     [withRefresh]
   );
 
-  const loadSampleCatalog = useMemo(
-    () =>
-      withRefresh(
-        store.loadSampleCatalog,
-        'loadSampleCatalog'
-      ),
-    [withRefresh]
-  );
+  const loadExternalCatalog = useMemo(
+  () =>
+    withRefresh(
+      store.loadExternalCatalog,
+      'loadExternalCatalog'
+    ),
+  [withRefresh]
+);
 
   // ==========================================================================
   // PERSONAL BOOK
@@ -1160,6 +1161,10 @@ console.log(
           ? data.books
           : [],
 
+      externalCatalogBooks: Array.isArray(data.externalCatalogBooks)
+        ? data.externalCatalogBooks
+          : [],
+
       libraries:
         Array.isArray(data.libraries)
           ? data.libraries
@@ -1224,7 +1229,7 @@ console.log(
 
       deleteBook,
 
-      loadSampleCatalog,
+      loadExternalCatalog,
 
       // ----------------------------------------------------------------------
       // Personal / Community books
@@ -1308,7 +1313,7 @@ console.log(
 
       deleteBook,
 
-      loadSampleCatalog,
+      loadExternalCatalog,
 
       addPersonalBook,
 

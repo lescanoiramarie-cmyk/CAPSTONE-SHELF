@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { BookOpen, MapPin, Plus, SearchX } from 'lucide-react';
+import {
+  BookOpen,
+  MapPin,
+  Plus,
+  SearchX,
+  Download,
+  LoaderCircle,
+} from 'lucide-react';
 import { useLibraryData, useLibrary } from '../context/useLibrary.js';
 import { useAuth } from '../context/useAuth.js';
 
@@ -17,7 +24,12 @@ const emptyForm = {
 
 export default function BookInventory() {
   const { books, libraries } = useLibraryData();
-  const { addBook, updateBook, deleteBook, loadSampleCatalog } = useLibrary();
+  const {
+  addBook,
+  updateBook,
+  deleteBook,
+  loadExternalCatalog,
+} = useLibrary();
   const { user } = useAuth();
 
   // Determine if user is a restricted sub-admin
@@ -35,8 +47,9 @@ export default function BookInventory() {
   const [mutationError, setMutationError] = useState('');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('title-asc');
-  const [loadingApiBooks, setLoadingApiBooks] = useState(false);
-  const [apiBooksError, setApiBooksError] = useState('');
+  const [loadingExternalCatalog, setLoadingExternalCatalog] = useState(false);
+  const [externalCatalogMessage, setExternalCatalogMessage] = useState('');
+  const [externalCatalogError, setExternalCatalogError] = useState('');
 
   // Helper para sa pagkuha ng pangalan ng library o 'Personal Collection'
   const getLibraryDisplayName = (libId) => {
@@ -111,6 +124,57 @@ export default function BookInventory() {
           return 0;
       }
     });
+
+  const handleLoadExternalCatalog = async () => {
+  const libraryId = isSubAdmin
+    ? subAdminLibraryId
+    : form.libraryId || libraries[0]?.id || '';
+
+  setExternalCatalogMessage('');
+  setExternalCatalogError('');
+
+  if (!libraryId) {
+    setExternalCatalogError(
+      'Select a library branch before loading external books.'
+    );
+    return;
+  }
+
+  if (typeof loadExternalCatalog !== 'function') {
+    setExternalCatalogError(
+      'The external catalog loader is not available. Check LibraryContext.jsx.'
+    );
+    return;
+  }
+
+  setLoadingExternalCatalog(true);
+
+  try {
+    const result = await loadExternalCatalog(libraryId);
+
+    const fetched = Number(result?.fetched || 0);
+    const upserted = Number(result?.upserted || 0);
+    const warnings = Array.isArray(result?.warnings)
+      ? result.warnings
+      : [];
+
+    setExternalCatalogMessage(
+      `External catalog sync completed. Retrieved ${fetched} records; ${upserted} records inserted or updated. Physical inventory was not changed.`
+    );
+
+    if (warnings.length > 0) {
+      setExternalCatalogError(
+        `Some Open Library searches failed: ${warnings.join(' | ')}`
+      );
+    }
+  } catch (error) {
+    setExternalCatalogError(
+      error?.message || 'Unable to load books from Open Library.'
+    );
+  } finally {
+    setLoadingExternalCatalog(false);
+  }
+};
 
   const startAdd = () => {
     setEditingId(null);
@@ -209,6 +273,23 @@ export default function BookInventory() {
 
   return (
     <div className="space-y-4">
+      {externalCatalogMessage && (
+  <div
+    role="status"
+    className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800"
+  >
+    {externalCatalogMessage}
+  </div>
+)}
+
+{externalCatalogError && (
+  <div
+    role="alert"
+    className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+  >
+    {externalCatalogError}
+  </div>
+)}
       {isSubAdmin && (
         <div className="bg-blue-50 border border-blue-200 text-blue-800 text-xs px-4 py-2.5 rounded-lg flex items-center justify-between">
           <span className="flex items-center gap-2"><MapPin size={15} aria-hidden="true" /> Managing inventory exclusively for: <b>{currentLibraryName}</b></span>

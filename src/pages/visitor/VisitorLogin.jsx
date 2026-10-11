@@ -1926,7 +1926,7 @@ export default function VisitorLogin() {
                       size={220}
                       level="H"
                       includeMargin
-                      className="w-full h-auto max-w-[200px]"
+                      className="w-full h-auto max-w-50"
                     />
                   </div>
                 </div>

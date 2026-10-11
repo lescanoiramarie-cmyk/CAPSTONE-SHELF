@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import Draggable from 'react-draggable';
 import { QRCodeSVG } from 'qrcode.react';
-import {
-  ThemeProvider,
-  useTheme,
-} from '../../context/ThemeContext.jsx';
+import { ThemeProvider } from '../../context/ThemeContext.jsx';
+import { useTheme } from '../../context/useTheme.js';
 import {
   Bell,
   BookMarked,
