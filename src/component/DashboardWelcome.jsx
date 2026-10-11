@@ -11,13 +11,16 @@ import {
   CheckCheck,
 } from 'lucide-react';
 
+
 export default function DashboardWelcome({
   name,
   description,
   actions = [],
   notifications = [],
   onNotificationClick,
+  showNotifications = true,
 }) {
+
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
@@ -160,107 +163,110 @@ const markAllNotificationsRead = () => {
           {/* Connection status */}
           {/* Notifications and connection status */}
         </div>
+
 <div className="relative z-20 flex w-full shrink-0 items-center gap-3 sm:w-auto">
-  <div className="relative">
-    <button
-      type="button"
-      onClick={() => setNotificationsOpen((open) => !open)}
-      aria-label={
-        unreadCount > 0
-          ? `Notifications, ${unreadCount} unread`
-          : 'Notifications'
-      }
-      aria-expanded={notificationsOpen}
-      className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
-    >
-      <Bell size={20} aria-hidden="true" />
+  {showNotifications && (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setNotificationsOpen((open) => !open)}
+        aria-label={
+          unreadCount > 0
+            ? `Notifications, ${unreadCount} unread`
+            : 'Notifications'
+        }
+        aria-expanded={notificationsOpen}
+        className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+      >
+        <Bell size={20} aria-hidden="true" />
 
-      {unreadCount > 0 && (
-        <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
-          {unreadCount > 99 ? '99+' : unreadCount}
-        </span>
-      )}
-    </button>
+        {unreadCount > 0 && (
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
+        )}
+      </button>
 
-    {notificationsOpen && (
-      <div className="absolute left-0 top-full z-50 mt-3 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-600 dark:bg-slate-800">
-        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-700">
-          <div>
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-              Notifications
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              {unreadCount} unread
-            </p>
+      {notificationsOpen && (
+        <div className="absolute left-0 top-full z-50 mt-3 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-600 dark:bg-slate-800">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-700">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                Notifications
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {unreadCount} unread
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={markAllNotificationsRead}
+              disabled={unreadCount === 0}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-[#174477] hover:underline disabled:cursor-not-allowed disabled:opacity-40 dark:text-blue-300"
+            >
+              <CheckCheck size={14} />
+              Mark all read
+            </button>
           </div>
 
-          <button
-            type="button"
-            onClick={markAllNotificationsRead}
-            disabled={unreadCount === 0}
-            className="inline-flex items-center gap-1 text-xs font-semibold text-[#174477] hover:underline disabled:cursor-not-allowed disabled:opacity-40 dark:text-blue-300"
-          >
-            <CheckCheck size={14} />
-            Mark all read
-          </button>
+          <div className="max-h-80 overflow-y-auto">
+            {notifications.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                You're all caught up. No current alerts.
+              </p>
+            ) : (
+              notifications.map((notification) => {
+                const isRead = readNotificationIds.has(notification.id);
+
+                return (
+                  <button
+                    key={notification.id}
+                    type="button"
+                    onClick={() => {
+                      setReadNotificationIds((previous) => {
+                        const next = new Set(previous);
+                        next.add(notification.id);
+                        return next;
+                      });
+
+                      setNotificationsOpen(false);
+                      onNotificationClick?.(notification);
+                    }}
+                    className={`block w-full border-b border-slate-100 px-4 py-3 text-left transition last:border-b-0 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700/70 ${
+                      isRead
+                        ? 'opacity-65'
+                        : 'bg-amber-50/60 dark:bg-amber-400/5'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span
+                        className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
+                          isRead ? 'bg-slate-300' : 'bg-amber-500'
+                        }`}
+                      />
+
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-bold text-slate-800 dark:text-slate-100">
+                          {notification.title}
+                        </span>
+                        <span className="mt-1 block text-xs leading-5 text-slate-600 dark:text-slate-300">
+                          {notification.message}
+                        </span>
+                        <span className="mt-1 block text-[11px] font-medium text-slate-400">
+                          {notification.timeLabel}
+                        </span>
+                      </span>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
         </div>
-
-        <div className="max-h-80 overflow-y-auto">
-          {notifications.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
-              You're all caught up. No current alerts.
-            </p>
-          ) : (
-            notifications.map((notification) => {
-              const isRead = readNotificationIds.has(notification.id);
-
-              return (
-                <button
-                  key={notification.id}
-                  type="button"
-                  onClick={() => {
-                    setReadNotificationIds((previous) => {
-                      const next = new Set(previous);
-                      next.add(notification.id);
-                      return next;
-                    });
-
-                    setNotificationsOpen(false);
-                    onNotificationClick?.(notification);
-                  }}
-                  className={`block w-full border-b border-slate-100 px-4 py-3 text-left transition last:border-b-0 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700/70 ${
-                    isRead ? 'opacity-65' : 'bg-amber-50/60 dark:bg-amber-400/5'
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <span
-                      className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
-                        isRead ? 'bg-slate-300' : 'bg-amber-500'
-                      }`}
-                    />
-
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-bold text-slate-800 dark:text-slate-100">
-                        {notification.title}
-                      </span>
-
-                      <span className="mt-1 block text-xs leading-5 text-slate-600 dark:text-slate-300">
-                        {notification.message}
-                      </span>
-
-                      <span className="mt-1 block text-[11px] font-medium text-slate-400">
-                        {notification.timeLabel}
-                      </span>
-                    </span>
-                  </div>
-                </button>
-              );
-            })
-          )}
-        </div>
-      </div>
-    )}
-  </div>
+      )}
+    </div>
+  )}
 
   <div
     role="status"
@@ -287,6 +293,7 @@ const markAllNotificationsRead = () => {
     />
   </div>
 </div>
+
 
         {/* Quick actions */}
         {actions.length > 0 && (

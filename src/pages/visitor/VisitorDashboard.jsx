@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import Draggable from 'react-draggable';
 import { QRCodeSVG } from 'qrcode.react';
 import {
+  Bell,
   BookMarked,
   BookOpen,
   CalendarDays,
@@ -119,11 +120,12 @@ export default function VisitorDashboard() {
   const { user, logout } = useAuth();
 
   const {
-    attendanceLogs = [],
-    borrowRequests = [],
-    libraries = [],
-    visitors = [],
-  } = useLibraryData();
+  attendanceLogs = [],
+  borrowRequests = [],
+  libraries = [],
+  visitors = [],
+  ownerCommunityBookRequests = [],
+} = useLibraryData();
 
   const [tab, setTab] = useState('catalog');
   const [catalogResetKey, setCatalogResetKey] = useState(0);
@@ -138,6 +140,9 @@ export default function VisitorDashboard() {
   const [announcementIndex, setAnnouncementIndex] = useState(0);
   const [isAnnouncementOpen, setIsAnnouncementOpen] = useState(false);
 
+  const [isNotificationsOpen, setIsNotificationsOpen] =
+  useState(false);
+
 
   const [isDarkAppearance, setIsDarkAppearance] = useState(() => {
     try {
@@ -148,6 +153,13 @@ export default function VisitorDashboard() {
       return false;
     }
   });
+
+  const ownerPendingRequests = ownerCommunityBookRequests.filter(
+    (request) =>
+      String(request.status || '').toLowerCase() === 'pending'
+  );
+
+  const ownerNotificationCount = ownerPendingRequests.length;
 
   useEffect(() => {
     try {
@@ -610,6 +622,118 @@ export default function VisitorDashboard() {
                 />
               </span>
             </button>
+            
+{/* COMMUNITY BOOK REQUEST NOTIFICATIONS */}
+<div className="relative">
+  <button
+    type="button"
+    onClick={() => setIsNotificationsOpen((open) => !open)}
+    className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
+    aria-label={`Book request notifications: ${ownerNotificationCount} pending`}
+    aria-expanded={isNotificationsOpen}
+    title="Book request notifications"
+  >
+    <Bell size={19} aria-hidden="true" />
+
+    {ownerNotificationCount > 0 && (
+      <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+        {ownerNotificationCount > 99
+          ? '99+'
+          : ownerNotificationCount}
+      </span>
+    )}
+  </button>
+
+  {isNotificationsOpen && (
+    <>
+      <button
+        type="button"
+        className="fixed inset-0 z-40 cursor-default"
+        aria-label="Close notifications"
+        onClick={() => setIsNotificationsOpen(false)}
+      />
+
+      <section
+        className="absolute right-0 z-50 mt-3 w-[min(92vw,380px)] overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-800 shadow-2xl dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+        aria-label="Community book notifications"
+      >
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+          <div>
+            <h3 className="text-sm font-bold">
+              Book Request Notifications
+            </h3>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              {ownerNotificationCount} pending request
+              {ownerNotificationCount === 1 ? '' : 's'}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsNotificationsOpen(false)}
+            className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-700"
+            aria-label="Close notifications"
+          >
+            <X size={17} aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="max-h-80 overflow-y-auto p-3">
+          {ownerPendingRequests.length === 0 ? (
+            <div className="px-3 py-8 text-center">
+              <Bell
+                size={26}
+                className="mx-auto mb-2 text-slate-400"
+                aria-hidden="true"
+              />
+              <p className="text-sm font-semibold">
+                No pending book requests
+              </p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Requests for your community books will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {ownerPendingRequests.map((request) => (
+                <article
+                  key={request.id}
+                  className="rounded-lg border border-slate-200 p-3 dark:border-slate-700"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-lg bg-blue-50 p-2 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                      <BookOpen size={18} aria-hidden="true" />
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="break-words text-sm font-semibold">
+                        {request.requesterName || 'A SHELF visitor'} requested your book
+                      </p>
+
+                      <p className="mt-1 break-words text-sm">
+                        {request.bookTitle || 'Untitled Book'}
+                      </p>
+
+                      {request.requestDate && (
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          {formatDateTime(request.requestDate)}
+                        </p>
+                      )}
+
+                      <span className="mt-2 inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
+                        Pending approval
+                      </span>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+    </>
+  )}
+</div>
 
             {/* SIGN OUT */}
             <button
@@ -639,6 +763,7 @@ export default function VisitorDashboard() {
         <DashboardWelcome
           name={user?.name?.split(' ')[0]}
           description="Search books, check availability, manage requests, and keep track of your library visits."
+          showNotifications={false}
           actions={[
             {
               label: 'Scan QR Pass',

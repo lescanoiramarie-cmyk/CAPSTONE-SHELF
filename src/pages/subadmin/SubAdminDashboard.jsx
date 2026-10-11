@@ -1276,7 +1276,7 @@ const branchNotifications = useMemo(() => {
         <DashboardWelcome
           name={user?.name?.split(' ')[0]}
           description={`Manage circulation, reservations, and inventory${user?.assignedBranchName ? ` for ${user.assignedBranchName}` : ' for your branch'}.`}
-
+          showNotifications={true}
         // NEW: In-app notifications
           notifications={branchNotifications}
           onNotificationClick={(notification) => {
