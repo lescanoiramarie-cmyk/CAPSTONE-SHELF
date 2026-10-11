@@ -7,8 +7,6 @@ import {
   ChevronDown,
   ClipboardList,
   Clock3,
-  FileSpreadsheet,
-  MessageSquare,
   QrCode,
   Upload,
   UsersRound,

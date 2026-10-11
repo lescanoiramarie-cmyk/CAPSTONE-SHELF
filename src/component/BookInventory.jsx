@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { BookOpen, MapPin, Plus, SearchX } from 'lucide-react';
+import {
+  BookOpen,
+  MapPin,
+  Plus,
+  SearchX,
+  Download,
+  LoaderCircle,
+} from 'lucide-react';
 import { useLibraryData, useLibrary } from '../context/useLibrary.js';
 import { useAuth } from '../context/useAuth.js';
 
@@ -17,7 +24,12 @@ const emptyForm = {
 
 export default function BookInventory() {
   const { books, libraries } = useLibraryData();
-  const { addBook, updateBook, deleteBook, loadSampleCatalog } = useLibrary();
+  const {
+  addBook,
+  updateBook,
+  deleteBook,
+  loadExternalCatalog,
+} = useLibrary();
   const { user } = useAuth();
 
   // Determine if user is a restricted sub-admin
@@ -35,8 +47,9 @@ export default function BookInventory() {
   const [mutationError, setMutationError] = useState('');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('title-asc');
-  const [loadingApiBooks, setLoadingApiBooks] = useState(false);
-  const [apiBooksError, setApiBooksError] = useState('');
+  const [loadingExternalCatalog, setLoadingExternalCatalog] = useState(false);
+  const [externalCatalogMessage, setExternalCatalogMessage] = useState('');
+  const [externalCatalogError, setExternalCatalogError] = useState('');
 
   // If sub-admin, restrict book list strictly to their libraryId
   const scopedBooks = isSubAdmin 
@@ -103,6 +116,57 @@ export default function BookInventory() {
         return 0;
     }
   });
+
+  const handleLoadExternalCatalog = async () => {
+  const libraryId = isSubAdmin
+    ? subAdminLibraryId
+    : form.libraryId || libraries[0]?.id || '';
+
+  setExternalCatalogMessage('');
+  setExternalCatalogError('');
+
+  if (!libraryId) {
+    setExternalCatalogError(
+      'Select a library branch before loading external books.'
+    );
+    return;
+  }
+
+  if (typeof loadExternalCatalog !== 'function') {
+    setExternalCatalogError(
+      'The external catalog loader is not available. Check LibraryContext.jsx.'
+    );
+    return;
+  }
+
+  setLoadingExternalCatalog(true);
+
+  try {
+    const result = await loadExternalCatalog(libraryId);
+
+    const fetched = Number(result?.fetched || 0);
+    const upserted = Number(result?.upserted || 0);
+    const warnings = Array.isArray(result?.warnings)
+      ? result.warnings
+      : [];
+
+    setExternalCatalogMessage(
+      `External catalog sync completed. Retrieved ${fetched} records; ${upserted} records inserted or updated. Physical inventory was not changed.`
+    );
+
+    if (warnings.length > 0) {
+      setExternalCatalogError(
+        `Some Open Library searches failed: ${warnings.join(' | ')}`
+      );
+    }
+  } catch (error) {
+    setExternalCatalogError(
+      error?.message || 'Unable to load books from Open Library.'
+    );
+  } finally {
+    setLoadingExternalCatalog(false);
+  }
+};
 
   const startAdd = () => {
     setEditingId(null);
@@ -175,23 +239,27 @@ export default function BookInventory() {
     }
   };
 
-  const handleLoadApiBooks = async () => {
-    setLoadingApiBooks(true);
-    setApiBooksError('');
-
-    try {
-      await loadSampleCatalog(subAdminLibraryId);
-    } catch (error) {
-      setApiBooksError(error.message || 'Failed to load books from Open Library.');
-    } finally {
-      setLoadingApiBooks(false);
-    }
-  };
-
   const currentLibraryName = libraries.find((l) => l.id === subAdminLibraryId)?.name || 'Your Branch';
 
   return (
     <div className="space-y-4">
+      {externalCatalogMessage && (
+  <div
+    role="status"
+    className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800"
+  >
+    {externalCatalogMessage}
+  </div>
+)}
+
+{externalCatalogError && (
+  <div
+    role="alert"
+    className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+  >
+    {externalCatalogError}
+  </div>
+)}
       {isSubAdmin && (
         <div className="bg-blue-50 border border-blue-200 text-blue-800 text-xs px-4 py-2.5 rounded-lg flex items-center justify-between">
           <span className="flex items-center gap-2"><MapPin size={15} aria-hidden="true" /> Managing inventory exclusively for: <b>{currentLibraryName}</b></span>
@@ -225,33 +293,48 @@ export default function BookInventory() {
     <option value="unavailable">Least Available</option>
   </select>
 
-  <div className="flex gap-2">
-    {isSubAdmin && (
-      <button
-        type="button"
-        onClick={handleLoadApiBooks}
-        disabled={loadingApiBooks || !subAdminLibraryId}
-        className="text-xs font-bold px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition disabled:opacity-50"
-      >
-        {loadingApiBooks ? 'Loading API Books...' : 'Load 100+ API Books'}
-      </button>
+  <div className="flex flex-wrap gap-2">
+  <button
+    type="button"
+    onClick={handleLoadExternalCatalog}
+    disabled={loadingExternalCatalog}
+    className="text-xs font-bold px-4 py-2.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
+  >
+    {loadingExternalCatalog ? (
+      <>
+        <LoaderCircle
+          size={15}
+          className="mr-1 inline-block animate-spin align-[-3px]"
+          aria-hidden="true"
+        />
+        Loading API Books...
+      </>
+    ) : (
+      <>
+        <Download
+          size={15}
+          className="mr-1 inline-block align-[-3px]"
+          aria-hidden="true"
+        />
+        Load API Books
+      </>
     )}
+  </button>
 
-    <button
-      onClick={startAdd}
-      className="text-xs font-bold px-4 py-2.5 rounded-lg bg-shelf-primary text-white hover:opacity-90 transition"
-    >
-      <Plus size={15} className="mr-1 inline-block align-[-3px]" aria-hidden="true" /> Add Book
-    </button>
-  </div>
+  <button
+    type="button"
+    onClick={startAdd}
+    className="text-xs font-bold px-4 py-2.5 rounded-lg bg-shelf-primary text-white hover:opacity-90 transition"
+  >
+    <Plus
+      size={15}
+      className="mr-1 inline-block align-[-3px]"
+      aria-hidden="true"
+    />
+    Add Book
+  </button>
 </div>
-
-
-      {apiBooksError && (
-        <p role="alert" className="text-xs text-red-600">
-          {apiBooksError}
-        </p>
-      )}
+</div>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
         {filtered.length === 0 ? (

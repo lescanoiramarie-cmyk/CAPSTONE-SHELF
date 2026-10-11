@@ -189,7 +189,7 @@ export default function LibraryMap({
         ==================================================== */}
 
         {showMap && (
-          <div className="lg:col-span-2 rounded-xl overflow-hidden border border-slate-200 shadow-sm h-80 lg:h-[600px]">
+          <div className="lg:col-span-2 rounded-xl overflow-hidden border border-slate-200 shadow-sm h-80 lg:h-150">
 
             <MapContainer
               center={[14.085, 121.149]}
@@ -234,7 +234,7 @@ export default function LibraryMap({
                   >
                     <Popup>
 
-                      <div className="min-w-[180px]">
+                      <div className="min-w-45">
 
                         <h3 className="font-bold text-sm">
                           {library.name}

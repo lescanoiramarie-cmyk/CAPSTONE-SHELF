@@ -1,13 +1,13 @@
 // ============================================================================
-// SHELF ILMS — data & business-logic layer (Supabase-backed)
+// SHELF ILMS â€” data & business-logic layer (Supabase-backed)
 // ----------------------------------------------------------------------------
 // This module is the only place in the app that talks to Supabase directly.
 // Components/contexts call these functions and never import `supabase`
 // themselves.
 //
 // Authentication:
-//   Visitors      → Supabase Auth + visitors.auth_user_id
-//   Staff/Admin   → Supabase Auth + staff_profiles
+//   Visitors      â†’ Supabase Auth + visitors.auth_user_id
+//   Staff/Admin   â†’ Supabase Auth + staff_profiles
 //
 // Business rules that must be atomic are handled by PostgreSQL RPC functions.
 // ============================================================================
@@ -271,7 +271,7 @@ function isPasswordValid(
 }
 
 // ============================================================================
-// ROW → CAMELCASE MAPPERS
+// ROW â†’ CAMELCASE MAPPERS
 // ============================================================================
 
 const mapLibrary = (r) => ({
@@ -646,7 +646,7 @@ export async function fetchBorrowRequests() {
     }
   } catch (storageError) {
     console.error(
-      'SHELF — unable to read local session:',
+      'SHELF â€” unable to read local session:',
       storageError
     );
   }
@@ -683,7 +683,7 @@ export async function fetchBorrowRequests() {
 
     if (sessionError) {
       console.warn(
-        'SHELF — unable to read Supabase auth session:',
+        'SHELF â€” unable to read Supabase auth session:',
         sessionError
       );
     }
@@ -693,7 +693,7 @@ export async function fetchBorrowRequests() {
       null;
 
     // ------------------------------------------------------------------------
-    // 2B. RESOLVE AUTH USER → SHELF VISITOR
+    // 2B. RESOLVE AUTH USER â†’ SHELF VISITOR
     // ------------------------------------------------------------------------
 
     if (
@@ -720,7 +720,7 @@ export async function fetchBorrowRequests() {
             );
 
           console.log(
-            'SHELF — resolved visitor from Supabase Auth:',
+            'SHELF â€” resolved visitor from Supabase Auth:',
             {
               authUserId,
               visitorId:
@@ -730,7 +730,7 @@ export async function fetchBorrowRequests() {
         }
       } catch (visitorLookupError) {
         console.warn(
-          'SHELF — unable to resolve Auth user to visitor:',
+          'SHELF â€” unable to resolve Auth user to visitor:',
           visitorLookupError
         );
       }
@@ -772,7 +772,7 @@ export async function fetchBorrowRequests() {
           );
 
         console.log(
-          'SHELF — resolved visitor from local session:',
+          'SHELF â€” resolved visitor from local session:',
           {
             visitorId:
               normalizedVisitorId,
@@ -783,13 +783,13 @@ export async function fetchBorrowRequests() {
 
   } catch (visitorResolveError) {
     console.error(
-      'SHELF — VISITOR ID RESOLUTION ERROR:',
+      'SHELF â€” VISITOR ID RESOLUTION ERROR:',
       visitorResolveError
     );
   }
 
   console.log(
-    'SHELF — FINAL VISITOR ID FOR REQUESTS:',
+    'SHELF â€” FINAL VISITOR ID FOR REQUESTS:',
     normalizedVisitorId
   );
 
@@ -807,7 +807,7 @@ export async function fetchBorrowRequests() {
 
     if (sessionError) {
       console.warn(
-        'SHELF — unable to check Supabase session:',
+        'SHELF â€” unable to check Supabase session:',
         sessionError
       );
     }
@@ -863,13 +863,13 @@ export async function fetchBorrowRequests() {
 
     else {
       console.warn(
-        'SHELF — borrow requests skipped: no Supabase session for this visitor.'
+        'SHELF â€” borrow requests skipped: no Supabase session for this visitor.'
       );
     }
 
   } catch (normalError) {
     console.error(
-      'SHELF — NORMAL BORROW REQUESTS ERROR:',
+      'SHELF â€” NORMAL BORROW REQUESTS ERROR:',
       normalError
     );
   }
@@ -892,7 +892,7 @@ export async function fetchBorrowRequests() {
   ) {
     try {
       console.log(
-        'SHELF — FETCHING COMMUNITY REQUESTS FOR VISITOR:',
+        'SHELF â€” FETCHING COMMUNITY REQUESTS FOR VISITOR:',
         normalizedVisitorId
       );
 
@@ -909,7 +909,7 @@ export async function fetchBorrowRequests() {
 
       if (error) {
         console.error(
-          'SHELF — COMMUNITY REQUEST RPC ERROR:',
+          'SHELF â€” COMMUNITY REQUEST RPC ERROR:',
           error
         );
       } else {
@@ -919,7 +919,7 @@ export async function fetchBorrowRequests() {
             : [];
 
         console.log(
-          'SHELF — COMMUNITY REQUEST RPC RESULT:',
+          'SHELF â€” COMMUNITY REQUEST RPC RESULT:',
           {
             visitorId:
               normalizedVisitorId,
@@ -935,14 +935,14 @@ export async function fetchBorrowRequests() {
 
     } catch (communityError) {
       console.error(
-        'SHELF — COMMUNITY REQUEST FETCH ERROR:',
+        'SHELF â€” COMMUNITY REQUEST FETCH ERROR:',
         communityError
       );
     }
 
   } else {
     console.warn(
-      'SHELF — COMMUNITY REQUESTS SKIPPED: no valid visitor ID.',
+      'SHELF â€” COMMUNITY REQUESTS SKIPPED: no valid visitor ID.',
       {
         visitorId:
           normalizedVisitorId,
@@ -1181,7 +1181,7 @@ export async function fetchBorrowRequests() {
   // ==========================================================================
 
   console.log(
-    'SHELF — FINAL REQUEST LIST:',
+    'SHELF â€” FINAL REQUEST LIST:',
     {
       visitorId:
         normalizedVisitorId,
@@ -2975,116 +2975,246 @@ export async function scanAttendance(
   };
 }
 
+
+function normalizeInventoryMatch(value) {
+  return String(value ?? '')
+    .normalize('NFKC')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase();
+}
+
+/**
+ * Adds incoming library stock to an existing matching book,
+ * or inserts a new book if no match exists.
+ *
+ * Matching: normalized title + author + library branch.
+ * Existing book IDs and transaction references are preserved.
+ *
+ * If the database already has multiple matching records,
+ * stop and request manual review instead of guessing which
+ * record should receive the additional copies.
+ */
+
+export async function mergeOrInsertLibraryBooks(incomingRows) {
+  if (!Array.isArray(incomingRows) || incomingRows.length === 0) {
+    return [];
+  }
+
+  const grouped = new Map();
+
+  // Combine repeated copies of the same book within this import.
+  for (const source of incomingRows) {
+    const row = { ...source };
+
+    const title = normalizeText(row.title);
+    const author = normalizeText(row.author);
+    const libraryId = normalizeText(row.library_id) || null;
+    const stock = Number(row.total_copies);
+
+    if (!title || !author) {
+      throw new Error('Every library book requires a title and author.');
+    }
+
+    if (!Number.isInteger(stock) || stock < 1) {
+      throw new Error(`Invalid stock count for "${title}".`);
+    }
+
+    if (libraryId && !isValidUuid(libraryId)) {
+      throw new Error(`Invalid library ID for "${title}".`);
+    }
+
+    const key = JSON.stringify([
+      normalizeInventoryMatch(title),
+      normalizeInventoryMatch(author),
+      libraryId,
+    ]);
+
+    const existingGroup = grouped.get(key);
+
+    if (existingGroup) {
+      existingGroup.total_copies += stock;
+      existingGroup.available_copies += Number(
+        row.available_copies ?? stock
+      );
+    } else {
+      grouped.set(key, {
+        ...row,
+        title,
+        author,
+        library_id: libraryId,
+        total_copies: stock,
+        available_copies: Number(row.available_copies ?? stock),
+        book_type: 'library',
+        owner_visitor_id: null,
+      });
+    }
+  }
+
+  const rows = [...grouped.values()];
+  const branchIds = [...new Set(rows.map((row) => row.library_id))];
+
+  // Read the existing catalog for each affected branch.
+  // No database writes occur during this preflight stage.
+  const existingByBranch = new Map();
+
+  for (const libraryId of branchIds) {
+    let query = supabase
+      .from('books')
+      .select(
+        'id, title, author, library_id, total_copies, available_copies, book_type'
+      )
+      .or('book_type.eq.library,book_type.is.null');
+
+    query = libraryId
+      ? query.eq('library_id', libraryId)
+      : query.is('library_id', null);
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw cleanErr(
+        error,
+        'Unable to check existing inventory for duplicates.'
+      );
+    }
+
+    existingByBranch.set(libraryId, data || []);
+  }
+
+  // Validate every match before changing any records.
+  const plan = rows.map((row) => {
+    const branchBooks = existingByBranch.get(row.library_id) || [];
+
+    const matches = branchBooks.filter((book) =>
+      normalizeInventoryMatch(book.title) ===
+        normalizeInventoryMatch(row.title) &&
+      normalizeInventoryMatch(book.author) ===
+        normalizeInventoryMatch(row.author)
+    );
+
+    if (matches.length > 1) {
+      throw new Error(
+        `Multiple existing records match "${row.title}" by ${row.author} ` +
+        `in this branch. No inventory changes were made. ` +
+        `Review those records manually before importing this book.`
+      );
+    }
+
+    return {
+      incoming: row,
+      existing: matches[0] || null,
+    };
+  });
+
+  const saved = [];
+
+  // Apply the validated plan.
+  for (const { incoming, existing } of plan) {
+    if (existing) {
+      const newTotal =
+        Number(existing.total_copies || 0) +
+        Number(incoming.total_copies || 0);
+
+      const newAvailable =
+        Number(existing.available_copies || 0) +
+        Number(incoming.available_copies || 0);
+
+      const { data, error } = await supabase
+        .from('books')
+        .update({
+          total_copies: newTotal,
+          available_copies: newAvailable,
+        })
+        .eq('id', existing.id)
+        .select('*')
+        .single();
+
+      if (error) {
+        throw cleanErr(
+          error,
+          `Unable to add copies to "${incoming.title}".`
+        );
+      }
+
+      saved.push(data);
+    } else {
+      const { data, error } = await supabase
+        .from('books')
+        .insert(incoming)
+        .select('*')
+        .single();
+
+      if (error) {
+        throw cleanErr(
+          error,
+          `Unable to add "${incoming.title}" to inventory.`
+        );
+      }
+
+      saved.push(data);
+    }
+  }
+
+  return saved.map(mapBook);
+}
+
+
 // ============================================================================
-// BOOK INVENTORY — ADD LIBRARY BOOK
+// BOOK INVENTORY â€” ADD LIBRARY BOOK
 // ============================================================================
 
-export async function addBook(
-  book
-) {
-  const title =
-    normalizeText(book?.title);
 
-  const author =
-    normalizeText(book?.author);
-
-  const libraryId =
-    normalizeText(book?.libraryId);
+export async function addBook(book) {
+  const title = normalizeText(book?.title);
+  const author = normalizeText(book?.author);
+  const libraryId = normalizeText(book?.libraryId);
+  const totalCopies = Math.max(
+    1,
+    Number(book?.totalCopies) || 1
+  );
 
   if (!title) {
-    throw new Error(
-      'Book title is required.'
-    );
+    throw new Error('Book title is required.');
   }
 
   if (!author) {
-    throw new Error(
-      'Book author is required.'
-    );
+    throw new Error('Book author is required.');
   }
 
-  if (
-    libraryId &&
-    !isValidUuid(libraryId)
-  ) {
-    throw new Error(
-      'Invalid library ID.'
-    );
+  if (libraryId && !isValidUuid(libraryId)) {
+    throw new Error('Invalid library ID.');
   }
 
-  const totalCopies =
-    Math.max(
-      1,
-      Number(
-        book?.totalCopies
-      ) || 1
-    );
+  const rows = await mergeOrInsertLibraryBooks([
+    {
+      title,
+      author,
+      category: normalizeBookCategory(book?.category) || 'General',
+      isbn: normalizeText(book?.isbn) || null,
+      shelf_location: normalizeText(book?.shelfLocation) || null,
+      library_id: libraryId || null,
+      total_copies: totalCopies,
+      available_copies: totalCopies,
+      summary: normalizeText(book?.summary) || null,
+      cover_url: normalizeText(book?.coverUrl) || DEFAULT_COVER_URL,
+      book_type: 'library',
+      owner_visitor_id: null,
+      lending_enabled: false,
+      condition: null,
+      lending_period_days: null,
+      handover_location: null,
+      handover_method: null,
+      handover_details: null,
+    },
+  ]);
 
-  const {
-    data,
-    error,
-  } =
-    await supabase
-      .from('books')
-      .insert({
-        title,
-        author,
-        category:
-          normalizeBookCategory(
-            book?.category
-          ) || 'General',
-        isbn:
-          normalizeText(
-            book?.isbn
-          ) || null,
-        shelf_location:
-          normalizeText(
-            book?.shelfLocation
-          ) || null,
-        library_id:
-          libraryId || null,
-        total_copies:
-          totalCopies,
-        available_copies:
-          totalCopies,
-        summary:
-          normalizeText(
-            book?.summary
-          ) || null,
-        cover_url:
-          normalizeText(
-            book?.coverUrl
-          ) ||
-          DEFAULT_COVER_URL,
-        book_type:
-          'library',
-        owner_visitor_id:
-          null,
-        lending_enabled:
-          false,
-        condition:
-          null,
-        lending_period_days:
-          null,
-        handover_location:
-          null,
-        handover_method:
-          null,
-        handover_details:
-          null,
-      })
-      .select()
-      .single();
-
-  if (error) {
-    throw cleanErr(error);
-  }
-
-  return mapBook(data);
+  return rows[0];
 }
 
+
 // ============================================================================
-// PERSONAL BOOK — ADD
+// PERSONAL BOOK â€” ADD
 // ============================================================================
 
 export async function addPersonalBook({
@@ -3248,6 +3378,9 @@ export async function addPersonalBook({
 
         p_author:
           normalizedAuthor,
+
+        p_category:
+          normalizedCategory,
 
         p_isbn:
           normalizedIsbn,
@@ -3590,7 +3723,7 @@ export async function requestCommunityBook(
 }
 
 // ============================================================================
-// FETCH COMMUNITY BOOK REQUESTS — OWNER
+// FETCH COMMUNITY BOOK REQUESTS â€” OWNER
 // ============================================================================
 //
 // Loads requests made by other visitors for books owned by this visitor.
@@ -3695,7 +3828,7 @@ export async function fetchOwnerCommunityBookRequests(
 }
 
 // ============================================================================
-// FETCH COMMUNITY BOOK REQUESTS — REQUESTER
+// FETCH COMMUNITY BOOK REQUESTS â€” REQUESTER
 // ============================================================================
 //
 // Loads requests submitted by the current visitor.
@@ -4007,10 +4140,7 @@ export async function confirmCommunityBookReturn(
     );
   }
 
-  const {
-    data,
-    error,
-  } = await supabase.rpc(
+  const { error } = await supabase.rpc(
     'confirm_community_book_return',
     {
       p_request_id:
@@ -4217,6 +4347,51 @@ export async function cancelCommunityBookRequest(
 // BULK BOOK UPLOAD
 // ============================================================================
 
+function normalizeAndValidateIsbn(value) {
+  const raw = normalizeText(value);
+
+  // Optional ang ISBN.
+  if (!raw) return null;
+
+  const isbn = raw
+    .replace(/^ISBN(?:-10|-13)?\s*:?/i, '')
+    .replace(/[\s-]/g, '')
+    .toUpperCase();
+
+  // Validate ISBN-10 checksum.
+  if (/^\d{9}[\dX]$/.test(isbn)) {
+    const sum = [...isbn].reduce(
+      (total, char, index) =>
+        total +
+        (char === 'X' ? 10 : Number(char)) *
+          (10 - index),
+      0
+    );
+
+    if (sum % 11 === 0) return isbn;
+  }
+
+  // Validate ISBN-13 checksum.
+  if (/^\d{13}$/.test(isbn)) {
+    const sum = [...isbn.slice(0, 12)].reduce(
+      (total, digit, index) =>
+        total +
+        Number(digit) * (index % 2 === 0 ? 1 : 3),
+      0
+    );
+
+    const checkDigit = (10 - (sum % 10)) % 10;
+
+    if (checkDigit === Number(isbn[12])) {
+      return isbn;
+    }
+  }
+
+  throw new Error(
+    `Invalid ISBN "${raw}". Please check the ISBN-10 or ISBN-13 digits.`
+  );
+}
+
 export async function addBooksBulk(
   books
 ) {
@@ -4261,7 +4436,7 @@ export async function addBooksBulk(
           );
 
         const isbn =
-          normalizeText(
+          normalizeAndValidateIsbn(
             normalized.isbn
           );
 
@@ -4281,13 +4456,12 @@ export async function addBooksBulk(
         if (
           !title ||
           !author ||
-          !isbn ||
           !category ||
           !Number.isInteger(stock) ||
           stock < 1
         ) {
           throw new Error(
-            `Row ${index + 1} requires title, author, ISBN, category, and a positive whole-number stock count.`
+            `Row ${index + 1} requires title, author, category, and a positive whole-number stock count.`
           );
         }
 
@@ -4365,22 +4539,8 @@ export async function addBooksBulk(
       }
     );
 
-  const {
-    data,
-    error,
-  } =
-    await supabase
-      .from('books')
-      .insert(rows)
-      .select();
 
-  if (error) {
-    throw cleanErr(error);
-  }
-
-  return (data || []).map(
-    mapBook
-  );
+  return await mergeOrInsertLibraryBooks(rows);
 }
 
 // ============================================================================
@@ -4784,187 +4944,127 @@ export async function deleteBook(
 // LOAD SAMPLE / API CATALOG
 // ============================================================================
 
-export async function loadSampleCatalog(
-  libraryId
-) {
-  const normalizedLibraryId =
-    normalizeText(libraryId);
 
-  if (!normalizedLibraryId) {
-    throw new Error(
-      'A library must be selected before loading books.'
-    );
-  }
+export async function loadExternalCatalog(libraryId) {
+  const normalizedLibraryId = normalizeText(libraryId);
 
-  if (
-    !isValidUuid(
-      normalizedLibraryId
-    )
-  ) {
-    throw new Error(
-      'Invalid library ID.'
-    );
+  if (!normalizedLibraryId || !isValidUuid(normalizedLibraryId)) {
+    throw new Error('Select a valid library before loading API books.');
   }
 
   const categories = [
-    'computer+science',
-    'engineering',
-    'mathematics',
-    'physics',
-    'history',
+    { query: 'computer+science', label: 'Computer Science' },
+    { query: 'engineering', label: 'Engineering' },
+    { query: 'mathematics', label: 'Mathematics' },
+    { query: 'physics', label: 'Physics' },
+    { query: 'history', label: 'History' },
   ];
 
-  const allBooks = [];
+  const recordsByKey = new Map();
+  const errors = [];
 
-  for (
-    const cat of categories
-  ) {
+  for (const category of categories) {
     try {
-      const response =
-        await fetch(
-          `https://openlibrary.org/search.json?q=${cat}&limit=25`
-        );
+      const response = await fetch(
+        `https://openlibrary.org/search.json?q=${category.query}&limit=25`
+      );
 
       if (!response.ok) {
-        throw new Error(
-          `Open Library returned ${response.status}.`
-        );
+        throw new Error(`Open Library returned ${response.status}.`);
       }
 
-      const data =
-        await response.json();
+      const data = await response.json();
 
-      const mapped =
-        (data.docs || []).map(
-          (
-            doc,
-            index
-          ) => {
-            const copies =
-              Math.floor(
-                Math.random() * 5
-              ) + 3;
+      for (const doc of data.docs || []) {
+        const key = String(doc.key || '').trim();
+        const title = String(doc.title || '').trim();
 
-            const categoryName =
-              cat.replace(
-                '+',
-                ' '
-              );
+        // Open Library work keys identify records across repeated imports.
+        if (!key.startsWith('/works/') || !title) continue;
 
-            return {
-              title:
-                doc.title ||
-                'Untitled',
+        const firstSentence = Array.isArray(doc.first_sentence)
+          ? doc.first_sentence[0]
+          : doc.first_sentence;
 
-              author:
-                doc.author_name?.[0] ||
-                'Unknown Author',
-
-              category:
-                normalizeBookCategory(categoryName),
-
-              isbn:
-                doc.isbn?.[0] ||
-                `ISBN-${Math.random()
-                  .toString(36)
-                  .substring(
-                    2,
-                    10
-                  )
-                  .toUpperCase()}`,
-
-              shelf_location:
-                `Shelf ${String.fromCharCode(
-                  65 +
-                    (index % 5)
-                )}-${(index % 10) + 1}`,
-
-              library_id:
-                normalizedLibraryId,
-
-              total_copies:
-                copies,
-
-              available_copies:
-                copies,
-
-              summary:
-                doc.first_sentence?.[0] ||
-                `An authoritative academic resource focusing on ${categoryName}, providing comprehensive theoretical frameworks, practical methodologies, and foundational insights for higher education students and researchers within the library network.`,
-
-              cover_url:
-                doc.cover_i
-                  ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`
-                  : DEFAULT_COVER_URL,
-
-              book_type:
-                'library',
-
-              owner_visitor_id:
-                null,
-
-              lending_enabled:
-                false,
-
-              condition:
-                null,
-
-              lending_period_days:
-                null,
-
-              handover_location:
-                null,
-
-              handover_method:
-                null,
-
-              handover_details:
-                null,
-            };
-          }
-        );
-
-      allBooks.push(
-        ...mapped
-      );
-    } catch (err) {
-      console.error(
-        'Error fetching sample catalog from API:',
-        err
-      );
+        recordsByKey.set(key, {
+          openlibrary_key: key,
+          title,
+          author: doc.author_name?.[0] || null,
+          category: normalizeBookCategory(category.label),
+          isbn: doc.isbn?.[0] || null,
+          summary: typeof firstSentence === 'string'
+            ? firstSentence
+            : null,
+          cover_url: doc.cover_i
+            ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`
+            : null,
+          source_url: `https://openlibrary.org${key}`,
+        });
+      }
+    } catch (error) {
+      errors.push(`${category.label}: ${error.message}`);
+      console.error('Open Library category import failed:', error);
     }
   }
 
-  if (
-    allBooks.length === 0
-  ) {
+  const records = [...recordsByKey.values()];
+
+  if (records.length === 0) {
     throw new Error(
-      'No books could be loaded from Open Library.'
+      errors.length
+        ? `Could not retrieve external books. ${errors.join(' | ')}`
+        : 'Open Library returned no usable records.'
     );
   }
 
-  const {
-    data,
-    error,
-  } =
-    await supabase
-      .from('books')
-      .insert(
-        allBooks
-      )
-      .select();
-
-  if (error) {
-    throw cleanErr(error);
-  }
-
-  return (data || []).map(
-    mapBook
+  // Upsert metadata only. This RPC never inserts into public.books.
+  const { data, error } = await supabase.rpc(
+    'upsert_external_catalog_books',
+    {
+      p_library_id: normalizedLibraryId,
+      p_books: records,
+    }
   );
+
+  if (error) throw cleanErr(error);
+
+  return {
+    success: true,
+    fetched: records.length,
+    upserted: Number(data || 0),
+    warnings: errors,
+  };
+}
+
+export async function fetchExternalCatalogBooks() {
+  const { data, error } = await supabase
+    .from('external_catalog_books')
+    .select('*')
+    .order('title', { ascending: true });
+
+  if (error) throw cleanErr(error);
+
+  return (data || []).map((record) => ({
+    id: record.openlibrary_key,
+    openLibraryKey: record.openlibrary_key,
+    title: record.title,
+    author: record.author,
+    category: normalizeBookCategory(record.category),
+    isbn: record.isbn,
+    summary: record.summary,
+    coverUrl: record.cover_url,
+    sourceUrl: record.source_url,
+    lastSyncedAt: record.last_synced_at,
+    createdAt: record.created_at,
+    updatedAt: record.updated_at,
+    isExternalCatalog: true,
+    availableCopies: 0,
+    totalCopies: 0,
+  }));
 }
 
 // ============================================================================
-// BORROW REQUEST — LIBRARY BOOKS
+// BORROW REQUEST â€” LIBRARY BOOKS
 // ============================================================================
 
 export async function requestBorrow(
