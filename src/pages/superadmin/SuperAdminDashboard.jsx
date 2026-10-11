@@ -836,13 +836,13 @@ export default function SuperAdminDashboard() {
   // ============================================================
 
   return (
-    <div className="flex min-h-screen bg-[#f8fafc] text-slate-800">
+    <div className="flex min-h-screen bg-shelf-bg text-slate-800">
 
       {/* ======================================================
           SIDEBAR
       ====================================================== */}
 
-      <aside className="flex w-60 shrink-0 flex-col bg-[#002046] text-white">
+      <aside className="flex w-60 shrink-0 flex-col bg-shelf-primary text-white">
 
         <div className="border-b border-white/10 p-5">
           <p className="font-extrabold tracking-wider">
@@ -1318,7 +1318,7 @@ export default function SuperAdminDashboard() {
                       ''
                     );
                   }}
-                  className="rounded-lg bg-[#002046] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#003568]"
+                  className="rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#003568]"
                 >
                   {showAddLibrary
                     ? 'Cancel'
@@ -1860,7 +1860,7 @@ export default function SuperAdminDashboard() {
                   disabled={
                     staffLoading
                   }
-                  className="rounded-lg bg-[#002046] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#003568] disabled:opacity-50"
+                  className="rounded-lg bg-shelf-primary px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#003568] disabled:opacity-50"
                 >
                   {staffLoading
                     ? 'Creating Account...'
@@ -1909,7 +1909,7 @@ export default function SuperAdminDashboard() {
 
               <div className="overflow-x-auto">
 
-                <table className="w-full min-w-[900px] text-left text-sm">
+                <table className="w-full min-w-225 text-left text-sm">
 
                   <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
 

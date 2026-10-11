@@ -585,7 +585,7 @@ function QRBookBorrowing({
             type="button"
             onClick={startScanner}
             disabled={scanning}
-            className="bg-[#002046] text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:opacity-90 transition disabled:opacity-50"
+            className="bg-shelf-primary text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:opacity-90 transition disabled:opacity-50"
           >
             {scanning
               ? 'Scanner Active'
@@ -749,7 +749,7 @@ function QRBookBorrowing({
                                 )
                               }
                               disabled={confirming}
-                              className="bg-[#002046] text-white px-5 py-2.5 rounded-lg text-xs font-bold hover:opacity-90 transition disabled:opacity-50"
+                              className="bg-shelf-primary text-white px-5 py-2.5 rounded-lg text-xs font-bold hover:opacity-90 transition disabled:opacity-50"
                             >
                               {confirming
                                 ? 'Confirming...'
@@ -1120,10 +1120,10 @@ const branchNotifications = useMemo(() => {
   };
 
   return (
-    <div className="h-screen overflow-hidden bg-[#f8fafc] text-slate-800 flex">
+    <div className="h-screen overflow-hidden bg-shelf-bg text-slate-800 flex">
 
       {/* SIDEBAR */}
-      <aside className="w-60 h-screen sticky top-0 bg-[#002046] text-white flex flex-col shrink-0">
+      <aside className="w-60 h-screen sticky top-0 bg-shelf-primary text-white flex flex-col shrink-0">
 
         <div className="p-5 border-b border-white/10">
           <p className="font-extrabold tracking-wider">

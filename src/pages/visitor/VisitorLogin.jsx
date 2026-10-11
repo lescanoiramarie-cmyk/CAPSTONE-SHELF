@@ -1724,7 +1724,7 @@ export default function VisitorLogin() {
   // =========================================================
 
   return (
-    <div className="min-h-screen flex w-full bg-[#f8fafc]">
+    <div className="min-h-screen flex w-full bg-shelf-bg">
       <style>{`
         input[type="password"]::-ms-reveal,
         input[type="password"]::-ms-clear {
@@ -1737,7 +1737,7 @@ export default function VisitorLogin() {
       ===================================================== */}
 
       <div
-        className="hidden lg:flex lg:w-1/2 bg-[#002046] text-white p-12 flex-col justify-between relative overflow-hidden bg-cover bg-center"
+        className="hidden lg:flex lg:w-1/2 bg-shelf-primary text-white p-12 flex-col justify-between relative overflow-hidden bg-cover bg-center"
         style={{
           backgroundImage: `linear-gradient(
             rgba(0, 32, 70, 0.85),
@@ -1794,7 +1794,7 @@ export default function VisitorLogin() {
                     setView('login');
                   }
                 }}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-[#002046]"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-shelf-primary"
                 aria-label="Go back"
                 title="Go back"
               >
@@ -1807,7 +1807,7 @@ export default function VisitorLogin() {
           {/* HEADER */}
 
           <div className="text-center lg:text-left space-y-1">
-            <h2 className="text-2xl font-bold text-[#0f172a]">
+            <h2 className="text-2xl font-bold text-shelf-text">
               {view === 'login' &&
                 'SHELF ILMS Login'}
 
@@ -1894,7 +1894,7 @@ export default function VisitorLogin() {
                 disabled={
                   isResendingVisitorOtp
                 }
-                className="w-full text-xs font-semibold text-[#002046] hover:underline disabled:opacity-60 disabled:hover:no-underline"
+                className="w-full text-xs font-semibold text-shelf-primary hover:underline disabled:opacity-60 disabled:hover:no-underline"
               >
                 {isResendingVisitorOtp
                   ? 'Sending verification code...'
@@ -1909,7 +1909,7 @@ export default function VisitorLogin() {
           {view === 'success' &&
             registeredVisitor && (
               <div className="space-y-4 bg-slate-50 p-6 rounded-xl border border-slate-200 text-center">
-                <h3 className="text-sm font-bold text-[#0f172a]">
+                <h3 className="text-sm font-bold text-shelf-text">
                   Welcome,{' '}
                   {
                     registeredVisitor.fullName
@@ -1931,7 +1931,7 @@ export default function VisitorLogin() {
                   </div>
                 </div>
 
-                <p className="text-xs font-mono font-bold text-[#002046] break-all">
+                <p className="text-xs font-mono font-bold text-shelf-primary break-all">
                   {
                     registeredVisitor.qrCode
                   }
@@ -1951,7 +1951,7 @@ export default function VisitorLogin() {
 
                     navigate('/visitor');
                   }}
-                  className="w-full bg-[#002046] text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition"
+                  className="w-full bg-shelf-primary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition"
                 >
                   Enter Library Portal
                 </button>
@@ -2004,7 +2004,7 @@ export default function VisitorLogin() {
                     setOtpInput(value);
                   }}
                   placeholder="000000"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm tracking-[0.35em] text-center font-mono focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm tracking-[0.35em] text-center font-mono focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                 />
               </div>
 
@@ -2015,7 +2015,7 @@ export default function VisitorLogin() {
                 }
                 className={`w-full py-2.5 rounded-lg font-bold text-sm transition shadow-sm ${
                   otpInput.length === 6
-                    ? 'bg-[#002046] text-white hover:opacity-95'
+                    ? 'bg-shelf-primary text-white hover:opacity-95'
                     : 'bg-slate-300 text-slate-500 cursor-not-allowed'
                 }`}
               >
@@ -2027,7 +2027,7 @@ export default function VisitorLogin() {
                 onClick={
                   handleResendOtp
                 }
-                className="w-full text-xs font-semibold text-[#002046] hover:underline"
+                className="w-full text-xs font-semibold text-shelf-primary hover:underline"
               >
                 Resend Verification Code
               </button>
@@ -2071,7 +2071,7 @@ export default function VisitorLogin() {
                       fullName: '',
                     });
                   }}
-                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20 ${
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 ${
                     fieldErrors.fullName
                       ? 'border-red-400'
                       : 'border-slate-300'
@@ -2118,7 +2118,7 @@ export default function VisitorLogin() {
                       contactNumber: '',
                     });
                   }}
-                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20 ${
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 ${
                     fieldErrors.contactNumber
                       ? 'border-red-400'
                       : 'border-slate-300'
@@ -2161,7 +2161,7 @@ export default function VisitorLogin() {
                       email: '',
                     });
                   }}
-                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20 ${
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 ${
                     fieldErrors.email
                       ? 'border-red-400'
                       : 'border-slate-300'
@@ -2209,7 +2209,7 @@ export default function VisitorLogin() {
                       barangay: '',
                     });
                   }}
-                  className={`w-full px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#002046]/20 ${
+                  className={`w-full px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 ${
                     fieldErrors.province
                       ? 'border-red-400'
                       : 'border-slate-300'
@@ -2261,7 +2261,7 @@ export default function VisitorLogin() {
                   disabled={
                     !selectedProvince
                   }
-                  className={`w-full px-3 py-2 border rounded-lg text-sm bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#002046]/20 ${
+                  className={`w-full px-3 py-2 border rounded-lg text-sm bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 ${
                     fieldErrors.city
                       ? 'border-red-400'
                       : 'border-slate-300'
@@ -2316,7 +2316,7 @@ export default function VisitorLogin() {
                       barangay: '',
                     });
                   }}
-                  className={`w-full px-3 py-2 border rounded-lg text-sm disabled:bg-slate-100 disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#002046]/20 ${
+                  className={`w-full px-3 py-2 border rounded-lg text-sm disabled:bg-slate-100 disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 ${
                     fieldErrors.barangay
                       ? 'border-red-400'
                       : 'border-slate-300'
@@ -2371,7 +2371,7 @@ export default function VisitorLogin() {
                         password: '',
                       });
                     }}
-                    className={`w-full px-3 py-2 pr-12 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20 ${
+                    className={`w-full px-3 py-2 pr-12 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 ${
                       fieldErrors.password
                         ? 'border-red-400'
                         : 'border-slate-300'
@@ -2385,7 +2385,7 @@ export default function VisitorLogin() {
                         !showRegisterPassword
                       )
                     }
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-[#002046]"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-shelf-primary"
                   >
                     {showRegisterPassword ? (
                       <EyeOff size={18} />
@@ -2485,7 +2485,7 @@ export default function VisitorLogin() {
                         confirmPassword: '',
                       });
                     }}
-                    className={`w-full px-3 py-2 pr-12 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20 ${
+                    className={`w-full px-3 py-2 pr-12 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 ${
                       formData
                         .confirmPassword
                         .length > 0
@@ -2503,7 +2503,7 @@ export default function VisitorLogin() {
                         !showConfirmPassword
                       )
                     }
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-[#002046]"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-shelf-primary"
                   >
                     {showConfirmPassword ? (
                       <EyeOff size={18} />
@@ -2532,7 +2532,7 @@ export default function VisitorLogin() {
                 aria-busy={
                   isRegistering
                 }
-                className="w-full bg-[#002046] text-white py-2.5 rounded-lg font-bold text-sm transition shadow-sm hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full bg-shelf-primary text-white py-2.5 rounded-lg font-bold text-sm transition shadow-sm hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isRegistering
                   ? 'Creating Account...'
@@ -2545,7 +2545,7 @@ export default function VisitorLogin() {
                   onClick={
                     resetToLogin
                   }
-                  className="text-xs font-semibold text-slate-600 hover:text-[#002046]"
+                  className="text-xs font-semibold text-slate-600 hover:text-shelf-primary"
                 >
                   Already have an account?
                   Sign In
@@ -2566,7 +2566,7 @@ export default function VisitorLogin() {
             >
               {showScanner ? (
                 <div className="space-y-4">
-                  <div className="bg-[#002046] text-white rounded-xl p-4 text-center">
+                  <div className="bg-shelf-primary text-white rounded-xl p-4 text-center">
                     <h3 className="font-bold text-sm">
                       Scan QR Code
                     </h3>
@@ -2577,7 +2577,7 @@ export default function VisitorLogin() {
                     </p>
                   </div>
 
-                  <div className="rounded-xl overflow-hidden border-2 border-[#002046] bg-black">
+                  <div className="rounded-xl overflow-hidden border-2 border-shelf-primary bg-black">
                     <div
                       id="visitor-qr-reader"
                       className="w-full"
@@ -2623,7 +2623,7 @@ export default function VisitorLogin() {
                             event.target.value,
                         });
                       }}
-                      className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                      className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                     />
                   </div>
 
@@ -2655,7 +2655,7 @@ export default function VisitorLogin() {
                               event.target.value,
                           })
                         }
-                        className="w-full px-4 py-2.5 pr-12 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                        className="w-full px-4 py-2.5 pr-12 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                       />
 
                       <button
@@ -2665,7 +2665,7 @@ export default function VisitorLogin() {
                             !showLoginPassword
                           )
                         }
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-[#002046]"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-shelf-primary"
                       >
                         {showLoginPassword ? (
                           <EyeOff
@@ -2684,7 +2684,7 @@ export default function VisitorLogin() {
 
                   <button
                     type="submit"
-                    className="w-full bg-[#002046] text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm"
+                    className="w-full bg-shelf-primary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm"
                   >
                     Sign In
                   </button>
@@ -2695,7 +2695,7 @@ export default function VisitorLogin() {
                     <button
                       type="button"
                       onClick={handleOpenForgotPassword}
-                      className="text-xs font-semibold text-[#002046] hover:underline"
+                      className="text-xs font-semibold text-shelf-primary hover:underline"
                     >
                       Forgot password?
                     </button>
@@ -2776,7 +2776,7 @@ export default function VisitorLogin() {
                             'register'
                           );
                         }}
-                        className="font-bold text-[#002046] hover:underline"
+                        className="font-bold text-shelf-primary hover:underline"
                       >
                         Register as Visitor
                       </button>
@@ -2831,7 +2831,7 @@ export default function VisitorLogin() {
                               .value
                           )
                         }
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                       />
                     </div>
 
@@ -2840,7 +2840,7 @@ export default function VisitorLogin() {
                       disabled={
                         isResetSubmitting
                       }
-                      className="w-full bg-[#002046] text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full bg-shelf-primary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isResetSubmitting
                         ? 'Sending Code...'
@@ -2886,7 +2886,7 @@ export default function VisitorLogin() {
                               )
                           )
                         }
-                        className="w-full px-4 py-3 border border-slate-300 rounded-lg text-center text-2xl font-bold tracking-[0.5em] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                        className="w-full px-4 py-3 border border-slate-300 rounded-lg text-center text-2xl font-bold tracking-[0.5em] text-slate-800 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                       />
                     </div>
 
@@ -2895,7 +2895,7 @@ export default function VisitorLogin() {
                       disabled={
                         isResetSubmitting
                       }
-                      className="w-full bg-[#002046] text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full bg-shelf-primary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isResetSubmitting
                         ? 'Verifying...'
@@ -2912,7 +2912,7 @@ export default function VisitorLogin() {
                             'request'
                           );
                         }}
-                        className="text-xs font-semibold text-[#002046] hover:underline"
+                        className="text-xs font-semibold text-shelf-primary hover:underline"
                       >
                         Use a different email
                       </button>
@@ -2950,7 +2950,7 @@ export default function VisitorLogin() {
                                 .value
                             )
                           }
-                          className="w-full px-4 py-2.5 pr-12 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                          className="w-full px-4 py-2.5 pr-12 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                         />
 
                         <button
@@ -3006,7 +3006,7 @@ export default function VisitorLogin() {
                               .value
                           )
                         }
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                       />
                     </div>
 
@@ -3024,7 +3024,7 @@ export default function VisitorLogin() {
                       disabled={
                         isResetSubmitting
                       }
-                      className="w-full bg-[#002046] text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full bg-shelf-primary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isResetSubmitting
                         ? 'Updating Password...'
@@ -3051,7 +3051,7 @@ export default function VisitorLogin() {
                   onClick={() => {
                     resetToLogin();
                   }}
-                  className="w-full bg-[#002046] text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm"
+                  className="w-full bg-shelf-primary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm"
                 >
                   Back to Sign In
                 </button>

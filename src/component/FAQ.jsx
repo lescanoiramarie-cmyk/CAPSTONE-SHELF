@@ -124,7 +124,7 @@ export default function FAQ() {
       {/* HEADER */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#002046] text-white">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-shelf-primary text-white">
             <Bot size={26} aria-hidden="true" />
           </div>
 
@@ -158,7 +158,7 @@ export default function FAQ() {
       {/* CHAT WINDOW */}
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div
-          className="h-[420px] space-y-5 overflow-y-auto bg-slate-50 p-4 sm:h-[480px] sm:p-6"
+          className="h-105 space-y-5 overflow-y-auto bg-slate-50 p-4 sm:h-120 sm:p-6"
           role="log"
           aria-label="Chat conversation"
           aria-live="polite"
@@ -174,15 +174,15 @@ export default function FAQ() {
                 }`}
               >
                 {!isUser && (
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#002046] text-white">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-shelf-primary text-white">
                     <Bot size={17} aria-hidden="true" />
                   </div>
                 )}
 
                 <div
-                  className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-sm leading-relaxed sm:max-w-[75%] ${
+                  className={`max-w-[85%] whitespace-pre-wrap wrap-break-word rounded-2xl px-4 py-3 text-sm leading-relaxed sm:max-w-[75%] ${
                     isUser
-                      ? 'rounded-tr-sm bg-[#002046] text-white'
+                      ? 'rounded-tr-sm bg-shelf-primary text-white'
                       : 'rounded-tl-sm border border-slate-200 bg-white text-slate-700 shadow-sm'
                   }`}
                 >
@@ -200,7 +200,7 @@ export default function FAQ() {
 
           {asking && (
             <div className="flex items-start gap-2.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#002046] text-white">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-shelf-primary text-white">
                 <Bot size={17} aria-hidden="true" />
               </div>
 
@@ -244,13 +244,13 @@ export default function FAQ() {
             rows={1}
             placeholder="Type your question..."
             disabled={asking}
-            className="max-h-28 min-h-11 flex-1 resize-y rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-[#002046] focus:ring-2 focus:ring-[#002046]/10 disabled:bg-slate-100"
+            className="max-h-28 min-h-11 flex-1 resize-y rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/10 disabled:bg-slate-100"
           />
 
           <button
             type="submit"
             disabled={asking || !question.trim()}
-            className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#002046] px-4 text-sm font-bold text-white transition hover:bg-[#003366] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-shelf-primary px-4 text-sm font-bold text-white transition hover:bg-[#003366] disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Send message"
           >
             <Send size={17} aria-hidden="true" />
@@ -267,7 +267,7 @@ export default function FAQ() {
             type="button"
             onClick={resetChat}
             disabled={asking}
-            className="text-xs font-semibold text-slate-500 transition hover:text-[#002046] disabled:opacity-50"
+            className="text-xs font-semibold text-slate-500 transition hover:text-shelf-primary disabled:opacity-50"
           >
             Clear conversation
           </button>
@@ -291,7 +291,7 @@ export default function FAQ() {
               type="button"
               disabled={asking}
               onClick={() => sendQuestion(suggestion)}
-              className="rounded-xl border border-slate-200 px-4 py-3 text-left text-sm leading-relaxed text-slate-700 transition hover:border-[#002046] hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl border border-slate-200 px-4 py-3 text-left text-sm leading-relaxed text-slate-700 transition hover:border-shelf-primary hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {suggestion}
             </button>

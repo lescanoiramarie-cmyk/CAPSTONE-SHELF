@@ -22,9 +22,9 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="min-h-screen flex w-full bg-[#f8fafc]">
+    <div className="min-h-screen flex w-full bg-shelf-bg">
       <div
-        className="hidden lg:flex lg:w-1/2 bg-[#002046] text-white p-12 flex-col justify-between relative overflow-hidden bg-cover bg-center"
+        className="hidden lg:flex lg:w-1/2 bg-shelf-primary text-white p-12 flex-col justify-between relative overflow-hidden bg-cover bg-center"
         style={{ backgroundImage: `linear-gradient(rgba(0, 32, 70, 0.88), rgba(0, 32, 70, 0.88)), url(${libraryBg})` }}
       >
         <div className="relative z-10 flex items-center gap-3">
@@ -47,7 +47,7 @@ export default function AdminLogin() {
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12">
         <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl border border-slate-200 space-y-6">
           <div className="text-center lg:text-left space-y-1">
-            <h2 className="text-2xl font-bold text-[#0f172a]">Sub-Admin Access</h2>
+            <h2 className="text-2xl font-bold text-shelf-text">Sub-Admin Access</h2>
             <p className="text-xs text-slate-500">Sign in with your staff credentials to manage library inventory.</p>
           </div>
 
@@ -64,7 +64,7 @@ export default function AdminLogin() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="staff@shelf.edu"
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
               />
             </div>
 
@@ -76,13 +76,13 @@ export default function AdminLogin() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
               />
             </div>
 
             <button
               type="submit"
-              className="w-full bg-[#002046] text-white py-3 rounded-lg font-bold text-sm hover:opacity-95 transition shadow-sm"
+              className="w-full bg-shelf-primary text-white py-3 rounded-lg font-bold text-sm hover:opacity-95 transition shadow-sm"
             >
               Sign In as Staff
             </button>
@@ -93,8 +93,8 @@ export default function AdminLogin() {
           </div>
 
           <div className="pt-4 border-t border-slate-200 flex justify-between text-xs font-semibold">
-            <a href="/" className="text-slate-500 hover:text-[#002046]">← Visitor Portal</a>
-            <a href="/superadmin-login" className="text-[#002046] hover:underline">Super-Admin Access →</a>
+            <a href="/" className="text-slate-500 hover:text-shelf-primary">← Visitor Portal</a>
+            <a href="/superadmin-login" className="text-shelf-primary hover:underline">Super-Admin Access →</a>
           </div>
         </div>
       </div>

@@ -1709,7 +1709,7 @@ const handleAnnouncementSave = async (event) => {
   <section className="space-y-6">
     {/* Reports heading */}
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-col gap-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 border-b border-slate-100 bg-linear-to-r from-slate-50 to-white p-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-shelf-primary">
             SHELF ILMS
@@ -1910,7 +1910,7 @@ const handleAnnouncementSave = async (event) => {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] text-left text-sm">
+        <table className="w-full min-w-190 text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
             <tr>
               <th className="px-5 py-4 font-semibold">Time</th>
@@ -2949,7 +2949,7 @@ const handleAnnouncementSave = async (event) => {
             </form>
 
             <div className="overflow-x-auto border border-slate-200 bg-white">
-              <table className="w-full min-w-[900px] text-left text-sm">
+              <table className="w-full min-w-225 text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                   <tr>
                     <th className="p-3">

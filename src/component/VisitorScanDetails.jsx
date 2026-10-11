@@ -11,7 +11,7 @@ export default function VisitorScanDetails({ visitor }) {
       {details.map(([label, value]) => (
         <div key={label}>
           <dt className="text-xs font-medium text-slate-500">{label}</dt>
-          <dd className="mt-0.5 break-words text-sm font-semibold text-slate-800">
+          <dd className="mt-0.5 wrap-break-word text-sm font-semibold text-slate-800">
             {value || 'Not provided'}
           </dd>
         </div>

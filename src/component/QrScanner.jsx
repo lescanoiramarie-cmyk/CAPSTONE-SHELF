@@ -178,13 +178,13 @@ export default function QrScanner({
             }
           }}
           placeholder={placeholder}
-          className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+          className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
         />
 
         <button
           type="button"
           onClick={() => submit()}
-          className="bg-[#002046] text-white text-sm font-bold px-4 py-2.5 rounded-lg hover:opacity-90 transition"
+          className="bg-shelf-primary text-white text-sm font-bold px-4 py-2.5 rounded-lg hover:opacity-90 transition"
         >
           Submit
         </button>

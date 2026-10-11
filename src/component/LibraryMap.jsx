@@ -132,7 +132,7 @@ export default function LibraryMap({
             setSearch(event.target.value)
           }
           placeholder="Search libraries by name or address..."
-          className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+          className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
         />
 
         <select
@@ -142,7 +142,7 @@ export default function LibraryMap({
               event.target.value
             )
           }
-          className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+          className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
         >
           <option value="All">
             All
@@ -286,7 +286,7 @@ export default function LibraryMap({
                                 library.id
                               )
                             }
-                            className="mt-2 text-xs font-bold text-[#002046] hover:underline"
+                            className="mt-2 text-xs font-bold text-shelf-primary hover:underline"
                           >
                             Browse Catalog →
                           </button>
@@ -388,7 +388,7 @@ export default function LibraryMap({
                         library.id
                       )
                     }
-                    className="mt-3 text-xs font-bold text-[#002046] hover:underline"
+                    className="mt-3 text-xs font-bold text-shelf-primary hover:underline"
                   >
                     Browse Library Catalog →
                   </button>

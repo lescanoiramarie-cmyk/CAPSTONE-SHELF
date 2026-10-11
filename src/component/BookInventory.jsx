@@ -205,7 +205,7 @@ export default function BookInventory() {
     value={search}
     onChange={(e) => setSearch(e.target.value)}
     placeholder="Search inventory…"
-    className="flex-1 max-w-sm px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+    className="flex-1 max-w-sm px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
   />
 
   {/* Sort Books */}
@@ -213,7 +213,7 @@ export default function BookInventory() {
     value={sortBy}
     onChange={(e) => setSortBy(e.target.value)}
     aria-label="Sort books"
-    className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+    className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
   >
     <option value="title-asc">Title (A–Z)</option>
     <option value="title-desc">Title (Z–A)</option>
@@ -239,7 +239,7 @@ export default function BookInventory() {
 
     <button
       onClick={startAdd}
-      className="text-xs font-bold px-4 py-2.5 rounded-lg bg-[#002046] text-white hover:opacity-90 transition"
+      className="text-xs font-bold px-4 py-2.5 rounded-lg bg-shelf-primary text-white hover:opacity-90 transition"
     >
       <Plus size={15} className="mr-1 inline-block align-[-3px]" aria-hidden="true" /> Add Book
     </button>
@@ -294,7 +294,7 @@ export default function BookInventory() {
                   )}
                   <td className="p-3 text-xs font-mono">{b.availableCopies}/{b.totalCopies}</td>
                   <td className="p-3 text-right space-x-2">
-                    <button onClick={() => startEdit(b)} className="text-xs font-bold text-[#002046] hover:underline">
+                    <button onClick={() => startEdit(b)} className="text-xs font-bold text-shelf-primary hover:underline">
                       Edit
                     </button>
                     <button onClick={() => handleDelete(b)} className="text-xs font-bold text-red-600 hover:underline">
@@ -387,7 +387,7 @@ export default function BookInventory() {
               <button type="button" onClick={() => { setShowForm(false); setMutationError(''); }} disabled={saving} className="text-xs font-bold px-4 py-2 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50">
                 Cancel
               </button>
-              <button type="submit" disabled={saving} className="text-xs font-bold px-4 py-2 rounded-lg bg-[#002046] text-white hover:opacity-90 disabled:opacity-50">
+              <button type="submit" disabled={saving} className="text-xs font-bold px-4 py-2 rounded-lg bg-shelf-primary text-white hover:opacity-90 disabled:opacity-50">
                 {saving ? 'Saving…' : (editingId ? 'Save Changes' : 'Add Book')}
               </button>
             </div>

@@ -90,12 +90,12 @@ function calculateOverdueDays(dueDate) {
 // =========================================================
 
 const STATUS_STYLES = {
-  queued: 'bg-slate-100 text-slate-600',
-  ready_for_pickup: 'bg-amber-100 text-amber-700',
-  borrowed: 'bg-blue-100 text-blue-700',
-  returned: 'bg-emerald-100 text-emerald-700',
-  cancelled: 'bg-red-100 text-red-700',
-  expired: 'bg-red-100 text-red-700',
+  queued: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200',
+  ready_for_pickup: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200',
+  borrowed: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200',
+  returned: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200',
+  cancelled: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200',
+  expired: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200',
 };
 
 const STATUS_LABELS = {
@@ -2311,7 +2311,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
     (book) => (
       <div
         key={book.id}
-        className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"
+        className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden"
       >
         <div className="p-5">
 
@@ -2321,10 +2321,10 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
               <div className="flex flex-wrap items-center gap-2 mb-2">
 
-                <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200 px-2 py-1 rounded">
                   Personal Book
                 </span>
-                <span className="text-[10px] font-bold tracking-wider bg-slate-100 text-slate-700 px-2 py-1 rounded">
+                <span className="text-[10px] font-bold tracking-wider bg-slate-100 text-slate-700 dark:bg-slate-600 dark:text-slate-100 px-2 py-1 rounded">
                   {book.isPublic ? 'Public' : 'Only Me'}
                 </span>
 
@@ -2422,18 +2422,18 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
 
-            <div className="bg-slate-50 rounded-lg p-3">
+            <div className="bg-slate-50 dark:bg-slate-700/60 rounded-lg p-3">
               <p className="text-slate-400">
                 Category
               </p>
-              <p className="font-semibold text-slate-700">
+              <p className="font-semibold text-slate-700 dark:text-slate-100">
                 {book.category ||
                   'Uncategorized'}
               </p>
             </div>
 
             <div className="bg-slate-50 rounded-lg p-3">
-              <p className="text-slate-400">
+              <p className="text-slate-400 dark:text-slate-400">
                 Condition
               </p>
               <p className="font-semibold text-slate-700">
@@ -2463,19 +2463,19 @@ const handleConfirmCommunityBookReturn = async (request) => {
               </p>
             </div>
 
-            <div className="bg-slate-50 rounded-lg p-3">
-              <p className="text-slate-400">
-                Copies
-              </p>
-              <p className="font-semibold text-slate-700">
-                {getPersonalBookAvailabilityLabel(book)}
-              </p>
-            </div>
+           <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-900">
+            <p className="text-slate-400 dark:text-slate-400">
+              Copies
+            </p>
+            <p className="font-semibold text-slate-700 dark:text-slate-200">
+              {getPersonalBookAvailabilityLabel(book)}
+            </p>
+          </div>
 
           </div>
 
           {book.lendingEnabled && (
-            <div className="mt-3 rounded-lg bg-amber-50 border border-amber-100 p-3">
+            <div className="mt-3 rounded-lg border border-amber-100 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/40">
 
               <div className="flex items-start gap-2">
                 <MapPin
@@ -2485,11 +2485,11 @@ const handleConfirmCommunityBookReturn = async (request) => {
                 />
 
                 <div className="min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">
                     Handover Arrangement
                   </p>
 
-                  <p className="mt-0.5 text-xs font-semibold text-slate-700">
+                  <p className="mt-0.5 text-xs font-semibold text-slate-700 dark:text-slate-200">
                     {getHandoverMethodLabel(
                       book.handoverMethod
                     )}
@@ -2641,11 +2641,11 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
                 <div>
 
-                  <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                  <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-400">
                     Handover Arrangement
                   </p>
 
-                  <p className="text-xs font-semibold text-slate-700 mt-0.5">
+                  <p className="text-xs font-semibold text-slate-700 mt-0.5 dark:text-slate-200">
                     {getHandoverMethodLabel(
                       book.handoverMethod
                     )}
@@ -2739,12 +2739,12 @@ const handleConfirmCommunityBookReturn = async (request) => {
               onChange={
                 handleSearchInputChange
               }
-              className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+              className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400"
             />
 
             <button
               type="submit"
-              className="px-5 py-2.5 bg-[#002046] text-white rounded-lg text-sm font-bold hover:opacity-90"
+              className="px-5 py-2.5 bg-shelf-primary text-white rounded-lg text-sm font-bold hover:opacity-90"
             >
               Search
             </button>
@@ -2784,7 +2784,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
                 <div>
 
-                  <h2 className="text-lg font-bold text-slate-800">
+                  <h2 className="text-lg font-bold text-slate-800 dark:text-white">
                     {mapLibrary.name}
                   </h2>
 
@@ -2823,7 +2823,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
               onSubmit={
                 handleSearch
               }
-              className="flex flex-1 min-w-[280px] gap-2"
+              className="flex flex-1 min-w-70 gap-2"
             >
 
               <input
@@ -2833,13 +2833,13 @@ const handleConfirmCommunityBookReturn = async (request) => {
                 onChange={
                   handleSearchInputChange
                 }
-                className="flex-1 min-w-0 px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                className="flex-1 min-w-0 px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                 aria-label="Search catalog"
               />
 
               <button
                 type="submit"
-                className="px-5 py-2.5 bg-[#002046] text-white rounded-lg text-sm font-bold hover:opacity-90 transition"
+                className="px-5 py-2.5 bg-shelf-primary text-white rounded-lg text-sm font-bold hover:opacity-90 transition"
               >
                 Search
               </button>
@@ -2994,7 +2994,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                   {selectedCategory}
                 </h2>
 
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                   {filteredBooks.length}{' '}
                   catalog{' '}
                   {filteredBooks.length ===
@@ -3012,7 +3012,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                     'All'
                   )
                 }
-                className="text-xs font-semibold text-[#002046] hover:underline"
+                className="text-xs font-semibold text-shelf-primary hover:underline"
               >
                 Clear category
               </button>
@@ -3271,7 +3271,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                         'catalog'
                       );
                     }}
-                    className="flex min-h-16 items-center justify-between gap-3 border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-[#002046] hover:bg-blue-50"
+                    className="flex min-h-16 items-center justify-between gap-3 border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-shelf-primary hover:bg-blue-50"
                   >
 
                     <span className="min-w-0 text-sm font-semibold text-slate-700">
@@ -3430,7 +3430,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                 resetPersonalBookForm();
                 setShowAddPersonalBook(true);
               }}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#002046] px-4 py-2.5 text-sm font-bold text-white hover:opacity-90"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white hover:opacity-90"
             >
 
               <Plus
@@ -3448,21 +3448,21 @@ const handleConfirmCommunityBookReturn = async (request) => {
               COMMUNITY BOOK REQUESTS FOR THIS OWNER
           ====================================================== */}
 
-          <div className="order-3 rounded-xl border border-violet-200 bg-white shadow-sm overflow-hidden">
+          <div className="order-3 rounded-xl border border-violet-200 bg-white shadow-sm overflow-hidden dark:border-slate-700 dark:bg-slate-800">
 
             {/* HEADER */}
 
-            <div className="px-5 py-4 border-b border-violet-100 bg-violet-50">
+            <div className="px-5 py-4 border-b border-violet-100 bg-violet-50 dark:border-slate-700 dark:bg-slate-800">
 
               <div className="flex items-center justify-between gap-3">
 
                 <div>
 
-                  <h3 className="text-sm font-bold text-violet-900">
+                  <h3 className="text-sm font-bold text-violet-900 dark:text-violet-200">
                     Community Book Requests
                   </h3>
 
-                  <p className="mt-1 text-xs text-violet-700">
+                  <p className="mt-1 text-xs text-violet-300">
                     Review requests from visitors who want
                     to borrow your personal books.
                   </p>
@@ -3484,8 +3484,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
             {/* ERROR */}
 
             {ownerCommunityRequestError && (
-
-              <div className="mx-5 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
+              <div className="mx-5 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
                 {ownerCommunityRequestError}
               </div>
 
@@ -3495,7 +3494,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
             {communityRequestNotice && (
 
-              <div className="mx-5 mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700">
+              <div className="mx-5 mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
                 {communityRequestNotice}
               </div>
 
@@ -3504,8 +3503,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
             {!loadingOwnerCommunityRequests &&
               ownerCommunityRequests.length > 0 && (
                 <div
-                  className="flex gap-2 overflow-x-auto border-b border-slate-100 px-5 py-3"
-                  aria-label="Filter community book requests"
+                  className="flex gap-2 overflow-x-auto border-b border-slate-100 px-5 py-3 dark:border-slate-700"
                 >
                   {OWNER_COMMUNITY_REQUEST_FILTERS.map((filter) => {
                     const count =
@@ -3528,7 +3526,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                         className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                           isSelected
                             ? 'border-violet-600 bg-violet-600 text-white'
-                            : 'border-slate-200 bg-white text-slate-600 hover:border-violet-300 hover:text-violet-700'
+                            : 'border-slate-200 bg-white text-slate-600 hover:border-violet-300 hover:text-violet-700 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:border-violet-400 dark:hover:text-violet-200'
                         }`}
                       >
                         {filter.label}
@@ -3571,11 +3569,11 @@ const handleConfirmCommunityBookReturn = async (request) => {
                   aria-hidden="true"
                 />
 
-                <p className="mt-2 text-sm font-semibold text-slate-600">
+                <p className="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-200">
                   No community book requests yet.
                 </p>
 
-                <p className="mt-1 text-xs text-slate-400">
+                <p className="mt-1 text-xs text-slate-400 dark:text-slate-400">
                   Requests from other visitors will appear
                   here when they ask to borrow one of your books.
                 </p>
@@ -3591,7 +3589,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                   No requests in this category.
                 </div>
               ) : (
-                <div className="divide-y divide-slate-100">
+                <div className="divide-y divide-slate-100 dark:divide-slate-700">
 
                 {filteredOwnerCommunityRequests.map((request) => {
 
@@ -3647,21 +3645,23 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
                         </div>
 
-                        <h4 className="text-sm font-bold text-slate-800">
-                          {request.bookTitle ||
-                            'Untitled Book'}
-                        </h4>
+                        <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+  {request.bookTitle ||
+    'Untitled Book'}
+</h4>
 
-                        <p className="text-xs text-slate-500">
+<p className="text-xs text-slate-500 dark:text-slate-400">
+  Requested by{' '}
+  <span className="font-semibold text-slate-700 dark:text-slate-200">
+    {request.requesterName ||
+      'SHELF Visitor'}
+  </span>
+</p>
 
-                          Requested by{' '}
-
-                          <span className="font-semibold text-slate-700">
-                            {request.requesterName ||
-                              'SHELF Visitor'}
-                          </span>
-
-                        </p>
+<p className="text-[11px] text-slate-400 dark:text-slate-400">
+  Requested:{' '}
+  {formatDateTime(request.requestDate)}
+</p>
 
                         <p className="text-[11px] text-slate-400">
 
@@ -4390,14 +4390,14 @@ const handleConfirmCommunityBookReturn = async (request) => {
       ====================================================== */}
 
       {showRejectCommunityRequest && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-200">
-            <div className="px-6 py-5 border-b border-slate-200 flex items-start justify-between gap-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-70 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-700">
+            <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-700 flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-base font-bold text-slate-800">
+                <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">
                   Reject Community Book Request
                 </h2>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                   {showRejectCommunityRequest.bookTitle || 'Community Book'}
                 </p>
               </div>
@@ -4409,16 +4409,15 @@ const handleConfirmCommunityBookReturn = async (request) => {
                     setCommunityRequestResponse('');
                   }
                 }}
-                className="text-slate-400 hover:text-slate-700"
-                aria-label="Close reject request dialog"
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
               >
                 <X size={20} aria-hidden="true" />
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 text-slate-700 dark:text-slate-200">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
                   Reason / Response (Optional)
                 </label>
                 <textarea
@@ -4427,7 +4426,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                   maxLength={500}
                   rows={4}
                   placeholder="Add a short message for the requester."
-                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20 resize-none"
+                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 resize-none"
                 />
                 <p className="mt-1 text-[10px] text-slate-400 text-right">
                   {communityRequestResponse.length}/500
@@ -4442,7 +4441,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                     setShowRejectCommunityRequest(null);
                     setCommunityRequestResponse('');
                   }}
-                  className="px-4 py-2.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 disabled:opacity-50"
+                  className="px-4 py-2.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600 disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -4465,7 +4464,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
       ====================================================== */}
 
       {showAddPersonalBook && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-60 flex items-center justify-center p-4">
 
           <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-200">
 
@@ -4498,8 +4497,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                   );
                   resetPersonalBookForm();
                 }}
-                className="text-slate-400 hover:text-slate-700"
-                aria-label="Close add personal book form"
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
               >
                 <X
                   size={20}
@@ -4513,14 +4511,14 @@ const handleConfirmCommunityBookReturn = async (request) => {
               onSubmit={
                 handleAddPersonalBook
               }
-              className="p-6 space-y-5"
+              className="p-6 space-y-5 text-slate-700 dark:text-slate-200"
             >
 
               {/* BASIC INFORMATION */}
 
               <div className="space-y-4">
 
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
                   Book Information
                 </h3>
 
@@ -4528,7 +4526,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
                   <div className="md:col-span-2">
 
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
                       Book Title *
                     </label>
 
@@ -4547,7 +4545,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                         )
                       }
                       placeholder="Enter book title"
-                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-400"
                       required
                     />
 
@@ -4555,7 +4553,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
                   <div>
 
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
                       Author *
                     </label>
 
@@ -4574,54 +4572,46 @@ const handleConfirmCommunityBookReturn = async (request) => {
                         )
                       }
                       placeholder="Author name"
-                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-400"
                       required
                     />
 
                   </div>
 
                   <div>
-  <label className="block text-xs font-bold text-slate-700 mb-1.5">
-    Category
-  </label>
+                    <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">
+                      Category
+                    </label>
 
-  <select
-    value={personalBookForm.category || ''}
-    onChange={(event) => {
-      console.log('CATEGORY SELECTED:', event.target.value);
-      updatePersonalBookForm('category', event.target.value);
-    }}
-    style={{
-      width: '100%',
-      padding: '10px 12px',
-      border: '1px solid #cbd5e1',
-      borderRadius: '8px',
-      backgroundColor: '#ffffff',
-      color: '#0f172a',
-      cursor: 'pointer',
-    }}
-  >
-    <option value="">Select a category</option>
-    <option value="Fiction">Fiction</option>
-    <option value="Non-Fiction">Non-Fiction</option>
-    <option value="Academic">Academic</option>
-    <option value="Computer Science">Computer Science</option>
-    <option value="Engineering">Engineering</option>
-    <option value="Education">Education</option>
-    <option value="Business">Business</option>
-    <option value="Science">Science</option>
-    <option value="Mathematics">Mathematics</option>
-    <option value="History">History</option>
-    <option value="Literature">Literature</option>
-    <option value="Arts">Arts</option>
-    <option value="Social Sciences">Social Sciences</option>
-    <option value="Reference">Reference</option>
-    <option value="Other">Other</option>
-  </select>
-</div>
+                    <select
+                      value={personalBookForm.category || ''}
+                      onChange={(event) => {
+                        console.log('CATEGORY SELECTED:', event.target.value);
+                        updatePersonalBookForm('category', event.target.value);
+                      }}
+                      className="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                    >
+                      <option value="">Select a category</option>
+                      <option value="Fiction">Fiction</option>
+                      <option value="Non-Fiction">Non-Fiction</option>
+                      <option value="Academic">Academic</option>
+                      <option value="Computer Science">Computer Science</option>
+                      <option value="Engineering">Engineering</option>
+                      <option value="Education">Education</option>
+                      <option value="Business">Business</option>
+                      <option value="Science">Science</option>
+                      <option value="Mathematics">Mathematics</option>
+                      <option value="History">History</option>
+                      <option value="Literature">Literature</option>
+                      <option value="Arts">Arts</option>
+                      <option value="Social Sciences">Social Sciences</option>
+                      <option value="Reference">Reference</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
                   <div>
 
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
                       ISBN
                     </label>
 
@@ -4640,14 +4630,14 @@ const handleConfirmCommunityBookReturn = async (request) => {
                         )
                       }
                       placeholder="Optional ISBN"
-                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-400"
                     />
 
                   </div>
 
                   <div>
 
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
                       Condition *
                     </label>
 
@@ -4664,7 +4654,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                             .value
                         )
                       }
-                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                       required
                     >
 
@@ -4691,7 +4681,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
                   <div>
 
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
                       Number of Copies *
                     </label>
 
@@ -4706,7 +4696,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                           event.target.value
                         )
                       }
-                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-400"
                       required
                     />
 
@@ -4718,7 +4708,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
                   <div className="md:col-span-2">
 
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
                       Summary
                     </label>
 
@@ -4737,7 +4727,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                       }
                       placeholder="Brief description of the book"
                       rows={3}
-                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20 resize-none"
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 resize-none"
                     />
 
                   </div>
@@ -4761,7 +4751,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                       key={label}
                       className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold ${
                         personalBookForm.isPublic === value
-                          ? 'border-[#002046] bg-blue-50 text-[#002046]'
+                          ? 'border-shelf-primary bg-blue-50 text-shelf-primary'
                           : 'border-slate-200 text-slate-600'
                       }`}
                     >
@@ -4839,7 +4829,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
                     <div>
 
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
                         Lending Period *
                       </label>
 
@@ -4865,7 +4855,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                                 .value
                             )
                           }
-                          className="w-full px-3 py-2.5 pr-16 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                          className="w-full px-3 py-2.5 pr-16 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                           required
                         />
 
@@ -4883,7 +4873,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
                     <div>
 
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
                         Handover Method *
                       </label>
 
@@ -4897,7 +4887,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                             event.target.value
                           )
                         }
-                        className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                        className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                         required={
                           personalBookForm.lendingEnabled
                         }
@@ -4920,7 +4910,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
                     <div className="md:col-span-2">
 
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
                         Handover Details
                       </label>
 
@@ -4937,7 +4927,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                         placeholder="Add instructions or details for arranging the handover."
                         maxLength={500}
                         rows={3}
-                        className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20 resize-none"
+                        className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 resize-none"
                       />
 
                       <p className="text-[10px] text-slate-400 mt-1">
@@ -4986,7 +4976,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                     );
                     resetPersonalBookForm();
                   }}
-                  className="px-4 py-2.5 rounded-lg bg-slate-100 text-slate-600 text-sm font-bold hover:bg-slate-200 disabled:opacity-50"
+                  className="px-4 py-2.5 rounded-lg bg-slate-100 text-slate-600 text-sm font-bold hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600 disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -4996,7 +4986,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                   disabled={
                     addingPersonalBook
                   }
-                  className="px-5 py-2.5 rounded-lg bg-[#002046] text-white text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-5 py-2.5 rounded-lg bg-shelf-primary text-white text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {addingPersonalBook
                     ? 'Adding Book...'
@@ -5284,7 +5274,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                                   entry
                                 )
                               }
-                              className="px-3 py-1.5 bg-[#002046] text-white rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="px-3 py-1.5 bg-shelf-primary text-white rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {submittingBorrow
                                 ? 'Processing...'
@@ -5457,7 +5447,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                   }
                   placeholder="Write your review or thoughts about this book..."
                   rows={2}
-                  className="w-full text-xs p-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#002046]/20 bg-white"
+                  className="w-full text-xs p-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 bg-white"
                   required
                 />
 
@@ -5468,7 +5458,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                     disabled={
                       isSubmitting
                     }
-                    className="bg-[#002046] text-white text-xs px-4 py-2 rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50"
+                    className="bg-shelf-primary text-white text-xs px-4 py-2 rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50"
                   >
                     {isSubmitting
                       ? 'Submitting...'

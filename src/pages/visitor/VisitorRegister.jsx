@@ -351,7 +351,7 @@ export default function VisitorLogin() {
   };
 
   return (
-    <div className="min-h-screen flex w-full bg-[#f8fafc]">
+    <div className="min-h-screen flex w-full bg-shelf-bg">
       <style>
         {`
           input[type="password"]::-ms-reveal,
@@ -363,7 +363,7 @@ export default function VisitorLogin() {
 
       {/* LEFT BRANDING PANEL */}
       <div
-        className="hidden lg:flex lg:w-1/2 bg-[#002046] text-white p-12 flex-col justify-between relative overflow-hidden bg-cover bg-center"
+        className="hidden lg:flex lg:w-1/2 bg-shelf-primary text-white p-12 flex-col justify-between relative overflow-hidden bg-cover bg-center"
         style={{
           backgroundImage: `
             linear-gradient(
@@ -403,7 +403,7 @@ export default function VisitorLogin() {
         <div className="w-full max-w-md bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-slate-200 space-y-6 my-auto">
           {/* HEADER */}
           <div className="text-center lg:text-left space-y-1">
-            <h2 className="text-2xl font-bold text-[#0f172a]">
+            <h2 className="text-2xl font-bold text-shelf-text">
               {view === 'register' && 'Visitor Registration'}
               {view === 'otp' && 'Verify Your Email'}
               {view === 'success' && 'Registration Successful'}
@@ -450,7 +450,7 @@ export default function VisitorLogin() {
                   onChange={(e) =>
                     setFormData({ ...formData, fullName: e.target.value })
                   }
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                 />
               </div>
 
@@ -466,7 +466,7 @@ export default function VisitorLogin() {
                   onChange={(e) =>
                     setFormData({ ...formData, contactNumber: e.target.value })
                   }
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                 />
               </div>
 
@@ -482,7 +482,7 @@ export default function VisitorLogin() {
                   onChange={(e) =>
                     setFormData({ ...formData, email: e.target.value })
                   }
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                 />
               </div>
 
@@ -499,7 +499,7 @@ export default function VisitorLogin() {
                   onChange={(e) =>
                     setFormData({ ...formData, schoolName: e.target.value })
                   }
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                 />
               </div>
 
@@ -516,7 +516,7 @@ export default function VisitorLogin() {
                   onChange={(e) =>
                     setFormData({ ...formData, studentEmail: e.target.value })
                   }
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                 />
               </div>
 
@@ -532,7 +532,7 @@ export default function VisitorLogin() {
                   onChange={(e) =>
                     setFormData({ ...formData, address: e.target.value })
                   }
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                 />
               </div>
 
@@ -551,14 +551,14 @@ export default function VisitorLogin() {
                     onChange={(e) =>
                       setFormData({ ...formData, password: e.target.value })
                     }
-                    className="w-full px-3 py-2 pr-12 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                    className="w-full px-3 py-2 pr-12 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                   />
                   <button
                     type="button"
                     onClick={() =>
                       setShowRegisterPassword(!showRegisterPassword)
                     }
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-[#002046] transition"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-shelf-primary transition"
                   >
                     {showRegisterPassword ? (
                       <EyeOff size={18} />
@@ -610,7 +610,7 @@ export default function VisitorLogin() {
                         confirmPassword: e.target.value,
                       })
                     }
-                    className={`w-full px-3 py-2 pr-12 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20 ${
+                    className={`w-full px-3 py-2 pr-12 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 ${
                       formData.confirmPassword.length > 0
                         ? passwordsMatch
                           ? 'border-green-400'
@@ -623,7 +623,7 @@ export default function VisitorLogin() {
                     onClick={() =>
                       setShowConfirmPassword(!showConfirmPassword)
                     }
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-[#002046] transition"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-shelf-primary transition"
                   >
                     {showConfirmPassword ? (
                       <EyeOff size={18} />
@@ -652,7 +652,7 @@ export default function VisitorLogin() {
                 disabled={!isPasswordValid || !passwordsMatch}
                 className={`w-full py-2.5 rounded-lg font-bold text-sm transition shadow-sm ${
                   isPasswordValid && passwordsMatch
-                    ? 'bg-[#002046] text-white hover:opacity-95'
+                    ? 'bg-shelf-primary text-white hover:opacity-95'
                     : 'bg-slate-300 text-slate-500 cursor-not-allowed'
                 }`}
               >
@@ -687,7 +687,7 @@ export default function VisitorLogin() {
                     setOtpInput(e.target.value.replace(/\D/g, ''))
                   }
                   placeholder="Enter 6-digit code"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm tracking-[0.35em] text-center font-mono focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm tracking-[0.35em] text-center font-mono focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                 />
               </div>
 
@@ -696,7 +696,7 @@ export default function VisitorLogin() {
                 disabled={otpInput.length !== 6}
                 className={`w-full py-2.5 rounded-lg font-bold text-sm transition shadow-sm ${
                   otpInput.length === 6
-                    ? 'bg-[#002046] text-white hover:opacity-95'
+                    ? 'bg-shelf-primary text-white hover:opacity-95'
                     : 'bg-slate-300 text-slate-500 cursor-not-allowed'
                 }`}
               >
@@ -706,7 +706,7 @@ export default function VisitorLogin() {
               <button
                 type="button"
                 onClick={handleResendOtp}
-                className="w-full text-xs font-semibold text-[#002046] hover:underline"
+                className="w-full text-xs font-semibold text-shelf-primary hover:underline"
               >
                 Resend Verification Code
               </button>
@@ -716,7 +716,7 @@ export default function VisitorLogin() {
           {/* SUCCESS VIEW */}
           {view === 'success' && registeredVisitor && (
             <div className="space-y-4 bg-slate-50 p-6 rounded-xl border border-slate-200 text-center">
-              <h3 className="text-sm font-bold text-[#0f172a]">
+              <h3 className="text-sm font-bold text-shelf-text">
                 Welcome, {registeredVisitor.fullName}!
               </h3>
 
@@ -726,7 +726,7 @@ export default function VisitorLogin() {
                 </div>
               </div>
 
-              <p className="text-xs font-mono font-bold text-[#002046] break-all">
+              <p className="text-xs font-mono font-bold text-shelf-primary break-all">
                 {registeredVisitor.qrCode}
               </p>
 
@@ -736,7 +736,7 @@ export default function VisitorLogin() {
                   loginAsVisitorSession(registeredVisitor);
                   navigate('/visitor');
                 }}
-                className="w-full bg-[#002046] text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition"
+                className="w-full bg-shelf-primary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition"
               >
                 Enter Library Portal
               </button>
@@ -748,11 +748,11 @@ export default function VisitorLogin() {
             <form onSubmit={handleLogin} className="space-y-4">
               {showScanner ? (
                 <div className="space-y-4">
-                  <div className="bg-[#002046] text-white rounded-xl p-4 text-center">
+                  <div className="bg-shelf-primary text-white rounded-xl p-4 text-center">
                     <h3 className="font-bold text-sm">Scan Your QR Pass</h3>
                   </div>
 
-                  <div className="rounded-xl overflow-hidden border-2 border-[#002046] bg-black">
+                  <div className="rounded-xl overflow-hidden border-2 border-shelf-primary bg-black">
                     <div id="visitor-qr-reader" className="w-full" />
                   </div>
 
@@ -781,7 +781,7 @@ export default function VisitorLogin() {
                           identifier: e.target.value,
                         })
                       }
-                      className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                      className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                     />
                   </div>
 
@@ -801,12 +801,12 @@ export default function VisitorLogin() {
                             password: e.target.value,
                           })
                         }
-                        className="w-full px-4 py-2.5 pr-12 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#002046]/20"
+                        className="w-full px-4 py-2.5 pr-12 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                       />
                       <button
                         type="button"
                         onClick={() => setShowLoginPassword(!showLoginPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-[#002046] transition"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-shelf-primary transition"
                       >
                         {showLoginPassword ? (
                           <EyeOff size={18} />
@@ -819,7 +819,7 @@ export default function VisitorLogin() {
 
                   <button
                     type="submit"
-                    className="w-full bg-[#002046] text-white py-2.5 rounded-lg font-bold text-sm hover:opacity-95 transition shadow-sm"
+                    className="w-full bg-shelf-primary text-white py-2.5 rounded-lg font-bold text-sm hover:opacity-95 transition shadow-sm"
                   >
                     Sign In
                   </button>
@@ -856,7 +856,7 @@ export default function VisitorLogin() {
                     setView('register');
                     setError('');
                   }}
-                  className="font-bold text-[#002046] hover:underline"
+                  className="font-bold text-shelf-primary hover:underline"
                 >
                   Register here
                 </button>
@@ -867,7 +867,7 @@ export default function VisitorLogin() {
                 <button
                   type="button"
                   onClick={resetToLogin}
-                  className="font-bold text-[#002046] hover:underline"
+                  className="font-bold text-shelf-primary hover:underline"
                 >
                   Sign in here
                 </button>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Draggable from 'react-draggable';
 import { QRCodeSVG } from 'qrcode.react';
+import { useTheme } from '../../context/ThemeContext.jsx';
 import {
   Bell,
   BookMarked,
@@ -61,22 +62,22 @@ function getStatusClass(status) {
 
   switch (normalizedStatus) {
     case 'returned':
-      return 'bg-green-100 text-green-700';
+      return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
 
     case 'borrowed':
-      return 'bg-blue-100 text-blue-700';
+      return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
 
     case 'ready_for_pickup':
-      return 'bg-amber-100 text-amber-700';
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
 
     case 'queued':
-      return 'bg-purple-100 text-purple-700';
+      return 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300';
 
     case 'cancelled':
-      return 'bg-red-100 text-red-700';
+      return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
 
     default:
-      return 'bg-slate-100 text-slate-600';
+      return 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
   }
 }
 
@@ -144,15 +145,7 @@ export default function VisitorDashboard() {
   useState(false);
 
 
-  const [isDarkAppearance, setIsDarkAppearance] = useState(() => {
-    try {
-      return (
-        globalThis.localStorage.getItem('shelf_visitor_appearance') === 'dark'
-      );
-    } catch {
-      return false;
-    }
-  });
+  const { isDarkAppearance, setIsDarkAppearance } = useTheme();
 
   const ownerPendingRequests = ownerCommunityBookRequests.filter(
     (request) =>
@@ -160,6 +153,7 @@ export default function VisitorDashboard() {
   );
 
   const ownerNotificationCount = ownerPendingRequests.length;
+
 
   useEffect(() => {
     try {
@@ -173,7 +167,7 @@ export default function VisitorDashboard() {
   }, [isDarkAppearance]);
 
       // LOAD LATEST PUBLISHED ANNOUNCEMENT
-    
+
       useEffect(() => {
         let active = true;
 
@@ -439,17 +433,18 @@ export default function VisitorDashboard() {
   // UI
   // =========================================================
 
+
   return (
     <div
-      className={`visitor-dashboard min-h-screen bg-[#f8fafc] text-slate-800 ${
-        isDarkAppearance ? 'dark bg-slate-900 text-slate-100' : ''
+      className={`visitor-dashboard min-h-screen transition-colors duration-200 ${
+        isDarkAppearance
+          ? 'theme-dark bg-slate-900 text-slate-100'
+          : 'bg-shelf-bg text-slate-800'
       }`}
     >
-
-      
             {/* ANNOUNCEMENT POPUP */}
             {isAnnouncementOpen && announcements[announcementIndex] && (
-              <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+              <div className="fixed inset-0 z-90 flex items-center justify-center p-4">
                 <button
                   type="button"
                   className="absolute inset-0 bg-slate-950/60"
@@ -463,7 +458,7 @@ export default function VisitorDashboard() {
                   aria-labelledby="visitor-announcement-title"
                   className="relative z-10 w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-800"
                 >
-                  <div className="flex items-center justify-between gap-3 bg-[#002046] px-5 py-4 text-white">
+                  <div className="flex items-center justify-between gap-3 bg-shelf-primary px-5 py-4 text-white">
                     <div className="flex items-center gap-3">
                       <Megaphone size={22} aria-hidden="true" />
                       <h2
@@ -489,7 +484,7 @@ export default function VisitorDashboard() {
                       {announcements[announcementIndex].title}
                     </h3>
 
-                    <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-600 dark:text-slate-300">
+                    <p className="whitespace-pre-wrap wrap-break-word text-sm leading-6 text-slate-600 dark:text-slate-300">
                       {announcements[announcementIndex].message}
                     </p>
 
@@ -522,7 +517,7 @@ export default function VisitorDashboard() {
                           onClick={() =>
                             setAnnouncementIndex((index) => index + 1)
                           }
-                          className="rounded-lg bg-[#002046] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#003366]"
+                          className="rounded-lg bg-shelf-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#003366]"
                         >
                           Next
                         </button>
@@ -530,7 +525,7 @@ export default function VisitorDashboard() {
                         <button
                           type="button"
                           onClick={() => setIsAnnouncementOpen(false)}
-                          className="rounded-lg bg-[#002046] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#003366]"
+                          className="rounded-lg bg-shelf-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#003366]"
                         >
                           Got it
                         </button>
@@ -545,11 +540,11 @@ export default function VisitorDashboard() {
       {/* =====================================================
           HEADER
       ====================================================== */}
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#002046] px-4 py-3 text-white shadow-md sm:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-shelf-primary px-4 py-3 text-white shadow-md sm:px-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 
           {/* LEFT: LOGO AND PORTAL LABEL */}
-          <div className="flex shrink-0 items-center gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
             <span className="text-lg font-extrabold tracking-wider">
               SHELF ILMS
             </span>
@@ -560,10 +555,10 @@ export default function VisitorDashboard() {
           </div>
 
           {/* RIGHT: WELCOME AND USER CONTROLS */}
-          <div className="flex flex-wrap items-center justify-start gap-2 sm:ml-auto sm:justify-end sm:gap-3">
+          <div className="grid w-full grid-cols-4 items-center gap-2 sm:ml-auto sm:flex sm:w-auto sm:justify-end sm:gap-3">
 
             {/* WELCOME */}
-            <span className="mr-1 text-xs text-slate-300">
+            <span className="col-span-4 text-xs text-slate-300 sm:col-span-1 sm:mr-1">
               Welcome, <b>{user?.name || 'Visitor'}</b>
             </span>
 
@@ -579,14 +574,14 @@ export default function VisitorDashboard() {
               title="Profile"
             >
               <UserRound size={18} aria-hidden="true" />
-              <span className="text-xs font-semibold">Profile</span>
+              <span className="hidden text-xs font-semibold sm:inline">Profile</span>
             </button>
 
             {/* DARK MODE */}
             <button
               type="button"
               onClick={() => setIsDarkAppearance((prev) => !prev)}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+              className="col-span-1 inline-flex min-h-10 w-full items-center justify-center gap-1 rounded-xl border border-white/20 bg-white/10 px-2 py-2 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 sm:w-auto sm:gap-2 sm:px-3"
               aria-label={
                 isDarkAppearance
                   ? 'Switch to light mode'
@@ -605,7 +600,7 @@ export default function VisitorDashboard() {
                 <Moon size={18} aria-hidden="true" />
               )}
 
-              <span className="text-xs font-semibold">
+              <span className="hidden text-xs font-semibold sm:inline">
                 {isDarkAppearance ? 'Light Mode' : 'Dark Mode'}
               </span>
 
@@ -622,13 +617,13 @@ export default function VisitorDashboard() {
                 />
               </span>
             </button>
-            
+
 {/* COMMUNITY BOOK REQUEST NOTIFICATIONS */}
 <div className="relative">
   <button
     type="button"
     onClick={() => setIsNotificationsOpen((open) => !open)}
-    className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
+    className="relative col-span-1 flex h-10 w-full items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/20 sm:h-10 sm:w-10"
     aria-label={`Book request notifications: ${ownerNotificationCount} pending`}
     aria-expanded={isNotificationsOpen}
     title="Book request notifications"
@@ -706,11 +701,11 @@ export default function VisitorDashboard() {
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <p className="break-words text-sm font-semibold">
+                      <p className="wrap-break-word text-sm font-semibold">
                         {request.requesterName || 'A SHELF visitor'} requested your book
                       </p>
 
-                      <p className="mt-1 break-words text-sm">
+                      <p className="mt-1 wrap-break-word text-sm">
                         {request.bookTitle || 'Untitled Book'}
                       </p>
 
@@ -754,7 +749,7 @@ export default function VisitorDashboard() {
       {/* =====================================================
           MAIN CONTENT
       ====================================================== */}
-        <main className="mx-auto max-w-7xl space-y-7 px-4 py-6 sm:px-6 sm:py-8 lg:space-y-8">
+        <main className="mx-auto min-w-0 max-w-7xl space-y-7 px-3 py-5 sm:px-6 sm:py-8 lg:space-y-8">
 
         {/* =================================================
             PAGE HEADER
@@ -857,7 +852,7 @@ export default function VisitorDashboard() {
         ================================================== */}
         <nav
           aria-label="Visitor dashboard"
-          className="sticky top-[76px] z-30 -mx-4 flex gap-2 overflow-x-auto border-b border-slate-200 bg-[#f8fafc]/95 px-4 pb-3 pt-2 backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/95 sm:top-[80px] sm:mx-0 sm:rounded-2xl sm:border sm:p-3"
+          className="relative z-30 -mx-4 flex min-w-0 gap-2 overflow-x-auto border-b border-slate-200 bg-shelf-bg/95 px-4 pb-3 pt-2 backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/95 sm:sticky sm:top-20 sm:mx-0 sm:rounded-2xl sm:border sm:p-3"
         >
           {[
             { id: 'catalog', label: 'Catalog', Icon: BookOpen },
@@ -880,7 +875,7 @@ export default function VisitorDashboard() {
               }}
               className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition sm:px-4 sm:text-sm ${
                 tab === id
-                  ? 'bg-[#002046] text-white shadow-sm dark:bg-blue-600'
+                  ? 'bg-shelf-primary text-white shadow-sm dark:bg-blue-600'
                   : 'border border-transparent text-slate-600 hover:border-slate-200 hover:bg-white hover:text-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-white'
               }`}
               aria-current={tab === id ? 'page' : undefined}
@@ -924,7 +919,7 @@ export default function VisitorDashboard() {
                   <button
                     type="button"
                     onClick={() => setLibraryFilter(null)}
-                    className="text-[#002046] dark:text-blue-400 font-bold hover:underline"
+                    className="text-shelf-primary dark:text-blue-400 font-bold hover:underline"
                   >
                     Clear filter
                   </button>
@@ -1041,7 +1036,7 @@ export default function VisitorDashboard() {
       aria-current={menuSection === id ? 'page' : undefined}
       className={`flex items-center justify-center gap-2 border-b-2 px-2 py-3 text-xs font-semibold ${
         menuSection === id
-          ? 'border-[#002046] text-[#002046] dark:border-blue-400 dark:text-blue-400'
+          ? 'border-shelf-primary text-shelf-primary dark:border-blue-400 dark:text-blue-400'
           : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
       }`}
     >
@@ -1094,7 +1089,7 @@ export default function VisitorDashboard() {
                             {label}
                           </dt>
 
-                          <dd className="break-words font-medium text-slate-800 dark:text-slate-200">
+                          <dd className="wrap-break-word font-medium text-slate-800 dark:text-slate-200">
                             {value || 'Not provided'}
                           </dd>
                         </div>
@@ -1124,7 +1119,7 @@ export default function VisitorDashboard() {
                           </div>
                         </div>
 
-                        <p className="mt-2 break-all font-mono text-xs font-bold text-[#002046] dark:text-blue-400">
+                        <p className="mt-2 break-all font-mono text-xs font-bold text-shelf-primary dark:text-blue-400">
                           {user.qrCode}
                         </p>
 
@@ -1132,7 +1127,7 @@ export default function VisitorDashboard() {
                           type="button"
                           onClick={handleSaveQrAsImage}
                           disabled={isSavingQr}
-                          className="mt-3 w-full rounded-md bg-[#002046] dark:bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:opacity-90 disabled:opacity-50"
+                          className="mt-3 w-full rounded-md bg-shelf-primary dark:bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:opacity-90 disabled:opacity-50"
                         >
                           {isSavingQr
                             ? 'Saving QR image...'
@@ -1222,7 +1217,7 @@ export default function VisitorDashboard() {
 
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="min-w-0">
-                                    <h4 className="break-words text-xs font-bold text-slate-800 dark:text-slate-200">
+                                    <h4 className="wrap-break-word text-xs font-bold text-slate-800 dark:text-slate-200">
                                       {transaction.bookTitle ||
                                         'Book transaction'}
                                     </h4>
@@ -1384,13 +1379,13 @@ export default function VisitorDashboard() {
       >
         <div
           ref={faqDragRef}
-          className="fixed bottom-5 right-5 z-[100] w-fit"
+          className="fixed bottom-5 right-5 z-100 w-fit"
         >
           {/* FAQ Chatbot Window */}
           {isFaqOpen && (
             <div className="mb-4 w-[min(92vw,400px)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800">
               {/* Draggable Header */}
-              <div className="faq-drag-handle flex cursor-move items-center justify-between gap-3 bg-[#002046] px-4 py-3 text-white">
+              <div className="faq-drag-handle flex cursor-move items-center justify-between gap-3 bg-shelf-primary px-4 py-3 text-white">
                 <div className="min-w-0">
                   <h3 className="font-bold">
                     SHELF FAQ Assistant
@@ -1424,7 +1419,7 @@ export default function VisitorDashboard() {
             <button
               type="button"
               onClick={() => setIsFaqOpen((open) => !open)}
-              className="faq-floating-button flex h-14 w-14 items-center justify-center rounded-full bg-[#002046] text-white shadow-xl transition hover:scale-105 hover:bg-blue-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-300"
+              className="faq-floating-button flex h-14 w-14 items-center justify-center rounded-full bg-shelf-primary text-white shadow-xl transition hover:scale-105 hover:bg-blue-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-300"
               aria-label={
                 isFaqOpen
                   ? 'Close FAQ chatbot'

@@ -81,7 +81,7 @@ export default function BookTransactions() {
               setError('');
             }}
             className={`px-4 py-2 text-sm font-bold rounded-lg transition ${
-              mode === t.id ? 'bg-[#002046] text-white' : 'bg-white border border-slate-300 text-slate-600 hover:bg-slate-50'
+              mode === t.id ? 'bg-shelf-primary text-white' : 'bg-white border border-slate-300 text-slate-600 hover:bg-slate-50'
             }`}
           >
             {t.label}

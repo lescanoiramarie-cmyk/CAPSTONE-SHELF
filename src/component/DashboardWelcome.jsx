@@ -311,7 +311,7 @@ const markAllNotificationsRead = () => {
                   key={label}
                   type="button"
                   onClick={onClick}
-                  className="group flex min-h-[58px] w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left transition duration-200 hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-700/60 dark:hover:border-amber-500 dark:hover:bg-slate-700 dark:focus-visible:ring-offset-slate-800"
+                  className="group flex min-h-14.5 w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left transition duration-200 hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-700/60 dark:hover:border-amber-500 dark:hover:bg-slate-700 dark:focus-visible:ring-offset-slate-800"
                 >
                   {Icon && (
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#174477] shadow-sm transition-colors group-hover:bg-amber-100 group-hover:text-amber-900 dark:bg-slate-600 dark:text-blue-200 dark:group-hover:bg-amber-400/20 dark:group-hover:text-amber-300">

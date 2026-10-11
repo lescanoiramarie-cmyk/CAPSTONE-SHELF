@@ -72,7 +72,7 @@ export default function AuditLogViewer({ libraries = [] }) {
                 <td className="p-3 font-mono text-xs">{log.actor_id || 'System'}</td>
                 <td className="p-3">{log.action}</td>
                 <td className="p-3">{branchName(log.branch_id)}</td>
-                <td className="max-w-sm p-3"><pre className="whitespace-pre-wrap break-words font-sans text-xs">{JSON.stringify(log.details || {})}</pre></td>
+                <td className="max-w-sm p-3"><pre className="whitespace-pre-wrap wrap-break-word font-sans text-xs">{JSON.stringify(log.details || {})}</pre></td>
               </tr>
             ))}
           </tbody>
