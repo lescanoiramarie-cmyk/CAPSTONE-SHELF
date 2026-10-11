@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-
 import { Bar } from 'react-chartjs-2';
-
 import {
   BarElement,
   CategoryScale,
@@ -10,9 +8,7 @@ import {
   LinearScale,
   Tooltip,
 } from 'chart.js';
-
 import { supabase } from '../lib/supabaseClient.js';
-
 import {
   exportToCSV,
   exportToExcel,
@@ -33,30 +29,10 @@ ChartJS.register(
   Legend
 );
 
-const TABS = [
-  {
-    id: 'reports',
-    label: 'Reports',
-  },
-  {
-    id: 'analytics',
-    label: 'Analytics',
-  },
-  {
-    id: 'feedback',
-    label: 'Feedback',
-  },
-  {
-    id: 'announcements',
-    label: 'Announcements',
-  },
-];
-
 function getLibraryName(libraries, id) {
   if (!id) {
     return 'All libraries';
   }
-
   return (
     libraries.find(
       (library) =>
@@ -72,7 +48,6 @@ function formatRole(role) {
     librarian: 'Library Staff',
     circulation: 'Circulation Staff',
   };
-
   return (
     labels[role] ||
     String(role || '')
@@ -91,13 +66,10 @@ function isDateInsideWindow(
   if (!window?.valid || !value) {
     return false;
   }
-
   const date = new Date(value);
-
   if (Number.isNaN(date.getTime())) {
     return false;
   }
-
   return (
     date >= window.start &&
     date < window.endExclusive
@@ -106,19 +78,15 @@ function isDateInsideWindow(
 
 function getDateKey(value, timeframe) {
   const date = new Date(value);
-
   if (Number.isNaN(date.getTime())) {
     return '';
   }
-
   const monthKey = `${date.getFullYear()}-${String(
     date.getMonth() + 1
   ).padStart(2, '0')}`;
-
   if (timeframe === 'year') {
     return monthKey;
   }
-
   return `${monthKey}-${String(
     date.getDate()
   ).padStart(
@@ -129,6 +97,7 @@ function getDateKey(value, timeframe) {
 
 function AdminWorkspace({
   initialTab = 'reports',
+  mode = 'reports', // 'reports' o 'communication'
   user,
   libraries = [],
   books = [],
@@ -137,80 +106,70 @@ function AdminWorkspace({
 }) {
   const isSubAdmin =
     user?.role === 'subadmin';
-
   const currentLibraryId =
     user?.libraryId ||
     user?.assignedBranch ||
     '';
-
   const [tab, setTab] = useState(initialTab);
 
-  /*
-   * =========================================================================
-   * ANALYTICS-ONLY FILTERS
-   * =========================================================================
-   *
-   * These states are intentionally isolated from Reports,
-   * Feedback, Announcements, and Staff Accounts.
-   */
+  // Sync tab sa initialTab kung magbago ang navigation item
+  useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab]);
+
+  // I-filter ang mga tabs batay sa napiling Sidebar menu (mode)
+  const activeTabs = useMemo(() => {
+    if (mode === 'communication') {
+      return [
+        { id: 'feedback', label: 'Feedback' },
+        { id: 'announcements', label: 'Announcements' },
+      ];
+    }
+    // Default mode: Reports & Services
+    return [
+      { id: 'reports', label: 'Reports' },
+      { id: 'analytics', label: 'Analytics' },
+    ];
+  }, [mode]);
 
   const [
     analyticsLibraryId,
     setAnalyticsLibraryId,
   ] = useState('');
-
   const [timeframe, setTimeframe] =
     useState('7d');
-
   const [
     customStartDate,
     setCustomStartDate,
   ] = useState('');
-
   const [
     customEndDate,
     setCustomEndDate,
   ] = useState('');
 
-  /*
-   * =========================================================================
-   * REPORT FILTERS
-   * =========================================================================
-   */
-
   const [reportSort, setReportSort] =
     useState('time');
-
   const [feedback, setFeedback] =
     useState([]);
-
   const [announcements, setAnnouncements] =
     useState([]);
-
   const [staff, setStaff] =
     useState([]);
-
   const [loading, setLoading] =
     useState(false);
-
   const [error, setError] =
     useState('');
-
   const [message, setMessage] =
     useState('');
-
   const [announcementForm, setAnnouncementForm] =
     useState({
       title: '',
       message: '',
     });
-
   const [editingAnnouncementId, setEditingAnnouncementId] =
     useState(null);
-
   const [feedbackReply, setFeedbackReply] =
     useState({});
-
   const [staffForm, setStaffForm] =
     useState({
       email: '',
@@ -218,10 +177,8 @@ function AdminWorkspace({
       password: '',
       libraryId: currentLibraryId,
     });
-
   const [forecast, setForecast] =
     useState(null);
-
   const [forecastLoading, setForecastLoading] =
     useState(false);
 
@@ -232,7 +189,6 @@ function AdminWorkspace({
       ),
     [books]
   );
-
   const analyticsWindow = useMemo(
     () => getTimeframeRange(
       timeframe,
@@ -241,15 +197,6 @@ function AdminWorkspace({
     ),
     [timeframe, customStartDate, customEndDate]
   );
-
-  /*
-   * =========================================================================
-   * REPORTS
-   * =========================================================================
-   *
-   * Sub-Admin: assigned branch only.
-   * Super Admin: all libraries.
-   */
 
   const scopedAttendance = useMemo(
     () =>
@@ -265,20 +212,17 @@ function AdminWorkspace({
       isSubAdmin,
     ]
   );
-
   const scopedBorrows = useMemo(
     () =>
       borrowRequests.filter((item) => {
         const book =
           booksById.get(item.bookId);
-
         if (isSubAdmin) {
           return (
             String(book?.libraryId) ===
             String(currentLibraryId)
           );
         }
-
         return true;
       }),
     [
@@ -288,12 +232,6 @@ function AdminWorkspace({
       isSubAdmin,
     ]
   );
-
-  /*
-   * =========================================================================
-   * REPORT ROWS
-   * =========================================================================
-   */
 
   const reportRows = useMemo(() => {
     const attendanceRows =
@@ -320,7 +258,6 @@ function AdminWorkspace({
             ? 'Checked out'
             : 'Checked in',
         }));
-
     const transactionRows =
       scopedBorrows
         .filter(
@@ -352,7 +289,6 @@ function AdminWorkspace({
             ' '
           ),
         }));
-
     const returnRows = scopedBorrows
       .filter((item) =>
         isDateInsideWindow(item.returnDate, analyticsWindow)
@@ -368,7 +304,6 @@ function AdminWorkspace({
         ),
         status: `Returned${Number(item.fineAmount) > 0 ? `; fine ${item.fineAmount}` : ''}`,
       }));
-
     return [
       ...attendanceRows,
       ...transactionRows,
@@ -379,13 +314,11 @@ function AdminWorkspace({
           b.person
         );
       }
-
       if (reportSort === 'type') {
         return a.type.localeCompare(
           b.type
         );
       }
-
       return (
         new Date(b.time) -
         new Date(a.time)
@@ -400,12 +333,6 @@ function AdminWorkspace({
     scopedBorrows,
   ]);
 
-  /*
-   * =========================================================================
-   * LOAD DATABASE-BACKED SECTIONS
-   * =========================================================================
-   */
-
   useEffect(() => {
     if (
       !supabase ||
@@ -417,15 +344,11 @@ function AdminWorkspace({
     ) {
       return undefined;
     }
-
     let active = true;
-
     async function loadData() {
       setLoading(true);
       setError('');
-
       let result;
-
       if (tab === 'feedback') {
         let query = supabase
           .from('visitor_feedback')
@@ -433,24 +356,12 @@ function AdminWorkspace({
           .order('created_at', {
             ascending: false,
           });
-
-        /*
-         * Sub-Admin:
-         * assigned branch only.
-         *
-         * Super Admin:
-         * all feedback.
-         *
-         * Analytics filters do NOT affect feedback.
-         */
-
         if (isSubAdmin) {
           query = query.eq(
             'library_id',
             currentLibraryId
           );
         }
-
         result = await query;
       } else if (
         tab === 'announcements'
@@ -471,11 +382,9 @@ function AdminWorkspace({
             ascending: false,
           });
       }
-
       if (!active) {
         return;
       }
-
       if (result.error) {
         setError(result.error.message);
       } else if (tab === 'feedback') {
@@ -493,21 +402,17 @@ function AdminWorkspace({
           result.data || []
         );
       }
-
       setLoading(false);
     }
-
     loadData().catch((loadError) => {
       if (active) {
         setError(
           loadError.message ||
             'Unable to load this section.'
         );
-
         setLoading(false);
       }
     });
-
     return () => {
       active = false;
     };
@@ -517,40 +422,10 @@ function AdminWorkspace({
     tab,
   ]);
 
-  /*
-   * =========================================================================
-   * ANALYTICS
-   * =========================================================================
-   */
-
-  /*
-   * -------------------------------------------------------------------------
-   * Analytics date window
-   * -------------------------------------------------------------------------
-   */
-
-  /*
-   * -------------------------------------------------------------------------
-   * Analytics library scope
-   * -------------------------------------------------------------------------
-   *
-   * Sub-Admin:
-   *   automatically assigned branch.
-   *
-   * Super Admin:
-   *   selected branch or all libraries.
-   */
-
   const effectiveAnalyticsLibraryId =
     isSubAdmin
       ? currentLibraryId
       : analyticsLibraryId;
-
-  /*
-   * -------------------------------------------------------------------------
-   * Analytics attendance scope
-   * -------------------------------------------------------------------------
-   */
 
   const analyticsScopedAttendance =
     useMemo(
@@ -567,18 +442,11 @@ function AdminWorkspace({
                 )
               );
             }
-
-            /*
-             * Empty analyticsLibraryId
-             * means All libraries.
-             */
-
             if (
               !analyticsLibraryId
             ) {
               return true;
             }
-
             return (
               String(
                 item.libraryId
@@ -597,12 +465,6 @@ function AdminWorkspace({
       ]
     );
 
-  /*
-   * -------------------------------------------------------------------------
-   * Analytics borrowing scope
-   * -------------------------------------------------------------------------
-   */
-
   const analyticsScopedBorrows =
     useMemo(
       () =>
@@ -612,7 +474,6 @@ function AdminWorkspace({
               booksById.get(
                 item.bookId
               );
-
             if (isSubAdmin) {
               return (
                 String(
@@ -623,18 +484,11 @@ function AdminWorkspace({
                 )
               );
             }
-
-            /*
-             * Empty analyticsLibraryId
-             * means All libraries.
-             */
-
             if (
               !analyticsLibraryId
             ) {
               return true;
             }
-
             return (
               String(
                 book?.libraryId
@@ -654,12 +508,6 @@ function AdminWorkspace({
       ]
     );
 
-  /*
-   * -------------------------------------------------------------------------
-   * Analytics date-filtered attendance
-   * -------------------------------------------------------------------------
-   */
-
   const analyticsAttendance =
     useMemo(
       () =>
@@ -675,12 +523,6 @@ function AdminWorkspace({
         analyticsWindow,
       ]
     );
-
-  /*
-   * -------------------------------------------------------------------------
-   * Analytics date-filtered transactions
-   * -------------------------------------------------------------------------
-   */
 
   const analyticsBorrows =
     useMemo(
@@ -698,12 +540,6 @@ function AdminWorkspace({
       ]
     );
 
-  /*
-   * -------------------------------------------------------------------------
-   * Analytics chart data
-   * -------------------------------------------------------------------------
-   */
-
   const periodCounts = useMemo(() => {
     if (!analyticsWindow.valid) {
       return {
@@ -712,24 +548,20 @@ function AdminWorkspace({
         transactions: [],
       };
     }
-
     const buckets = getTimeframeBuckets(
       timeframe,
       analyticsWindow
     );
     const visitCounts = new Map();
     const transactionCounts = new Map();
-
     analyticsAttendance.forEach((item) => {
       const key = getDateKey(item.timeIn, timeframe);
       visitCounts.set(key, (visitCounts.get(key) || 0) + 1);
     });
-
     analyticsBorrows.forEach((item) => {
       const key = getDateKey(item.requestDate, timeframe);
       transactionCounts.set(key, (transactionCounts.get(key) || 0) + 1);
     });
-
     return {
       labels: buckets.map((bucket) => bucket.label),
       visits: buckets.map(
@@ -750,30 +582,20 @@ function AdminWorkspace({
     if (!analyticsWindow.valid) {
       return [];
     }
-
     const buckets = getTimeframeBuckets(
       'custom',
       analyticsWindow
     ).slice(-366);
     const counts = new Map();
-
     analyticsAttendance.forEach((item) => {
       const key = getDateKey(item.timeIn, 'custom');
       counts.set(key, (counts.get(key) || 0) + 1);
     });
-
     return buckets.map((bucket) => counts.get(bucket.key) || 0);
   }, [analyticsAttendance, analyticsWindow]);
 
-  /*
-   * -------------------------------------------------------------------------
-   * Most requested categories
-   * -------------------------------------------------------------------------
-   */
-
   const topCategories = useMemo(() => {
     const counts = new Map();
-
     analyticsBorrows.forEach(
       (request) => {
         const category =
@@ -781,7 +603,6 @@ function AdminWorkspace({
             request.bookId
           )?.category ||
           'Uncategorized';
-
         counts.set(
           category,
           (counts.get(
@@ -790,7 +611,6 @@ function AdminWorkspace({
         );
       }
     );
-
     return [...counts]
       .sort(
         (a, b) =>
@@ -802,12 +622,6 @@ function AdminWorkspace({
     analyticsBorrows,
   ]);
 
-  /*
-   * -------------------------------------------------------------------------
-   * Operational recommendations
-   * -------------------------------------------------------------------------
-   */
-
   const demandRecommendations =
     useMemo(() => {
       if (
@@ -818,7 +632,6 @@ function AdminWorkspace({
             'Select a valid analytics date range.',
         ];
       }
-
       const visitTimes =
         analyticsAttendance
           .map((item) =>
@@ -832,19 +645,16 @@ function AdminWorkspace({
                 value
               )
           );
-
       const latestVisit =
         Math.max(
           ...visitTimes,
           0
         );
-
       if (!latestVisit) {
         return [
           'There is not yet enough visitor activity in the selected date range to generate a demand recommendation.',
         ];
       }
-
       const recent =
         analyticsAttendance.filter(
           (item) => {
@@ -852,14 +662,12 @@ function AdminWorkspace({
               new Date(
                 item.timeIn
               ).getTime();
-
             return (
               latestVisit - time <
               7 * 86400000
             );
           }
         ).length;
-
       const prior =
         analyticsAttendance.filter(
           (item) => {
@@ -867,10 +675,8 @@ function AdminWorkspace({
               new Date(
                 item.timeIn
               ).getTime();
-
             const age =
               latestVisit - time;
-
             return (
               age >=
                 7 * 86400000 &&
@@ -879,9 +685,7 @@ function AdminWorkspace({
             );
           }
         ).length;
-
       const suggestions = [];
-
       if (
         recent >
           prior * 1.2 &&
@@ -891,13 +695,11 @@ function AdminWorkspace({
           'Visitor volume is up at least 20% week over week. Consider adding front-desk coverage during peak hours.'
         );
       }
-
       if (topCategories[0]) {
         suggestions.push(
           `Review copy levels for ${topCategories[0][0]}, the highest-demand category in the selected transaction data.`
         );
       }
-
       if (
         suggestions.length ===
         0
@@ -906,7 +708,6 @@ function AdminWorkspace({
           'Demand is steady or there is not yet enough activity to recommend a staffing change. Continue collecting branch activity.'
         );
       }
-
       return suggestions;
     }, [
       analyticsAttendance,
@@ -914,18 +715,11 @@ function AdminWorkspace({
       topCategories,
     ]);
 
-  /*
-   * =========================================================================
-   * EXPORT
-   * =========================================================================
-   */
-
   const handleExport = async (format) => {
     if (!analyticsWindow.valid) {
       setError(analyticsWindow.error);
       return;
     }
-
     const rows = reportRows.map(
         (row) => ({
           ...row,
@@ -934,7 +728,6 @@ function AdminWorkspace({
           ).toISOString(),
         })
       );
-
     const suffix = `${
       timeframe
     }_${
@@ -942,7 +735,6 @@ function AdminWorkspace({
         ? currentLibraryId
         : 'all-libraries'
     }`;
-
     if (format === 'pdf') {
       const [{ jsPDF }, { default: autoTable }] = await Promise.all([
         import('jspdf'),
@@ -954,7 +746,6 @@ function AdminWorkspace({
       const branchLabel = isSubAdmin
         ? getLibraryName(libraries, currentLibraryId)
         : 'All libraries';
-
       document.setFontSize(16);
       document.text('SHELF ILMS Circulation Report', 14, 16);
       document.setFontSize(10);
@@ -987,7 +778,6 @@ function AdminWorkspace({
       document.save(`SHELF_Report_${suffix}.pdf`);
       return;
     }
-
     if (format === 'xlsx') {
       exportToExcel(
         rows,
@@ -1001,228 +791,174 @@ function AdminWorkspace({
     }
   };
 
-  /*
-   * =========================================================================
-   * ANNOUNCEMENTS
-   * =========================================================================
-   */
-const handleAnnouncementEdit = (item) => {
-  setError('');
-  setMessage('');
-
-  setAnnouncementForm({
-    title: item.title || '',
-    message: item.message || '',
-  });
-
-  setEditingAnnouncementId(item.id);
-};
-
-const handleAnnouncementSave = async (event) => {
-  event.preventDefault();
-
-  setError('');
-  setMessage('');
-
-  if (!supabase) {
-    setError('Supabase connection is unavailable.');
-    return;
-  }
-
-  const title = announcementForm.title.trim();
-  const messageText = announcementForm.message.trim();
-
-  if (!title || !messageText) {
-    setError('Please enter both the title and message.');
-    return;
-  }
-
-  try {
-    const values = {
-      title,
-      message: messageText,
-      created_by: user?.name || user?.email || 'Admin',
-      published: true,
-    };
-
-    const result = editingAnnouncementId
-      ? await supabase
-          .from('announcements')
-          .update({
-            ...values,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', editingAnnouncementId)
-      : await supabase
-          .from('announcements')
-          .insert(values);
-
-    if (result.error) {
-      setError(`Unable to publish announcement: ${result.error.message}`);
-      return;
-    }
-
-    const { data, error: fetchError } = await supabase
-      .from('announcements')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (fetchError) {
-      setError(
-        `Announcement was saved, but the list could not refresh: ${fetchError.message}`
-      );
-      return;
-    }
-
-    setAnnouncements(data || []);
-
+  const handleAnnouncementEdit = (item) => {
+    setError('');
+    setMessage('');
     setAnnouncementForm({
-      title: '',
-      message: '',
+      title: item.title || '',
+      message: item.message || '',
     });
+    setEditingAnnouncementId(item.id);
+  };
 
-    setEditingAnnouncementId(null);
-
-    setMessage(
-  editingAnnouncementId
-    ? 'Announcement updated successfully.'
-    : 'Announcement published successfully.'
-);
-    setTab('announcements');
-  } catch (error) {
-    setError(
-      error?.message || 'An unexpected error occurred while publishing.'
-    );
-  }
-};
-
-
-  const handleAnnouncementDelete = async (id) => {
-  if (!supabase) {
-    setError('Supabase connection is unavailable.');
-    return;
-  }
-
-  if (!globalThis.confirm('Delete this announcement?')) {
-    return;
-  }
-
-  setError('');
-  setMessage('');
-
-  try {
-    const { error: deleteError } = await supabase
-      .from('announcements')
-      .delete()
-      .eq('id', id);
-
-    if (deleteError) {
-      setError(`Unable to delete announcement: ${deleteError.message}`);
+  const handleAnnouncementSave = async (event) => {
+    event.preventDefault();
+    setError('');
+    setMessage('');
+    if (!supabase) {
+      setError('Supabase connection is unavailable.');
       return;
     }
-
-    setAnnouncements((current) =>
-      current.filter((item) => item.id !== id)
-    );
-
-    setMessage('Announcement deleted successfully.');
-  } catch (error) {
-    setError(
-      error?.message || 'An unexpected error occurred while deleting.'
-    );
-  }
-};
-  /*
-   * =========================================================================
-   * FEEDBACK
-   * =========================================================================
-   */
-
-  const handleFeedbackReply =
-    async (item) => {
-      const reply = String(
-        feedbackReply[item.id] ||
-          ''
-      ).trim();
-
-      if (!reply) {
+    const title = announcementForm.title.trim();
+    const messageText = announcementForm.message.trim();
+    if (!title || !messageText) {
+      setError('Please enter both the title and message.');
+      return;
+    }
+    try {
+      const values = {
+        title,
+        message: messageText,
+        created_by: user?.name || user?.email || 'Admin',
+        published: true,
+      };
+      const result = editingAnnouncementId
+        ? await supabase
+            .from('announcements')
+            .update({
+              ...values,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', editingAnnouncementId)
+        : await supabase
+            .from('announcements')
+            .insert(values);
+      if (result.error) {
+        setError(`Unable to publish announcement: ${result.error.message}`);
         return;
       }
-
-      const {
-        error: replyError,
-      } = await supabase
-        .from('visitor_feedback')
-        .update({
-          admin_reply: reply,
-          replied_by:
-            user?.name ||
-            user?.email,
-          replied_at:
-            new Date().toISOString(),
-          status: 'answered',
-          updated_at:
-            new Date().toISOString(),
-        })
-        .eq(
-          'id',
-          item.id
-        );
-
-      if (replyError) {
+      const { data, error: fetchError } = await supabase
+        .from('announcements')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (fetchError) {
         setError(
-          replyError.message
+          `Announcement was saved, but the list could not refresh: ${fetchError.message}`
         );
-      } else {
-        setFeedback(
-          (current) =>
-            current.map(
-              (entry) =>
-                entry.id ===
-                item.id
-                  ? {
-                      ...entry,
-                      admin_reply:
-                        reply,
-                      status:
-                        'answered',
-                    }
-                  : entry
-            )
-        );
-
-        setFeedbackReply(
-          (current) => ({
-            ...current,
-            [item.id]: '',
-          })
-        );
-
-        setMessage(
-          'Reply saved.'
-        );
+        return;
       }
-    };
+      setAnnouncements(data || []);
+      setAnnouncementForm({
+        title: '',
+        message: '',
+      });
+      setEditingAnnouncementId(null);
+      setMessage(
+        editingAnnouncementId
+          ? 'Announcement updated successfully.'
+          : 'Announcement published successfully.'
+      );
+      setTab('announcements');
+    } catch (error) {
+      setError(
+        error?.message || 'An unexpected error occurred while publishing.'
+      );
+    }
+  };
 
-  /*
-   * =========================================================================
-   * VISITOR FORECAST
-   * =========================================================================
-   */
+  const handleAnnouncementDelete = async (id) => {
+    if (!supabase) {
+      setError('Supabase connection is unavailable.');
+      return;
+    }
+    if (!globalThis.confirm('Delete this announcement?')) {
+      return;
+    }
+    setError('');
+    setMessage('');
+    try {
+      const { error: deleteError } = await supabase
+        .from('announcements')
+        .delete()
+        .eq('id', id);
+      if (deleteError) {
+        setError(`Unable to delete announcement: ${deleteError.message}`);
+        return;
+      }
+      setAnnouncements((current) =>
+        current.filter((item) => item.id !== id)
+      );
+      setMessage('Announcement deleted successfully.');
+    } catch (error) {
+      setError(
+        error?.message || 'An unexpected error occurred while deleting.'
+      );
+    }
+  };
+
+  const handleFeedbackReply = async (item) => {
+    const reply = String(feedbackReply[item.id] || '').trim();
+
+    // 1. Validation kapag walang nilagay sa reply box
+    if (!reply) {
+      setError('Please enter a reply message before saving.');
+      setMessage('');
+      return;
+    }
+
+    // 2. Validation kapag masyadong maiksi ang reply (iwas "a" o "ok")
+    if (reply.length < 3) {
+      setError('Please write a valid reply (at least 3 characters long).');
+      setMessage('');
+      return;
+    }
+
+    setError('');
+    setMessage('');
+
+    const { error: replyError } = await supabase
+      .from('visitor_feedback')
+      .update({
+        admin_reply: reply,
+        replied_by: user?.name || user?.email,
+        replied_at: new Date().toISOString(),
+        status: 'answered',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', item.id);
+
+    if (replyError) {
+      setError(replyError.message);
+    } else {
+      setFeedback((current) =>
+        current.map((entry) =>
+          entry.id === item.id
+            ? {
+                ...entry,
+                admin_reply: reply,
+                status: 'answered',
+              }
+            : entry
+        )
+      );
+      setFeedbackReply((current) => ({
+        ...current,
+        [item.id]: '',
+      }));
+      setMessage('Reply saved successfully.');
+    }
+  };
 
   const runForecast = async () => {
     const endpoint =
       import.meta.env
         .VITE_ANALYTICS_API_URL;
-
     if (!endpoint) {
       setError(
         'Set VITE_ANALYTICS_API_URL to the Python analytics service URL to enable forecasts.'
       );
-
       return;
     }
-
     if (
       !analyticsWindow.valid
     ) {
@@ -1230,23 +966,11 @@ const handleAnnouncementSave = async (event) => {
         analyticsWindow.error ||
           'Please select a valid analytics date range.'
       );
-
       return;
     }
-
     setForecastLoading(true);
     setError('');
-
     try {
-      /*
-       * Build category demand from the
-       * currently selected Analytics date window.
-       *
-       * The selected branch and selected date
-       * range are therefore both reflected in
-       * the forecast input.
-       */
-
       const categorySeries =
         topCategories.map(
           ([category]) => {
@@ -1262,7 +986,6 @@ const handleAnnouncementSave = async (event) => {
               )
             );
             const weeklyDemand = Array(weekCount).fill(0);
-
             analyticsBorrows.forEach(
               (request) => {
                 const requestCategory =
@@ -1270,19 +993,16 @@ const handleAnnouncementSave = async (event) => {
                     request.bookId
                   )?.category ||
                   'Uncategorized';
-
                 if (
                   requestCategory !==
                   category
                 ) {
                   return;
                 }
-
                 const requestTime =
                   new Date(
                     request.requestDate
                   ).getTime();
-
                 if (
                   !Number.isFinite(
                     requestTime
@@ -1290,32 +1010,20 @@ const handleAnnouncementSave = async (event) => {
                 ) {
                   return;
                 }
-
                 const endTime =
                   analyticsWindow.endExclusive.getTime();
-
                 const ageDays =
                   Math.floor(
                     (endTime -
                       requestTime) /
                       86400000
                   );
-
                 if (
                   ageDays < 0
                 ) {
                   return;
                 }
-
                 const weekIndex = Math.floor(ageDays / 7);
-
-                /*
-                 * 0 = most recent week
-                 * 1 = previous week
-                 * 2 = two weeks ago
-                 * 3 = three weeks ago
-                 */
-
                 if (
                   weekIndex >= 0 &&
                   weekIndex <
@@ -1327,13 +1035,6 @@ const handleAnnouncementSave = async (event) => {
                 }
               }
             );
-
-            /*
-             * Reverse so the Python service
-             * receives oldest -> newest
-             * weekly demand.
-             */
-
             return {
               category,
               weekly_demand:
@@ -1341,7 +1042,6 @@ const handleAnnouncementSave = async (event) => {
             };
           }
         );
-
       const response =
         await fetch(
           `${endpoint.replace(
@@ -1350,34 +1050,27 @@ const handleAnnouncementSave = async (event) => {
           )}/forecast?timeframe=${encodeURIComponent(timeframe)}`,
           {
             method: 'POST',
-
             headers: {
               'Content-Type':
                 'application/json',
             },
-
             body: JSON.stringify({
               daily_visitors:
                 forecastDailyVisitorCounts,
-
               categories:
                 categorySeries,
-
               horizon_days: 7,
             }),
           }
         );
-
       if (!response.ok) {
         const errorResponse =
           await response.json().catch(() => ({}));
-
         throw new Error(
           errorResponse.detail ||
             `Forecast service returned ${response.status}.`
         );
       }
-
       setForecast(
         await response.json()
       );
@@ -1386,7 +1079,6 @@ const handleAnnouncementSave = async (event) => {
         forecastError instanceof Error
           ? forecastError.message
           : '';
-
       setError(
         forecastError instanceof TypeError &&
           /fetch/i.test(errorMessage)
@@ -1398,215 +1090,6 @@ const handleAnnouncementSave = async (event) => {
     }
   };
 
-  /*
-   * =========================================================================
-   * CREATE STAFF
-   * =========================================================================
-   */
-
-  const handleCreateStaff =
-    async (event) => {
-      event.preventDefault();
-
-      if (!supabase) {
-        setError(
-          'Supabase is not configured.'
-        );
-
-        return;
-      }
-
-      setError('');
-      setMessage('');
-
-      const email =
-        staffForm.email
-          .trim()
-          .toLowerCase();
-
-      const fullName =
-        staffForm.fullName.trim();
-
-      const password =
-        staffForm.password;
-
-      const libraryId =
-        staffForm.libraryId;
-
-      if (
-        !email ||
-        !fullName ||
-        !password ||
-        !libraryId
-      ) {
-        setError(
-          'Please complete all staff account fields.'
-        );
-
-        return;
-      }
-
-      if (password.length < 10) {
-        setError(
-          'Temporary password must contain at least 10 characters.'
-        );
-
-        return;
-      }
-
-      const {
-        data,
-        error: provisionError,
-      } =
-        await supabase.functions.invoke(
-          'manage-staff',
-          {
-            body: {
-              operation: 'create',
-              email,
-              fullName,
-              password,
-              libraryId,
-            },
-          }
-        );
-
-      if (
-        provisionError ||
-        data?.error
-      ) {
-        setError(
-          provisionError?.message ||
-            data?.error ||
-            'Unable to create the staff account.'
-        );
-
-        return;
-      }
-
-      setStaffForm({
-        email: '',
-        fullName: '',
-        password: '',
-        libraryId:
-          currentLibraryId ||
-          '',
-      });
-
-      setMessage(
-        'Sub-admin account created successfully. Share its temporary password securely.'
-      );
-      await recordAuditEvent({
-        action: 'staff.account.created',
-        branchId: libraryId,
-        details: { email, fullName, role: 'subadmin' },
-      });
-
-      const {
-        data: updatedStaff,
-        error: queryError,
-      } =
-        await supabase
-          .from('staff_profiles')
-          .select(
-            'id, email, full_name, role, library_id, is_active, created_at'
-          )
-          .order('created_at', {
-            ascending: false,
-          });
-
-      if (queryError) {
-        setError(
-          queryError.message
-        );
-      } else {
-        setStaff(
-          updatedStaff || []
-        );
-      }
-    };
-
-  /*
-   * =========================================================================
-   * ENABLE / DISABLE STAFF
-   * =========================================================================
-   */
-
-  const toggleStaffActive =
-    async (profile) => {
-      setError('');
-      setMessage('');
-
-      const {
-        data,
-        error: updateError,
-      } =
-        await supabase.functions.invoke(
-          'manage-staff',
-          {
-            body: {
-              operation:
-                'set-active',
-
-              userId:
-                profile.id,
-
-              isActive:
-                !profile.is_active,
-            },
-          }
-        );
-
-      if (
-        updateError ||
-        data?.error
-      ) {
-        setError(
-          updateError?.message ||
-            data?.error ||
-            'Unable to update the staff account.'
-        );
-
-        return;
-      }
-
-      setStaff(
-        (current) =>
-          current.map(
-            (item) =>
-              item.id ===
-              profile.id
-                ? {
-                    ...item,
-                    is_active:
-                      !profile.is_active,
-                  }
-                : item
-          )
-      );
-
-      setMessage(
-        `${profile.full_name} is now ${
-          !profile.is_active
-            ? 'active'
-            : 'disabled'
-        }.`
-      );
-      await recordAuditEvent({
-        action: profile.is_active
-          ? 'staff.account.disabled'
-          : 'staff.account.enabled',
-        branchId: profile.library_id,
-        details: { staffId: profile.id, email: profile.email },
-      });
-    };
-
-  /*
-   * =========================================================================
-   * SUPABASE GUARD
-   * =========================================================================
-   */
-
   if (!supabase) {
     return (
       <p className="border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -1617,65 +1100,38 @@ const handleAnnouncementSave = async (event) => {
     );
   }
 
-  /*
-   * =========================================================================
-   * UI
-   * =========================================================================
-   */
-
   return (
     <div className="space-y-5">
-      {/* ================================================================= */}
-      {/* NAVIGATION                                                        */}
-      {/* ================================================================= */}
+      {/* NAVIGATION TABS FILTERED ACCORDING TO MODE */}
+      <nav
+        className="flex gap-2 overflow-x-auto border-b border-slate-200"
+        aria-label="Admin workspace"
+      >
+        {activeTabs.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => {
+              setTab(item.id);
+              setError('');
+              setMessage('');
+              setLoading(
+                ['feedback', 'announcements'].includes(item.id)
+              );
+            }}
+            aria-current={tab === item.id ? 'page' : undefined}
+            className={`shrink-0 border-b-2 px-3 py-3 text-sm font-semibold ${
+              tab === item.id
+                ? 'border-shelf-primary text-shelf-primary'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
 
-
-    <nav
-      className="flex gap-2 overflow-x-auto border-b border-slate-200"
-      aria-label="Admin workspace"
-    >
-      {(isSubAdmin
-        ? ['reports', 'analytics'].includes(tab)
-          ? TABS.filter((item) =>
-              ['reports', 'analytics'].includes(item.id)
-            )
-          : TABS.filter((item) =>
-              ['feedback', 'announcements'].includes(item.id)
-            )
-        : [
-            ...TABS,
-            { id: 'staff', label: 'Staff accounts' },
-            { id: 'audit', label: 'Audit trail' },
-          ]
-      ).map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          onClick={() => {
-            setTab(item.id);
-            setError('');
-            setMessage('');
-            setLoading(
-              ['feedback', 'announcements', 'staff'].includes(item.id)
-            );
-          }}
-          aria-current={tab === item.id ? 'page' : undefined}
-          className={`shrink-0 border-b-2 px-3 py-3 text-sm font-semibold ${
-            tab === item.id
-              ? 'border-shelf-primary text-shelf-primary'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          {item.label}
-        </button>
-      ))}
-    </nav>
-
-
-      {/* ================================================================= */}
-      {/* MESSAGES                                                          */}
-      {/* ================================================================= */}
-
+      {/* MESSAGES */}
       {error && (
         <p
           role="alert"
@@ -1684,7 +1140,6 @@ const handleAnnouncementSave = async (event) => {
           {error}
         </p>
       )}
-
       {message && (
         <p
           role="status"
@@ -1693,333 +1148,297 @@ const handleAnnouncementSave = async (event) => {
           {message}
         </p>
       )}
-
       {loading && (
         <p className="text-sm text-slate-500">
           Loading records...
         </p>
       )}
 
-      {/* ================================================================= */}
-      {/* REPORTS                                                           */}
-      {/* ================================================================= */}
-
-
-{tab === 'reports' && (
-  <section className="space-y-6">
-    {/* Reports heading */}
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-col gap-4 border-b border-slate-100 bg-linear-to-r from-slate-50 to-white p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-shelf-primary">
-            SHELF ILMS
-          </p>
-          <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
-            Activity Reports
-          </h2>
-          <p className="mt-1 text-sm text-slate-500">
-            {isSubAdmin
-              ? getLibraryName(libraries, currentLibraryId)
-              : 'All libraries'}
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-          <p className="text-xs font-medium text-slate-500">
-            Selected period
-          </p>
-          <p className="mt-1 text-sm font-semibold text-slate-800">
-            {analyticsWindow.label}
-          </p>
-        </div>
-      </div>
-
-      {/* Filters and export controls */}
-      <div className="space-y-4 p-5">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-          <div className="min-w-0">
-            <p className="mb-2 text-sm font-semibold text-slate-700">
-              Date range
-            </p>
-            <AnalyticsDateFilter
-              timeframe={timeframe}
-              onTimeframeChange={(value) => {
-                setTimeframe(value);
-                setForecast(null);
-              }}
-              customStart={customStartDate}
-              onCustomStartChange={setCustomStartDate}
-              customEnd={customEndDate}
-              onCustomEndChange={setCustomEndDate}
-              range={analyticsWindow}
-            />
-          </div>
-
-          <label className="block text-sm font-semibold text-slate-700">
-            Sort activities
-            <select
-              value={reportSort}
-              onChange={(event) => setReportSort(event.target.value)}
-              className="mt-2 block w-full min-w-44 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal text-slate-700 outline-none transition focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20"
-            >
-              <option value="time">Newest first</option>
-              <option value="name">Visitor name</option>
-              <option value="type">Activity type</option>
-            </select>
-          </label>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
-          <span className="mr-1 text-sm font-semibold text-slate-600">
-            Export report:
-          </span>
-          <button
-            type="button"
-            onClick={() => handleExport('xlsx')}
-            className="inline-flex items-center justify-center rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-shelf-primary/30"
-          >
-            Export Excel
-          </button>
-          <button
-            type="button"
-            onClick={() => handleExport('csv')}
-            className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300"
-          >
-            Export CSV
-          </button>
-          <button
-            type="button"
-            onClick={() => handleExport('pdf')}
-            className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300"
-          >
-            Export PDF
-          </button>
-        </div>
-
-        {!analyticsWindow.valid && (
-          <p
-            role="alert"
-            className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
-          >
-            {analyticsWindow.error}
-          </p>
-        )}
-      </div>
-    </div>
-
-    {/* Summary cards */}
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-slate-500">
-              Visitor check-ins
-            </p>
-            <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
-              {reportRows.filter((row) => row.type === 'Visitor').length}
-            </p>
-          </div>
-          <span className="rounded-xl bg-blue-50 px-3 py-2 text-lg text-blue-700">
-            V
-          </span>
-        </div>
-        <p className="mt-3 text-xs text-slate-500">
-          Recorded library visits
-        </p>
-      </div>
-
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-slate-500">
-              Book requests
-            </p>
-            <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
-              {reportRows.filter((row) => row.type === 'Book transaction').length}
-            </p>
-          </div>
-          <span className="rounded-xl bg-violet-50 px-3 py-2 text-lg text-violet-700">
-            B
-          </span>
-        </div>
-        <p className="mt-3 text-xs text-slate-500">
-          Recorded book transactions
-        </p>
-      </div>
-
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-slate-500">
-              Book returns
-            </p>
-            <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
-              {reportRows.filter((row) => row.type === 'Book return').length}
-            </p>
-          </div>
-          <span className="rounded-xl bg-emerald-50 px-3 py-2 text-lg text-emerald-700">
-            R
-          </span>
-        </div>
-        <p className="mt-3 text-xs text-slate-500">
-          Returns recorded in this period
-        </p>
-      </div>
-
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-slate-500">
-              Active loans
-            </p>
-            <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
-              {scopedBorrows.filter(
-                (item) =>
-                  item.status === 'borrowed' &&
-                  isDateInsideWindow(
-                    item.borrowDate || item.requestDate,
-                    analyticsWindow
-                  )
-              ).length}
-            </p>
-          </div>
-          <span className="rounded-xl bg-amber-50 px-3 py-2 text-lg text-amber-700">
-            L
-          </span>
-        </div>
-        <p className="mt-3 text-xs text-slate-500">
-          Loans currently marked as borrowed
-        </p>
-      </div>
-    </div>
-
-    {/* Activity table */}
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-col gap-1 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h3 className="text-base font-bold text-slate-900">
-            Activity history
-          </h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Review visits, book transactions, and returns.
-          </p>
-        </div>
-        <span className="mt-2 inline-flex w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 sm:mt-0">
-          {reportRows.length} records
-        </span>
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-190 text-left text-sm">
-          <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-            <tr>
-              <th className="px-5 py-4 font-semibold">Time</th>
-              <th className="px-5 py-4 font-semibold">Activity</th>
-              <th className="px-5 py-4 font-semibold">Visitor</th>
-              <th className="px-5 py-4 font-semibold">Details</th>
-              <th className="px-5 py-4 font-semibold">Branch</th>
-              <th className="px-5 py-4 font-semibold">Status</th>
-            </tr>
-          </thead>
-
-          <tbody className="divide-y divide-slate-100">
-            {reportRows.map((row, index) => {
-              const status = String(row.status || '');
-              const statusStyle =
-                /returned|checked out/i.test(status)
-                  ? 'bg-emerald-50 text-emerald-700'
-                  : /borrowed|checked in|approved/i.test(status)
-                    ? 'bg-blue-50 text-blue-700'
-                    : /rejected|overdue|fine/i.test(status)
-                      ? 'bg-rose-50 text-rose-700'
-                      : 'bg-slate-100 text-slate-700';
-
-              return (
-                <tr
-                  key={`${row.type}-${row.time}-${index}`}
-                  className="transition hover:bg-slate-50/80"
+      {/* REPORTS TAB */}
+      {tab === 'reports' && (
+        <section className="space-y-6">
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex flex-col gap-4 border-b border-slate-100 bg-linear-to-r from-slate-50 to-white p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-shelf-primary">
+                  SHELF ILMS
+                </p>
+                <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
+                  Activity Reports
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {isSubAdmin
+                    ? getLibraryName(libraries, currentLibraryId)
+                    : 'All libraries'}
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                <p className="text-xs font-medium text-slate-500">
+                  Selected period
+                </p>
+                <p className="mt-1 text-sm font-semibold text-slate-800">
+                  {analyticsWindow.label}
+                </p>
+              </div>
+            </div>
+            <div className="space-y-4 p-5">
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+                <div className="min-w-0">
+                  <p className="mb-2 text-sm font-semibold text-slate-700">
+                    Date range
+                  </p>
+                  <AnalyticsDateFilter
+                    timeframe={timeframe}
+                    onTimeframeChange={(value) => {
+                      setTimeframe(value);
+                      setForecast(null);
+                    }}
+                    customStart={customStartDate}
+                    onCustomStartChange={setCustomStartDate}
+                    customEnd={customEndDate}
+                    onCustomEndChange={setCustomEndDate}
+                    range={analyticsWindow}
+                  />
+                </div>
+                <label className="block text-sm font-semibold text-slate-700">
+                  Sort activities
+                  <select
+                    value={reportSort}
+                    onChange={(event) => setReportSort(event.target.value)}
+                    className="mt-2 block w-full min-w-44 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal text-slate-700 outline-none transition focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20"
+                  >
+                    <option value="time">Newest first</option>
+                    <option value="name">Visitor name</option>
+                    <option value="type">Activity type</option>
+                  </select>
+                </label>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
+                <span className="mr-1 text-sm font-semibold text-slate-600">
+                  Export report:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleExport('xlsx')}
+                  className="inline-flex items-center justify-center rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-shelf-primary/30"
                 >
-                  <td className="whitespace-nowrap px-5 py-4 text-xs text-slate-500">
-                    {new Date(row.time).toLocaleString()}
-                  </td>
-                  <td className="px-5 py-4">
-                    <span className="font-semibold text-slate-800">
-                      {row.type}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4 font-medium text-slate-800">
-                    {row.person}
-                  </td>
-                  <td className="max-w-xs px-5 py-4 text-slate-600">
-                    <span className="line-clamp-2">{row.detail}</span>
-                  </td>
-                  <td className="px-5 py-4 text-slate-600">
-                    {row.branch}
-                  </td>
-                  <td className="px-5 py-4">
-                    <span
-                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyle}`}
-                    >
-                      {status || 'Unknown'}
-                    </span>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {reportRows.length === 0 && (
-        <div className="px-6 py-14 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-lg font-bold text-slate-500">
-            —
+                  Export Excel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExport('csv')}
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                >
+                  Export CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExport('pdf')}
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                >
+                  Export PDF
+                </button>
+              </div>
+              {!analyticsWindow.valid && (
+                <p
+                  role="alert"
+                  className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+                >
+                  {analyticsWindow.error}
+                </p>
+              )}
+            </div>
           </div>
-          <h4 className="mt-3 text-sm font-semibold text-slate-800">
-            No activity found
-          </h4>
-          <p className="mt-1 text-sm text-slate-500">
-            Try selecting a different date range.
-          </p>
-        </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-slate-500">
+                    Visitor check-ins
+                  </p>
+                  <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
+                    {reportRows.filter((row) => row.type === 'Visitor').length}
+                  </p>
+                </div>
+                <span className="rounded-xl bg-blue-50 px-3 py-2 text-lg text-blue-700">
+                  V
+                </span>
+              </div>
+              <p className="mt-3 text-xs text-slate-500">
+                Recorded library visits
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-slate-500">
+                    Book requests
+                  </p>
+                  <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
+                    {reportRows.filter((row) => row.type === 'Book transaction').length}
+                  </p>
+                </div>
+                <span className="rounded-xl bg-violet-50 px-3 py-2 text-lg text-violet-700">
+                  B
+                </span>
+              </div>
+              <p className="mt-3 text-xs text-slate-500">
+                Recorded book transactions
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-slate-500">
+                    Book returns
+                  </p>
+                  <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
+                    {reportRows.filter((row) => row.type === 'Book return').length}
+                  </p>
+                </div>
+                <span className="rounded-xl bg-emerald-50 px-3 py-2 text-lg text-emerald-700">
+                  R
+                </span>
+              </div>
+              <p className="mt-3 text-xs text-slate-500">
+                Returns recorded in this period
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-slate-500">
+                    Active loans
+                  </p>
+                  <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
+                    {scopedBorrows.filter(
+                      (item) =>
+                        item.status === 'borrowed' &&
+                        isDateInsideWindow(
+                          item.borrowDate || item.requestDate,
+                          analyticsWindow
+                        )
+                    ).length}
+                  </p>
+                </div>
+                <span className="rounded-xl bg-amber-50 px-3 py-2 text-lg text-amber-700">
+                  L
+                </span>
+              </div>
+              <p className="mt-3 text-xs text-slate-500">
+                Loans currently marked as borrowed
+              </p>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex flex-col gap-1 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Activity history
+                </h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Review visits, book transactions, and returns.
+                </p>
+              </div>
+              <span className="mt-2 inline-flex w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 sm:mt-0">
+                {reportRows.length} records
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-190 text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+                  <tr>
+                    <th className="px-5 py-4 font-semibold">Time</th>
+                    <th className="px-5 py-4 font-semibold">Activity</th>
+                    <th className="px-5 py-4 font-semibold">Visitor</th>
+                    <th className="px-5 py-4 font-semibold">Details</th>
+                    <th className="px-5 py-4 font-semibold">Branch</th>
+                    <th className="px-5 py-4 font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {reportRows.map((row, index) => {
+                    const status = String(row.status || '');
+                    const statusStyle =
+                      /returned|checked out/i.test(status)
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : /borrowed|checked in|approved/i.test(status)
+                          ? 'bg-blue-50 text-blue-700'
+                          : /rejected|overdue|fine/i.test(status)
+                            ? 'bg-rose-50 text-rose-700'
+                            : 'bg-slate-100 text-slate-700';
+                    return (
+                      <tr
+                        key={`row.type-${row.time}-${index}`}
+                        className="transition hover:bg-slate-50/80"
+                      >
+                        <td className="whitespace-nowrap px-5 py-4 text-xs text-slate-500">
+                          {new Date(row.time).toLocaleString()}
+                        </td>
+                        <td className="px-5 py-4">
+                          <span className="font-semibold text-slate-800">
+                            {row.type}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 font-medium text-slate-800">
+                          {row.person}
+                        </td>
+                        <td className="max-w-xs px-5 py-4 text-slate-600">
+                          <span className="line-clamp-2">{row.detail}</span>
+                        </td>
+                        <td className="px-5 py-4 text-slate-600">
+                          {row.branch}
+                        </td>
+                        <td className="px-5 py-4">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyle}`}
+                          >
+                            {status || 'Unknown'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {reportRows.length === 0 && (
+              <div className="px-6 py-14 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-lg font-bold text-slate-500">
+                  —
+                </div>
+                <h4 className="mt-3 text-sm font-semibold text-slate-800">
+                  No activity found
+                </h4>
+                <p className="mt-1 text-sm text-slate-500">
+                  Try selecting a different date range.
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
       )}
-    </div>
-  </section>
-)}
 
-
-      {/* ================================================================= */}
-      {/* ANALYTICS                                                         */}
-      {/* ================================================================= */}
-
+      {/* ANALYTICS TAB */}
       {tab === 'analytics' && (
         <section className="space-y-5">
-          {/* ============================================================= */}
-          {/* ANALYTICS FILTERS                                             */}
-          {/* ============================================================= */}
-
           <section className="border border-slate-200 bg-white p-4">
             <div className="mb-4">
               <h2 className="text-base font-bold text-slate-900">
                 Analytics filters
               </h2>
-
               <p className="mt-1 text-sm text-slate-500">
                 {isSubAdmin
                   ? 'Analytics are automatically limited to your assigned branch. Select a date range to view the corresponding activity.'
                   : 'Filter analytics by library or branch and date range.'}
               </p>
             </div>
-
             <div className="grid gap-4 md:grid-cols-2">
-              {/* ========================================================= */}
-              {/* SUPER ADMIN ONLY: LIBRARY / BRANCH                        */}
-              {/* ========================================================= */}
-
               {!isSubAdmin && (
                 <label className="block text-sm font-semibold text-slate-700">
                   Library / Branch
-
                   <select
                     value={
                       analyticsLibraryId
@@ -2030,7 +1449,6 @@ const handleAnnouncementSave = async (event) => {
                       setAnalyticsLibraryId(
                         event.target.value
                       );
-
                       setForecast(
                         null
                       );
@@ -2040,7 +1458,6 @@ const handleAnnouncementSave = async (event) => {
                     <option value="">
                       All libraries
                     </option>
-
                     {libraries.map(
                       (library) => (
                         <option
@@ -2060,11 +1477,6 @@ const handleAnnouncementSave = async (event) => {
                   </select>
                 </label>
               )}
-
-              {/* ========================================================= */}
-              {/* DATE RANGE - BOTH SUB-ADMIN AND SUPER ADMIN               */}
-              {/* ========================================================= */}
-
               <AnalyticsDateFilter
                 timeframe={timeframe}
                 onTimeframeChange={(value) => {
@@ -2078,17 +1490,11 @@ const handleAnnouncementSave = async (event) => {
                 range={analyticsWindow}
               />
             </div>
-
-            {/* =========================================================== */}
-            {/* SUB-ADMIN ASSIGNED BRANCH                                   */}
-            {/* =========================================================== */}
-
             {isSubAdmin && (
               <div className="mt-4">
                 <p className="text-sm font-semibold text-slate-700">
                   Assigned branch
                 </p>
-
                 <div className="mt-1 border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                   {getLibraryName(
                     libraries,
@@ -2097,16 +1503,10 @@ const handleAnnouncementSave = async (event) => {
                 </div>
               </div>
             )}
-
-            {/* =========================================================== */}
-            {/* FILTER SUMMARY                                              */}
-            {/* =========================================================== */}
-
             <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
               <span className="font-semibold text-slate-500">
                 Showing:
               </span>
-
               <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
                 {isSubAdmin
                   ? getLibraryName(
@@ -2120,12 +1520,10 @@ const handleAnnouncementSave = async (event) => {
                     )
                   : 'All libraries'}
               </span>
-
               <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
                 {analyticsWindow.label}
               </span>
             </div>
-
             {!analyticsWindow.valid && (
               <p className="mt-3 border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                 {analyticsWindow.error}
@@ -2133,21 +1531,12 @@ const handleAnnouncementSave = async (event) => {
             )}
           </section>
 
-          {/* ============================================================= */}
-          {/* ANALYTICS CONTENT                                             */}
-          {/* ============================================================= */}
-
           <section className="grid gap-5 xl:grid-cols-[1.3fr_0.7fr]">
-            {/* =========================================================== */}
-            {/* MAIN ANALYTICS CARD                                         */}
-            {/* =========================================================== */}
-
             <div className="border border-slate-200 bg-white p-4">
               <div className="mb-4">
                 <h2 className="text-lg font-bold text-slate-900">
                   Branch demand
                 </h2>
-
                 <p className="text-sm text-slate-500">
                   {isSubAdmin
                     ? getLibraryName(
@@ -2164,32 +1553,25 @@ const handleAnnouncementSave = async (event) => {
                   {analyticsWindow.label}
                 </p>
               </div>
-
               {analyticsWindow.valid ? (
                 <Bar
                   data={{
                     labels:
                       periodCounts.labels,
-
                     datasets: [
                       {
                         label:
                           'Visitors',
-
                         data:
                           periodCounts.visits,
-
                         backgroundColor:
                           '#0f766e',
                       },
-
                       {
                         label:
                           'Book transactions',
-
                         data:
                           periodCounts.transactions,
-
                         backgroundColor:
                           '#d97706',
                       },
@@ -2197,20 +1579,16 @@ const handleAnnouncementSave = async (event) => {
                   }}
                   options={{
                     responsive: true,
-
                     maintainAspectRatio:
                       true,
-
                     scales: {
                       y: {
                         beginAtZero: true,
-
                         ticks: {
                           precision: 0,
                         },
                       },
                     },
-
                     plugins: {
                       legend: {
                         display: true,
@@ -2226,10 +1604,6 @@ const handleAnnouncementSave = async (event) => {
                 </div>
               )}
 
-              {/* ========================================================= */}
-              {/* ANALYTICS METRICS                                         */}
-              {/* ========================================================= */}
-
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 <Metric
                   label="Visitors"
@@ -2237,14 +1611,12 @@ const handleAnnouncementSave = async (event) => {
                     analyticsAttendance.length
                   }
                 />
-
                 <Metric
                   label="Book transactions"
                   value={
                     analyticsBorrows.length
                   }
                 />
-
                 <Metric
                   label="Active loans"
                   value={
@@ -2257,16 +1629,11 @@ const handleAnnouncementSave = async (event) => {
                 />
               </div>
 
-              {/* ========================================================= */}
-              {/* MOST REQUESTED CATEGORIES                                 */}
-              {/* ========================================================= */}
-
               <div className="mt-5">
                 <h3 className="text-sm font-bold">
                   Most requested
                   categories
                 </h3>
-
                 {topCategories.length >
                 0 ? (
                   <ol className="mt-2 space-y-1 text-sm text-slate-600">
@@ -2284,7 +1651,6 @@ const handleAnnouncementSave = async (event) => {
                           <span>
                             {category}
                           </span>
-
                           <span className="font-semibold">
                             {count}
                           </span>
@@ -2303,21 +1669,12 @@ const handleAnnouncementSave = async (event) => {
               </div>
             </div>
 
-            {/* =========================================================== */}
-            {/* RIGHT SIDE                                                   */}
-            {/* =========================================================== */}
-
             <aside className="space-y-4">
-              {/* ========================================================= */}
-              {/* RECOMMENDATIONS                                            */}
-              {/* ========================================================= */}
-
               <section className="border border-slate-200 bg-white p-4">
                 <h2 className="text-base font-bold">
                   Operational
                   recommendations
                 </h2>
-
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-600">
                   {demandRecommendations.map(
                     (item) => (
@@ -2331,16 +1688,11 @@ const handleAnnouncementSave = async (event) => {
                 </ul>
               </section>
 
-              {/* ========================================================= */}
-              {/* FORECAST                                                   */}
-              {/* ========================================================= */}
-
               <section className="border border-slate-200 bg-white p-4">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-base font-bold">
                     Visitor forecast
                   </h2>
-
                   <button
                     type="button"
                     onClick={
@@ -2357,13 +1709,11 @@ const handleAnnouncementSave = async (event) => {
                       : 'Run forecast'}
                   </button>
                 </div>
-
                 <p className="mt-2 text-xs text-slate-500">
                   Forecast input follows
                   the selected analytics
                   branch and date range.
                 </p>
-
                 {forecast
                   ?.forecasts
                   ?.length ? (
@@ -2381,7 +1731,6 @@ const handleAnnouncementSave = async (event) => {
                               item.date
                             }
                           </span>
-
                           <span>
                             {
                               item.visitorCount
@@ -2400,7 +1749,6 @@ const handleAnnouncementSave = async (event) => {
                     forecast.
                   </p>
                 )}
-
                 {forecast?.highDemandCategories?.map(
                   (item) => (
                     <p
@@ -2416,7 +1764,6 @@ const handleAnnouncementSave = async (event) => {
                         projected
                         demand
                       </span>
-
                       <span>
                         {
                           item.projectedDemand
@@ -2425,13 +1772,12 @@ const handleAnnouncementSave = async (event) => {
                     </p>
                   )
                 )}
-
+                {/* SYSTEM ANALYTICS INSIGHTS (Pinalitan ang Gemini) */}
                 {forecast?.insights?.length > 0 && (
                   <div className="mt-4 border-t border-slate-200 pt-3">
                     <h3 className="text-sm font-bold">
-                      Gemini analytics insights
+                      System Analytics Insights
                     </h3>
-
                     <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600">
                       {forecast.insights.map(
                         (item) => (
@@ -2443,13 +1789,12 @@ const handleAnnouncementSave = async (event) => {
                     </ul>
                   </div>
                 )}
-
+                {/* PREDICTIVE RECOMMENDATIONS (Pinalitan ang Gemini) */}
                 {forecast?.recommendations?.length > 0 && (
                   <div className="mt-4 border-t border-slate-200 pt-3">
                     <h3 className="text-sm font-bold">
-                      Gemini recommendations
+                      Predictive Recommendations
                     </h3>
-
                     <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-emerald-800">
                       {forecast.recommendations.map(
                         (item) => (
@@ -2467,24 +1812,19 @@ const handleAnnouncementSave = async (event) => {
         </section>
       )}
 
-      {/* ================================================================= */}
-      {/* FEEDBACK                                                          */}
-      {/* ================================================================= */}
-
+      {/* FEEDBACK TAB */}
       {tab === 'feedback' && (
         <section className="space-y-3">
           <div>
             <h2 className="text-lg font-bold">
               Visitor feedback
             </h2>
-
             <p className="text-sm text-slate-500">
               Review submissions
               and add a manual
               reply.
             </p>
           </div>
-
           {feedback.map(
             (item) => (
               <article
@@ -2496,7 +1836,6 @@ const handleAnnouncementSave = async (event) => {
                     <p className="font-semibold text-slate-900">
                       {item.subject}
                     </p>
-
                     <p className="text-xs text-slate-500">
                       {
                         item.visitor_name
@@ -2516,7 +1855,6 @@ const handleAnnouncementSave = async (event) => {
                       ).toLocaleString()}
                     </p>
                   </div>
-
                   <span className="h-fit bg-slate-100 px-2 py-1 text-xs capitalize">
                     {String(
                       item.status ||
@@ -2527,11 +1865,9 @@ const handleAnnouncementSave = async (event) => {
                     )}
                   </span>
                 </div>
-
                 <p className="whitespace-pre-wrap text-sm text-slate-700">
                   {item.message}
                 </p>
-
                 {item.admin_reply && (
                   <p className="border-l-2 border-emerald-600 bg-emerald-50 p-3 text-sm text-emerald-900">
                     <strong>
@@ -2542,7 +1878,6 @@ const handleAnnouncementSave = async (event) => {
                     }
                   </p>
                 )}
-
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <textarea
                     rows={2}
@@ -2568,7 +1903,6 @@ const handleAnnouncementSave = async (event) => {
                     placeholder="Write a manual reply..."
                     className="min-w-0 flex-1 border border-slate-300 p-2 text-sm"
                   />
-
                   <button
                     type="button"
                     onClick={() =>
@@ -2584,7 +1918,6 @@ const handleAnnouncementSave = async (event) => {
               </article>
             )
           )}
-
           {!loading &&
             feedback.length ===
               0 && (
@@ -2596,10 +1929,7 @@ const handleAnnouncementSave = async (event) => {
         </section>
       )}
 
-      {/* ================================================================= */}
-      {/* ANNOUNCEMENTS                                                     */}
-      {/* ================================================================= */}
-
+      {/* ANNOUNCEMENTS TAB */}
       {tab === 'announcements' && (
         <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
           <div className="space-y-3">
@@ -2608,14 +1938,12 @@ const handleAnnouncementSave = async (event) => {
                 Published and draft
                 announcements
               </h2>
-
               <p className="text-sm text-slate-500">
                 Published notices
                 are visible to
                 all visitors.
               </p>
             </div>
-
             {announcements.map(
               (item) => (
                 <article
@@ -2627,11 +1955,9 @@ const handleAnnouncementSave = async (event) => {
                       <h3 className="font-semibold">
                         {item.title}
                       </h3>
-
                       <p className="mt-1 whitespace-pre-wrap text-sm text-slate-600">
                         {item.message}
                       </p>
-
                       <p className="mt-2 text-xs text-slate-400">
                         {item.published
                           ? 'Published'
@@ -2642,7 +1968,6 @@ const handleAnnouncementSave = async (event) => {
                         ).toLocaleString()}
                       </p>
                     </div>
-
                     <div className="flex gap-2">
                       <button
                         type="button"
@@ -2655,7 +1980,6 @@ const handleAnnouncementSave = async (event) => {
                       >
                         Edit
                       </button>
-
                       <button
                         type="button"
                         onClick={() =>
@@ -2672,7 +1996,6 @@ const handleAnnouncementSave = async (event) => {
                 </article>
               )
             )}
-
             {!loading &&
               announcements.length ===
                 0 && (
@@ -2683,7 +2006,6 @@ const handleAnnouncementSave = async (event) => {
                 </p>
               )}
           </div>
-
           <form
             onSubmit={
               handleAnnouncementSave
@@ -2695,10 +2017,8 @@ const handleAnnouncementSave = async (event) => {
                 ? 'Edit announcement'
                 : 'New announcement'}
             </h2>
-
             <label className="block text-sm font-medium">
               Title
-
               <input
                 required
                 maxLength={160}
@@ -2718,10 +2038,8 @@ const handleAnnouncementSave = async (event) => {
                 className="mt-1 w-full border border-slate-300 px-3 py-2"
               />
             </label>
-
             <label className="block text-sm font-medium">
               Message
-
               <textarea
                 required
                 rows={6}
@@ -2742,7 +2060,6 @@ const handleAnnouncementSave = async (event) => {
                 className="mt-1 w-full border border-slate-300 px-3 py-2"
               />
             </label>
-
             <div className="flex gap-2">
               <button
                 type="submit"
@@ -2752,7 +2069,6 @@ const handleAnnouncementSave = async (event) => {
                   ? 'Save changes'
                   : 'Publish announcement'}
               </button>
-
               {editingAnnouncementId && (
                 <button
                   type="button"
@@ -2763,7 +2079,6 @@ const handleAnnouncementSave = async (event) => {
                         message: '',
                       }
                     );
-
                     setEditingAnnouncementId(
                       null
                     );
@@ -2778,318 +2093,13 @@ const handleAnnouncementSave = async (event) => {
         </section>
       )}
 
-      {/* ================================================================= */}
-      {/* STAFF ACCOUNTS                                                    */}
-      {/* ================================================================= */}
-
-      {tab === 'staff' &&
-        !isSubAdmin && (
-          <section className="space-y-5">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">
-                Staff accounts
-              </h2>
-
-              <p className="text-sm text-slate-500">
-                Staff records are
-                loaded directly
-                from the
-                <code className="mx-1 rounded bg-slate-100 px-1 py-0.5">
-                  staff_profiles
-                </code>
-                table. Authentication
-                is handled by
-                Supabase Auth.
-              </p>
-            </div>
-
-            <form
-              onSubmit={
-                handleCreateStaff
-              }
-              className="grid gap-3 border border-slate-200 bg-white p-4 sm:grid-cols-2"
-            >
-              <div className="sm:col-span-2">
-                <h3 className="font-semibold text-slate-900">
-                  Create sub-admin
-                </h3>
-
-                <p className="mt-1 text-xs text-slate-500">
-                  This creates a
-                  Supabase Auth
-                  account and its
-                  corresponding
-                  staff profile.
-                </p>
-              </div>
-
-              <label className="text-sm font-medium">
-                Full name
-
-                <input
-                  required
-                  value={
-                    staffForm.fullName
-                  }
-                  onChange={(event) =>
-                    setStaffForm(
-                      (current) => ({
-                        ...current,
-                        fullName:
-                          event.target
-                            .value,
-                      })
-                    )
-                  }
-                  className="mt-1 w-full border border-slate-300 px-3 py-2"
-                />
-              </label>
-
-              <label className="text-sm font-medium">
-                Email
-
-                <input
-                  required
-                  type="email"
-                  value={
-                    staffForm.email
-                  }
-                  onChange={(event) =>
-                    setStaffForm(
-                      (current) => ({
-                        ...current,
-                        email:
-                          event.target
-                            .value,
-                      })
-                    )
-                  }
-                  className="mt-1 w-full border border-slate-300 px-3 py-2"
-                />
-              </label>
-
-              <label className="text-sm font-medium">
-                Temporary password
-
-                <input
-                  required
-                  minLength={10}
-                  type="password"
-                  value={
-                    staffForm.password
-                  }
-                  onChange={(event) =>
-                    setStaffForm(
-                      (current) => ({
-                        ...current,
-                        password:
-                          event.target
-                            .value,
-                      })
-                    )
-                  }
-                  className="mt-1 w-full border border-slate-300 px-3 py-2"
-                />
-
-                <span className="mt-1 block text-xs font-normal text-slate-500">
-                  Minimum 10
-                  characters.
-                </span>
-              </label>
-
-              <label className="text-sm font-medium">
-                Assigned branch
-
-                <select
-                  required
-                  value={
-                    staffForm.libraryId
-                  }
-                  onChange={(event) =>
-                    setStaffForm(
-                      (current) => ({
-                        ...current,
-                        libraryId:
-                          event.target
-                            .value,
-                      })
-                    )
-                  }
-                  className="mt-1 w-full border border-slate-300 bg-white px-3 py-2"
-                >
-                  <option value="">
-                    Select branch
-                  </option>
-
-                  {libraries.map(
-                    (library) => (
-                      <option
-                        key={
-                          library.id
-                        }
-                        value={
-                          library.id
-                        }
-                      >
-                        {
-                          library.name
-                        }
-                      </option>
-                    )
-                  )}
-                </select>
-              </label>
-
-              <button
-                type="submit"
-                className="w-fit bg-shelf-primary px-4 py-2 text-sm font-semibold text-white sm:col-span-2"
-              >
-                Create sub-admin
-              </button>
-            </form>
-
-            <div className="overflow-x-auto border border-slate-200 bg-white">
-              <table className="w-full min-w-225 text-left text-sm">
-                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                  <tr>
-                    <th className="p-3">
-                      Staff member
-                    </th>
-
-                    <th className="p-3">
-                      Email
-                    </th>
-
-                    <th className="p-3">
-                      Role
-                    </th>
-
-                    <th className="p-3">
-                      Assigned branch
-                    </th>
-
-                    <th className="p-3">
-                      Status
-                    </th>
-
-                    <th className="p-3">
-                      Action
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y divide-slate-100">
-                  {staff.map(
-                    (item) => (
-                      <tr
-                        key={
-                          item.id
-                        }
-                      >
-                        <td className="p-3 font-medium text-slate-900">
-                          {
-                            item.full_name
-                          }
-                        </td>
-
-                        <td className="p-3 text-slate-600">
-                          {
-                            item.email
-                          }
-                        </td>
-
-                        <td className="p-3">
-                          <span
-                            className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                              item.role ===
-                              'superadmin'
-                                ? 'bg-purple-100 text-purple-800'
-                                : item.role ===
-                                  'subadmin'
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-slate-100 text-slate-700'
-                            }`}
-                          >
-                            {formatRole(
-                              item.role
-                            )}
-                          </span>
-                        </td>
-
-                        <td className="p-3 text-slate-600">
-                          {getLibraryName(
-                            libraries,
-                            item.library_id
-                          )}
-                        </td>
-
-                        <td className="p-3">
-                          <span
-                            className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                              item.is_active
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}
-                          >
-                            {item.is_active
-                              ? 'Active'
-                              : 'Disabled'}
-                          </span>
-                        </td>
-
-                        <td className="p-3">
-                          {item.role ===
-                          'superadmin' ? (
-                            <span className="text-xs text-slate-400">
-                              Protected
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                toggleStaffActive(
-                                  item
-                                )
-                              }
-                              className="font-semibold text-shelf-primary"
-                            >
-                              {item.is_active
-                                ? 'Disable'
-                                : 'Enable'}
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  )}
-                </tbody>
-              </table>
-
-              {!loading &&
-                staff.length ===
-                  0 && (
-                  <p className="p-6 text-center text-sm text-slate-500">
-                    No staff accounts
-                    were found in
-                    staff_profiles.
-                  </p>
-                )}
-            </div>
-          </section>
-        )}
-
+      {/* AUDIT TRAIL TAB */}
       {tab === 'audit' && !isSubAdmin && (
         <AuditLogViewer libraries={libraries} />
       )}
     </div>
   );
 }
-
-/*
- * ============================================================================
- * METRIC COMPONENT
- * ============================================================================
- */
 
 function Metric({
   label,
@@ -3100,7 +2110,6 @@ function Metric({
       <p className="text-xs font-semibold uppercase text-slate-500">
         {label}
       </p>
-
       <p className="mt-1 text-2xl font-bold text-slate-900">
         {value}
       </p>

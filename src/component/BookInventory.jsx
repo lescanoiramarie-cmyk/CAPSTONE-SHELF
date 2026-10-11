@@ -38,71 +38,79 @@ export default function BookInventory() {
   const [loadingApiBooks, setLoadingApiBooks] = useState(false);
   const [apiBooksError, setApiBooksError] = useState('');
 
+  // Helper para sa pagkuha ng pangalan ng library o 'Personal Collection'
+  const getLibraryDisplayName = (libId) => {
+    if (!libId) return 'Personal Collection';
+    const found = libraries.find((l) => String(l.id) === String(libId));
+    return found ? found.name : 'Personal Collection';
+  };
+
   // If sub-admin, restrict book list strictly to their libraryId
   const scopedBooks = isSubAdmin 
     ? books.filter((b) => b.libraryId === subAdminLibraryId) 
     : books;
 
   const filtered = scopedBooks
-  .filter((b) => {
-    const query = search.trim().toLowerCase();
+    .filter((b) => {
+      const query = search.trim().toLowerCase();
 
-    return (
-      String(b.title || '').toLowerCase().includes(query) ||
-      String(b.author || '').toLowerCase().includes(query) ||
-      String(b.isbn || '').toLowerCase().includes(query)
-    );
-  })
-  .sort((a, b) => {
-    switch (sortBy) {
-      case 'title-asc':
-        return String(a.title || '').localeCompare(
-          String(b.title || ''),
-          undefined,
-          { sensitivity: 'base' }
-        );
+      return (
+        String(b.title || '').toLowerCase().includes(query) ||
+        String(b.author || '').toLowerCase().includes(query) ||
+        String(b.category || '').toLowerCase().includes(query) ||
+        String(b.isbn || '').toLowerCase().includes(query)
+      );
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'title-asc':
+          return String(a.title || '').localeCompare(
+            String(b.title || ''),
+            undefined,
+            { sensitivity: 'base' }
+          );
 
-      case 'title-desc':
-        return String(b.title || '').localeCompare(
-          String(a.title || ''),
-          undefined,
-          { sensitivity: 'base' }
-        );
+        case 'title-desc':
+          return String(b.title || '').localeCompare(
+            String(a.title || ''),
+            undefined,
+            { sensitivity: 'base' }
+          );
 
-      case 'author-asc':
-        return String(a.author || '').localeCompare(
-          String(b.author || ''),
-          undefined,
-          { sensitivity: 'base' }
-        );
+        case 'author-asc':
+          return String(a.author || '').localeCompare(
+            String(b.author || ''),
+            undefined,
+            { sensitivity: 'base' }
+          );
 
-      case 'author-desc':
-        return String(b.author || '').localeCompare(
-          String(a.author || ''),
-          undefined,
-          { sensitivity: 'base' }
-        );
+        case 'author-desc':
+          return String(b.author || '').localeCompare(
+            String(a.author || ''),
+            undefined,
+            { sensitivity: 'base' }
+          );
 
-      case 'newest':
-        return new Date(b.createdAt || b.created_at || 0).getTime() -
-          new Date(a.createdAt || a.created_at || 0).getTime();
+        case 'newest':
+          return new Date(b.createdAt || b.created_at || 0).getTime() -
+            new Date(a.createdAt || a.created_at || 0).getTime();
 
-      case 'oldest':
-        return new Date(a.createdAt || a.created_at || 0).getTime() -
-          new Date(b.createdAt || b.created_at || 0).getTime();
+        case 'oldest':
+          return new Date(a.createdAt || a.created_at || 0).getTime() -
+            new Date(b.createdAt || b.created_at || 0).getTime();
 
-      case 'available':
-        return Number(b.availableCopies || 0) -
-          Number(a.availableCopies || 0);
+        case 'available':
+          return Number(b.availableCopies || 0) -
+            Number(a.availableCopies || 0);
 
-      case 'unavailable':
-        return Number(a.availableCopies || 0) -
-          Number(b.availableCopies || 0);
+        case 'unavailable':
+          return Number(a.availableCopies || 0) -
+            Number(b.availableCopies || 0);
 
-      default:
-        return 0;
-    }
-  });
+        default:
+          return 0;
+      }
+    });
 
   const startAdd = () => {
     setEditingId(null);
@@ -120,15 +128,15 @@ export default function BookInventory() {
     setEditingUpdatedAt(book.updatedAt);
     setMutationError('');
     setForm({
-      title: book.title,
-      author: book.author,
-      category: book.category,
-      isbn: book.isbn,
-      shelfLocation: book.shelfLocation,
-      libraryId: book.libraryId,
-      totalCopies: book.totalCopies,
-      summary: book.summary,
-      coverUrl: book.coverUrl,
+      title: book.title || '',
+      author: book.author || '',
+      category: book.category || '',
+      isbn: book.isbn || '',
+      shelfLocation: book.shelfLocation || '',
+      libraryId: book.libraryId || '',
+      totalCopies: book.totalCopies || 1,
+      summary: book.summary || '',
+      coverUrl: book.coverUrl || '',
     });
     setShowForm(true);
   };
@@ -136,6 +144,13 @@ export default function BookInventory() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMutationError('');
+
+    // Strict validation para sa Category
+    if (!form.category || !form.category.trim()) {
+      setMutationError('Book Category is required. Please enter a valid category.');
+      return;
+    }
+
     setSaving(true);
     // Force sub-admin to always save under their own assigned library
     const finalLibraryId = isSubAdmin ? subAdminLibraryId : form.libraryId;
@@ -144,6 +159,7 @@ export default function BookInventory() {
       if (editingId) {
         await updateBook(editingId, {
           ...form,
+          category: form.category.trim(),
           libraryId: finalLibraryId,
           totalCopies: Number(form.totalCopies),
           updatedAt: editingUpdatedAt,
@@ -151,6 +167,7 @@ export default function BookInventory() {
       } else {
         await addBook({
           ...form,
+          category: form.category.trim(),
           libraryId: finalLibraryId,
         });
       }
@@ -188,7 +205,7 @@ export default function BookInventory() {
     }
   };
 
-  const currentLibraryName = libraries.find((l) => l.id === subAdminLibraryId)?.name || 'Your Branch';
+  const currentLibraryName = getLibraryDisplayName(subAdminLibraryId);
 
   return (
     <div className="space-y-4">
@@ -198,54 +215,52 @@ export default function BookInventory() {
         </div>
       )}
 
-      
-<div className="flex flex-col sm:flex-row gap-3 justify-between">
-  <input
-    type="text"
-    value={search}
-    onChange={(e) => setSearch(e.target.value)}
-    placeholder="Search inventory…"
-    className="flex-1 max-w-sm px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
-  />
+      <div className="flex flex-col sm:flex-row gap-3 justify-between">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search inventory…"
+          className="flex-1 max-w-sm px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
+        />
 
-  {/* Sort Books */}
-  <select
-    value={sortBy}
-    onChange={(e) => setSortBy(e.target.value)}
-    aria-label="Sort books"
-    className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
-  >
-    <option value="title-asc">Title (A–Z)</option>
-    <option value="title-desc">Title (Z–A)</option>
-    <option value="author-asc">Author (A–Z)</option>
-    <option value="author-desc">Author (Z–A)</option>
-    <option value="newest">Newest First</option>
-    <option value="oldest">Oldest First</option>
-    <option value="available">Most Available</option>
-    <option value="unavailable">Least Available</option>
-  </select>
+        {/* Sort Books */}
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          aria-label="Sort books"
+          className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
+        >
+          <option value="title-asc">Title (A–Z)</option>
+          <option value="title-desc">Title (Z–A)</option>
+          <option value="author-asc">Author (A–Z)</option>
+          <option value="author-desc">Author (Z–A)</option>
+          <option value="newest">Newest First</option>
+          <option value="oldest">Oldest First</option>
+          <option value="available">Most Available</option>
+          <option value="unavailable">Least Available</option>
+        </select>
 
-  <div className="flex gap-2">
-    {isSubAdmin && (
-      <button
-        type="button"
-        onClick={handleLoadApiBooks}
-        disabled={loadingApiBooks || !subAdminLibraryId}
-        className="text-xs font-bold px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition disabled:opacity-50"
-      >
-        {loadingApiBooks ? 'Loading API Books...' : 'Load 100+ API Books'}
-      </button>
-    )}
+        <div className="flex gap-2">
+          {isSubAdmin && (
+            <button
+              type="button"
+              onClick={handleLoadApiBooks}
+              disabled={loadingApiBooks || !subAdminLibraryId}
+              className="text-xs font-bold px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition disabled:opacity-50"
+            >
+              {loadingApiBooks ? 'Loading API Books...' : 'Load 100+ API Books'}
+            </button>
+          )}
 
-    <button
-      onClick={startAdd}
-      className="text-xs font-bold px-4 py-2.5 rounded-lg bg-shelf-primary text-white hover:opacity-90 transition"
-    >
-      <Plus size={15} className="mr-1 inline-block align-[-3px]" aria-hidden="true" /> Add Book
-    </button>
-  </div>
-</div>
-
+          <button
+            onClick={startAdd}
+            className="text-xs font-bold px-4 py-2.5 rounded-lg bg-shelf-primary text-white hover:opacity-90 transition"
+          >
+            <Plus size={15} className="mr-1 inline-block align-[-3px]" aria-hidden="true" /> Add Book
+          </button>
+        </div>
+      </div>
 
       {apiBooksError && (
         <p role="alert" className="text-xs text-red-600">
@@ -286,10 +301,12 @@ export default function BookInventory() {
                 <tr key={b.id} className="hover:bg-slate-50">
                   <td className="p-3 font-bold text-slate-800">{b.title}</td>
                   <td className="p-3 text-xs text-slate-500">{b.author}</td>
-                  <td className="p-3 text-xs text-slate-500">{b.category}</td>
+                  <td className="p-3 text-xs text-slate-500 font-medium">
+                    {b.category || <span className="text-amber-600 italic">Uncategorized</span>}
+                  </td>
                   {!isSubAdmin && (
                     <td className="p-3 text-xs text-slate-500">
-                      {libraries.find((l) => l.id === b.libraryId)?.name || b.libraryId}
+                      {getLibraryDisplayName(b.libraryId)}
                     </td>
                   )}
                   <td className="p-3 text-xs font-mono">{b.availableCopies}/{b.totalCopies}</td>
@@ -316,38 +333,40 @@ export default function BookInventory() {
           >
             <h3 className="text-sm font-bold text-slate-800">{editingId ? 'Edit Book' : 'Add New Book'}</h3>
             {mutationError && (
-              <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+              <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
                 {mutationError}
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Title</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Title *</label>
               <input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Author</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Author *</label>
                 <input required value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Category</label>
-                <input required value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Category <span className="text-red-500">*</span>
+                </label>
+                <input required placeholder="e.g. Fiction, Science" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">ISBN</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">ISBN *</label>
                 <input required value={form.isbn} onChange={(e) => setForm({ ...form, isbn: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Shelf Location</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Shelf Location *</label>
                 <input required value={form.shelfLocation} onChange={(e) => setForm({ ...form, shelfLocation: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Library Branch</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Library Location</label>
                 {isSubAdmin ? (
                   // Locked display for sub-admins so they can't change branch
                   <input 
@@ -356,13 +375,13 @@ export default function BookInventory() {
                     className="w-full px-3 py-2 border border-slate-200 bg-slate-100 rounded-lg text-sm text-slate-600 cursor-not-allowed" 
                   />
                 ) : (
-                  // Super admin can choose any branch
+                  // Super admin can choose any branch or Personal Collection
                   <select 
-                    required 
                     value={form.libraryId} 
                     onChange={(e) => setForm({ ...form, libraryId: e.target.value })} 
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
                   >
+                    <option value="">Personal Collection (Private Owner)</option>
                     {libraries.map((l) => (
                       <option key={l.id} value={l.id}>{l.name}</option>
                     ))}
@@ -370,7 +389,7 @@ export default function BookInventory() {
                 )}
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Total Copies</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Total Copies *</label>
                 <input required type="number" min="1" value={form.totalCopies} onChange={(e) => setForm({ ...form, totalCopies: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
               </div>
             </div>

@@ -4,12 +4,11 @@ import {
   useRef,
   useState,
 } from 'react';
-
 import {
   Bar,
   Line,
 } from 'react-chartjs-2';
-
+import LocationPickerMap from '../../component/LocationPickerMap.jsx';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -28,24 +27,21 @@ import {
   Building2,
   FileSpreadsheet,
   MapPinned,
+  MessageSquare,
   ShieldCheck,
   Upload,
   UsersRound,
 } from 'lucide-react';
-
 import { useAuth } from '../../context/useAuth.js';
 import {
   useLibraryData,
   useLibrary,
 } from '../../context/useLibrary.js';
-
 import BookInventory from '../../component/BookInventory.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
 import AdminWorkspace from '../../component/AdminWorkspace.jsx';
 import DashboardWelcome from '../../component/DashboardWelcome.jsx';
-
 import { supabase } from '../../lib/supabaseClient.js';
-
 import {
   exportToExcel,
   exportToCSV,
@@ -86,8 +82,13 @@ const NAV = [
   },
   {
     id: 'workspace',
-    label: 'Reports & Services',
+    label: 'Reports and Services',
     Icon: FileSpreadsheet,
+  },
+  {
+    id: 'communication',
+    label: 'Communication',
+    Icon: MessageSquare,
   },
 ];
 
@@ -99,17 +100,13 @@ function StatCard({
   const tones = {
     default:
       'bg-white border-slate-200 border-l-slate-300 text-slate-800',
-
     amber:
       'bg-amber-50 border-amber-200 border-l-amber-500 text-amber-800',
-
     red:
       'bg-red-50 border-red-200 border-l-red-500 text-red-700',
-
     blue:
       'bg-blue-50 border-blue-200 border-l-blue-500 text-blue-800',
   };
-
   return (
     <div
       className={`rounded-r-xl border border-l-4 p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${tones[tone]}`}
@@ -132,12 +129,10 @@ function lastNDaysLabels(n) {
     { length: n },
     (_, index) => {
       const date = new Date();
-
       date.setDate(
         date.getDate() -
           (n - 1 - index)
       );
-
       return date.toLocaleDateString(
         'en-PH',
         {
@@ -167,19 +162,15 @@ function formatStaffRole(role) {
   if (role === 'superadmin') {
     return 'Super Admin';
   }
-
   if (role === 'subadmin') {
     return 'Sub-Admin';
   }
-
   if (role === 'librarian') {
     return 'Library Staff';
   }
-
   if (role === 'circulation') {
     return 'Circulation Staff';
   }
-
   return (
     String(role || '')
       .replaceAll('_', ' ')
@@ -191,35 +182,28 @@ function formatStaffRole(role) {
   );
 }
 
-
 export default function SuperAdminDashboard() {
   const mainScrollRef = useRef(null);
-
   const {
     user,
     logout,
   } = useAuth();
-
   const handleSuperAdminLogout = async () => {
     mainScrollRef.current?.scrollTo({
       top: 0,
       left: 0,
       behavior: 'instant',
     });
-
     window.scrollTo({
       top: 0,
       left: 0,
       behavior: 'instant',
     });
-
     await logout();
   };
-
   const {
     addLibrary,
   } = useLibrary();
-
   const {
     books,
     visitors,
@@ -227,29 +211,24 @@ export default function SuperAdminDashboard() {
     attendanceLogs,
     libraries,
   } = useLibraryData();
-
   const [section, setSection] =
     useState('overview');
 
   // ============================================================
   // IMPORT / EXPORT
   // ============================================================
-
   const [
     importTarget,
     setImportTarget,
   ] = useState('books');
-
   const handleFileUpload = (
     event
   ) => {
     const file =
       event.target.files?.[0];
-
     if (!file) {
       return;
     }
-
     parseImportFile(
       file,
       async (importedJSON) => {
@@ -259,25 +238,21 @@ export default function SuperAdminDashboard() {
           } = await supabase
             .from(importTarget)
             .insert(importedJSON);
-
           if (error) {
             window.alert(
               `Failed to import data: ${error.message}`
             );
             return;
           }
-
           window.alert(
             `Data successfully imported to ${importTarget}!`
           );
-
           window.location.reload();
         } catch (error) {
           console.error(
             'Import error:',
             error
           );
-
           window.alert(
             error.message ||
               'Failed to import data.'
@@ -285,29 +260,24 @@ export default function SuperAdminDashboard() {
         }
       }
     );
-
     event.target.value = '';
   };
 
   // ============================================================
-  // ADD LIBRARY
+  // ADD LIBRARY & MAP STATE
   // ============================================================
-
   const [
     showAddLibrary,
     setShowAddLibrary,
   ] = useState(false);
-
   const [
     savingLibrary,
     setSavingLibrary,
   ] = useState(false);
-
   const [
     libraryMessage,
     setLibraryMessage,
   ] = useState('');
-
   const [
     libraryForm,
     setLibraryForm,
@@ -315,36 +285,41 @@ export default function SuperAdminDashboard() {
     name: '',
     campus: '',
     address: '',
-    lat: '',
-    lng: '',
+    lat: '14.085000',
+    lng: '121.149000',
     hours: '8:00 AM - 5:00 PM',
     status: 'Open',
   });
 
+  const [mapPosition, setMapPosition] = useState([14.0850, 121.1490]);
+
+  const handleCoordinateChange = (lat, lng) => {
+    setLibraryForm((previous) => ({
+      ...previous,
+      lat: String(lat),
+      lng: String(lng),
+    }));
+  };
+
   // ============================================================
   // STAFF ACCOUNTS
   // ============================================================
-
   const [
     staffAccounts,
     setStaffAccounts,
   ] = useState([]);
-
   const [
     staffLoading,
     setStaffLoading,
   ] = useState(false);
-
   const [
     staffError,
     setStaffError,
   ] = useState('');
-
   const [
     staffMessage,
     setStaffMessage,
   ] = useState('');
-
   const [
     staffForm,
     setStaffForm,
@@ -358,7 +333,6 @@ export default function SuperAdminDashboard() {
   // ============================================================
   // LOAD STAFF ACCOUNTS
   // ============================================================
-
   const loadStaffAccounts =
     async () => {
       if (!supabase) {
@@ -367,11 +341,9 @@ export default function SuperAdminDashboard() {
         );
         return;
       }
-
       try {
         setStaffLoading(true);
         setStaffError('');
-
         const {
           data,
           error,
@@ -383,11 +355,9 @@ export default function SuperAdminDashboard() {
           .order('created_at', {
             ascending: false,
           });
-
         if (error) {
           throw error;
         }
-
         setStaffAccounts(
           data || []
         );
@@ -396,7 +366,6 @@ export default function SuperAdminDashboard() {
           'Load staff accounts error:',
           error
         );
-
         setStaffError(
           error.message ||
             'Unable to load staff accounts.'
@@ -405,7 +374,6 @@ export default function SuperAdminDashboard() {
         setStaffLoading(false);
       }
     };
-
   useEffect(() => {
     if (
       section === 'accounts'
@@ -417,35 +385,27 @@ export default function SuperAdminDashboard() {
   // ============================================================
   // CREATE STAFF ACCOUNT
   // ============================================================
-
   const handleCreateStaff =
     async (event) => {
       event.preventDefault();
-
       if (!supabase) {
         setStaffError(
           'Supabase is not configured.'
         );
         return;
       }
-
       setStaffError('');
       setStaffMessage('');
-
       const fullName =
         staffForm.fullName.trim();
-
       const email =
         staffForm.email
           .trim()
           .toLowerCase();
-
       const password =
         staffForm.password;
-
       const libraryId =
         staffForm.libraryId;
-
       if (
         !fullName ||
         !email ||
@@ -457,17 +417,14 @@ export default function SuperAdminDashboard() {
         );
         return;
       }
-
       if (password.length < 10) {
         setStaffError(
           'Password must contain at least 10 characters.'
         );
         return;
       }
-
       try {
         setStaffLoading(true);
-
         const {
           data,
           error,
@@ -485,26 +442,21 @@ export default function SuperAdminDashboard() {
               },
             }
           );
-
         if (error) {
           throw error;
         }
-
         if (data?.error) {
           throw new Error(
             data.error
           );
         }
-
         setStaffForm({
           fullName: '',
           email: '',
           password: '',
           libraryId: '',
         });
-
         await loadStaffAccounts();
-
         setStaffMessage(
           'Sub-admin account created successfully.'
         );
@@ -513,7 +465,6 @@ export default function SuperAdminDashboard() {
           'Create staff account error:',
           error
         );
-
         setStaffError(
           error.message ||
             'Unable to create staff account.'
@@ -526,7 +477,6 @@ export default function SuperAdminDashboard() {
   // ============================================================
   // ENABLE / DISABLE STAFF
   // ============================================================
-
   const handleToggleStaff =
     async (staff) => {
       if (!supabase) {
@@ -535,7 +485,6 @@ export default function SuperAdminDashboard() {
         );
         return;
       }
-
       if (
         staff.role ===
         'superadmin'
@@ -545,29 +494,23 @@ export default function SuperAdminDashboard() {
         );
         return;
       }
-
       const nextState =
         !staff.is_active;
-
       const action =
         nextState
           ? 'enable'
           : 'disable';
-
       const confirmed =
         window.confirm(
           `Are you sure you want to ${action} ${staff.full_name}?`
         );
-
       if (!confirmed) {
         return;
       }
-
       try {
         setStaffLoading(true);
         setStaffError('');
         setStaffMessage('');
-
         const {
           data,
           error,
@@ -585,19 +528,15 @@ export default function SuperAdminDashboard() {
               },
             }
           );
-
         if (error) {
           throw error;
         }
-
         if (data?.error) {
           throw new Error(
             data.error
           );
         }
-
         await loadStaffAccounts();
-
         setStaffMessage(
           `${staff.full_name} is now ${
             nextState
@@ -610,7 +549,6 @@ export default function SuperAdminDashboard() {
           'Toggle staff account error:',
           error
         );
-
         setStaffError(
           error.message ||
             'Unable to update staff account.'
@@ -623,7 +561,6 @@ export default function SuperAdminDashboard() {
   // ============================================================
   // CURRENT LOCATION
   // ============================================================
-
   const useCurrentLocation =
     () => {
       if (
@@ -634,24 +571,16 @@ export default function SuperAdminDashboard() {
         );
         return;
       }
-
       setLibraryMessage(
         'Getting your current location...'
       );
-
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setLibraryForm(
-            (previous) => ({
-              ...previous,
-              lat: position.coords.latitude.toFixed(
-                6
-              ),
-              lng: position.coords.longitude.toFixed(
-                6
-              ),
-            })
-          );
+          const latitude = position.coords.latitude;
+          const longitude = position.coords.longitude;
+
+          setMapPosition([latitude, longitude]);
+          handleCoordinateChange(latitude.toFixed(6), longitude.toFixed(6));
 
           setLibraryMessage(
             'Location captured successfully.'
@@ -662,9 +591,8 @@ export default function SuperAdminDashboard() {
             'Geolocation error:',
             error
           );
-
           setLibraryMessage(
-            'Unable to get your location. Please enter latitude and longitude manually.'
+            'Unable to get your location. Please select on the map.'
           );
         }
       );
@@ -673,11 +601,9 @@ export default function SuperAdminDashboard() {
   // ============================================================
   // ADD LIBRARY
   // ============================================================
-
   const handleAddLibrary =
     async (event) => {
       event.preventDefault();
-
       if (
         !libraryForm.name.trim() ||
         !libraryForm.address.trim() ||
@@ -685,41 +611,35 @@ export default function SuperAdminDashboard() {
         !libraryForm.lng
       ) {
         setLibraryMessage(
-          'Please enter the library name, address, latitude, and longitude.'
+          'Please enter the library name, address, and pin exact location on the map.'
         );
         return;
       }
-
       try {
         setSavingLibrary(true);
         setLibraryMessage('');
-
         await addLibrary(
           libraryForm
         );
-
         setLibraryMessage(
           'Library added successfully.'
         );
-
         setLibraryForm({
           name: '',
           campus: '',
           address: '',
-          lat: '',
-          lng: '',
+          lat: '14.085000',
+          lng: '121.149000',
           hours:
             '8:00 AM - 5:00 PM',
           status: 'Open',
         });
-
         setShowAddLibrary(false);
       } catch (error) {
         console.error(
           'Add library error:',
           error
         );
-
         setLibraryMessage(
           error.message ||
             'Failed to add library.'
@@ -732,14 +652,12 @@ export default function SuperAdminDashboard() {
   // ============================================================
   // DASHBOARD DATA
   // ============================================================
-
   const activeBorrows =
     borrowRequests.filter(
       (request) =>
         request.status ===
         'borrowed'
     ).length;
-
   const overdue =
     borrowRequests.filter(
       (request) =>
@@ -750,7 +668,6 @@ export default function SuperAdminDashboard() {
           request.dueDate
         ) < new Date()
     ).length;
-
   const openLibraries =
     libraries.filter(
       (library) =>
@@ -760,33 +677,26 @@ export default function SuperAdminDashboard() {
   // ============================================================
   // TREND DATA
   // ============================================================
-
   const trendData = useMemo(() => {
     const days = 7;
-
     const labels =
       lastNDaysLabels(days);
-
     const dayKey = (value) =>
       new Date(
         value
       ).toDateString();
-
     const keys = Array.from(
       { length: days },
       (_, index) => {
         const date =
           new Date();
-
         date.setDate(
           date.getDate() -
             (days - 1 - index)
         );
-
         return date.toDateString();
       }
     );
-
     const visitCounts =
       keys.map((key) =>
         attendanceLogs.filter(
@@ -797,7 +707,6 @@ export default function SuperAdminDashboard() {
             ) === key
         ).length
       );
-
     const borrowCounts =
       keys.map((key) =>
         borrowRequests.filter(
@@ -808,7 +717,6 @@ export default function SuperAdminDashboard() {
             ) === key
         ).length
       );
-
     return {
       labels,
       visitCounts,
@@ -822,23 +730,19 @@ export default function SuperAdminDashboard() {
   // ============================================================
   // CATEGORY DATA
   // ============================================================
-
   const categoryData =
     useMemo(() => {
       const counts = {};
-
       books.forEach(
         (book) => {
           const category =
             book.category ||
             'Uncategorized';
-
           counts[category] =
             (counts[category] ||
               0) + 1;
         }
       );
-
       return {
         labels:
           Object.keys(
@@ -854,28 +758,19 @@ export default function SuperAdminDashboard() {
   // ============================================================
   // UI
   // ============================================================
-
   return (
     <div className="flex h-screen overflow-hidden bg-shelf-bg text-slate-800">
-
-      {/* ======================================================
-          SIDEBAR
-      ====================================================== */}
-
+      {/* SIDEBAR */}
       <aside className="fixed inset-y-0 left-0 z-40 flex h-screen w-60 shrink-0 flex-col overflow-y-auto bg-shelf-primary text-white">
-
         <div className="border-b border-white/10 p-5">
           <p className="font-extrabold tracking-wider">
             SHELF ILMS
           </p>
-
           <p className="mt-1 text-xs text-slate-300">
             Super-Admin Console
           </p>
         </div>
-
         <nav className="flex-1 space-y-1 p-3">
-
           {NAV.map(
             ({ Icon, ...item }) => (
               <button
@@ -885,10 +780,8 @@ export default function SuperAdminDashboard() {
                   setSection(
                     item.id
                   );
-
                   setStaffError('');
                   setStaffMessage('');
-
                   if (
                     item.id !==
                     'map'
@@ -896,7 +789,6 @@ export default function SuperAdminDashboard() {
                     setShowAddLibrary(
                       false
                     );
-
                     setLibraryMessage(
                       ''
                     );
@@ -914,42 +806,30 @@ export default function SuperAdminDashboard() {
               </button>
             )
           )}
-
         </nav>
-
         <div className="space-y-2 border-t border-white/10 p-4">
-
           <p className="text-xs text-slate-300">
             Signed in as
           </p>
-
           <p className="text-sm font-bold">
             {user?.name ||
               'System Super Administrator'}
           </p>
-
-
-<button
-  type="button"
-  onClick={handleSuperAdminLogout}
-  className="w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs transition hover:bg-white/20"
->
-  Sign Out
-</button>
-
-
+          <button
+            type="button"
+            onClick={handleSuperAdminLogout}
+            className="w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs transition hover:bg-white/20"
+          >
+            Sign Out
+          </button>
         </div>
-
       </aside>
 
-      {/* ======================================================
-          MAIN CONTENT
-      ====================================================== */}
-
+      {/* MAIN CONTENT */}
       <main
-  ref={mainScrollRef}
-  className="ml-60 min-w-0 flex-1 space-y-6 overflow-y-auto p-4 sm:p-6 lg:p-8"
->
+        ref={mainScrollRef}
+        className="ml-60 min-w-0 flex-1 space-y-6 overflow-y-auto p-4 sm:p-6 lg:p-8"
+      >
         <DashboardWelcome
           name={user?.name?.split(' ')[0]}
           description="System metrics, library operations, staff accounts, and reports at a glance."
@@ -960,398 +840,126 @@ export default function SuperAdminDashboard() {
           ]}
         />
 
-        {/* ====================================================
-            OVERVIEW
-        ==================================================== */}
-
-        {section ===
-          'overview' && (
+        {/* OVERVIEW */}
+        {section === 'overview' && (
           <div className="space-y-6">
-
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-
-              <StatCard
-                label="Registered Visitors"
-                value={
-                  visitors.length
-                }
-                tone="blue"
-              />
-
-              <StatCard
-                label="Titles in Catalog"
-                value={
-                  books.length
-                }
-              />
-
-              <StatCard
-                label="Active Borrows"
-                value={
-                  activeBorrows
-                }
-              />
-
-              <StatCard
-                label="Overdue Items"
-                value={overdue}
-                tone="red"
-              />
-
-              <StatCard
-                label="Branches Open"
-                value={`${openLibraries}/${libraries.length}`}
-                tone="amber"
-              />
-
+              <StatCard label="Registered Visitors" value={visitors.length} tone="blue" />
+              <StatCard label="Titles in Catalog" value={books.length} />
+              <StatCard label="Active Borrows" value={activeBorrows} />
+              <StatCard label="Overdue Items" value={overdue} tone="red" />
+              <StatCard label="Branches Open" value={`${openLibraries}/${libraries.length}`} tone="amber" />
             </div>
 
-            {/* ==================================================
-                DATA MANAGEMENT
-            ================================================== */}
-
+            {/* DATA MANAGEMENT */}
             <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-
               <div className="flex flex-col justify-between gap-2 border-b border-slate-100 pb-3 md:flex-row md:items-center">
-
                 <div>
-                  <h3 className="text-sm font-bold text-slate-800">
-                    Data Management &
-                    Reports
-                  </h3>
-
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    Export system records
-                    or import new entries
-                    into the database.
-                  </p>
+                  <h3 className="text-sm font-bold text-slate-800">Data Management & Reports</h3>
+                  <p className="mt-0.5 text-xs text-slate-500">Export system records or import new entries into the database.</p>
                 </div>
-
                 <div className="flex items-center gap-2">
-
                   <select
-                    value={
-                      importTarget
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setImportTarget(
-                        event.target
-                          .value
-                      )
-                    }
+                    value={importTarget}
+                    onChange={(event) => setImportTarget(event.target.value)}
                     className="rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-2 text-xs font-semibold text-slate-700"
                   >
-                    <option value="books">
-                      Import to Books
-                      Table
-                    </option>
-
-                    <option value="attendance_logs">
-                      Import to
-                      Attendance
-                      Logs
-                    </option>
+                    <option value="books">Import to Books Table</option>
+                    <option value="attendance_logs">Import to Attendance Logs</option>
                   </select>
-
                   <label className="cursor-pointer rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-bold text-white transition hover:bg-blue-700">
-
                     <Upload size={14} className="mr-1.5 inline-block align-[-2px]" aria-hidden="true" />
                     Import File
-
-                    <input
-                      type="file"
-                      accept=".csv,.xlsx,.xls"
-                      onChange={
-                        handleFileUpload
-                      }
-                      className="hidden"
-                    />
-
+                    <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} className="hidden" />
                   </label>
-
                 </div>
-
               </div>
-
               <div className="grid grid-cols-1 gap-4 pt-1 sm:grid-cols-2">
-
-                {/* BOOK EXPORT */}
-
                 <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/50 p-3.5">
-
                   <div>
                     <p className="text-xs font-bold text-slate-700">
                       <BookOpen size={14} className="mr-1.5 inline-block align-[-2px]" aria-hidden="true" />
-                      All Books
-                      Catalog
+                      All Books Catalog
                     </p>
-
-                    <p className="text-[11px] text-slate-500">
-                      Total Titles:{' '}
-                      {books.length}
-                    </p>
+                    <p className="text-[11px] text-slate-500">Total Titles: {books.length}</p>
                   </div>
-
                   <div className="flex gap-2">
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        exportToExcel(
-                          books,
-                          'All_Libraries_Books.xlsx'
-                        )
-                      }
-                      className="rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-emerald-700"
-                    >
-                      Excel
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        exportToCSV(
-                          books,
-                          'All_Libraries_Books.csv'
-                        )
-                      }
-                      className="rounded bg-slate-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-slate-800"
-                    >
-                      CSV
-                    </button>
-
+                    <button type="button" onClick={() => exportToExcel(books, 'All_Libraries_Books.xlsx')} className="rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-emerald-700">Excel</button>
+                    <button type="button" onClick={() => exportToCSV(books, 'All_Libraries_Books.csv')} className="rounded bg-slate-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-slate-800">CSV</button>
                   </div>
-
                 </div>
-
-                {/* ATTENDANCE EXPORT */}
-
                 <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/50 p-3.5">
-
                   <div>
                     <p className="text-xs font-bold text-slate-700">
                       <Activity size={14} className="mr-1.5 inline-block align-[-2px]" aria-hidden="true" />
-                      Total
-                      Attendance
+                      Total Attendance
                     </p>
-
-                    <p className="text-[11px] text-slate-500">
-                      Total Visits:{' '}
-                      {
-                        attendanceLogs.length
-                      }
-                    </p>
+                    <p className="text-[11px] text-slate-500">Total Visits: {attendanceLogs.length}</p>
                   </div>
-
                   <div className="flex gap-2">
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        exportToExcel(
-                          attendanceLogs,
-                          'Total_Attendance_All_Libraries.xlsx'
-                        )
-                      }
-                      className="rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-emerald-700"
-                    >
-                      Excel
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        exportToCSV(
-                          attendanceLogs,
-                          'Total_Attendance_All_Libraries.csv'
-                        )
-                      }
-                      className="rounded bg-slate-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-slate-800"
-                    >
-                      CSV
-                    </button>
-
+                    <button type="button" onClick={() => exportToExcel(attendanceLogs, 'Total_Attendance_All_Libraries.xlsx')} className="rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-emerald-700">Excel</button>
+                    <button type="button" onClick={() => exportToCSV(attendanceLogs, 'Total_Attendance_All_Libraries.csv')} className="rounded bg-slate-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-slate-800">CSV</button>
                   </div>
-
                 </div>
-
               </div>
-
             </div>
 
             {/* CHARTS */}
-
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-
               <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-
-                <h3 className="mb-3 text-sm font-bold text-slate-800">
-                  Visits & Borrows —
-                  Last 7 Days
-                </h3>
-
+                <h3 className="mb-3 text-sm font-bold text-slate-800">Visits & Borrows — Last 7 Days</h3>
                 <Line
                   data={{
-                    labels:
-                      trendData.labels,
-
+                    labels: trendData.labels,
                     datasets: [
-                      {
-                        label:
-                          'Attendance',
-
-                        data:
-                          trendData.visitCounts,
-
-                        borderColor:
-                          '#2563eb',
-
-                        backgroundColor:
-                          '#2563eb',
-
-                        tension: 0.3,
-                      },
-
-                      {
-                        label:
-                          'Books Borrowed',
-
-                        data:
-                          trendData.borrowCounts,
-
-                        borderColor:
-                          '#002046',
-
-                        backgroundColor:
-                          '#002046',
-
-                        tension: 0.3,
-                      },
+                      { label: 'Attendance', data: trendData.visitCounts, borderColor: '#2563eb', backgroundColor: '#2563eb', tension: 0.3 },
+                      { label: 'Books Borrowed', data: trendData.borrowCounts, borderColor: '#002046', backgroundColor: '#002046', tension: 0.3 },
                     ],
                   }}
-                  options={{
-                    responsive:
-                      true,
-
-                    plugins: {
-                      legend: {
-                        position:
-                          'bottom',
-                      },
-                    },
-                  }}
+                  options={{ responsive: true, plugins: { legend: { position: 'bottom' } } }}
                 />
-
               </div>
-
               <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-
-                <h3 className="mb-3 text-sm font-bold text-slate-800">
-                  Catalog by Category
-                </h3>
-
-                {categoryData
-                  .labels
-                  .length ===
-                0 ? (
-                  <p className="text-xs text-slate-500">
-                    No books in the
-                    catalog yet.
-                  </p>
+                <h3 className="mb-3 text-sm font-bold text-slate-800">Catalog by Category</h3>
+                {categoryData.labels.length === 0 ? (
+                  <p className="text-xs text-slate-500">No books in the catalog yet.</p>
                 ) : (
                   <Bar
                     data={{
-                      labels:
-                        categoryData.labels,
-
-                      datasets: [
-                        {
-                          label:
-                            'Titles',
-
-                          data:
-                            categoryData.values,
-
-                          backgroundColor:
-                            '#2563eb',
-                        },
-                      ],
+                      labels: categoryData.labels,
+                      datasets: [{ label: 'Titles', data: categoryData.values, backgroundColor: '#2563eb' }],
                     }}
-                    options={{
-                      responsive:
-                        true,
-
-                      plugins: {
-                        legend: {
-                          display:
-                            false,
-                        },
-                      },
-                    }}
+                    options={{ responsive: true, plugins: { legend: { display: false } } }}
                   />
                 )}
-
               </div>
-
             </div>
-
           </div>
         )}
 
-        {/* ====================================================
-            INVENTORY
-        ==================================================== */}
+        {/* INVENTORY */}
+        {section === 'inventory' && <BookInventory />}
 
-        {section ===
-          'inventory' && (
-          <BookInventory />
-        )}
-
-        {/* ====================================================
-            LIBRARIES & MAP
-        ==================================================== */}
-
+        {/* LIBRARIES & MAP */}
         {section === 'map' && (
           <div className="space-y-4">
-
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-
               <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-
                 <div>
-                  <h2 className="text-lg font-bold text-slate-800">
-                    Libraries & Map
-                  </h2>
-
-                  <p className="mt-1 text-xs text-slate-500">
-                    Manage library branches
-                    and their locations.
-                  </p>
+                  <h2 className="text-lg font-bold text-slate-800">Libraries & Map</h2>
+                  <p className="mt-1 text-xs text-slate-500">Manage library branches and their locations.</p>
                 </div>
-
                 <button
                   type="button"
                   onClick={() => {
-                    setShowAddLibrary(
-                      (current) =>
-                        !current
-                    );
-
-                    setLibraryMessage(
-                      ''
-                    );
+                    setShowAddLibrary((current) => !current);
+                    setLibraryMessage('');
                   }}
                   className="rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#003568]"
                 >
-                  {showAddLibrary
-                    ? 'Cancel'
-                    : '+ Add Library'}
+                  {showAddLibrary ? 'Cancel' : '+ Add Library'}
                 </button>
-
               </div>
-
             </div>
 
             {libraryMessage && (
@@ -1360,757 +968,346 @@ export default function SuperAdminDashboard() {
               </div>
             )}
 
+            {/* MODAL OVERLAY FOR ADD LIBRARY */}
             {showAddLibrary && (
-              <form
-                onSubmit={
-                  handleAddLibrary
-                }
-                className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
-              >
-
-                <div className="mb-5">
-                  <h3 className="text-sm font-bold text-slate-800">
-                    Add New Library
-                  </h3>
-
-                  <p className="mt-1 text-xs text-slate-500">
-                    Enter the library
-                    information and map
-                    coordinates.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-
-                  {/* NAME */}
-
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-slate-600">
-                      Library Name *
-                    </label>
-
-                    <input
-                      type="text"
-                      value={
-                        libraryForm.name
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        setLibraryForm(
-                          (
-                            current
-                          ) => ({
-                            ...current,
-                            name:
-                              event
-                                .target
-                                .value,
-                          })
-                        )
-                      }
-                      placeholder="e.g. Tanauan City Public Library"
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
-                      required
-                    />
-                  </div>
-
-                  {/* CAMPUS */}
-
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-slate-600">
-                      Campus / Branch
-                    </label>
-
-                    <input
-                      type="text"
-                      value={
-                        libraryForm.campus
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        setLibraryForm(
-                          (
-                            current
-                          ) => ({
-                            ...current,
-                            campus:
-                              event
-                                .target
-                                .value,
-                          })
-                        )
-                      }
-                      placeholder="e.g. Tanauan City"
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
-                    />
-                  </div>
-
-                  {/* ADDRESS */}
-
-                  <div className="md:col-span-2">
-                    <label className="mb-1 block text-xs font-semibold text-slate-600">
-                      Address *
-                    </label>
-
-                    <input
-                      type="text"
-                      value={
-                        libraryForm.address
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        setLibraryForm(
-                          (
-                            current
-                          ) => ({
-                            ...current,
-                            address:
-                              event
-                                .target
-                                .value,
-                          })
-                        )
-                      }
-                      placeholder="Complete library address"
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
-                      required
-                    />
-                  </div>
-
-                  {/* LATITUDE */}
-
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-slate-600">
-                      Latitude *
-                    </label>
-
-                    <input
-                      type="number"
-                      step="any"
-                      value={
-                        libraryForm.lat
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        setLibraryForm(
-                          (
-                            current
-                          ) => ({
-                            ...current,
-                            lat:
-                              event
-                                .target
-                                .value,
-                          })
-                        )
-                      }
-                      placeholder="14.085000"
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
-                      required
-                    />
-                  </div>
-
-                  {/* LONGITUDE */}
-
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-slate-600">
-                      Longitude *
-                    </label>
-
-                    <input
-                      type="number"
-                      step="any"
-                      value={
-                        libraryForm.lng
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        setLibraryForm(
-                          (
-                            current
-                          ) => ({
-                            ...current,
-                            lng:
-                              event
-                                .target
-                                .value,
-                          })
-                        )
-                      }
-                      placeholder="121.149000"
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
-                      required
-                    />
-                  </div>
-
-                  {/* HOURS */}
-
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-slate-600">
-                      Operating Hours
-                    </label>
-
-                    <input
-                      type="text"
-                      value={
-                        libraryForm.hours
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        setLibraryForm(
-                          (
-                            current
-                          ) => ({
-                            ...current,
-                            hours:
-                              event
-                                .target
-                                .value,
-                          })
-                        )
-                      }
-                      placeholder="8:00 AM - 5:00 PM"
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
-                    />
-                  </div>
-
-                  {/* STATUS */}
-
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-slate-600">
-                      Status
-                    </label>
-
-                    <select
-                      value={
-                        libraryForm.status
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        setLibraryForm(
-                          (
-                            current
-                          ) => ({
-                            ...current,
-                            status:
-                              event
-                                .target
-                                .value,
-                          })
-                        )
-                      }
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+                <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+                  {/* MODAL HEADER */}
+                  <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-800">
+                        Add New Library
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Enter library info and pin exact location on map.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddLibrary(false)}
+                      className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
                     >
-                      <option value="Open">
-                        Open
-                      </option>
-
-                      <option value="Closed">
-                        Closed
-                      </option>
-                    </select>
+                      ✕
+                    </button>
                   </div>
 
+                  {/* FORM */}
+                  <form onSubmit={handleAddLibrary}>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      {/* NAME */}
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-600">
+                          Library Name *
+                        </label>
+                        <input
+                          type="text"
+                          value={libraryForm.name}
+                          onChange={(e) =>
+                            setLibraryForm((prev) => ({
+                              ...prev,
+                              name: e.target.value,
+                            }))
+                          }
+                          placeholder="e.g. Tanauan City Public Library"
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+                          required
+                        />
+                      </div>
+
+                      {/* CAMPUS */}
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-600">
+                          Campus / Branch
+                        </label>
+                        <input
+                          type="text"
+                          value={libraryForm.campus}
+                          onChange={(e) =>
+                            setLibraryForm((prev) => ({
+                              ...prev,
+                              campus: e.target.value,
+                            }))
+                          }
+                          placeholder="e.g. Tanauan City"
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+                        />
+                      </div>
+
+                      {/* ADDRESS */}
+                      <div className="md:col-span-2">
+                        <label className="mb-1 block text-xs font-semibold text-slate-600">
+                          Address *
+                        </label>
+                        <input
+                          type="text"
+                          value={libraryForm.address}
+                          onChange={(e) =>
+                            setLibraryForm((prev) => ({
+                              ...prev,
+                              address: e.target.value,
+                            }))
+                          }
+                          placeholder="Complete library address"
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+                          required
+                        />
+                      </div>
+
+                      {/* MAP PICKER COMPONENT */}
+                      <div className="md:col-span-2 my-1">
+                        <label className="mb-1 block text-xs font-semibold text-slate-600">
+                          Pin Exact Location on Map (Click or Drag marker) *
+                        </label>
+                        <LocationPickerMap
+                          position={mapPosition}
+                          setPosition={setMapPosition}
+                          onChangeCoordinates={handleCoordinateChange}
+                        />
+                      </div>
+
+                      {/* LATITUDE (READ ONLY) */}
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-600">
+                          Latitude *
+                        </label>
+                        <input
+                          type="text"
+                          readOnly
+                          value={libraryForm.lat}
+                          className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2.5 text-sm text-slate-600 cursor-not-allowed"
+                          required
+                        />
+                      </div>
+
+                      {/* LONGITUDE (READ ONLY) */}
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-600">
+                          Longitude *
+                        </label>
+                        <input
+                          type="text"
+                          readOnly
+                          value={libraryForm.lng}
+                          className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2.5 text-sm text-slate-600 cursor-not-allowed"
+                          required
+                        />
+                      </div>
+
+                      {/* HOURS */}
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-600">
+                          Operating Hours
+                        </label>
+                        <input
+                          type="text"
+                          value={libraryForm.hours}
+                          onChange={(e) =>
+                            setLibraryForm((prev) => ({
+                              ...prev,
+                              hours: e.target.value,
+                            }))
+                          }
+                          placeholder="8:00 AM - 5:00 PM"
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+                        />
+                      </div>
+
+                      {/* STATUS */}
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-slate-600">
+                          Status
+                        </label>
+                        <select
+                          value={libraryForm.status}
+                          onChange={(e) =>
+                            setLibraryForm((prev) => ({
+                              ...prev,
+                              status: e.target.value,
+                            }))
+                          }
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"
+                        >
+                          <option value="Open">Open</option>
+                          <option value="Closed">Closed</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* BUTTONS */}
+                    <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end border-t border-slate-100 pt-4">
+                      <button
+                        type="button"
+                        onClick={useCurrentLocation}
+                        className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-center gap-1.5"
+                      >
+                        <MapPinned size={14} aria-hidden="true" />
+                        Use Current Location
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddLibrary(false)}
+                        className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={savingLibrary}
+                        className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        {savingLibrary ? 'Adding...' : 'Add Library'}
+                      </button>
+                    </div>
+                  </form>
                 </div>
-
-                <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-
-                  <button
-                    type="button"
-                    onClick={
-                      useCurrentLocation
-                    }
-                    className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"
-                  >
-                    <MapPinned size={14} className="mr-1.5 inline-block align-[-2px]" aria-hidden="true" />
-                    Use Current
-                    Location
-                  </button>
-
-                  <button
-                    type="submit"
-                    disabled={
-                      savingLibrary
-                    }
-                    className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
-                  >
-                    {savingLibrary
-                      ? 'Adding...'
-                      : 'Add Library'}
-                  </button>
-
-                </div>
-
-              </form>
+              </div>
             )}
 
-            <LibraryMap />
-
+            {/* HIDE MAIN MAP WHEN ADD LIBRARY MODAL IS OPEN */}
+            {!showAddLibrary && <LibraryMap />}
           </div>
         )}
 
-        {/* ====================================================
-            STAFF ACCOUNTS
-        ==================================================== */}
-
-        {section ===
-          'accounts' && (
+        {/* STAFF ACCOUNTS */}
+        {section === 'accounts' && (
           <div className="space-y-6">
-
-            {/* HEADER */}
-
             <div>
-              <h2 className="text-lg font-bold text-slate-800">
-                Staff Accounts
-              </h2>
-
-              <p className="mt-1 text-sm text-slate-500">
-                Manage database-backed
-                sub-admin and circulation
-                staff accounts.
-              </p>
+              <h2 className="text-lg font-bold text-slate-800">Staff Accounts</h2>
+              <p className="mt-1 text-sm text-slate-500">Manage database-backed sub-admin and circulation staff accounts.</p>
             </div>
-
-            {/* ERROR */}
 
             {staffError && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-                {staffError}
-              </div>
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{staffError}</div>
             )}
-
-            {/* SUCCESS */}
-
             {staffMessage && (
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                {staffMessage}
-              </div>
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{staffMessage}</div>
             )}
 
-            {/* CREATE ACCOUNT */}
-
-            <form
-              onSubmit={
-                handleCreateStaff
-              }
-              className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
-            >
-
+            <form onSubmit={handleCreateStaff} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="mb-5">
-                <h3 className="text-sm font-bold text-slate-800">
-                  Create Sub-Admin
-                  Account
-                </h3>
-
-                <p className="mt-1 text-xs text-slate-500">
-                  Creates a Supabase Auth
-                  account and the
-                  corresponding
-                  staff_profiles record.
-                </p>
+                <h3 className="text-sm font-bold text-slate-800">Create Sub-Admin Account</h3>
+                <p className="mt-1 text-xs text-slate-500">Creates a Supabase Auth account and the corresponding staff_profiles record.</p>
               </div>
-
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-
-                {/* FULL NAME */}
-
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-600">
-                    Full Name
-                  </label>
-
-                  <input
-                    type="text"
-                    value={
-                      staffForm.fullName
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setStaffForm(
-                        (
-                          current
-                        ) => ({
-                          ...current,
-                          fullName:
-                            event
-                              .target
-                              .value,
-                        })
-                      )
-                    }
-                    placeholder="e.g. Juan Dela Cruz"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
-                    required
-                  />
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Full Name</label>
+                  <input type="text" value={staffForm.fullName} onChange={(e) => setStaffForm((prev) => ({ ...prev, fullName: e.target.value }))} placeholder="e.g. Juan Dela Cruz" className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm" required />
                 </div>
-
-                {/* EMAIL */}
-
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-600">
-                    Email
-                  </label>
-
-                  <input
-                    type="email"
-                    value={
-                      staffForm.email
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setStaffForm(
-                        (
-                          current
-                        ) => ({
-                          ...current,
-                          email:
-                            event
-                              .target
-                              .value,
-                        })
-                      )
-                    }
-                    placeholder="staff@shelf.edu"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
-                    required
-                  />
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Email</label>
+                  <input type="email" value={staffForm.email} onChange={(e) => setStaffForm((prev) => ({ ...prev, email: e.target.value }))} placeholder="staff@shelf.edu" className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm" required />
                 </div>
-
-                {/* PASSWORD */}
-
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-600">
-                    Temporary Password
-                  </label>
-
-                  <input
-                    type="password"
-                    value={
-                      staffForm.password
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setStaffForm(
-                        (
-                          current
-                        ) => ({
-                          ...current,
-                          password:
-                            event
-                              .target
-                              .value,
-                        })
-                      )
-                    }
-                    placeholder="Minimum 10 characters"
-                    minLength={10}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
-                    required
-                  />
-
-                  <p className="mt-1 text-[11px] text-slate-400">
-                    Passwords are handled by
-                    Supabase Auth.
-                  </p>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Temporary Password</label>
+                  <input type="password" value={staffForm.password} onChange={(e) => setStaffForm((prev) => ({ ...prev, password: e.target.value }))} placeholder="Minimum 10 characters" minLength={10} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm" required />
+                  <p className="mt-1 text-[11px] text-slate-400">Passwords are handled by Supabase Auth.</p>
                 </div>
-
-                {/* BRANCH */}
-
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-600">
-                    Assigned Branch
-                  </label>
-
-                  <select
-                    value={
-                      staffForm.libraryId
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setStaffForm(
-                        (
-                          current
-                        ) => ({
-                          ...current,
-                          libraryId:
-                            event
-                              .target
-                              .value,
-                        })
-                      )
-                    }
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"
-                    required
-                  >
-                    <option value="">
-                      Select a library
-                    </option>
-
-                    {libraries.map(
-                      (library) => (
-                        <option
-                          key={
-                            library.id
-                          }
-                          value={
-                            library.id
-                          }
-                        >
-                          {
-                            library.name
-                          }
-                        </option>
-                      )
-                    )}
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Assigned Branch</label>
+                  <select value={staffForm.libraryId} onChange={(e) => setStaffForm((prev) => ({ ...prev, libraryId: e.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm" required>
+                    <option value="">Select a library</option>
+                    {libraries.map((library) => (
+                      <option key={library.id} value={library.id}>{library.name}</option>
+                    ))}
                   </select>
                 </div>
-
               </div>
-
               <div className="mt-5">
-
-                <button
-                  type="submit"
-                  disabled={
-                    staffLoading
-                  }
-                  className="rounded-lg bg-shelf-primary px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#003568] disabled:opacity-50"
-                >
-                  {staffLoading
-                    ? 'Creating Account...'
-                    : 'Create Sub-Admin'}
+                <button type="submit" disabled={staffLoading} className="rounded-lg bg-shelf-primary px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#003568] disabled:opacity-50">
+                  {staffLoading ? 'Creating Account...' : 'Create Sub-Admin'}
                 </button>
-
               </div>
-
             </form>
 
-            {/* STAFF TABLE */}
-
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-
               <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-
                 <div>
-                  <h3 className="text-sm font-bold text-slate-800">
-                    Registered Staff
-                    Accounts
-                  </h3>
-
-                  <p className="mt-1 text-xs text-slate-500">
-                    Records are loaded
-                    directly from
-                    staff_profiles.
-                  </p>
+                  <h3 className="text-sm font-bold text-slate-800">Registered Staff Accounts</h3>
+                  <p className="mt-1 text-xs text-slate-500">Records are loaded directly from staff_profiles.</p>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={
-                    loadStaffAccounts
-                  }
-                  disabled={
-                    staffLoading
-                  }
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  {staffLoading
-                    ? 'Loading...'
-                    : 'Refresh'}
+                <button type="button" onClick={loadStaffAccounts} disabled={staffLoading} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                  {staffLoading ? 'Loading...' : 'Refresh'}
                 </button>
-
               </div>
-
               <div className="overflow-x-auto">
-
                 <table className="w-full min-w-225 text-left text-sm">
-
                   <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-
                     <tr>
-                      <th className="p-3">
-                        Name
-                      </th>
-
-                      <th className="p-3">
-                        Email
-                      </th>
-
-                      <th className="p-3">
-                        Role
-                      </th>
-
-                      <th className="p-3">
-                        Assigned Branch
-                      </th>
-
-                      <th className="p-3">
-                        Status
-                      </th>
-
-                      <th className="p-3">
-                        Action
-                      </th>
+                      <th className="p-3">Name</th>
+                      <th className="p-3">Email</th>
+                      <th className="p-3">Role</th>
+                      <th className="p-3">Assigned Branch</th>
+                      <th className="p-3">Status</th>
+                      <th className="p-3">Action</th>
                     </tr>
-
                   </thead>
-
                   <tbody className="divide-y divide-slate-100">
-
-                    {staffAccounts.map(
-                      (staff) => (
-                        <tr
-                          key={
-                            staff.id
-                          }
-                          className="hover:bg-slate-50"
-                        >
-
-                          <td className="p-3 font-semibold text-slate-700">
-                            {
-                              staff.full_name
-                            }
-                          </td>
-
-                          <td className="p-3 text-xs font-mono text-slate-500">
-                            {
-                              staff.email
-                            }
-                          </td>
-
-                          <td className="p-3">
-
-                            <span
-                              className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold ${
-                                staff.role ===
-                                'superadmin'
-                                  ? 'bg-purple-100 text-purple-800'
-                                  : staff.role ===
-                                    'subadmin'
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : 'bg-slate-100 text-slate-700'
-                              }`}
-                            >
-                              {formatStaffRole(
-                                staff.role
-                              )}
-                            </span>
-
-                          </td>
-
-                          <td className="p-3 text-xs text-slate-500">
-                            {getLibraryName(
-                              libraries,
-                              staff.library_id
-                            )}
-                          </td>
-
-                          <td className="p-3">
-
-                            <span
-                              className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold ${
-                                staff.is_active
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-red-100 text-red-800'
-                              }`}
-                            >
-                              {staff.is_active
-                                ? 'Active'
-                                : 'Disabled'}
-                            </span>
-
-                          </td>
-
-                          <td className="p-3">
-
-                            {staff.role ===
-                            'superadmin' ? (
-                              <span className="text-xs font-semibold text-slate-400">
-                                Protected
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleToggleStaff(
-                                    staff
-                                  )
-                                }
-                                disabled={
-                                  staffLoading
-                                }
-                                className={`text-xs font-bold disabled:opacity-50 ${
-                                  staff.is_active
-                                    ? 'text-red-600 hover:text-red-800'
-                                    : 'text-emerald-600 hover:text-emerald-800'
-                                }`}
-                              >
-                                {staff.is_active
-                                  ? 'Disable'
-                                  : 'Enable'}
-                              </button>
-                            )}
-
-                          </td>
-
-                        </tr>
-                      )
-                    )}
-
+                    {staffAccounts.map((staff) => (
+                      <tr key={staff.id} className="hover:bg-slate-50">
+                        <td className="p-3 font-semibold text-slate-700">{staff.full_name}</td>
+                        <td className="p-3 text-xs font-mono text-slate-500">{staff.email}</td>
+                        <td className="p-3">
+                          <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold ${staff.role === 'superadmin' ? 'bg-purple-100 text-purple-800' : staff.role === 'subadmin' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700'}`}>
+                            {formatStaffRole(staff.role)}
+                          </span>
+                        </td>
+                        <td className="p-3 text-xs text-slate-500">{getLibraryName(libraries, staff.library_id)}</td>
+                        <td className="p-3">
+                          <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold ${staff.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                            {staff.is_active ? 'Active' : 'Disabled'}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          {staff.role === 'superadmin' ? (
+                            <span className="text-xs font-semibold text-slate-400">Protected</span>
+                          ) : (
+                            <button type="button" onClick={() => handleToggleStaff(staff)} disabled={staffLoading} className={`text-xs font-bold disabled:opacity-50 ${staff.is_active ? 'text-red-600 hover:text-red-800' : 'text-emerald-600 hover:text-emerald-800'}`}>
+                              {staff.is_active ? 'Disable' : 'Enable'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
-
                 </table>
-
               </div>
-
-              {!staffLoading &&
-                staffAccounts.length ===
-                  0 && (
-                  <div className="p-8 text-center text-sm text-slate-500">
-                    No staff accounts
-                    were found in
-                    staff_profiles.
-                  </div>
-                )}
-
+              {!staffLoading && staffAccounts.length === 0 && (
+                <div className="p-8 text-center text-sm text-slate-500">
+                  No staff accounts were found in staff_profiles.
+                </div>
+              )}
             </div>
-
           </div>
         )}
 
-        {/* ====================================================
-            REPORTS & SERVICES
-        ==================================================== */}
-
-        {section ===
-          'workspace' && (
+        {/* REPORTS AND SERVICES */}
+        {section === 'workspace' && (
           <AdminWorkspace
+            initialTab="reports"
+            mode="reports"
             user={user}
             libraries={libraries}
             books={books}
             visitors={visitors}
-            borrowRequests={
-              borrowRequests
-            }
-            attendanceLogs={
-              attendanceLogs
-            }
+            borrowRequests={borrowRequests}
+            attendanceLogs={attendanceLogs}
           />
         )}
 
+        {/* COMMUNICATION (FEEDBACK & ANNOUNCEMENTS) */}
+        {section === 'communication' && (
+          <AdminWorkspace
+            initialTab="feedback"
+            mode="communication"
+            user={user}
+            libraries={libraries}
+            books={books}
+            visitors={visitors}
+            borrowRequests={borrowRequests}
+            attendanceLogs={attendanceLogs}
+          />
+        )}
       </main>
-
     </div>
   );
 }
