@@ -1,497 +1,365 @@
-import { useState } from 'react';
-import {
-  BookOpen,
-  MapPin,
-  Plus,
-  SearchX,
-  Download,
-  LoaderCircle,
-} from 'lucide-react';
-import { useLibraryData, useLibrary } from '../context/useLibrary.js';
-import { useAuth } from '../context/useAuth.js';
-
-const emptyForm = {
-  title: '',
-  author: '',
-  category: '',
-  isbn: '',
-  shelfLocation: '',
-  libraryId: '',
-  totalCopies: 1,
-  summary: '',
-  coverUrl: '',
-};
+import React, { useState } from 'react';
+import { useLibrary } from '../context/useLibrary';
 
 export default function BookInventory() {
-  const { books, libraries } = useLibraryData();
-  const {
-  addBook,
-  updateBook,
-  deleteBook,
-  loadExternalCatalog,
-} = useLibrary();
-  const { user } = useAuth();
+  const { 
+    books, 
+    addBook, 
+    updateBook, 
+    deleteBook, 
+    libraries, 
+    loading, 
+    error 
+  } = useLibrary();
 
-  // Determine if user is a restricted sub-admin
-  const isSubAdmin = user?.role === 'subadmin';
-  const subAdminLibraryId = user?.libraryId || user?.assignedBranch || (isSubAdmin ? '' : libraries[0]?.id || '');
-
-  const [form, setForm] = useState({ 
-    ...emptyForm, 
-    libraryId: isSubAdmin ? subAdminLibraryId : (libraries[0]?.id || '') 
-  });
-  const [editingId, setEditingId] = useState(null);
-  const [editingUpdatedAt, setEditingUpdatedAt] = useState(null);
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [mutationError, setMutationError] = useState('');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('title-asc');
-  const [loadingExternalCatalog, setLoadingExternalCatalog] = useState(false);
-  const [externalCatalogMessage, setExternalCatalogMessage] = useState('');
-  const [externalCatalogError, setExternalCatalogError] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [mutationError, setMutationError] = useState('');
 
-  // Helper para sa pagkuha ng pangalan ng library o 'Personal Collection'
+  const [form, setForm] = useState({
+    title: '',
+    author: '',
+    isbn: '',
+    category: '',
+    copies: 1,
+    libraryId: '',
+    coverUrl: '',
+    summary: ''
+  });
+
+  // Alternative term para sa personal/unassigned books
   const getLibraryDisplayName = (libId) => {
-    if (!libId) return 'Personal Collection';
-    const found = libraries.find((l) => String(l.id) === String(libId));
+    if (!libId) return 'Personal Collection'; 
+    const found = libraries?.find((l) => String(l.id) === String(libId));
     return found ? found.name : 'Personal Collection';
   };
 
-  // If sub-admin, restrict book list strictly to their libraryId
-  const scopedBooks = isSubAdmin 
-    ? books.filter((b) => b.libraryId === subAdminLibraryId) 
-    : books;
-
-  const filtered = scopedBooks
-    .filter((b) => {
-      const query = search.trim().toLowerCase();
-
-      return (
-        String(b.title || '').toLowerCase().includes(query) ||
-        String(b.author || '').toLowerCase().includes(query) ||
-        String(b.category || '').toLowerCase().includes(query) ||
-        String(b.isbn || '').toLowerCase().includes(query)
-      );
-    })
-    .sort((a, b) => {
-      switch (sortBy) {
-        case 'title-asc':
-          return String(a.title || '').localeCompare(
-            String(b.title || ''),
-            undefined,
-            { sensitivity: 'base' }
-          );
-
-        case 'title-desc':
-          return String(b.title || '').localeCompare(
-            String(a.title || ''),
-            undefined,
-            { sensitivity: 'base' }
-          );
-
-        case 'author-asc':
-          return String(a.author || '').localeCompare(
-            String(b.author || ''),
-            undefined,
-            { sensitivity: 'base' }
-          );
-
-        case 'author-desc':
-          return String(b.author || '').localeCompare(
-            String(a.author || ''),
-            undefined,
-            { sensitivity: 'base' }
-          );
-
-        case 'newest':
-          return new Date(b.createdAt || b.created_at || 0).getTime() -
-            new Date(a.createdAt || a.created_at || 0).getTime();
-
-        case 'oldest':
-          return new Date(a.createdAt || a.created_at || 0).getTime() -
-            new Date(b.createdAt || b.created_at || 0).getTime();
-
-        case 'available':
-          return Number(b.availableCopies || 0) -
-            Number(a.availableCopies || 0);
-
-        case 'unavailable':
-          return Number(a.availableCopies || 0) -
-            Number(b.availableCopies || 0);
-
-        default:
-          return 0;
-      }
-    });
-
-  const handleLoadExternalCatalog = async () => {
-  const libraryId = isSubAdmin
-    ? subAdminLibraryId
-    : form.libraryId || libraries[0]?.id || '';
-
-  setExternalCatalogMessage('');
-  setExternalCatalogError('');
-
-  if (!libraryId) {
-    setExternalCatalogError(
-      'Select a library branch before loading external books.'
-    );
-    return;
-  }
-
-  if (typeof loadExternalCatalog !== 'function') {
-    setExternalCatalogError(
-      'The external catalog loader is not available. Check LibraryContext.jsx.'
-    );
-    return;
-  }
-
-  setLoadingExternalCatalog(true);
-
-  try {
-    const result = await loadExternalCatalog(libraryId);
-
-    const fetched = Number(result?.fetched || 0);
-    const upserted = Number(result?.upserted || 0);
-    const warnings = Array.isArray(result?.warnings)
-      ? result.warnings
-      : [];
-
-    setExternalCatalogMessage(
-      `External catalog sync completed. Retrieved ${fetched} records; ${upserted} records inserted or updated. Physical inventory was not changed.`
-    );
-
-    if (warnings.length > 0) {
-      setExternalCatalogError(
-        `Some Open Library searches failed: ${warnings.join(' | ')}`
-      );
-    }
-  } catch (error) {
-    setExternalCatalogError(
-      error?.message || 'Unable to load books from Open Library.'
-    );
-  } finally {
-    setLoadingExternalCatalog(false);
-  }
-};
-
-  const startAdd = () => {
+  const handleOpenAdd = () => {
     setEditingId(null);
-    setEditingUpdatedAt(null);
-    setMutationError('');
-    setForm({ 
-      ...emptyForm, 
-      libraryId: isSubAdmin ? subAdminLibraryId : (libraries[0]?.id || '') 
+    setForm({
+      title: '',
+      author: '',
+      isbn: '',
+      category: '',
+      copies: 1,
+      libraryId: libraries?.[0]?.id || '',
+      coverUrl: '',
+      summary: ''
     });
+    setMutationError('');
     setShowForm(true);
   };
 
-  const startEdit = (book) => {
+  const handleOpenEdit = (book) => {
     setEditingId(book.id);
-    setEditingUpdatedAt(book.updatedAt);
-    setMutationError('');
     setForm({
       title: book.title || '',
       author: book.author || '',
-      category: book.category || '',
       isbn: book.isbn || '',
-      shelfLocation: book.shelfLocation || '',
+      category: book.category || '',
+      copies: book.copies || 1,
       libraryId: book.libraryId || '',
-      totalCopies: book.totalCopies || 1,
-      summary: book.summary || '',
       coverUrl: book.coverUrl || '',
+      summary: book.summary || ''
     });
+    setMutationError('');
     setShowForm(true);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setMutationError('');
-
-    // Strict validation para sa Category
-    if (!form.category || !form.category.trim()) {
-      setMutationError('Book Category is required. Please enter a valid category.');
-      return;
-    }
-
     setSaving(true);
-    // Force sub-admin to always save under their own assigned library
-    const finalLibraryId = isSubAdmin ? subAdminLibraryId : form.libraryId;
+    setMutationError('');
 
     try {
       if (editingId) {
-        await updateBook(editingId, {
-          ...form,
-          category: form.category.trim(),
-          libraryId: finalLibraryId,
-          totalCopies: Number(form.totalCopies),
-          updatedAt: editingUpdatedAt,
-        });
+        await updateBook(editingId, form);
       } else {
-        await addBook({
-          ...form,
-          category: form.category.trim(),
-          libraryId: finalLibraryId,
-        });
+        await addBook(form);
       }
       setShowForm(false);
-      setEditingId(null);
-      setEditingUpdatedAt(null);
-    } catch (error) {
-      const message = error?.message || 'Unable to save the book.';
-      setMutationError(
-        message.includes('INVENTORY_CONFLICT')
-          ? 'This book or its copy count changed while you were editing. Reload the inventory and review the latest available copies before saving.'
-          : message
-      );
+    } catch (err) {
+      setMutationError(err.message || 'Failed to save book');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = (book) => {
-    if (window.confirm(`Remove "${book.title}" from the catalog? This cannot be undone.`)) {
-      deleteBook(book.id);
+  const handleDelete = async (id) => {
+    if (window.confirm('Are you sure you want to delete this book?')) {
+      try {
+        await deleteBook(id);
+      } catch (err) {
+        alert(err.message || 'Failed to delete book');
+      }
     }
   };
 
-  const handleLoadApiBooks = async () => {
-    setLoadingApiBooks(true);
-    setApiBooksError('');
+  const filteredBooks = (books || [])
+    .filter((b) => {
+      const q = search.toLowerCase();
+      return (
+        b.title?.toLowerCase().includes(q) ||
+        b.author?.toLowerCase().includes(q) ||
+        b.isbn?.toLowerCase().includes(q) ||
+        b.category?.toLowerCase().includes(q)
+      );
+    })
+    .sort((a, b) => {
+      if (sortBy === 'title-asc') return (a.title || '').localeCompare(b.title || '');
+      if (sortBy === 'title-desc') return (b.title || '').localeCompare(a.title || '');
+      if (sortBy === 'author-asc') return (a.author || '').localeCompare(b.author || '');
+      if (sortBy === 'copies-desc') return (b.copies || 0) - (a.copies || 0);
+      return 0;
+    });
 
-    try {
-      await loadSampleCatalog(subAdminLibraryId);
-    } catch (error) {
-      setApiBooksError(error.message || 'Failed to load books from Open Library.');
-    } finally {
-      setLoadingApiBooks(false);
-    }
-  };
-
-  const currentLibraryName = getLibraryDisplayName(subAdminLibraryId);
+  if (loading) {
+    return <div className="p-4 text-slate-600">Loading book inventory...</div>;
+  }
 
   return (
-    <div className="space-y-4">
-      {externalCatalogMessage && (
-  <div
-    role="status"
-    className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800"
-  >
-    {externalCatalogMessage}
-  </div>
-)}
+    <div className="p-6 space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Book Inventory</h1>
+          <p className="text-xs text-slate-500">Manage all books across system libraries</p>
+        </div>
+        <button
+          onClick={handleOpenAdd}
+          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition"
+        >
+          + Add New Book
+        </button>
+      </div>
 
-{externalCatalogError && (
-  <div
-    role="alert"
-    className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
-  >
-    {externalCatalogError}
-  </div>
-)}
-      {isSubAdmin && (
-        <div className="bg-blue-50 border border-blue-200 text-blue-800 text-xs px-4 py-2.5 rounded-lg flex items-center justify-between">
-          <span className="flex items-center gap-2"><MapPin size={15} aria-hidden="true" /> Managing inventory exclusively for: <b>{currentLibraryName}</b></span>
+      {error && (
+        <div className="p-3 bg-red-100 text-red-700 rounded-lg text-sm">
+          {error}
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-3 justify-between">
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search inventory…"
-          className="flex-1 max-w-sm px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
-        />
-
-        {/* Sort Books */}
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value)}
-          aria-label="Sort books"
-          className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
-        >
-          <option value="title-asc">Title (A–Z)</option>
-          <option value="title-desc">Title (Z–A)</option>
-          <option value="author-asc">Author (A–Z)</option>
-          <option value="author-desc">Author (Z–A)</option>
-          <option value="newest">Newest First</option>
-          <option value="oldest">Oldest First</option>
-          <option value="available">Most Available</option>
-          <option value="unavailable">Least Available</option>
-        </select>
-
-        <div className="flex gap-2">
-          {isSubAdmin && (
-            <button
-              type="button"
-              onClick={handleLoadApiBooks}
-              disabled={loadingApiBooks || !subAdminLibraryId}
-              className="text-xs font-bold px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition disabled:opacity-50"
-            >
-              {loadingApiBooks ? 'Loading API Books...' : 'Load 100+ API Books'}
-            </button>
-          )}
-
-          <button
-            onClick={startAdd}
-            className="text-xs font-bold px-4 py-2.5 rounded-lg bg-shelf-primary text-white hover:opacity-90 transition"
+      <div className="flex flex-col sm:flex-row gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+        <div className="flex-1">
+          <input
+            type="text"
+            placeholder="Search by title, author, ISBN, category..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+        <div className="w-full sm:w-48">
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <Plus size={15} className="mr-1 inline-block align-[-3px]" aria-hidden="true" /> Add Book
-          </button>
+            <option value="title-asc">Title (A-Z)</option>
+            <option value="title-desc">Title (Z-A)</option>
+            <option value="author-asc">Author (A-Z)</option>
+            <option value="copies-desc">Most Copies</option>
+          </select>
         </div>
       </div>
 
-      {apiBooksError && (
-        <p role="alert" className="text-xs text-red-600">
-          {apiBooksError}
-        </p>
-      )}
-
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
-        {filtered.length === 0 ? (
-          <div className="px-5 py-12 text-center">
-            {search ? <SearchX size={30} className="mx-auto text-slate-400" aria-hidden="true" /> : <BookOpen size={30} className="mx-auto text-amber-700" aria-hidden="true" />}
-            <h3 className="mt-3 text-base font-bold text-slate-800">
-              {search ? 'No titles match that search.' : 'Your shelves are ready for their first titles.'}
-            </h3>
-            <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
-              {search ? 'Try another title, author, or ISBN.' : isSubAdmin ? `Start building the collection at ${currentLibraryName}.` : 'Add a book to begin building the catalog.'}
-            </p>
-            {search ? (
-              <button type="button" onClick={() => setSearch('')} className="mt-4 rounded-lg bg-amber-500 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-amber-400">Clear search</button>
-            ) : (
-              <button type="button" onClick={startAdd} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-amber-400"><Plus size={16} aria-hidden="true" /> Add a book</button>
-            )}
-          </div>
-        ) : (
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase tracking-wider">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm text-slate-600">
+            <thead className="bg-slate-50 text-slate-700 font-semibold uppercase text-xs">
               <tr>
-                <th className="p-3">Title</th>
-                <th className="p-3">Author</th>
-                <th className="p-3">Category</th>
-                {!isSubAdmin && <th className="p-3">Library</th>}
-                <th className="p-3">Copies</th>
-                <th className="p-3 text-right">Actions</th>
+                <th className="p-4">Book</th>
+                <th className="p-4">Category</th>
+                <th className="p-4">Library Location</th>
+                <th className="p-4">Copies</th>
+                <th className="p-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map((b) => (
-                <tr key={b.id} className="hover:bg-slate-50">
-                  <td className="p-3 font-bold text-slate-800">{b.title}</td>
-                  <td className="p-3 text-xs text-slate-500">{b.author}</td>
-                  <td className="p-3 text-xs text-slate-500 font-medium">
-                    {b.category || <span className="text-amber-600 italic">Uncategorized</span>}
-                  </td>
-                  {!isSubAdmin && (
-                    <td className="p-3 text-xs text-slate-500">
-                      {getLibraryDisplayName(b.libraryId)}
-                    </td>
-                  )}
-                  <td className="p-3 text-xs font-mono">{b.availableCopies}/{b.totalCopies}</td>
-                  <td className="p-3 text-right space-x-2">
-                    <button onClick={() => startEdit(b)} className="text-xs font-bold text-shelf-primary hover:underline">
-                      Edit
-                    </button>
-                    <button onClick={() => handleDelete(b)} className="text-xs font-bold text-red-600 hover:underline">
-                      Delete
-                    </button>
+              {filteredBooks.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="p-6 text-center text-slate-400">
+                    No books found.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredBooks.map((book) => (
+                  <tr key={book.id} className="hover:bg-slate-50/50 transition">
+                    <td className="p-4 flex items-center gap-3">
+                      {book.coverUrl ? (
+                        <img
+                          src={book.coverUrl}
+                          alt={book.title}
+                          className="w-10 h-14 object-cover rounded"
+                        />
+                      ) : (
+                        <div className="w-10 h-14 bg-slate-200 rounded flex items-center justify-center text-xs text-slate-400">
+                          No Cover
+                        </div>
+                      )}
+                      <div>
+                        <div className="font-semibold text-slate-800">{book.title}</div>
+                        <div className="text-xs text-slate-400">By {book.author || 'Unknown'}</div>
+                        {book.isbn && <div className="text-[10px] text-slate-400">ISBN: {book.isbn}</div>}
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs font-medium">
+                        {book.category}
+                      </span>
+                    </td>
+                    <td className="p-4 text-xs font-medium text-slate-700">
+                      {getLibraryDisplayName(book.libraryId)}
+                    </td>
+                    <td className="p-4 font-semibold text-slate-700">{book.copies || 0}</td>
+                    <td className="p-4 text-right space-x-2">
+                      <button
+                        onClick={() => handleOpenEdit(book)}
+                        className="px-2 py-1 text-xs text-indigo-600 hover:bg-indigo-50 rounded font-medium"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(book.id)}
+                        className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded font-medium"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
-        )}
+        </div>
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <form
-            onSubmit={handleSubmit}
-            className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-3 border border-slate-200 shadow-2xl max-h-[90vh] overflow-y-auto"
-          >
-            <h3 className="text-sm font-bold text-slate-800">{editingId ? 'Edit Book' : 'Add New Book'}</h3>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4">
+            <h2 className="text-lg font-bold text-slate-800">
+              {editingId ? 'Edit Book' : 'Add New Book'}
+            </h2>
+
             {mutationError && (
-              <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+              <div className="p-3 bg-red-50 text-red-600 rounded-lg text-xs">
                 {mutationError}
               </div>
             )}
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Title *</label>
-              <input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleSubmit} className="space-y-3 text-xs">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Author *</label>
-                <input required value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                <label className="block text-slate-700 font-semibold mb-1">Title *</label>
+                <input
+                  required
+                  type="text"
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Category <span className="text-red-500">*</span>
-                </label>
-                <input required placeholder="e.g. Fiction, Science" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">ISBN *</label>
-                <input required value={form.isbn} onChange={(e) => setForm({ ...form, isbn: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Shelf Location *</label>
-                <input required value={form.shelfLocation} onChange={(e) => setForm({ ...form, shelfLocation: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Library Location</label>
-                {isSubAdmin ? (
-                  // Locked display for sub-admins so they can't change branch
-                  <input 
-                    disabled 
-                    value={currentLibraryName} 
-                    className="w-full px-3 py-2 border border-slate-200 bg-slate-100 rounded-lg text-sm text-slate-600 cursor-not-allowed" 
-                  />
-                ) : (
-                  // Super admin can choose any branch or Personal Collection
-                  <select 
-                    value={form.libraryId} 
-                    onChange={(e) => setForm({ ...form, libraryId: e.target.value })} 
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-                  >
-                    <option value="">Personal Collection (Private Owner)</option>
-                    {libraries.map((l) => (
-                      <option key={l.id} value={l.id}>{l.name}</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Total Copies *</label>
-                <input required type="number" min="1" value={form.totalCopies} onChange={(e) => setForm({ ...form, totalCopies: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Cover Image URL (optional)</label>
-              <input value={form.coverUrl} onChange={(e) => setForm({ ...form, coverUrl: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Summary</label>
-              <textarea rows="2" value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"></textarea>
-            </div>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => { setShowForm(false); setMutationError(''); }} disabled={saving} className="text-xs font-bold px-4 py-2 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50">
-                Cancel
-              </button>
-              <button type="submit" disabled={saving} className="text-xs font-bold px-4 py-2 rounded-lg bg-shelf-primary text-white hover:opacity-90 disabled:opacity-50">
-                {saving ? 'Saving…' : (editingId ? 'Save Changes' : 'Add Book')}
-              </button>
-            </div>
-          </form>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">Author</label>
+                  <input
+                    type="text"
+                    value={form.author}
+                    onChange={(e) => setForm({ ...form, author: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">ISBN</label>
+                  <input
+                    type="text"
+                    value={form.isbn}
+                    onChange={(e) => setForm({ ...form, isbn: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">Category *</label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="e.g. Fiction, History, Science"
+                    value={form.category}
+                    onChange={(e) => setForm({ ...form, category: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">Copies</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={form.copies}
+                    onChange={(e) => setForm({ ...form, copies: parseInt(e.target.value) || 1 })}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">Library Location</label>
+                <select
+                  value={form.libraryId}
+                  onChange={(e) => setForm({ ...form, libraryId: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Personal Collection / Main Branch</option>
+                  {(libraries || []).map((lib) => (
+                    <option key={lib.id} value={lib.id}>
+                      {lib.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">Cover Image URL</label>
+                <input
+                  type="text"
+                  value={form.coverUrl}
+                  onChange={(e) => setForm({ ...form, coverUrl: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">Summary</label>
+                <textarea
+                  rows="2"
+                  value={form.summary}
+                  onChange={(e) => setForm({ ...form, summary: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowForm(false); setMutationError(''); }}
+                  className="px-4 py-2 border rounded-lg text-slate-600 hover:bg-slate-50 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold disabled:opacity-50"
+                >
+                  {saving ? 'Saving...' : (editingId ? 'Save Changes' : 'Add Book')}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
