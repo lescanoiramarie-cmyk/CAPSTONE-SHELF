@@ -1780,20 +1780,29 @@ export default function VisitorLogin() {
 
       <div className="relative w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-8 lg:p-12 overflow-y-auto">
         <div className="w-full max-w-md bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-slate-200 space-y-6 my-auto">
-          {view === 'register' && (
-  <div className="sticky top-0 z-20 -mt-1 flex justify-start bg-white pb-1">
-    <button
-      type="button"
-      onClick={handleBack}
-      className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-[#002046]"
-      aria-label="Go back"
-      title="Go back"
-    >
-      <ArrowLeft size={16} aria-hidden="true" />
-      Back
-    </button>
-  </div>
-)}
+          {(view === 'register' || view === 'forgot') && (
+            <div className="sticky top-0 z-20 -mt-1 flex justify-start bg-white pb-1">
+              <button
+                type="button"
+                onClick={() => {
+                  if (view === 'register') {
+                    handleBack();
+                  } else {
+                    setError('');
+                    setResetStep('request');
+                    setResetNotice('');
+                    setView('login');
+                  }
+                }}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-[#002046]"
+                aria-label="Go back"
+                title="Go back"
+              >
+                <ArrowLeft size={16} aria-hidden="true" />
+                Back
+              </button>
+            </div>
+          )}
 
           {/* HEADER */}
 
@@ -2681,28 +2690,16 @@ export default function VisitorLogin() {
                   </button>
 
                   {/* FORGOT PASSWORD */}
-                  {/*
-                    Only offered for email sign-in. A QR pass has
-                    no password to forget, and the identifier field
-                    accepts either form, so the link is hidden until
-                    an email address has been entered.
-                  */}
 
-                  {loginData.identifier
-                    .trim()
-                    .includes('@') && (
-                    <div className="text-center">
-                      <button
-                        type="button"
-                        onClick={
-                          handleOpenForgotPassword
-                        }
-                        className="text-xs font-semibold text-[#002046] hover:underline"
-                      >
-                        Forgot password?
-                      </button>
-                    </div>
-                  )}
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={handleOpenForgotPassword}
+                      className="text-xs font-semibold text-[#002046] hover:underline"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
 
                   <div className="relative flex items-center justify-center my-4">
                     <div className="border-t border-slate-200 w-full" />
