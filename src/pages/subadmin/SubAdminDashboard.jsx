@@ -4,9 +4,11 @@ import {
   Activity,
   AlertTriangle,
   BookOpen,
+  ChevronDown,
   ClipboardList,
   Clock3,
   FileSpreadsheet,
+  MessageSquare,
   QrCode,
   Upload,
   UsersRound,
@@ -31,14 +33,15 @@ import {
   confirmPickup,
 } from '../../data/store.js';
 
+
 const NAV = [
   { id: 'overview', label: 'Overview', Icon: Activity },
   { id: 'attendance', label: 'Attendance', Icon: QrCode },
   { id: 'transactions', label: 'Book Transactions', Icon: BookOpen },
   { id: 'inventory', label: 'Inventory', Icon: ClipboardList },
   { id: 'queue', label: 'Reservation Queue', Icon: Clock3 },
-  { id: 'workspace', label: 'Reports & Services', Icon: FileSpreadsheet },
 ];
+
 
 function StatCard({ label, value, tone = 'default' }) {
   const tones = {
@@ -62,6 +65,180 @@ function StatCard({ label, value, tone = 'default' }) {
     </div>
   );
 }
+
+
+function AttendanceTrendChart({ attendance = [] }) {
+  const dailyCounts = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - (6 - index));
+
+    const count = attendance.filter((record) => {
+      const timestamp = record.timeIn || record.time_in;
+      if (!timestamp) return false;
+
+      const recordDate = new Date(timestamp);
+      return (
+        !Number.isNaN(recordDate.getTime()) &&
+        recordDate.toDateString() === date.toDateString()
+      );
+    }).length;
+
+    return {
+      label: date.toLocaleDateString('en-US', { weekday: 'short' }),
+      count,
+    };
+  });
+
+  const maxCount = Math.max(1, ...dailyCounts.map((day) => day.count));
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h3 className="text-sm font-bold text-slate-800">
+        Visitor Attendance
+      </h3>
+      <p className="mt-1 text-xs text-slate-500">
+        Daily attendance for the last seven days
+      </p>
+
+      {attendance.length === 0 ? (
+        <p className="py-10 text-center text-sm text-slate-500">
+          No attendance records available for this branch.
+        </p>
+      ) : (
+        <div className="mt-6 flex h-44 items-end justify-around gap-2">
+          {dailyCounts.map((day) => (
+            <div
+              key={day.label}
+              className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2"
+            >
+              <span className="text-xs font-semibold text-slate-600">
+                {day.count}
+              </span>
+
+              <div className="flex h-28 w-full items-end justify-center">
+                <div
+                  className="w-full max-w-10 rounded-t-md bg-blue-500 transition-all"
+                  style={{
+                    height:
+                      day.count === 0
+                        ? '0%'
+                        : `${Math.max(6, (day.count / maxCount) * 100)}%`,
+                  }}
+                />
+              </div>
+
+              <span className="text-xs text-slate-500">
+                {day.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BorrowingStatusChart({ requests = [] }) {
+  const getStatus = (request) =>
+    String(request.status || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[\s-]+/g, '_');
+
+  const isOverdue = (request) => {
+    const status = getStatus(request);
+    const dueDate = request.dueDate || request.due_date;
+
+    return (
+      status === 'borrowed' &&
+      dueDate &&
+      !Number.isNaN(new Date(dueDate).getTime()) &&
+      new Date(dueDate) < new Date()
+    );
+  };
+
+  const statuses = [
+    {
+      key: 'pending',
+      label: 'Pending',
+      color: 'bg-amber-500',
+      count: requests.filter((r) => getStatus(r) === 'pending').length,
+    },
+    {
+      key: 'ready',
+      label: 'Ready for Pickup',
+      color: 'bg-blue-500',
+      count: requests.filter(
+        (r) => getStatus(r) === 'ready_for_pickup'
+      ).length,
+    },
+    {
+      key: 'borrowed',
+      label: 'Active Borrows',
+      color: 'bg-violet-500',
+      count: requests.filter(
+        (r) => getStatus(r) === 'borrowed' && !isOverdue(r)
+      ).length,
+    },
+    {
+      key: 'overdue',
+      label: 'Overdue',
+      color: 'bg-red-500',
+      count: requests.filter(isOverdue).length,
+    },
+    {
+      key: 'returned',
+      label: 'Returned',
+      color: 'bg-emerald-500',
+      count: requests.filter((r) => getStatus(r) === 'returned').length,
+    },
+  ];
+
+  const maxCount = Math.max(1, ...statuses.map((item) => item.count));
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h3 className="text-sm font-bold text-slate-800">
+        Borrowing Status
+      </h3>
+      <p className="mt-1 text-xs text-slate-500">
+        Book requests and transactions for your assigned branch
+      </p>
+
+      {requests.length === 0 ? (
+        <p className="py-10 text-center text-sm text-slate-500">
+          No borrowing records available for this branch.
+        </p>
+      ) : (
+        <div className="mt-6 space-y-4">
+          {statuses.map((item) => (
+            <div key={item.key}>
+              <div className="mb-1 flex items-center justify-between gap-3">
+                <span className="text-xs text-slate-600">
+                  {item.label}
+                </span>
+                <span className="text-xs font-bold text-slate-800">
+                  {item.count}
+                </span>
+              </div>
+
+              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className={`h-full rounded-full ${item.color} transition-all`}
+                  style={{
+                    width: `${(item.count / maxCount) * 100}%`,
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 function formatDateTime(value) {
   if (!value) return '—';
@@ -686,6 +863,11 @@ export default function SubAdminDashboard() {
   } = useLibraryData();
 
   const [section, setSection] = useState('overview');
+  const [expandedGroups, setExpandedGroups] = useState({
+  reports: true,
+  communication: false,
+});
+  const [workspaceTab, setWorkspaceTab] = useState('reports');
   const { addBooksBulk } = useLibrary();
 
   // ============================================================
@@ -834,10 +1016,10 @@ export default function SubAdminDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex">
+    <div className="h-screen overflow-hidden bg-[#f8fafc] text-slate-800 flex">
 
       {/* SIDEBAR */}
-      <aside className="w-60 bg-[#002046] text-white flex flex-col shrink-0">
+      <aside className="w-60 h-screen sticky top-0 bg-[#002046] text-white flex flex-col shrink-0">
 
         <div className="p-5 border-b border-white/10">
           <p className="font-extrabold tracking-wider">
@@ -849,26 +1031,119 @@ export default function SubAdminDashboard() {
           </p>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1">
 
-          {NAV.map(({ Icon, ...item }) => (
+      {NAV.map(({ Icon, ...item }) => (
+        <button
+          key={item.id}
+          type="button"
+          onClick={() => setSection(item.id)}
+          className={`w-full text-left text-sm px-3 py-2.5 rounded-lg transition ${
+            section === item.id
+              ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
+              : 'text-slate-300 hover:bg-white/5'
+          }`}
+        >
+          <Icon
+            size={18}
+            className="mr-3 inline-block align-[-3px]"
+            aria-hidden="true"
+          />
+          {item.label}
+        </button>
+      ))}
+
+      {/* REPORTS & SERVICES */}
+      <button
+        type="button"
+        onClick={() =>
+          setExpandedGroups((prev) => ({
+            ...prev,
+            reports: !prev.reports,
+          }))
+        }
+        aria-expanded={expandedGroups.reports}
+        className="w-full flex items-center justify-between text-left text-sm px-3 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 transition"
+      >
+        <span>Reports &amp; Services</span>
+        <ChevronDown
+          size={16}
+          className={`transition-transform ${
+            expandedGroups.reports ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+
+      {expandedGroups.reports && (
+        <div className="ml-3 border-l border-white/15 pl-2 space-y-1">
+          {[
+            { id: 'reports', label: 'Reports' },
+            { id: 'analytics', label: 'Analytics' },
+          ].map((item) => (
             <button
               key={item.id}
               type="button"
-              onClick={() =>
-                setSection(item.id)
-              }
-              className={`w-full text-left text-sm px-3 py-2.5 rounded-lg transition ${
-                section === item.id
-                  ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
+              onClick={() => {
+                setWorkspaceTab('item.id');
+                setSection('workspace');
+              }}
+              className={`w-full text-left text-sm px-3 py-2 rounded-lg transition ${
+                section === 'workspace' && workspaceTab === item.id
+                  ? 'bg-white/15 font-bold text-amber-300'
                   : 'text-slate-300 hover:bg-white/5'
               }`}
             >
-              <Icon size={18} className="mr-3 inline-block align-[-3px]" aria-hidden="true" />
               {item.label}
             </button>
           ))}
+        </div>
+      )}
 
+      {/* COMMUNICATION */}
+      <button
+        type="button"
+        onClick={() =>
+          setExpandedGroups((prev) => ({
+            ...prev,
+            communication: !prev.communication,
+          }))
+        }
+        aria-expanded={expandedGroups.communication}
+        className="w-full flex items-center justify-between text-left text-sm px-3 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 transition"
+      >
+        <span>Communication</span>
+        <ChevronDown
+          size={16}
+          className={`transition-transform ${
+            expandedGroups.communication ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+
+      {expandedGroups.communication && (
+        <div className="ml-3 border-l border-white/15 pl-2 space-y-1">
+          {[
+            { id: 'feedback', label: 'Feedback' },
+            { id: 'announcements', label: 'Announcements' },
+          ].map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                setWorkspaceTab(item.id);
+                setSection('workspace');
+              }}
+              className={`w-full text-left text-sm px-3 py-2 rounded-lg transition ${
+                section === 'workspace' && workspaceTab === item.id
+                  ? 'bg-white/15 font-bold text-amber-300'
+                  : 'text-slate-300 hover:bg-white/5'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
         </nav>
 
         <div className="p-4 border-t border-white/10 space-y-2">
@@ -893,7 +1168,7 @@ export default function SubAdminDashboard() {
       </aside>
 
       {/* MAIN CONTENT */}
-      <main className="min-w-0 flex-1 space-y-6 overflow-y-auto p-4 sm:p-6 lg:p-8">
+      <main className="h-screen min-w-0 flex-1 space-y-6 overflow-y-auto p-4 sm:p-6 lg:p-8">
         <DashboardWelcome
           name={user?.name?.split(' ')[0]}
           description={`Manage circulation, reservations, and inventory${user?.assignedBranchName ? ` for ${user.assignedBranchName}` : ' for your branch'}.`}
@@ -939,6 +1214,12 @@ export default function SubAdminDashboard() {
 
             </div>
 
+             {/* OVERVIEW CHARTS */}
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+              <AttendanceTrendChart attendance={branchAttendance} />
+              <BorrowingStatusChart requests={branchBorrowRequests} />
+            </div>
+
             {/* BRANCH DATA MANAGEMENT CARD */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
               <div className="border-b border-slate-100 pb-3 flex flex-col md:flex-row md:items-center justify-between gap-2">
@@ -978,7 +1259,7 @@ export default function SubAdminDashboard() {
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                
+
                 {/* BRANCH BOOKS EXPORT */}
                 <div className="p-3.5 border border-slate-100 bg-slate-50/50 rounded-lg flex items-center justify-between">
                   <div>
@@ -1059,6 +1340,8 @@ export default function SubAdminDashboard() {
 
         {section === 'workspace' && (
           <AdminWorkspace
+            key={workspaceTab}
+            initialTab={workspaceTab}
             user={user}
             libraries={libraries}
             books={branchBooks}
@@ -1066,7 +1349,6 @@ export default function SubAdminDashboard() {
             attendanceLogs={branchAttendance}
           />
         )}
-
       </main>
     </div>
   );
