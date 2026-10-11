@@ -288,19 +288,28 @@ export function LibraryProvider({ children }) {
               ? result
               : [];
 
-          console.log(
-            'SHELF — OWNER COMMUNITY REQUESTS:',
-            {
-              visitorId:
-                currentVisitorId,
+          
+console.log(
+  'SHELF — OWNER REQUEST DEBUG:',
+  {
+    currentVisitorId,
+    count: ownerCommunityBookRequests.length,
+    matchingYeshaRequests: ownerCommunityBookRequests
+      .filter((request) =>
+        String(request.requesterName || '').includes('Yesha')
+      )
+      .map((request) => ({
+        id: request.id,
+        bookTitle: request.bookTitle,
+        ownerVisitorId: request.ownerVisitorId,
+        requesterName: request.requesterName,
+        status: request.status,
+        requestDate: request.requestDate,
+      })),
+    requests: ownerCommunityBookRequests,
+  }
+);
 
-              count:
-                ownerCommunityBookRequests.length,
-
-              requests:
-                ownerCommunityBookRequests,
-            }
-          );
         } catch (error) {
           console.error(
             'SHELF owner community book requests loading failed:',
