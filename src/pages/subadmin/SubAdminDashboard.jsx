@@ -1084,7 +1084,7 @@ export default function SubAdminDashboard() {
               key={item.id}
               type="button"
               onClick={() => {
-                setWorkspaceTab('item.id');
+                setWorkspaceTab(item.id);
                 setSection('workspace');
               }}
               className={`w-full text-left text-sm px-3 py-2 rounded-lg transition ${
