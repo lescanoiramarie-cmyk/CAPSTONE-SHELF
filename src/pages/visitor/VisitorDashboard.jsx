@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import Draggable from 'react-draggable';
 import { QRCodeSVG } from 'qrcode.react';
-import { useTheme } from '../../context/ThemeContext.jsx';
+import {
+  ThemeProvider,
+  useTheme,
+} from '../../context/ThemeContext.jsx';
 import {
   Bell,
   BookMarked,
@@ -117,7 +120,7 @@ function getCommunityReturnReminder(dueDate) {
   return null;
 }
 
-export default function VisitorDashboard() {
+function VisitorDashboardContent() {
   const { user, logout } = useAuth();
 
   const {
@@ -1438,5 +1441,12 @@ export default function VisitorDashboard() {
         </div>
       </Draggable>
     </div>
+  );
+}
+export default function VisitorDashboard() {
+  return (
+    <ThemeProvider>
+      <VisitorDashboardContent />
+    </ThemeProvider>
   );
 }

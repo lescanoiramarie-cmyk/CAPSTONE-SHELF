@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -190,11 +191,30 @@ function formatStaffRole(role) {
   );
 }
 
+
 export default function SuperAdminDashboard() {
+  const mainScrollRef = useRef(null);
+
   const {
     user,
     logout,
   } = useAuth();
+
+  const handleSuperAdminLogout = async () => {
+    mainScrollRef.current?.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: 'instant',
+    });
+
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: 'instant',
+    });
+
+    await logout();
+  };
 
   const {
     addLibrary,
@@ -836,13 +856,13 @@ export default function SuperAdminDashboard() {
   // ============================================================
 
   return (
-    <div className="flex min-h-screen bg-shelf-bg text-slate-800">
+    <div className="flex h-screen overflow-hidden bg-shelf-bg text-slate-800">
 
       {/* ======================================================
           SIDEBAR
       ====================================================== */}
 
-      <aside className="flex w-60 shrink-0 flex-col bg-shelf-primary text-white">
+      <aside className="fixed inset-y-0 left-0 z-40 flex h-screen w-60 shrink-0 flex-col overflow-y-auto bg-shelf-primary text-white">
 
         <div className="border-b border-white/10 p-5">
           <p className="font-extrabold tracking-wider">
@@ -908,13 +928,15 @@ export default function SuperAdminDashboard() {
               'System Super Administrator'}
           </p>
 
-          <button
-            type="button"
-            onClick={logout}
-            className="w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs transition hover:bg-white/20"
-          >
-            Sign Out
-          </button>
+
+<button
+  type="button"
+  onClick={handleSuperAdminLogout}
+  className="w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs transition hover:bg-white/20"
+>
+  Sign Out
+</button>
+
 
         </div>
 
@@ -924,7 +946,10 @@ export default function SuperAdminDashboard() {
           MAIN CONTENT
       ====================================================== */}
 
-      <main className="min-w-0 flex-1 space-y-6 overflow-y-auto p-4 sm:p-6 lg:p-8">
+      <main
+  ref={mainScrollRef}
+  className="ml-60 min-w-0 flex-1 space-y-6 overflow-y-auto p-4 sm:p-6 lg:p-8"
+>
         <DashboardWelcome
           name={user?.name?.split(' ')[0]}
           description="System metrics, library operations, staff accounts, and reports at a glance."

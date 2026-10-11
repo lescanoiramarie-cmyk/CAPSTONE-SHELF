@@ -1,4 +1,9 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+} from 'react';
 
 const ThemeContext = createContext(null);
 
@@ -14,20 +19,14 @@ export function ThemeProvider({ children }) {
   const [isDarkAppearance, setIsDarkAppearance] = useState(getSavedTheme);
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', isDarkAppearance);
-
     try {
       localStorage.setItem(
         'shelf_visitor_appearance',
         isDarkAppearance ? 'dark' : 'light'
       );
     } catch {
-      // The theme still applies for the current session.
+      // Theme preference cannot be saved.
     }
-
-    return () => {
-      document.documentElement.classList.remove('dark');
-    };
   }, [isDarkAppearance]);
 
   const toggleTheme = () => {
@@ -36,9 +35,15 @@ export function ThemeProvider({ children }) {
 
   return (
     <ThemeContext.Provider
-      value={{ isDarkAppearance, setIsDarkAppearance, toggleTheme }}
+      value={{
+        isDarkAppearance,
+        setIsDarkAppearance,
+        toggleTheme,
+      }}
     >
-      {children}
+      <div className={isDarkAppearance ? 'dark' : ''}>
+        {children}
+      </div>
     </ThemeContext.Provider>
   );
 }
