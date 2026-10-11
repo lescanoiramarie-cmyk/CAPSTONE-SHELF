@@ -903,6 +903,110 @@ export default function SubAdminDashboard() {
     [borrowRequests, branchBookIds]
   );
 
+  const [notificationNow, setNotificationNow] = useState(() => Date.now());
+
+useEffect(() => {
+  const intervalId = setInterval(() => {
+    setNotificationNow(Date.now());
+  }, 60_000);
+
+  return () => clearInterval(intervalId);
+}, []);
+
+const branchNotifications = useMemo(() => {
+  if (!currentLibraryId) return [];
+
+  const now = notificationNow;
+  const oneDay = 24 * 60 * 60 * 1000;
+  const items = [];
+
+  const formatTime = (value) => {
+    if (!value) return 'Date unavailable';
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) return 'Date unavailable';
+
+    return date.toLocaleString('en-PH', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+  };
+
+  branchBorrowRequests.forEach((request) => {
+    const bookTitle = request.bookTitle || 'Untitled book';
+    const visitorName = request.visitorName || 'Visitor';
+    const requestDate = request.requestDate
+      ? new Date(request.requestDate).getTime()
+      : NaN;
+    const pickupDeadline = request.pickupDeadline
+      ? new Date(request.pickupDeadline).getTime()
+      : NaN;
+    const dueDate = request.dueDate
+      ? new Date(request.dueDate).getTime()
+      : NaN;
+
+    // Recently queued reservations from this branch.
+    if (
+      ['queued', 'pending'].includes(
+        String(request.status || '').toLowerCase()
+      ) &&
+      Number.isFinite(requestDate) &&
+      requestDate <= now &&
+      requestDate >= now - oneDay
+    ) {
+      items.push({
+        id: `reservation-${request.id}`,
+        title: 'New reservation request',
+        message: `${visitorName} — ${bookTitle}`,
+        timeLabel: `Requested ${formatTime(request.requestDate)}`,
+        timestamp: requestDate,
+        priority: 3,
+        section: 'queue',
+      });
+    }
+
+    // Pickups that expire within the next 24 hours.
+    if (
+      request.status === 'ready_for_pickup' &&
+      Number.isFinite(pickupDeadline) &&
+      pickupDeadline >= now &&
+      pickupDeadline <= now + oneDay
+    ) {
+      items.push({
+        id: `pickup-${request.id}`,
+        title: 'Pickup deadline approaching',
+        message: `${bookTitle} for ${visitorName}`,
+        timeLabel: `Deadline ${formatTime(request.pickupDeadline)}`,
+        timestamp: pickupDeadline,
+        priority: 2,
+        section: 'queue',
+      });
+    }
+
+    // Books whose recorded due date has passed.
+    if (
+      request.status === 'borrowed' &&
+      Number.isFinite(dueDate) &&
+      dueDate < now
+    ) {
+      items.push({
+        id: `overdue-${request.id}`,
+        title: 'Overdue book',
+        message: `${bookTitle} — ${visitorName}`,
+        timeLabel: `Due ${formatTime(request.dueDate)}`,
+        timestamp: dueDate,
+        priority: 1,
+        section: 'transactions',
+      });
+    }
+  });
+
+  return items
+    .sort((a, b) => a.priority - b.priority || b.timestamp - a.timestamp)
+    .slice(0, 20);
+}, [branchBorrowRequests, currentLibraryId, notificationNow]);
+
   // 3. Import File Handler para sa Branch
   const [importError, setImportError] = useState('');
   const [importMessage, setImportMessage] = useState('');
@@ -1172,6 +1276,13 @@ export default function SubAdminDashboard() {
         <DashboardWelcome
           name={user?.name?.split(' ')[0]}
           description={`Manage circulation, reservations, and inventory${user?.assignedBranchName ? ` for ${user.assignedBranchName}` : ' for your branch'}.`}
+
+        // NEW: In-app notifications
+          notifications={branchNotifications}
+          onNotificationClick={(notification) => {
+            setSection(notification.section);
+          }}
+
           actions={[
             { label: 'Scan Visitor QR', Icon: QrCode, onClick: () => setSection('attendance') },
             { label: 'Open Inventory', Icon: BookOpen, onClick: () => setSection('inventory') },
