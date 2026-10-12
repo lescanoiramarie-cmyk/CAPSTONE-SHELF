@@ -286,7 +286,7 @@ const mapLibrary = (r) => ({
   isSampleLocation: r.is_sample_location,
 });
 
-const mapBook = (r) => ({
+export const mapBook = (r) => ({
   id: r.id,
   title: r.title,
   author: r.author,
@@ -1285,7 +1285,7 @@ export async function getVisitor(
     : null;
 }
 
-const resolveVisitorAuthUserId = async (
+export const resolveVisitorAuthUserId = async (
   visitorId
 ) => {
   const normalizedVisitorId =

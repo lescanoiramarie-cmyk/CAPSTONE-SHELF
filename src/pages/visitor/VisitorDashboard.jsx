@@ -427,6 +427,7 @@ function VisitorDashboardContent() {
     'categories',
     'communityBooks',
     'personalBooks',
+    'readingList',
     'myBorrows',
   ];
 
@@ -860,6 +861,7 @@ function VisitorDashboardContent() {
             { id: 'categories', label: 'Book Categories', Icon: Bookmark },
             { id: 'communityBooks', label: 'Community Books', Icon: UsersRound },
             { id: 'personalBooks', label: 'My Personal Books', Icon: BookMarked },
+            { id: 'readingList', label: 'My Reading List', Icon: Bookmark },
             { id: 'myBorrows', label: 'My Requests & Borrows', Icon: CalendarDays },
             { id: 'map', label: 'Library Map', Icon: MapPinned },
             { id: 'services', label: 'Announcements & Feedback', Icon: Megaphone },

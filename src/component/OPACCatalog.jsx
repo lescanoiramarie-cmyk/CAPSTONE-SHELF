@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/useAuth.js';
 import {
   BookOpen,
+  Bookmark,
   Eye,
   EyeOff,
   MapPinned,
@@ -23,6 +24,7 @@ import LibraryMap from './LibraryMap.jsx';
 
 import { supabase } from '../lib/supabaseClient.js';
 import { recordVisitorSearch } from '../lib/recommendationEngine.js';
+import { fetchReadingList, toggleReadingList } from '../services/shelf.js';
 
 // =========================================================
 // DATE HELPERS
@@ -255,6 +257,15 @@ export default function OPACCatalog({
   const [selectedBook, setSelectedBook] =
     useState(null);
 
+  const [readingListBookIds, setReadingListBookIds] =
+    useState([]);
+  const [readingListBooks, setReadingListBooks] =
+    useState([]);
+  const [readingListLoading, setReadingListLoading] =
+    useState(false);
+  const [savingReadingListBookId, setSavingReadingListBookId] =
+    useState(null);
+
   const [notice, setNotice] =
     useState('');
 
@@ -343,6 +354,105 @@ export default function OPACCatalog({
 
   const [addingPersonalBook, setAddingPersonalBook] =
     useState(false);
+
+  const refreshReadingList = async () => {
+    if (!user?.id) {
+      setReadingListBookIds([]);
+      setReadingListBooks([]);
+      return;
+    }
+
+    setReadingListLoading(true);
+
+    try {
+      const list = await fetchReadingList(user.id);
+      const ids = (list || []).map((book) => String(book.id));
+      setReadingListBooks(list || []);
+      setReadingListBookIds(ids);
+    } catch (error) {
+      console.error('Unable to load reading list:', error);
+      setReadingListBooks([]);
+      setReadingListBookIds([]);
+    } finally {
+      setReadingListLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!user?.id) {
+      setReadingListBookIds([]);
+      setReadingListBooks([]);
+      return;
+    }
+
+    refreshReadingList();
+  }, [user?.id]);
+
+  const isBookInReadingList = (bookId) =>
+    readingListBookIds.includes(String(bookId));
+
+  const handleToggleReadingList = async (book) => {
+    if (!book?.id) {
+      setNotice('Unable to identify the selected book.');
+      return;
+    }
+
+    if (!user?.id) {
+      setNotice('Please log in before saving a book to your reading list.');
+      return;
+    }
+
+    if (savingReadingListBookId === book.id) {
+      return;
+    }
+
+    setSavingReadingListBookId(book.id);
+    setNotice('');
+
+    try {
+      const nextSavedState = await toggleReadingList(user.id, book.id);
+      const normalizedId = String(book.id);
+
+      setReadingListBookIds((previousIds) => {
+        if (nextSavedState) {
+          return previousIds.includes(normalizedId)
+            ? previousIds
+            : [...previousIds, normalizedId];
+        }
+
+        return previousIds.filter((id) => id !== normalizedId);
+      });
+
+      setReadingListBooks((previousBooks) => {
+        if (nextSavedState) {
+          if (previousBooks.some((item) => String(item.id) === normalizedId)) {
+            return previousBooks;
+          }
+
+          return [book, ...previousBooks];
+        }
+
+        return previousBooks.filter((item) => String(item.id) !== normalizedId);
+      });
+
+      if (activeView === 'readingList') {
+        await refreshReadingList();
+      }
+
+      setNotice(
+        nextSavedState
+          ? `Saved "${book.title || 'this book'}" to your reading list.`
+          : `Removed "${book.title || 'this book'}" from your reading list.`
+      );
+    } catch (error) {
+      console.error('Reading list toggle error:', error);
+      setNotice(
+        error?.message || 'Unable to update your reading list right now.'
+      );
+    } finally {
+      setSavingReadingListBookId(null);
+    }
+  };
 
   // =========================================================
   // ADD PERSONAL BOOK FORM
@@ -3537,6 +3647,113 @@ const handleConfirmCommunityBookReturn = async (request) => {
           )}
 
         </section>
+      ) : activeView === 'readingList' ? (
+        <section className="space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Bookmark
+                  size={20}
+                  className="text-amber-600"
+                  aria-hidden="true"
+                />
+                <h2 className="text-lg font-bold text-slate-800">
+                  My Reading List
+                </h2>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">
+                Books you want to revisit later.
+              </p>
+            </div>
+          </div>
+
+          {readingListLoading ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-10 text-center">
+              <p className="text-sm text-slate-500">
+                Loading your reading list...
+              </p>
+            </div>
+          ) : readingListBooks.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
+              <Bookmark
+                size={32}
+                className="mx-auto text-slate-300"
+                aria-hidden="true"
+              />
+              <h3 className="mt-3 text-base font-bold text-slate-700">
+                Your reading list is empty. Go explore the catalog!
+              </h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Save books you want to revisit later from the catalog or book details.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {readingListBooks.map((book) => (
+                <div
+                  key={book.id}
+                  className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+                >
+                  <div className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <span className="inline-block rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                          {book.category || 'Uncategorized'}
+                        </span>
+                        <h3 className="mt-2 text-base font-bold text-slate-800 line-clamp-2">
+                          {book.title || 'Untitled Book'}
+                        </h3>
+                        <p className="mt-1 text-xs text-slate-500">
+                          By {book.author || 'Unknown Author'}
+                        </p>
+                      </div>
+                      <BookOpen size={22} className="shrink-0 text-slate-400" aria-hidden="true" />
+                    </div>
+
+                    <div className="mt-4 space-y-2 text-xs text-slate-600">
+                      <div className="flex items-center justify-between gap-2">
+                        <span>Availability</span>
+                        <span className={`rounded-full px-2 py-0.5 font-bold ${
+                          Number(book.availableCopies || 0) > 0
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {Number(book.availableCopies || 0) > 0
+                            ? `${book.availableCopies} available`
+                            : 'Unavailable'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span>ISBN</span>
+                        <span className="font-mono text-slate-500">
+                          {book.isbn || 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBook(book)}
+                        className="flex-1 rounded-lg bg-shelf-primary px-3 py-2 text-xs font-bold text-white hover:opacity-90"
+                      >
+                        View Details
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleReadingList(book)}
+                        className="rounded-lg bg-amber-100 px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={savingReadingListBookId === book.id}
+                      >
+                        {savingReadingListBookId === book.id ? 'Saving...' : 'Remove'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       ) : activeView ===
         'communityBooks' ? (
         /* =====================================================
@@ -5432,6 +5649,30 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
             </div>
 
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <button
+                type="button"
+                disabled={savingReadingListBookId === selectedBook.id}
+                onClick={() => handleToggleReadingList(selectedBook)}
+                className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                  isBookInReadingList(selectedBook.id)
+                    ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <Bookmark
+                  size={16}
+                  fill={isBookInReadingList(selectedBook.id) ? 'currentColor' : 'none'}
+                  aria-hidden="true"
+                />
+                {savingReadingListBookId === selectedBook.id
+                  ? 'Saving...'
+                  : isBookInReadingList(selectedBook.id)
+                    ? 'Saved to Reading List'
+                    : 'Read Later'}
+              </button>
+            </div>
+
             {/* I-PASTE DITO ANG EXTERNAL CATALOG NOTICE */}
               {selectedBook.isExternalCatalog && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2">
@@ -5525,6 +5766,32 @@ const handleConfirmCommunityBookReturn = async (request) => {
                               className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-300 transition"
                             >
                               View Map
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={
+                                savingReadingListBookId === entry.id
+                              }
+                              onClick={() =>
+                                handleToggleReadingList(entry)
+                              }
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                                isBookInReadingList(entry.id)
+                                  ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                              }`}
+                            >
+                              <Bookmark
+                                size={14}
+                                fill={isBookInReadingList(entry.id) ? 'currentColor' : 'none'}
+                                aria-hidden="true"
+                              />
+                              {savingReadingListBookId === entry.id
+                                ? 'Saving...'
+                                : isBookInReadingList(entry.id)
+                                  ? 'Saved'
+                                  : 'Read Later'}
                             </button>
 
                             <button
