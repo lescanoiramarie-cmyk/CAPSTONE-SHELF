@@ -3719,6 +3719,11 @@ export async function requestCommunityBook(
     ownerResponse:
       row.owner_response ||
       null,
+
+    queuePosition:
+      row.queue_position ??
+      row.queuePosition ??
+      null,
   };
 }
 

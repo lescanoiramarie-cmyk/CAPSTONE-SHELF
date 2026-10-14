@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useLibrary } from '../context/useLibrary';
 
 export default function BookInventory() {
@@ -18,6 +18,8 @@ export default function BookInventory() {
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [mutationError, setMutationError] = useState('');
+  const getBookCopies = (book) =>
+    Number(book?.totalCopies ?? book?.total_copies ?? book?.copies ?? 0);
 
   const [form, setForm] = useState({
     title: '',
@@ -60,7 +62,7 @@ export default function BookInventory() {
       author: book.author || '',
       isbn: book.isbn || '',
       category: book.category || '',
-      copies: book.copies || 1,
+      copies: getBookCopies(book) || 1,
       libraryId: book.libraryId || '',
       coverUrl: book.coverUrl || '',
       summary: book.summary || ''
@@ -76,9 +78,15 @@ export default function BookInventory() {
 
     try {
       if (editingId) {
-        await updateBook(editingId, form);
+        await updateBook(editingId, {
+          ...form,
+          totalCopies: form.copies,
+        });
       } else {
-        await addBook(form);
+        await addBook({
+          ...form,
+          totalCopies: form.copies,
+        });
       }
       setShowForm(false);
     } catch (err) {
@@ -112,7 +120,7 @@ export default function BookInventory() {
       if (sortBy === 'title-asc') return (a.title || '').localeCompare(b.title || '');
       if (sortBy === 'title-desc') return (b.title || '').localeCompare(a.title || '');
       if (sortBy === 'author-asc') return (a.author || '').localeCompare(b.author || '');
-      if (sortBy === 'copies-desc') return (b.copies || 0) - (a.copies || 0);
+      if (sortBy === 'copies-desc') return getBookCopies(b) - getBookCopies(a);
       return 0;
     });
 
@@ -213,7 +221,7 @@ export default function BookInventory() {
                     <td className="p-4 text-xs font-medium text-slate-700">
                       {getLibraryDisplayName(book.libraryId)}
                     </td>
-                    <td className="p-4 font-semibold text-slate-700">{book.copies || 0}</td>
+                    <td className="p-4 font-semibold text-slate-700">{getBookCopies(book)}</td>
                     <td className="p-4 text-right space-x-2">
                       <button
                         onClick={() => handleOpenEdit(book)}

@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ClipboardList,
   Clock3,
+  MapPinned,
   QrCode,
   Upload,
   UsersRound,
@@ -22,6 +23,7 @@ import BookInventory from '../../component/BookInventory.jsx';
 import ReservationQueue from '../../component/ReservationQueue.jsx';
 import AdminWorkspace from '../../component/AdminWorkspace.jsx';
 import DashboardWelcome from '../../component/DashboardWelcome.jsx';
+import LibraryMap from '../../component/LibraryMap.jsx';
 
 import { supabase } from '../../lib/supabaseClient.js';
 import { exportToExcel, exportToCSV } from '../../lib/excelUtils.js';
@@ -38,6 +40,7 @@ const NAV = [
   { id: 'transactions', label: 'Book Transactions', Icon: BookOpen },
   { id: 'inventory', label: 'Inventory', Icon: ClipboardList },
   { id: 'queue', label: 'Reservation Queue', Icon: Clock3 },
+  { id: 'map', label: 'Branch Map', Icon: MapPinned },
 ];
 
 
@@ -116,7 +119,9 @@ function AttendanceTrendChart({ attendance = [] }) {
 
               <div className="flex h-28 w-full items-end justify-center">
                 <div
-                  className="w-full max-w-10 rounded-t-md bg-blue-500 transition-all"
+                  title={`${day.label}: ${day.count} visitors`}
+                  aria-label={`${day.label}: ${day.count} visitors`}
+                  className="w-full max-w-10 rounded-t-md bg-blue-500 transition-all duration-200 hover:scale-x-110 hover:bg-blue-600 hover:shadow-md"
                   style={{
                     height:
                       day.count === 0
@@ -223,7 +228,9 @@ function BorrowingStatusChart({ requests = [] }) {
 
               <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                 <div
-                  className={`h-full rounded-full ${item.color} transition-all`}
+                  title={`${item.label}: ${item.count} requests`}
+                  aria-label={`${item.label}: ${item.count} requests`}
+                  className={`h-full rounded-full ${item.color} transition-all duration-200 hover:brightness-110`}
                   style={{
                     width: `${(item.count / maxCount) * 100}%`,
                   }}
@@ -861,12 +868,23 @@ export default function SubAdminDashboard() {
   } = useLibraryData();
 
   const [section, setSection] = useState('overview');
+  const [focusRequestId, setFocusRequestId] = useState(null);
   const [expandedGroups, setExpandedGroups] = useState({
   reports: true,
   communication: false,
 });
   const [workspaceTab, setWorkspaceTab] = useState('reports');
   const { addBooksBulk } = useLibrary();
+
+  useEffect(() => {
+    if (!focusRequestId || section === 'overview') return;
+    const frame = requestAnimationFrame(() => {
+      document
+        .getElementById(`admin-request-${focusRequestId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusRequestId, section]);
 
   // ============================================================
   // BRANCH SPECIFIC DATA & IMPORT / EXPORT LOGIC
@@ -955,6 +973,7 @@ const branchNotifications = useMemo(() => {
     ) {
       items.push({
         id: `reservation-${request.id}`,
+        requestId: request.id,
         title: 'New reservation request',
         message: `${visitorName} — ${bookTitle}`,
         timeLabel: `Requested ${formatTime(request.requestDate)}`,
@@ -973,6 +992,7 @@ const branchNotifications = useMemo(() => {
     ) {
       items.push({
         id: `pickup-${request.id}`,
+        requestId: request.id,
         title: 'Pickup deadline approaching',
         message: `${bookTitle} for ${visitorName}`,
         timeLabel: `Deadline ${formatTime(request.pickupDeadline)}`,
@@ -990,6 +1010,7 @@ const branchNotifications = useMemo(() => {
     ) {
       items.push({
         id: `overdue-${request.id}`,
+        requestId: request.id,
         title: 'Overdue book',
         message: `${bookTitle} — ${visitorName}`,
         timeLabel: `Due ${formatTime(request.dueDate)}`,
@@ -1278,6 +1299,7 @@ const branchNotifications = useMemo(() => {
         // NEW: In-app notifications
           notifications={branchNotifications}
           onNotificationClick={(notification) => {
+            setFocusRequestId(notification.requestId);
             setSection(notification.section);
           }}
 
@@ -1422,6 +1444,31 @@ const branchNotifications = useMemo(() => {
           </div>
         )}
 
+        {focusRequestId &&
+          section !== 'overview' &&
+          (() => {
+            const request = branchBorrowRequests.find(
+              (item) => String(item.id) === String(focusRequestId)
+            );
+            return request ? (
+              <section
+                id={`admin-request-${request.id}`}
+                className="rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-sm"
+              >
+                <h2 className="text-sm font-bold text-amber-900">
+                  Selected request: {request.bookTitle || 'Untitled book'}
+                </h2>
+                <p className="mt-1 text-xs text-amber-800">
+                  {request.visitorName || 'Visitor'} · {request.status}
+                  {request.dueDate ? ` · Due ${formatDateTime(request.dueDate)}` : ''}
+                  {request.pickupDeadline
+                    ? ` · Pickup deadline ${formatDateTime(request.pickupDeadline)}`
+                    : ''}
+                </p>
+              </section>
+            ) : null;
+          })()}
+
         {/* ATTENDANCE */}
         {section === 'attendance' && (
           <AttendanceScanner />
@@ -1445,6 +1492,13 @@ const branchNotifications = useMemo(() => {
         {/* RESERVATION QUEUE */}
         {section === 'queue' && (
           <ReservationQueue user={user} />
+        )}
+
+        {section === 'map' && (
+          <LibraryMap
+            libraryScopeId={currentLibraryId}
+            focusBranchId={currentLibraryId || null}
+          />
         )}
 
         {section === 'workspace' && (

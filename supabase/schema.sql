@@ -159,6 +159,7 @@ create table if not exists community_book_requests (
   approved_at timestamptz,
   rejected_at timestamptz,
   owner_response text,
+  queue_position integer,
   pickup_deadline timestamptz,
   borrow_date timestamptz,
   due_date timestamptz,

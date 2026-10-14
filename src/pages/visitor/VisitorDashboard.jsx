@@ -10,6 +10,7 @@ import {
   CalendarDays,
   AlertTriangle,
   Bookmark,
+  ClipboardList,
   CircleDollarSign,
   LogOut,
   MapPinned,
@@ -144,6 +145,7 @@ function VisitorDashboardContent() {
 
   const [isNotificationsOpen, setIsNotificationsOpen] =
   useState(false);
+  const [focusRequestId, setFocusRequestId] = useState(null);
 
 
   const { isDarkAppearance, setIsDarkAppearance } = useTheme();
@@ -693,9 +695,16 @@ function VisitorDashboardContent() {
           ) : (
             <div className="space-y-2">
               {ownerPendingRequests.map((request) => (
-                <article
+                <button
                   key={request.id}
-                  className="rounded-lg border border-slate-200 p-3 dark:border-slate-700"
+                  type="button"
+                  onClick={() => {
+                    setIsNotificationsOpen(false);
+                    setTab('personalBooks');
+                    setFocusRequestId(request.id);
+                  }}
+                  className="w-full rounded-lg border border-slate-200 p-3 text-left transition hover:border-blue-300 hover:bg-blue-50/50 dark:border-slate-700 dark:hover:bg-slate-700/60"
+                  aria-label={`Open request for ${request.bookTitle || 'book'}`}
                 >
                   <div className="flex items-start gap-3">
                     <div className="rounded-lg bg-blue-50 p-2 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
@@ -722,7 +731,7 @@ function VisitorDashboardContent() {
                       </span>
                     </div>
                   </div>
-                </article>
+                </button>
               ))}
             </div>
           )}
@@ -861,7 +870,7 @@ function VisitorDashboardContent() {
             { id: 'categories', label: 'Book Categories', Icon: Bookmark },
             { id: 'communityBooks', label: 'Community Books', Icon: UsersRound },
             { id: 'personalBooks', label: 'My Personal Books', Icon: BookMarked },
-            { id: 'readingList', label: 'My Reading List', Icon: Bookmark },
+            { id: 'readingList', label: 'My Reading List', Icon: ClipboardList },
             { id: 'myBorrows', label: 'My Requests & Borrows', Icon: CalendarDays },
             { id: 'map', label: 'Library Map', Icon: MapPinned },
             { id: 'services', label: 'Announcements & Feedback', Icon: Megaphone },
@@ -943,6 +952,7 @@ function VisitorDashboardContent() {
               activeView={tab}
               onViewChange={setTab}
               catalogResetKey={catalogResetKey}
+              focusRequestId={focusRequestId}
             />
           </div>
         )}

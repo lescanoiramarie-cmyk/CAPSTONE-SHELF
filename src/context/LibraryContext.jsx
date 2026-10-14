@@ -383,12 +383,12 @@ console.log(
                 request.request_date ||
                 null,
 
-              pickupDeadline:
-                request.pickup_deadline ||
-                null,
-
               queuePosition:
                 request.queue_position ??
+                null,
+
+              pickupDeadline:
+                request.pickup_deadline ||
                 null,
 
               borrowDate:
@@ -437,6 +437,18 @@ console.log(
 
               ownerName:
                 request.owner_name ||
+                null,
+
+              ownerContactEmail:
+                request.owner_contact_email ||
+                null,
+
+              ownerContactNumber:
+                request.owner_contact_number ||
+                null,
+
+              ownerContactDetails:
+                request.owner_contact_details ||
                 null,
 
               ownerResponse:

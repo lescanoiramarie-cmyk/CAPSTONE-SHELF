@@ -11,6 +11,7 @@ import {
 import { useLibraryData } from '../context/useLibrary.js';
 
 import 'leaflet/dist/leaflet.css';
+import '../lib/leafletIcons.js';
 
 function FocusBranch({ library, markerRef }) {
   const map = useMap();
@@ -29,8 +30,14 @@ export default function LibraryMap({
   onBrowseLibrary,
   focusBranchId = null,
   bookContext = null,
+  libraryScopeId = null,
 }) {
   const { libraries = [] } = useLibraryData();
+  const visibleLibraries = libraryScopeId == null
+    ? libraries
+    : libraries.filter(
+        (library) => String(library.id) === String(libraryScopeId)
+      );
   const focusedMarkerRef = useRef(null);
 
   const [search, setSearch] = useState('');
@@ -43,7 +50,7 @@ export default function LibraryMap({
 
   const campuses = [];
 
-  libraries.forEach((library) => {
+  visibleLibraries.forEach((library) => {
     if (
       library.campus &&
       !campuses.includes(library.campus)
@@ -56,7 +63,7 @@ export default function LibraryMap({
   // FILTER LIBRARIES
   // =========================================================
 
-  const filteredLibraries = libraries.filter(
+  const filteredLibraries = visibleLibraries.filter(
     (library) => {
       const searchText =
         search.trim().toLowerCase();
@@ -106,8 +113,18 @@ export default function LibraryMap({
         );
 
         return (
+          library.lat !== null &&
+          library.lat !== undefined &&
+          library.lng !== null &&
+          library.lng !== undefined &&
+          String(library.lat).trim() !== '' &&
+          String(library.lng).trim() !== '' &&
           Number.isFinite(lat) &&
-          Number.isFinite(lng)
+          Number.isFinite(lng) &&
+          lat >= -90 &&
+          lat <= 90 &&
+          lng >= -180 &&
+          lng <= 180
         );
       }
     );
@@ -209,8 +226,16 @@ export default function LibraryMap({
                     (library) => library.id === focusBranchId
                   );
                   return branch &&
+                    branch.lat != null &&
+                    branch.lng != null &&
+                    String(branch.lat).trim() !== '' &&
+                    String(branch.lng).trim() !== '' &&
                     Number.isFinite(Number(branch.lat)) &&
-                    Number.isFinite(Number(branch.lng)) ? (
+                    Number.isFinite(Number(branch.lng)) &&
+                    Number(branch.lat) >= -90 &&
+                    Number(branch.lat) <= 90 &&
+                    Number(branch.lng) >= -180 &&
+                    Number(branch.lng) <= 180 ? (
                     <FocusBranch
                       library={branch}
                       markerRef={focusedMarkerRef}

@@ -3,6 +3,8 @@ import { useAuth } from '../context/useAuth.js';
 import {
   BookOpen,
   Bookmark,
+  ClipboardList,
+  HandHeart,
   Eye,
   EyeOff,
   MapPinned,
@@ -13,6 +15,7 @@ import {
   Users,
   Clock3,
   MapPin,
+  Star,
 } from 'lucide-react';
 
 import {
@@ -191,6 +194,7 @@ export default function OPACCatalog({
   activeView = 'catalog',
   onViewChange = () => {},
   catalogResetKey = 0,
+  focusRequestId = null,
 }) {
   const { user } = useAuth();
 
@@ -463,6 +467,7 @@ export default function OPACCatalog({
       title: '',
       author: '',
       category: '',
+      customCategory: '',
       isbn: '',
       summary: '',
       condition: 'Good',
@@ -595,6 +600,26 @@ if (!cancelled) {
             request.ownerName ??
             null,
 
+          queuePosition:
+            request.queue_position ??
+            request.queuePosition ??
+            null,
+
+          ownerContactEmail:
+            request.owner_contact_email ??
+            request.ownerContactEmail ??
+            null,
+
+          ownerContactNumber:
+            request.owner_contact_number ??
+            request.ownerContactNumber ??
+            null,
+
+          ownerContactDetails:
+            request.owner_contact_details ??
+            request.ownerContactDetails ??
+            null,
+
           requesterVisitorId:
             request.requester_visitor_id ??
             request.requesterVisitorId ??
@@ -724,6 +749,7 @@ if (!cancelled) {
       title: '',
       author: '',
       category: '',
+      customCategory: '',
       isbn: '',
       summary: '',
       condition: 'Good',
@@ -759,7 +785,9 @@ if (!cancelled) {
       personalBookForm.author.trim();
 
     const category =
-      personalBookForm.category.trim();
+      personalBookForm.category === 'Others'
+        ? personalBookForm.customCategory.trim()
+        : personalBookForm.category.trim();
 
     const isbn =
       personalBookForm.isbn.trim();
@@ -793,6 +821,11 @@ if (!cancelled) {
       setNotice(
         'Book author is required.'
       );
+      return;
+    }
+
+    if (personalBookForm.category === 'Others' && !category) {
+      setNotice('Enter a category when selecting Others.');
       return;
     }
 
@@ -970,6 +1003,15 @@ if (!cancelled) {
       .sort((a, b) =>
         a.label.localeCompare(b.label)
       );
+
+  const personalBookCategories = [
+    ...new Map(
+      categorySummaries
+        .filter(({ label }) => label !== 'Uncategorized')
+        .map(({ label }) => [label.toLocaleLowerCase(), label])
+    ).values(),
+  ].filter((label) => !['other', 'others'].includes(label.toLocaleLowerCase()))
+    .sort((a, b) => a.localeCompare(b));
 
   const libraryOptions = [
     'All',
@@ -1708,6 +1750,26 @@ const myRequests = useMemo(() => {
               request.requestDate ??
               null,
 
+            queuePosition:
+              request.queue_position ??
+              request.queuePosition ??
+              null,
+
+            ownerContactEmail:
+              request.owner_contact_email ??
+              request.ownerContactEmail ??
+              null,
+
+            ownerContactNumber:
+              request.owner_contact_number ??
+              request.ownerContactNumber ??
+              null,
+
+            ownerContactDetails:
+              request.owner_contact_details ??
+              request.ownerContactDetails ??
+              null,
+
             ownerVisitorId:
               request.owner_visitor_id ??
               request.ownerVisitorId ??
@@ -1852,6 +1914,20 @@ const myRequests = useMemo(() => {
   user?.fullName,
   user?.full_name,
 ]);
+
+  useEffect(() => {
+    if (!focusRequestId || !['myBorrows', 'personalBooks'].includes(activeView)) return;
+    const frame = requestAnimationFrame(() => {
+      document
+        .getElementById(
+          activeView === 'personalBooks'
+            ? `community-owner-request-${focusRequestId}`
+            : `borrow-request-${focusRequestId}`
+        )
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeView, focusRequestId, myRequests, ownerCommunityRequests]);
 
   // =========================================================
   // PERSONAL BOOK SEARCH
@@ -2100,16 +2176,6 @@ if (
       return;
     }
 
-    if (
-      getPersonalBookCopyAvailability(book)
-        .availableCopies === 0
-    ) {
-      setNotice(
-        'This community book is currently borrowed and unavailable.'
-      );
-      return;
-    }
-
     if (book.lendingEnabled === false) {
       setNotice('This community book is not currently available for lending.');
       return;
@@ -2172,7 +2238,9 @@ if (
       }
 
       setNotice(
-        `"${book.title}" request was submitted successfully. The owner must approve your request before borrowing can proceed.`
+        Number.isFinite(Number(request.queuePosition))
+          ? `"${book.title}" request submitted. You are #${request.queuePosition} in the queue, and the owner must approve it before handover.`
+          : `"${book.title}" request was submitted successfully. The owner must approve your request before borrowing can proceed.`
       );
 
       setSelectedBook(null);
@@ -2975,8 +3043,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
           </div>
 
-          {(book.handoverMethod ||
-            book.handoverDetails) && (
+          {book.handoverMethod && (
             <div className="mt-4 rounded-lg bg-slate-50 p-3">
 
               <div className="flex items-start gap-2">
@@ -2998,12 +3065,6 @@ const handleConfirmCommunityBookReturn = async (request) => {
                       book.handoverMethod
                     )}
                   </p>
-
-                  {book.handoverDetails && (
-                    <p className="text-xs text-slate-600 mt-1">
-                      {book.handoverDetails}
-                    </p>
-                  )}
 
                 </div>
 
@@ -3652,7 +3713,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <Bookmark
+                <ClipboardList
                   size={20}
                   className="text-amber-600"
                   aria-hidden="true"
@@ -4059,6 +4120,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
                     <div
                       key={request.id}
+                      id={`community-owner-request-${request.id}`}
                       className="p-5"
                     >
 
@@ -4488,7 +4550,12 @@ const handleConfirmCommunityBookReturn = async (request) => {
                     return (
                       <tr
                         key={request.id}
-                        className="hover:bg-slate-50"
+                        id={`borrow-request-${request.id}`}
+                        className={`hover:bg-slate-50 ${
+                          String(focusRequestId) === String(request.id)
+                            ? 'bg-amber-50 ring-2 ring-inset ring-amber-400'
+                            : ''
+                        }`}
                       >
 
                 {/* =================================================
@@ -4628,18 +4695,39 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
                       {request.status ===
                         'pending' && (
-                        <p className="font-semibold text-amber-600">
-                          Waiting for the book owner
-                          to approve your request.
-                        </p>
+                        <div className="space-y-1">
+                          <p className="font-semibold text-amber-600">
+                            Waiting for the book owner to approve your request.
+                          </p>
+                          {request.queuePosition != null && (
+                            <p className="font-semibold text-violet-700">
+                              Queue position: #{request.queuePosition}
+                            </p>
+                          )}
+                        </div>
                       )}
 
                       {request.status ===
                         'approved' && (
-                        <p className="font-semibold text-green-600">
-                          Your request was approved
-                          by the book owner.
-                        </p>
+                        <div className="space-y-1">
+                          <p className="font-semibold text-green-600">
+                            Your request was approved by the book owner.
+                          </p>
+                          <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
+                            <p className="font-bold">Arrange the handover with the owner</p>
+                            {request.ownerContactEmail && (
+                              <p className="mt-1">Email: {request.ownerContactEmail}</p>
+                            )}
+                            {request.ownerContactNumber && (
+                              <p className="mt-1">Phone: {request.ownerContactNumber}</p>
+                            )}
+                            {request.ownerContactDetails && (
+                              <p className="mt-1 whitespace-pre-wrap">
+                                Additional details: {request.ownerContactDetails}
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       )}
 
                       {request.status ===
@@ -4655,6 +4743,23 @@ const handleConfirmCommunityBookReturn = async (request) => {
                               Please return it by{' '}
                               {formatDate(request.dueDate)}.
                             </p>
+                          )}
+                          {(request.ownerContactEmail ||
+                            request.ownerContactNumber ||
+                            request.ownerContactDetails) && (
+                            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs font-normal text-blue-900">
+                              {request.ownerContactEmail && (
+                                <p>Email: {request.ownerContactEmail}</p>
+                              )}
+                              {request.ownerContactNumber && (
+                                <p className="mt-1">Phone: {request.ownerContactNumber}</p>
+                              )}
+                              {request.ownerContactDetails && (
+                                <p className="mt-1 whitespace-pre-wrap">
+                                  Additional details: {request.ownerContactDetails}
+                                </p>
+                              )}
+                            </div>
                           )}
                         </div>
                       )}
@@ -5040,29 +5145,32 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
                     <select
                       value={personalBookForm.category || ''}
-                      onChange={(event) => {
-                        console.log('CATEGORY SELECTED:', event.target.value);
-                        updatePersonalBookForm('category', event.target.value);
-                      }}
+                      onChange={(event) =>
+                        updatePersonalBookForm('category', event.target.value)
+                      }
                       className="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                     >
                       <option value="">Select a category</option>
-                      <option value="Fiction">Fiction</option>
-                      <option value="Non-Fiction">Non-Fiction</option>
-                      <option value="Academic">Academic</option>
-                      <option value="Computer Science">Computer Science</option>
-                      <option value="Engineering">Engineering</option>
-                      <option value="Education">Education</option>
-                      <option value="Business">Business</option>
-                      <option value="Science">Science</option>
-                      <option value="Mathematics">Mathematics</option>
-                      <option value="History">History</option>
-                      <option value="Literature">Literature</option>
-                      <option value="Arts">Arts</option>
-                      <option value="Social Sciences">Social Sciences</option>
-                      <option value="Reference">Reference</option>
-                      <option value="Other">Other</option>
+                      {personalBookCategories.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                      <option value="Others">Others</option>
                     </select>
+                    {personalBookForm.category === 'Others' && (
+                      <input
+                        type="text"
+                        value={personalBookForm.customCategory}
+                        onChange={(event) =>
+                          updatePersonalBookForm('customCategory', event.target.value)
+                        }
+                        placeholder="Enter a custom category"
+                        className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                        maxLength={80}
+                        required
+                      />
+                    )}
                   </div>
                   <div>
 
@@ -5366,7 +5474,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                     <div className="md:col-span-2">
 
                       <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
-                        Handover Details
+                        Additional Contact Details
                       </label>
 
                       <textarea
@@ -5379,7 +5487,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                             event.target.value
                           )
                         }
-                        placeholder="Add instructions or details for arranging the handover."
+                        placeholder="Add any extra contact details or instructions for arranging the handover."
                         maxLength={500}
                         rows={3}
                         className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 resize-none"
@@ -5409,9 +5517,9 @@ const handleConfirmCommunityBookReturn = async (request) => {
                   owned by you. If you enable
                   lending, other visitors can see
                   the book in Community Books.
-                  Borrowing will use an owner
-                  approval workflow once that
-                  feature is enabled.
+                  Every request requires owner approval. Approved borrowers
+                  receive the owner's contact details, and the owner confirms
+                  each handover and return.
                 </p>
 
               </div>
@@ -5611,22 +5719,14 @@ const handleConfirmCommunityBookReturn = async (request) => {
                       )}
                     </p>
 
-                    {selectedBook.handoverDetails && (
-                      <p className="mt-1 text-xs text-slate-600">
-                        {selectedBook.handoverDetails}
-                      </p>
-                    )}
-
-                  </div>
-
+                    </div>
                 </div>
 
                 <div className="rounded-lg bg-white border border-violet-100 px-3 py-2">
 
-                  <p className="text-[11px] font-semibold text-violet-700">
-                    Owner approval is required
-                    before this personal book can
-                    be borrowed.
+                    <p className="text-[11px] font-semibold text-violet-700">
+                      Owner approval is required before borrowing. Contact details
+                      are shared with the requester after approval.
                   </p>
 
                 </div>
@@ -5647,30 +5747,6 @@ const handleConfirmCommunityBookReturn = async (request) => {
                   'No summary provided yet.'}
               </p>
 
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3 pt-2">
-              <button
-                type="button"
-                disabled={savingReadingListBookId === selectedBook.id}
-                onClick={() => handleToggleReadingList(selectedBook)}
-                className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold transition disabled:opacity-50 disabled:cursor-not-allowed ${
-                  isBookInReadingList(selectedBook.id)
-                    ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                <Bookmark
-                  size={16}
-                  fill={isBookInReadingList(selectedBook.id) ? 'currentColor' : 'none'}
-                  aria-hidden="true"
-                />
-                {savingReadingListBookId === selectedBook.id
-                  ? 'Saving...'
-                  : isBookInReadingList(selectedBook.id)
-                    ? 'Saved to Reading List'
-                    : 'Read Later'}
-              </button>
             </div>
 
             {/* I-PASTE DITO ANG EXTERNAL CATALOG NOTICE */}
@@ -5782,9 +5858,8 @@ const handleConfirmCommunityBookReturn = async (request) => {
                                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                               }`}
                             >
-                              <Bookmark
+                              <ClipboardList
                                 size={14}
-                                fill={isBookInReadingList(entry.id) ? 'currentColor' : 'none'}
                                 aria-hidden="true"
                               />
                               {savingReadingListBookId === entry.id
@@ -5838,16 +5913,14 @@ const handleConfirmCommunityBookReturn = async (request) => {
     <button
       type="button"
       onClick={() => handleRequestCommunityBook(selectedBook)}
-      disabled={
-        submittingCommunityRequest ||
-        getPersonalBookCopyAvailability(selectedBook).availableCopies === 0
-      }
-      className="w-full rounded-lg bg-violet-600 text-white py-2.5 text-sm font-bold hover:bg-violet-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+      disabled={submittingCommunityRequest}
+      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-violet-600 py-2.5 text-sm font-bold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
     >
+      <HandHeart size={16} strokeWidth={2} aria-hidden="true" />
       {submittingCommunityRequest
         ? 'Submitting Request...'
         : getPersonalBookCopyAvailability(selectedBook).availableCopies === 0
-          ? 'Borrowed â€” Unavailable'
+          ? 'Join Community Book Queue'
         : 'Request Community Book'}
     </button>
 
@@ -5860,14 +5933,9 @@ const handleConfirmCommunityBookReturn = async (request) => {
       <p className="text-xs text-slate-500 text-center">
         This book is not currently available for community lending.
       </p>
-    ) : getPersonalBookCopyAvailability(selectedBook)
-        .availableCopies === 0 ? (
-      <p className="text-xs text-amber-700 text-center">
-        All copies are currently borrowed. Please check again after they are returned.
-      </p>
     ) : (
       <p className="text-[10px] text-slate-400 text-center">
-        Your request will be sent to the book owner for approval.
+        Requests are handled in order and always require owner approval.
       </p>
     )}
   </div>
@@ -6033,19 +6101,19 @@ const handleConfirmCommunityBookReturn = async (request) => {
                             }
                           </span>
 
-                          <span className="text-amber-500 font-bold">
-                            {'â­'.repeat(
-                              Math.max(
-                                0,
-                                Math.min(
-                                  5,
-                                  Number(
-                                    review.rating
-                                  ) ||
-                                    0
-                                )
-                              )
-                            )}
+                          <span
+                            className="inline-flex items-center gap-0.5 text-amber-500"
+                            aria-label={`${Math.max(0, Math.min(5, Number(review.rating) || 0))} out of 5 stars`}
+                          >
+                            {Array.from({ length: 5 }, (_, index) => (
+                              <Star
+                                key={index}
+                                size={13}
+                                strokeWidth={1.8}
+                                fill={index < Number(review.rating) ? 'currentColor' : 'none'}
+                                aria-hidden="true"
+                              />
+                            ))}
                           </span>
 
                         </div>
@@ -6111,6 +6179,3 @@ const handleConfirmCommunityBookReturn = async (request) => {
     </div>
   );
   };
-
-
-

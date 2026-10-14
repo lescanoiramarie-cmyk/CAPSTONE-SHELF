@@ -104,7 +104,30 @@ const markAllNotificationsRead = () => {
         className="pointer-events-none absolute -right-12 -top-16 h-48 w-48 rounded-full bg-amber-400/10 blur-3xl"
       />
 
-      <div className="relative p-5 sm:p-7 lg:p-8">
+      <div
+        role="status"
+        aria-live="polite"
+        className={`absolute right-5 top-5 z-10 inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-semibold ${
+          isOnline
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
+            : 'border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300'
+        }`}
+      >
+        {isOnline ? (
+          <Wifi size={15} aria-hidden="true" />
+        ) : (
+          <WifiOff size={15} aria-hidden="true" />
+        )}
+        <span>{isOnline ? 'Online' : 'Offline'}</span>
+        <span
+          aria-hidden="true"
+          className={`h-2 w-2 rounded-full ${
+            isOnline ? 'bg-emerald-500' : 'bg-slate-400'
+          }`}
+        />
+      </div>
+
+      <div className="relative p-5 pt-16 sm:p-7 sm:pt-16 lg:p-8 lg:pt-16">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           {/* Welcome information */}
           <div className="min-w-0">
@@ -268,30 +291,6 @@ const markAllNotificationsRead = () => {
     </div>
   )}
 
-  <div
-    role="status"
-    aria-live="polite"
-    className={`inline-flex w-fit items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-semibold ${
-      isOnline
-        ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
-        : 'border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300'
-    }`}
-  >
-    {isOnline ? (
-      <Wifi size={15} aria-hidden="true" />
-    ) : (
-      <WifiOff size={15} aria-hidden="true" />
-    )}
-
-    <span>{isOnline ? 'Online' : 'Offline'}</span>
-
-    <span
-      aria-hidden="true"
-      className={`h-2 w-2 rounded-full ${
-        isOnline ? 'bg-emerald-500' : 'bg-slate-400'
-      }`}
-    />
-  </div>
 </div>
 
 

@@ -1,19 +1,7 @@
 import { useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
-import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-
-// Fix sa default marker icon issue sa Leaflet + React/Vite
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconUrl: markerIcon,
-  iconRetinaUrl: markerIcon2x,
-  shadowUrl: markerShadow,
-});
+import '../lib/leafletIcons.js';
 
 // Component para sa pag-click at pag-drag sa mapa
 function MapEventsHandler({ position, setPosition, onChangeCoordinates }) {
