@@ -15,7 +15,6 @@ import {
 } from '../lib/excelUtils.js';
 import AnalyticsDateFilter from './AnalyticsDateFilter.jsx';
 import AuditLogViewer from './AuditLogViewer.jsx';
-import { recordAuditEvent } from '../lib/auditLog.js';
 import {
   getTimeframeBuckets,
   getTimeframeRange,
@@ -38,24 +37,6 @@ function getLibraryName(libraries, id) {
       (library) =>
         String(library.id) === String(id)
     )?.name || 'Unknown library'
-  );
-}
-
-function formatRole(role) {
-  const labels = {
-    superadmin: 'Super Admin',
-    subadmin: 'Sub-Admin',
-    librarian: 'Library Staff',
-    circulation: 'Circulation Staff',
-  };
-  return (
-    labels[role] ||
-    String(role || '')
-      .replaceAll('_', ' ')
-      .replace(/\b\w/g, (char) =>
-        char.toUpperCase()
-      ) ||
-    'Staff'
   );
 }
 
@@ -111,11 +92,13 @@ function AdminWorkspace({
     user?.assignedBranch ||
     '';
   const [tab, setTab] = useState(initialTab);
+  const [previousInitialTab, setPreviousInitialTab] =
+    useState(initialTab);
 
-  // Sync tab sa initialTab kung magbago ang navigation item
-  useEffect(() => {
+  if (previousInitialTab !== initialTab) {
+    setPreviousInitialTab(initialTab);
     setTab(initialTab);
-  }, [initialTab]);
+  }
 
   // I-filter ang mga tabs batay sa napiling Sidebar menu (mode)
   const activeTabs = useMemo(() => {
@@ -153,8 +136,6 @@ function AdminWorkspace({
     useState([]);
   const [announcements, setAnnouncements] =
     useState([]);
-  const [staff, setStaff] =
-    useState([]);
   const [loading, setLoading] =
     useState(false);
   const [error, setError] =
@@ -170,13 +151,6 @@ function AdminWorkspace({
     useState(null);
   const [feedbackReply, setFeedbackReply] =
     useState({});
-  const [staffForm, setStaffForm] =
-    useState({
-      email: '',
-      fullName: '',
-      password: '',
-      libraryId: currentLibraryId,
-    });
   const [forecast, setForecast] =
     useState(null);
   const [forecastLoading, setForecastLoading] =
@@ -339,7 +313,6 @@ function AdminWorkspace({
       ![
         'feedback',
         'announcements',
-        'staff',
       ].includes(tab)
     ) {
       return undefined;
@@ -372,15 +345,6 @@ function AdminWorkspace({
           .order('created_at', {
             ascending: false,
           });
-      } else {
-        result = await supabase
-          .from('staff_profiles')
-          .select(
-            'id, email, full_name, role, library_id, is_active, created_at'
-          )
-          .order('created_at', {
-            ascending: false,
-          });
       }
       if (!active) {
         return;
@@ -395,10 +359,6 @@ function AdminWorkspace({
         tab === 'announcements'
       ) {
         setAnnouncements(
-          result.data || []
-        );
-      } else {
-        setStaff(
           result.data || []
         );
       }

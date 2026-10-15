@@ -2090,6 +2090,8 @@ export async function requestPasswordResetCode(
 
   return {
     success: true,
+    expiresInSeconds:
+      Number(data?.expiresInSeconds) || 15 * 60,
     message:
       normalizeText(
         data?.message
@@ -3355,14 +3357,6 @@ export async function addPersonalBook({
     );
   }
 
-  // ADD THIS RESOLUTION STEP:
-  const resolvedVisitorId =
-    isValidUuid(normalizedVisitorId)
-      ? normalizedVisitorId
-      : await resolveVisitorAuthUserId(
-          normalizedVisitorId
-        );
-
   const {
     data,
     error,
@@ -3371,7 +3365,7 @@ export async function addPersonalBook({
       'add_personal_book',
       {
         p_visitor_id:
-          resolvedVisitorId, // <-- Use resolved UUID here
+          normalizedVisitorId,
 
         p_title:
           normalizedTitle,
@@ -3473,6 +3467,123 @@ export async function setPersonalBookVisibility(
   }
 
   return Boolean(isPublic);
+}
+
+export async function updatePersonalBook({
+  visitorId,
+  bookId,
+  title,
+  author,
+  category = null,
+  isbn = null,
+  summary = null,
+  condition = 'Good',
+  lendingPeriodDays = 7,
+  totalCopies = 1,
+  handoverMethod = 'arrange_with_owner',
+  handoverDetails = null,
+  lendingEnabled = true,
+  isPublic = false,
+}) {
+  const normalizedVisitorId = normalizeText(visitorId);
+  const normalizedBookId = normalizeText(bookId);
+  const normalizedTitle = normalizeText(title);
+  const normalizedAuthor = normalizeText(author);
+  const normalizedCategory = normalizeBookCategory(category) || null;
+  const normalizedIsbn = normalizeText(isbn) || null;
+  const normalizedSummary = normalizeText(summary) || null;
+  const normalizedCondition = normalizeText(condition) || 'Good';
+  const normalizedLendingPeriod = Number(lendingPeriodDays);
+  const normalizedTotalCopies = Number(totalCopies);
+  const normalizedHandoverMethod =
+    normalizeText(handoverMethod).toLowerCase() || 'arrange_with_owner';
+  const normalizedHandoverDetails =
+    normalizeText(handoverDetails) || null;
+
+  if (!isValidVisitorId(normalizedVisitorId)) {
+    throw new Error('Invalid visitor ID.');
+  }
+  if (!normalizedBookId) {
+    throw new Error('Book ID is required.');
+  }
+  if (!normalizedTitle || !normalizedAuthor) {
+    throw new Error('Book title and author are required.');
+  }
+  if (!PERSONAL_BOOK_CONDITIONS.includes(normalizedCondition)) {
+    throw new Error('Invalid book condition.');
+  }
+  if (
+    !Number.isInteger(normalizedLendingPeriod) ||
+    normalizedLendingPeriod < PERSONAL_BOOK_MIN_LENDING_DAYS ||
+    normalizedLendingPeriod > PERSONAL_BOOK_MAX_LENDING_DAYS
+  ) {
+    throw new Error(
+      `Lending period must be between ${PERSONAL_BOOK_MIN_LENDING_DAYS} and ${PERSONAL_BOOK_MAX_LENDING_DAYS} days.`
+    );
+  }
+  if (!Number.isInteger(normalizedTotalCopies) || normalizedTotalCopies < 1) {
+    throw new Error('Copy count must be a whole number of at least 1.');
+  }
+  if (!PERSONAL_BOOK_HANDOVER_METHODS.includes(normalizedHandoverMethod)) {
+    throw new Error('Invalid handover method.');
+  }
+  if (normalizedHandoverDetails?.length > 500) {
+    throw new Error('Handover details must not exceed 500 characters.');
+  }
+
+  const { data, error } = await supabase.rpc('update_personal_book', {
+    p_visitor_id: normalizedVisitorId,
+    p_book_id: normalizedBookId,
+    p_title: normalizedTitle,
+    p_author: normalizedAuthor,
+    p_category: normalizedCategory,
+    p_isbn: normalizedIsbn,
+    p_summary: normalizedSummary,
+    p_condition: normalizedCondition,
+    p_lending_period_days: normalizedLendingPeriod,
+    p_handover_method: normalizedHandoverMethod,
+    p_handover_details: normalizedHandoverDetails,
+    p_lending_enabled: lendingEnabled !== false,
+    p_total_copies: normalizedTotalCopies,
+    p_is_public: Boolean(isPublic),
+  });
+
+  if (error) {
+    console.error('UPDATE PERSONAL BOOK RPC ERROR:', error);
+    throw cleanErr(error, 'Unable to update the personal book.');
+  }
+
+  const row = firstRow(data);
+  if (!row?.id) {
+    throw new Error('The personal book was not updated.');
+  }
+  return mapBook(row);
+}
+
+export async function deletePersonalBook(visitorId, bookId) {
+  const normalizedVisitorId = normalizeText(visitorId);
+  const normalizedBookId = normalizeText(bookId);
+
+  if (!isValidVisitorId(normalizedVisitorId)) {
+    throw new Error('Invalid visitor ID.');
+  }
+  if (!normalizedBookId) {
+    throw new Error('Book ID is required.');
+  }
+
+  const { data, error } = await supabase.rpc('delete_personal_book', {
+    p_visitor_id: normalizedVisitorId,
+    p_book_id: normalizedBookId,
+  });
+
+  if (error) {
+    console.error('DELETE PERSONAL BOOK RPC ERROR:', error);
+    throw cleanErr(error, 'Unable to remove the personal book.');
+  }
+  if (data !== true) {
+    throw new Error('The personal book was not removed.');
+  }
+  return true;
 }
 
 // ============================================================================
@@ -3784,6 +3895,8 @@ export async function fetchOwnerCommunityBookRequests(
     ? data
     : []
   ).map((request) => ({
+    ...request,
+
     id:
       request.id,
 
@@ -3802,6 +3915,22 @@ export async function fetchOwnerCommunityBookRequests(
       request.owner_name ||
       null,
 
+    queuePosition:
+      request.queue_position ??
+      null,
+
+    ownerContactEmail:
+      request.owner_contact_email ||
+      null,
+
+    ownerContactNumber:
+      request.owner_contact_number ||
+      null,
+
+    ownerContactDetails:
+      request.owner_contact_details ||
+      null,
+
     requesterVisitorId:
       request.requester_visitor_id ||
       null,
@@ -3811,8 +3940,9 @@ export async function fetchOwnerCommunityBookRequests(
       'SHELF Visitor',
 
     status:
-      request.status ||
-      'pending',
+      String(request.status || 'pending')
+        .trim()
+        .toLowerCase(),
 
     requestDate:
       request.request_date ||
@@ -3829,6 +3959,37 @@ export async function fetchOwnerCommunityBookRequests(
     ownerResponse:
       request.owner_response ||
       null,
+
+    pickupDeadline:
+      request.pickup_deadline ||
+      null,
+
+    borrowDate:
+      request.borrow_date ||
+      null,
+
+    dueDate:
+      request.due_date ||
+      null,
+
+    returnDate:
+      request.return_date ||
+      null,
+
+    fineAmount:
+      request.fine_amount ??
+      0,
+
+    confirmedBy:
+      request.confirmed_by ||
+      null,
+
+    returnConfirmedBy:
+      request.return_confirmed_by ||
+      null,
+
+    requestType: 'community',
+    isCommunityBook: true,
   }));
 }
 

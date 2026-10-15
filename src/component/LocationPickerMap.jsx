@@ -45,12 +45,12 @@ function RecenterMap({ center }) {
 
 export default function LocationPickerMap({ position, setPosition, onChangeCoordinates }) {
   return (
-    <div className="w-full h-72 rounded-xl overflow-hidden border border-slate-300 shadow-sm my-3 z-0">
+    <div className="relative isolate z-0 my-3 h-72 w-full min-w-0 overflow-hidden rounded-xl border border-slate-300 shadow-sm">
       <MapContainer
         center={position}
         zoom={14}
         scrollWheelZoom={true}
-        className="w-full h-full"
+        className="relative z-0 h-full w-full"
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'

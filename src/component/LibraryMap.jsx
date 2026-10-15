@@ -206,13 +206,13 @@ export default function LibraryMap({
         ==================================================== */}
 
         {showMap && (
-          <div className="lg:col-span-2 rounded-xl overflow-hidden border border-slate-200 shadow-sm h-80 lg:h-150">
+          <div className="relative isolate z-0 min-w-0 overflow-hidden rounded-xl border border-slate-200 shadow-sm h-80 lg:h-150">
 
             <MapContainer
               center={[14.085, 121.149]}
               zoom={13}
               scrollWheelZoom
-              className="w-full h-full"
+              className="relative z-0 h-full w-full"
             >
 
               <TileLayer

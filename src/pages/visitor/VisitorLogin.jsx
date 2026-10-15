@@ -148,6 +148,9 @@ const LOCATION_OPTIONS = {
   ],
 };
 
+const RESET_CODE_TTL_SECONDS = 15 * 60;
+const RESET_CODE_RESEND_COOLDOWN_SECONDS = 60;
+
 // =========================================================
 // PASSWORD REQUIREMENT COMPONENT
 // =========================================================
@@ -253,10 +256,46 @@ export default function VisitorLogin() {
     setIsResetSubmitting,
   ] = useState(false);
 
+  const [resetExpiresAt, setResetExpiresAt] =
+    useState(null);
+  const [resetResendAvailableAt, setResetResendAvailableAt] =
+    useState(null);
+  const [resetTimeRemaining, setResetTimeRemaining] =
+    useState(0);
+  const [resetResendRemaining, setResetResendRemaining] =
+    useState(0);
+
   const [
     showResetPassword,
     setShowResetPassword,
   ] = useState(false);
+
+  useEffect(() => {
+    if (view !== 'forgot' || resetStep !== 'verify') {
+      return undefined;
+    }
+
+    const timer = setInterval(() => {
+      const now = Date.now();
+      setResetTimeRemaining(
+        resetExpiresAt
+          ? Math.max(0, Math.ceil((resetExpiresAt - now) / 1000))
+          : 0
+      );
+      setResetResendRemaining(
+        resetResendAvailableAt
+          ? Math.max(0, Math.ceil((resetResendAvailableAt - now) / 1000))
+          : 0
+      );
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [
+    resetExpiresAt,
+    resetResendAvailableAt,
+    resetStep,
+    view,
+  ]);
 
   const resetPasswordValid =
     resetPassword.length >= 12 &&
@@ -1496,6 +1535,21 @@ export default function VisitorLogin() {
             'If that address belongs to a SHELF account, a verification code is on its way.'
         );
 
+        const now = Date.now();
+        const expiresInSeconds =
+          Number(result?.expiresInSeconds) ||
+          RESET_CODE_TTL_SECONDS;
+        setResetExpiresAt(
+          now + expiresInSeconds * 1000
+        );
+        setResetResendAvailableAt(
+          now + RESET_CODE_RESEND_COOLDOWN_SECONDS * 1000
+        );
+        setResetTimeRemaining(expiresInSeconds);
+        setResetResendRemaining(
+          RESET_CODE_RESEND_COOLDOWN_SECONDS
+        );
+
         // Move to the code step either way. The response is identical for
         // unknown addresses, so this reveals nothing and still matches what
         // the visitor was told to expect.
@@ -1517,9 +1571,59 @@ export default function VisitorLogin() {
       }
     };
 
+  const handleResendResetCode = async () => {
+    if (
+      isResetSubmitting ||
+      (resetTimeRemaining > 0 && resetResendRemaining > 0)
+    ) {
+      return;
+    }
+
+    setError('');
+    setResetNotice('');
+    setIsResetSubmitting(true);
+
+    try {
+      const result = await requestPasswordResetCode(resetEmail);
+      const now = Date.now();
+      const expiresInSeconds =
+        Number(result?.expiresInSeconds) ||
+        RESET_CODE_TTL_SECONDS;
+
+      setResetCode('');
+      setResetExpiresAt(now + expiresInSeconds * 1000);
+      setResetResendAvailableAt(
+        now + RESET_CODE_RESEND_COOLDOWN_SECONDS * 1000
+      );
+      setResetTimeRemaining(expiresInSeconds);
+      setResetResendRemaining(
+        RESET_CODE_RESEND_COOLDOWN_SECONDS
+      );
+      setResetNotice(
+        'A new verification code has been requested. Any previous code is no longer valid.'
+      );
+    } catch (err) {
+      console.error('RESEND RESET CODE ERROR:', err);
+      setError(
+        err?.message ||
+          'Unable to resend the verification code. Please try again.'
+      );
+    } finally {
+      setIsResetSubmitting(false);
+    }
+  };
+
   const handleVerifyResetCode =
     async (event) => {
       event.preventDefault();
+
+      if (!resetExpiresAt || Date.now() >= resetExpiresAt) {
+        setError(
+          'This verification code has expired. Please request a new one.'
+        );
+        setResetTimeRemaining(0);
+        return;
+      }
 
       const code =
         resetCode.trim();
@@ -2860,6 +2964,20 @@ export default function VisitorLogin() {
                       </div>
                     )}
 
+                    <p
+                      className={`text-center text-xs font-semibold ${
+                        resetTimeRemaining > 0
+                          ? 'text-slate-600'
+                          : 'text-red-700'
+                      }`}
+                      role="status"
+                      aria-live="polite"
+                    >
+                      {resetTimeRemaining > 0
+                        ? `Code expires in ${String(Math.floor(resetTimeRemaining / 60)).padStart(2, '0')}:${String(resetTimeRemaining % 60).padStart(2, '0')}.`
+                        : 'This code has expired. Request a new code to continue.'}
+                    </p>
+
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
                         Verification code
@@ -2893,13 +3011,32 @@ export default function VisitorLogin() {
                     <button
                       type="submit"
                       disabled={
-                        isResetSubmitting
+                        isResetSubmitting ||
+                        resetTimeRemaining === 0
                       }
                       className="w-full bg-shelf-primary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isResetSubmitting
                         ? 'Verifying...'
                         : 'Verify Code'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleResendResetCode}
+                      disabled={
+                        isResetSubmitting ||
+                        (resetTimeRemaining > 0 &&
+                          resetResendRemaining > 0)
+                      }
+                      className="w-full rounded-lg border border-slate-300 bg-white py-2.5 text-sm font-bold text-shelf-primary transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isResetSubmitting
+                        ? 'Sending Code...'
+                        : resetTimeRemaining === 0 ||
+                            resetResendRemaining === 0
+                          ? 'Resend Code'
+                          : `Resend Code in ${resetResendRemaining}s`}
                     </button>
 
                     <div className="text-center">

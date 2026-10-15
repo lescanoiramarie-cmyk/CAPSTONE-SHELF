@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/useAuth.js';
 import {
   BookOpen,
@@ -206,6 +206,8 @@ export default function OPACCatalog({
   personalBooks = [],
   communityBooks = [],
   myCommunityBookRequests = [],
+  ownerCommunityBookRequests = [],
+  ownerCommunityRequestLoadError = '',
 } = useLibraryData();
 
   const {
@@ -213,12 +215,15 @@ export default function OPACCatalog({
   cancelBorrowRequest,
   addPersonalBook,
   setPersonalBookVisibility,
+  updatePersonalBook,
+  deletePersonalBook,
   requestCommunityBook,
   fetchOwnerCommunityBookRequests,
   approveCommunityBookRequest,
   rejectCommunityBookRequest,
   confirmCommunityBookPickup,
   confirmCommunityBookReturn,
+  loading: libraryLoading,
   PICKUP_WINDOW_HOURS,
   BORROW_PERIOD_DAYS,
 } = useLibrary();
@@ -300,14 +305,10 @@ export default function OPACCatalog({
   // COMMUNITY BOOK OWNER REQUEST STATES
   // =========================================================
 
-  const [ownerCommunityRequests, setOwnerCommunityRequests] =
-    useState([]);
+  const ownerCommunityRequests = ownerCommunityBookRequests;
 
   const [ownerCommunityRequestFilter, setOwnerCommunityRequestFilter] =
     useState('all');
-
-  const [loadingOwnerCommunityRequests, setLoadingOwnerCommunityRequests] =
-    useState(false);
 
   const [ownerCommunityRequestError, setOwnerCommunityRequestError] =
     useState('');
@@ -333,6 +334,8 @@ export default function OPACCatalog({
       }, {}),
     [ownerCommunityRequests]
   );
+  const loadingOwnerCommunityRequests =
+    libraryLoading && ownerCommunityRequests.length === 0;
 
   const filteredOwnerCommunityRequests = useMemo(() => {
     if (ownerCommunityRequestFilter === 'all') {
@@ -356,10 +359,19 @@ export default function OPACCatalog({
   const [showAddPersonalBook, setShowAddPersonalBook] =
     useState(false);
 
-  const [addingPersonalBook, setAddingPersonalBook] =
-    useState(false);
+  const [editingPersonalBook, setEditingPersonalBook] =
+    useState(null);
 
-  const refreshReadingList = async () => {
+  const [savingPersonalBook, setSavingPersonalBook] =
+    useState(false);
+  const [personalBookToRemove, setPersonalBookToRemove] =
+    useState(null);
+  const [personalBookRemovalError, setPersonalBookRemovalError] =
+    useState('');
+  const [removingPersonalBookId, setRemovingPersonalBookId] =
+    useState(null);
+
+  const refreshReadingList = useCallback(async () => {
     if (!user?.id) {
       setReadingListBookIds([]);
       setReadingListBooks([]);
@@ -380,17 +392,19 @@ export default function OPACCatalog({
     } finally {
       setReadingListLoading(false);
     }
-  };
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user?.id) {
-      setReadingListBookIds([]);
-      setReadingListBooks([]);
       return;
     }
 
-    refreshReadingList();
-  }, [user?.id]);
+    const refreshTimer = setTimeout(() => {
+      void refreshReadingList();
+    }, 0);
+
+    return () => clearTimeout(refreshTimer);
+  }, [refreshReadingList, user?.id]);
 
   const isBookInReadingList = (bookId) =>
     readingListBookIds.includes(String(bookId));
@@ -537,200 +551,6 @@ export default function OPACCatalog({
   // =========================================================
 
   // =========================================================
-  // LOAD COMMUNITY BOOK REQUESTS FOR THE OWNER
-  // =========================================================
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadOwnerCommunityRequests = async () => {
-      if (!user?.id) {
-        setOwnerCommunityRequests([]);
-        setLoadingOwnerCommunityRequests(false);
-        return;
-      }
-
-      if (typeof window !== 'undefined') {
-        // Keep the owner section tied to the currently logged-in visitor.
-        // The actual ownership check is also enforced by the RPC.
-      }
-
-      if (typeof fetchOwnerCommunityBookRequests !== 'function') {
-        if (!cancelled) {
-          setOwnerCommunityRequests([]);
-          setOwnerCommunityRequestError(
-            'Community book request service is not available. Please refresh the page.'
-          );
-        }
-        return;
-      }
-
-      setLoadingOwnerCommunityRequests(true);
-      setOwnerCommunityRequestError('');
-
-      try {
-        const requests =
-  await fetchOwnerCommunityBookRequests(user.id);
-
-if (!cancelled) {
-  const normalizedRequests =
-    Array.isArray(requests)
-      ? requests.map((request) => ({
-          ...request,
-
-          id: request.id,
-
-          bookId:
-            request.book_id ??
-            request.bookId ??
-            null,
-
-          bookTitle:
-            request.book_title ??
-            request.bookTitle ??
-            'Untitled Book',
-
-          ownerVisitorId:
-            request.owner_visitor_id ??
-            request.ownerVisitorId ??
-            null,
-
-          ownerName:
-            request.owner_name ??
-            request.ownerName ??
-            null,
-
-          queuePosition:
-            request.queue_position ??
-            request.queuePosition ??
-            null,
-
-          ownerContactEmail:
-            request.owner_contact_email ??
-            request.ownerContactEmail ??
-            null,
-
-          ownerContactNumber:
-            request.owner_contact_number ??
-            request.ownerContactNumber ??
-            null,
-
-          ownerContactDetails:
-            request.owner_contact_details ??
-            request.ownerContactDetails ??
-            null,
-
-          requesterVisitorId:
-            request.requester_visitor_id ??
-            request.requesterVisitorId ??
-            null,
-
-          requesterName:
-            request.requester_name ??
-            request.requesterName ??
-            'SHELF Visitor',
-
-          status:
-            String(
-              request.status ?? 'pending'
-            )
-              .trim()
-              .toLowerCase(),
-
-          requestDate:
-            request.request_date ??
-            request.requestDate ??
-            null,
-
-          approvedAt:
-            request.approved_at ??
-            request.approvedAt ??
-            null,
-
-          rejectedAt:
-            request.rejected_at ??
-            request.rejectedAt ??
-            null,
-
-          ownerResponse:
-            request.owner_response ??
-            request.ownerResponse ??
-            null,
-
-          pickupDeadline:
-            request.pickup_deadline ??
-            request.pickupDeadline ??
-            null,
-
-          borrowDate:
-            request.borrow_date ??
-            request.borrowDate ??
-            null,
-
-          dueDate:
-            request.due_date ??
-            request.dueDate ??
-            null,
-
-          returnDate:
-            request.return_date ??
-            request.returnDate ??
-            null,
-
-          fineAmount:
-            request.fine_amount ??
-            request.fineAmount ??
-            0,
-
-          confirmedBy:
-            request.confirmed_by ??
-            request.confirmedBy ??
-            null,
-
-          returnConfirmedBy:
-            request.return_confirmed_by ??
-            request.returnConfirmedBy ??
-            null,
-
-          requestType: 'community',
-          isCommunityBook: true,
-        }))
-      : [];
-
-  console.log(
-    'SHELF â€” NORMALIZED OWNER COMMUNITY REQUESTS:',
-    normalizedRequests
-  );
-
-  setOwnerCommunityRequests(
-    normalizedRequests
-  );
-}
-      } catch (error) {
-        console.error('Load owner community requests error:', error);
-
-        if (!cancelled) {
-          setOwnerCommunityRequests([]);
-          setOwnerCommunityRequestError(
-            error?.message ||
-              'Unable to load community book requests.'
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingOwnerCommunityRequests(false);
-        }
-      }
-    };
-
-    loadOwnerCommunityRequests();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [fetchOwnerCommunityBookRequests, user?.id]);
-
-  // =========================================================
   // PERSONAL BOOK FORM HELPERS
   // =========================================================
 
@@ -762,11 +582,41 @@ if (!cancelled) {
     });
   };
 
+  const openEditPersonalBook = (book) => {
+    const isCustomCategory =
+      book.category &&
+      !personalBookCategories.includes(book.category);
+
+    setEditingPersonalBook(book);
+    setPersonalBookForm({
+      title: book.title || '',
+      author: book.author || '',
+      category: isCustomCategory ? 'Others' : book.category || '',
+      customCategory: isCustomCategory ? book.category : '',
+      isbn: book.isbn || '',
+      summary: book.summary || '',
+      condition: book.condition || 'Good',
+      lendingPeriodDays: book.lendingPeriodDays || 7,
+      handoverMethod: book.handoverMethod || 'arrange_with_owner',
+      handoverDetails: book.handoverDetails || '',
+      lendingEnabled: Boolean(book.lendingEnabled),
+      isPublic: Boolean(book.isPublic),
+      totalCopies: getPersonalBookCopyAvailability(book).totalCopies,
+    });
+    setNotice('');
+    setShowAddPersonalBook(true);
+  };
+
+  const openRemovePersonalBook = (book) => {
+    setPersonalBookRemovalError('');
+    setPersonalBookToRemove(book);
+  };
+
   // =========================================================
-  // ADD PERSONAL BOOK
+  // SAVE PERSONAL BOOK
   // =========================================================
 
-  const handleAddPersonalBook = async (
+  const handleSavePersonalBook = async (
     event
   ) => {
     event.preventDefault();
@@ -824,6 +674,36 @@ if (!cancelled) {
       return;
     }
 
+    const normalizedTitle = normalizeCatalogValue(title);
+    const normalizedAuthor = normalizeCatalogValue(author);
+    const normalizedIsbn = normalizeCatalogIsbn(isbn);
+    const duplicateBook = personalBooks.find((book) => {
+      if (
+        editingPersonalBook &&
+        String(book.id) === String(editingPersonalBook.id)
+      ) {
+        return false;
+      }
+
+      const existingTitle = normalizeCatalogValue(book.title);
+      const existingAuthor = normalizeCatalogValue(book.author);
+      const existingIsbn = normalizeCatalogIsbn(book.isbn);
+
+      return (
+        (normalizedIsbn && existingIsbn === normalizedIsbn) ||
+        (existingTitle === normalizedTitle &&
+          existingAuthor === normalizedAuthor &&
+          (!normalizedIsbn || !existingIsbn || existingIsbn === normalizedIsbn))
+      );
+    });
+
+    if (duplicateBook) {
+      setNotice(
+        `"${duplicateBook.title}" by ${duplicateBook.author} is already in your personal books.`
+      );
+      return;
+    }
+
     if (personalBookForm.category === 'Others' && !category) {
       setNotice('Enter a category when selecting Others.');
       return;
@@ -871,16 +751,15 @@ if (!cancelled) {
       return;
     }
 
-    if (addingPersonalBook) {
+    if (savingPersonalBook) {
       return;
     }
 
-    setAddingPersonalBook(true);
+    setSavingPersonalBook(true);
     setNotice('');
 
     try {
-      const createdBook =
-        await addPersonalBook({
+      const bookDetails = {
           visitorId: user.id,
           title,
           author,
@@ -901,32 +780,68 @@ if (!cancelled) {
             ),
           isPublic:
             Boolean(personalBookForm.isPublic),
-        });
+      };
+      const savedBook = editingPersonalBook
+        ? await updatePersonalBook({
+            ...bookDetails,
+            bookId: editingPersonalBook.id,
+          })
+        : await addPersonalBook(bookDetails);
 
-      if (!createdBook) {
+      if (!savedBook) {
         throw new Error(
-          'The personal book was not created. Please try again.'
+          `The personal book was not ${editingPersonalBook ? 'updated' : 'created'}. Please try again.`
         );
       }
 
       setShowAddPersonalBook(false);
+      setEditingPersonalBook(null);
       resetPersonalBookForm();
 
       setNotice(
-        `"${title}" was added to your personal books successfully.`
+        editingPersonalBook
+          ? `"${title}" was updated successfully.`
+          : `"${title}" was added to your personal books successfully.`
       );
     } catch (error) {
       console.error(
-        'Add personal book error:',
+        'Save personal book error:',
         error
       );
 
       setNotice(
         error?.message ||
-          'Unable to add the personal book. Please try again.'
+          `Unable to ${editingPersonalBook ? 'update' : 'add'} the personal book. Please try again.`
       );
     } finally {
-      setAddingPersonalBook(false);
+      setSavingPersonalBook(false);
+    }
+  };
+
+  const handleRemovePersonalBook = async () => {
+    if (!personalBookToRemove?.id || !user?.id) {
+      setPersonalBookRemovalError(
+        'Unable to identify the personal book to remove.'
+      );
+      return;
+    }
+    if (removingPersonalBookId) return;
+
+    setRemovingPersonalBookId(personalBookToRemove.id);
+    setPersonalBookRemovalError('');
+    try {
+      await deletePersonalBook(user.id, personalBookToRemove.id);
+      setNotice(
+        `"${personalBookToRemove.title || 'Personal book'}" was removed from your collection.`
+      );
+      setPersonalBookToRemove(null);
+    } catch (error) {
+      console.error('Remove personal book error:', error);
+      setPersonalBookRemovalError(
+        error?.message || 'Unable to remove this personal book. Please try again.'
+      );
+    } finally {
+      setRemovingPersonalBookId(null);
     }
   };
 
@@ -2269,7 +2184,6 @@ if (
       const refreshedRequests = Array.isArray(requests)
         ? requests
         : [];
-      setOwnerCommunityRequests(refreshedRequests);
       return refreshedRequests;
     } catch (error) {
       console.error('Reload owner community requests error:', error);
@@ -2724,7 +2638,22 @@ const handleConfirmCommunityBookReturn = async (request) => {
   // =========================================================
 
   const renderPersonalBookCard =
-    (book) => (
+    (book) => {
+      const bookRequests = ownerCommunityRequests.filter(
+        (request) =>
+          String(request.bookId ?? request.book_id ?? '') ===
+          String(book.id)
+      );
+      const hasActiveRequest = bookRequests.some((request) =>
+        ['pending', 'approved', 'borrowed'].includes(
+          getOwnerCommunityRequestStatus(request)
+        )
+      );
+      const canRemove =
+        bookRequests.length === 0 &&
+        getPersonalBookCopyAvailability(book).borrowedCopies === 0;
+
+      return (
       <div
         key={book.id}
         className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden"
@@ -2826,6 +2755,36 @@ const handleConfirmCommunityBookReturn = async (request) => {
                       ? 'Make Private'
                       : 'Make Public'}
                 </button>
+              )}
+              {String(book.ownerVisitorId ?? '') === String(user?.id ?? '') && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => openEditPersonalBook(book)}
+                    disabled={hasActiveRequest || savingPersonalBook}
+                    title={
+                      hasActiveRequest
+                        ? 'Resolve active community requests before editing this book.'
+                        : 'Edit personal book'
+                    }
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openRemovePersonalBook(book)}
+                    disabled={!canRemove || removingPersonalBookId === book.id}
+                    title={
+                      canRemove
+                        ? 'Remove personal book'
+                        : 'Books with community request history or on-loan copies cannot be removed.'
+                    }
+                    className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1.5 text-[11px] font-bold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                </>
               )}
               <BookOpen
                 size={22}
@@ -2932,7 +2891,8 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
         </div>
       </div>
-    );
+      );
+    };
 
   // =========================================================
   // COMMUNITY BOOK CARD
@@ -3464,7 +3424,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                     'map'
                   )
                 }
-                className="mt-5 inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-bold text-slate-950 transition hover:bg-amber-400"
+                className="mt-5 inline-flex items-center gap-2 rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
               >
 
                 <MapPinned
@@ -3515,7 +3475,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                     'All'
                   );
                 }}
-                className="mt-4 rounded-lg bg-amber-500 px-4 py-2 text-xs font-bold text-slate-950 transition hover:bg-amber-400"
+                className="mt-4 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
               >
                 Clear All Filters
               </button>
@@ -3803,7 +3763,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                       <button
                         type="button"
                         onClick={() => handleToggleReadingList(book)}
-                        className="rounded-lg bg-amber-100 px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={savingReadingListBookId === book.id}
                       >
                         {savingReadingListBookId === book.id ? 'Saving...' : 'Remove'}
@@ -3943,6 +3903,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
             <button
               type="button"
               onClick={() => {
+                setEditingPersonalBook(null);
                 resetPersonalBookForm();
                 setShowAddPersonalBook(true);
               }}
@@ -3999,9 +3960,9 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
             {/* ERROR */}
 
-            {ownerCommunityRequestError && (
+            {(ownerCommunityRequestError || ownerCommunityRequestLoadError) && (
               <div className="mx-5 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
-                {ownerCommunityRequestError}
+                {ownerCommunityRequestError || ownerCommunityRequestLoadError}
               </div>
 
             )}
@@ -4041,8 +4002,8 @@ const handleConfirmCommunityBookReturn = async (request) => {
                         }
                         className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                           isSelected
-                            ? 'border-violet-600 bg-violet-600 text-white'
-                            : 'border-slate-200 bg-white text-slate-600 hover:border-violet-300 hover:text-violet-700 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:border-violet-400 dark:hover:text-violet-200'
+                            ? 'border-shelf-primary bg-shelf-primary text-white'
+                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400 hover:text-shelf-primary dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:border-slate-400 dark:hover:text-white'
                         }`}
                       >
                         {filter.label}
@@ -4180,16 +4141,6 @@ const handleConfirmCommunityBookReturn = async (request) => {
   {formatDateTime(request.requestDate)}
 </p>
 
-                        <p className="text-[11px] text-slate-400">
-
-                          Requested:{' '}
-
-                          {formatDateTime(
-                            request.requestDate
-                          )}
-
-                        </p>
-
                         {request.ownerResponse && (
 
                           <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
@@ -4226,12 +4177,12 @@ const handleConfirmCommunityBookReturn = async (request) => {
                                 request
                               )
                             }
-                            className="rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="rounded-lg bg-shelf-primary px-4 py-2.5 text-xs font-bold text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
 
                             {isProcessing
                               ? 'Processing...'
-                              : 'Approve Request'}
+                              : 'Confirm'}
 
                           </button>
 
@@ -4290,12 +4241,12 @@ const handleConfirmCommunityBookReturn = async (request) => {
                                 request
                               )
                             }
-                            className="mt-4 w-full rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="mt-4 w-full rounded-lg bg-shelf-primary px-5 py-3 text-sm font-black text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
 
                             {isProcessing
                               ? 'Processing...'
-                              : 'Confirm Handover'}
+                              : 'Confirm'}
 
                           </button>
 
@@ -4330,12 +4281,12 @@ const handleConfirmCommunityBookReturn = async (request) => {
                                 request
                               )
                             }
-                            className="mt-4 w-full rounded-lg bg-violet-600 px-5 py-3 text-sm font-black text-white hover:bg-violet-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="mt-4 w-full rounded-lg bg-shelf-primary px-5 py-3 text-sm font-black text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
 
                             {isProcessing
                               ? 'Processing...'
-                              : 'Confirm Return'}
+                              : 'Confirm'}
 
                           </button>
 
@@ -4424,10 +4375,11 @@ const handleConfirmCommunityBookReturn = async (request) => {
               <button
                 type="button"
                 onClick={() => {
+                  setEditingPersonalBook(null);
                   resetPersonalBookForm();
                   setShowAddPersonalBook(true);
                 }}
-                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2.5 text-xs font-bold text-slate-950 hover:bg-amber-400"
+                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-shelf-primary px-4 py-2.5 text-xs font-bold text-white transition hover:opacity-90"
               >
 
                 <Plus
@@ -5033,12 +4985,13 @@ const handleConfirmCommunityBookReturn = async (request) => {
               <div>
 
                 <h2 className="text-lg font-bold text-slate-800">
-                  Add Personal Book
+                  {editingPersonalBook ? 'Edit Personal Book' : 'Add Personal Book'}
                 </h2>
 
                 <p className="text-xs text-slate-500 mt-1">
-                  Add a book that you
-                  personally own.
+                  {editingPersonalBook
+                    ? 'Update the details of your personal book.'
+                    : 'Add a book that you personally own.'}
                 </p>
 
               </div>
@@ -5046,17 +4999,15 @@ const handleConfirmCommunityBookReturn = async (request) => {
               <button
                 type="button"
                 onClick={() => {
-                  if (
-                    addingPersonalBook
-                  ) {
+                  if (savingPersonalBook) {
                     return;
                   }
 
-                  setShowAddPersonalBook(
-                    false
-                  );
+                  setShowAddPersonalBook(false);
+                  setEditingPersonalBook(null);
                   resetPersonalBookForm();
                 }}
+                disabled={savingPersonalBook}
                 className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
               >
                 <X
@@ -5068,9 +5019,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
             </div>
 
             <form
-              onSubmit={
-                handleAddPersonalBook
-              }
+              onSubmit={handleSavePersonalBook}
               className="p-6 space-y-5 text-slate-700 dark:text-slate-200"
             >
 
@@ -5531,12 +5480,11 @@ const handleConfirmCommunityBookReturn = async (request) => {
                 <button
                   type="button"
                   disabled={
-                    addingPersonalBook
+                    savingPersonalBook
                   }
                   onClick={() => {
-                    setShowAddPersonalBook(
-                      false
-                    );
+                    setShowAddPersonalBook(false);
+                    setEditingPersonalBook(null);
                     resetPersonalBookForm();
                   }}
                   className="px-4 py-2.5 rounded-lg bg-slate-100 text-slate-600 text-sm font-bold hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600 disabled:opacity-50"
@@ -5547,13 +5495,17 @@ const handleConfirmCommunityBookReturn = async (request) => {
                 <button
                   type="submit"
                   disabled={
-                    addingPersonalBook
+                    savingPersonalBook
                   }
                   className="px-5 py-2.5 rounded-lg bg-shelf-primary text-white text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {addingPersonalBook
-                    ? 'Adding Book...'
-                    : 'Add Personal Book'}
+                  {savingPersonalBook
+                    ? editingPersonalBook
+                      ? 'Saving Changes...'
+                      : 'Adding Book...'
+                    : editingPersonalBook
+                      ? 'Save Changes'
+                      : 'Add Personal Book'}
                 </button>
 
               </div>
@@ -5562,6 +5514,60 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
           </div>
 
+        </div>
+      )}
+
+      {personalBookToRemove && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="remove-personal-book-title"
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
+          >
+            <h2
+              id="remove-personal-book-title"
+              className="text-lg font-bold text-slate-900"
+            >
+              Remove personal book?
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              This will permanently remove “{personalBookToRemove.title || 'Personal book'}”
+              from your collection. Books with community request history cannot be removed
+              so that transaction records are preserved.
+            </p>
+            {personalBookRemovalError && (
+              <p
+                role="alert"
+                className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+              >
+                {personalBookRemovalError}
+              </p>
+            )}
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={removingPersonalBookId === personalBookToRemove.id}
+                onClick={() => {
+                  setPersonalBookToRemove(null);
+                  setPersonalBookRemovalError('');
+                }}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={removingPersonalBookId === personalBookToRemove.id}
+                onClick={handleRemovePersonalBook}
+                className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {removingPersonalBookId === personalBookToRemove.id
+                  ? 'Removing...'
+                  : 'Remove Book'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -5852,11 +5858,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                               onClick={() =>
                                 handleToggleReadingList(entry)
                               }
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition disabled:opacity-50 disabled:cursor-not-allowed ${
-                                isBookInReadingList(entry.id)
-                                  ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-                                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                              }`}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <ClipboardList
                                 size={14}
@@ -5914,7 +5916,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
       type="button"
       onClick={() => handleRequestCommunityBook(selectedBook)}
       disabled={submittingCommunityRequest}
-      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-violet-600 py-2.5 text-sm font-bold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-shelf-primary py-2.5 text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
     >
       <HandHeart size={16} strokeWidth={2} aria-hidden="true" />
       {submittingCommunityRequest

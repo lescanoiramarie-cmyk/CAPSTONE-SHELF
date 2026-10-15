@@ -42,6 +42,7 @@ const emptyData = {
   communityBooks: [],
   myCommunityBookRequests: [],
   ownerCommunityBookRequests: [],
+  ownerCommunityRequestLoadError: '',
 };
 
 export function LibraryProvider({ children }) {
@@ -268,6 +269,7 @@ export function LibraryProvider({ children }) {
       // ----------------------------------------------------------------------
 
       let ownerCommunityBookRequests = [];
+      let ownerCommunityRequestLoadError = '';
 
       if (
         currentVisitorId &&
@@ -285,28 +287,6 @@ export function LibraryProvider({ children }) {
               ? result
               : [];
 
-          
-console.log(
-  'SHELF — OWNER REQUEST DEBUG:',
-  {
-    currentVisitorId,
-    count: ownerCommunityBookRequests.length,
-    matchingYeshaRequests: ownerCommunityBookRequests
-      .filter((request) =>
-        String(request.requesterName || '').includes('Yesha')
-      )
-      .map((request) => ({
-        id: request.id,
-        bookTitle: request.bookTitle,
-        ownerVisitorId: request.ownerVisitorId,
-        requesterName: request.requesterName,
-        status: request.status,
-        requestDate: request.requestDate,
-      })),
-    requests: ownerCommunityBookRequests,
-  }
-);
-
         } catch (error) {
           console.error(
             'SHELF owner community book requests loading failed:',
@@ -314,6 +294,9 @@ console.log(
           );
 
           ownerCommunityBookRequests = [];
+          ownerCommunityRequestLoadError =
+            error?.message ||
+            'Unable to load community book requests.';
         }
       }
 
@@ -587,6 +570,8 @@ console.log(
 
         ownerCommunityBookRequests:
           ownerCommunityBookRequests,
+
+        ownerCommunityRequestLoadError,
       });
 
       setConnectionError('');
@@ -608,6 +593,8 @@ console.log(
         myCommunityBookRequests,
 
         ownerCommunityBookRequests,
+
+        ownerCommunityRequestLoadError,
       };
     } catch (err) {
       console.error(
@@ -998,6 +985,24 @@ console.log(
     [withRefresh]
   );
 
+  const updatePersonalBook = useMemo(
+    () =>
+      withRefresh(
+        store.updatePersonalBook,
+        'updatePersonalBook'
+      ),
+    [withRefresh]
+  );
+
+  const deletePersonalBook = useMemo(
+    () =>
+      withRefresh(
+        store.deletePersonalBook,
+        'deletePersonalBook'
+      ),
+    [withRefresh]
+  );
+
   // ==========================================================================
   // COMMUNITY BOOK REQUESTS
   // ==========================================================================
@@ -1221,6 +1226,9 @@ console.log(
           ? data.ownerCommunityBookRequests
           : [],
 
+      ownerCommunityRequestLoadError:
+        data.ownerCommunityRequestLoadError || '',
+
       loading,
 
       connectionError,
@@ -1250,6 +1258,10 @@ console.log(
       addPersonalBook,
 
       setPersonalBookVisibility,
+
+      updatePersonalBook,
+
+      deletePersonalBook,
 
       requestCommunityBook,
 
@@ -1330,6 +1342,10 @@ console.log(
       addPersonalBook,
 
       setPersonalBookVisibility,
+
+      updatePersonalBook,
+
+      deletePersonalBook,
 
       requestCommunityBook,
 

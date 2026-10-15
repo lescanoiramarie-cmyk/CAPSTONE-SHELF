@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Draggable from 'react-draggable';
 import { QRCodeSVG } from 'qrcode.react';
 import { ThemeProvider } from '../../context/ThemeContext.jsx';
@@ -146,9 +146,85 @@ function VisitorDashboardContent() {
   const [isNotificationsOpen, setIsNotificationsOpen] =
   useState(false);
   const [focusRequestId, setFocusRequestId] = useState(null);
-
+  const [termsStatus, setTermsStatus] = useState('loading');
+  const [termsError, setTermsError] = useState('');
+  const [isAcceptingTerms, setIsAcceptingTerms] = useState(false);
 
   const { isDarkAppearance, setIsDarkAppearance } = useTheme();
+
+  const loadTermsAcceptance = useCallback(async () => {
+    if (!user?.id) {
+      setTermsStatus('accepted');
+      return;
+    }
+
+    setTermsStatus('loading');
+    setTermsError('');
+
+    try {
+      const { data: sessionData, error: sessionError } =
+        await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+
+      if (!sessionData?.session) {
+        const acceptedAt = globalThis.localStorage.getItem(
+          `shelf_visitor_terms_accepted_${user.id}`
+        );
+        setTermsStatus(acceptedAt ? 'accepted' : 'required');
+        return;
+      }
+
+      const { data, error } = await supabase.rpc(
+        'get_visitor_terms_accepted_at'
+      );
+      if (error) throw error;
+      setTermsStatus(data ? 'accepted' : 'required');
+    } catch (error) {
+      console.error('Unable to load visitor terms acceptance:', error);
+      setTermsError(
+        'We could not verify whether you have accepted the Terms and Conditions. Please try again.'
+      );
+      setTermsStatus('error');
+    }
+  }, [user]);
+
+  useEffect(() => {
+    const termsTimer = setTimeout(() => {
+      void loadTermsAcceptance();
+    }, 0);
+
+    return () => clearTimeout(termsTimer);
+  }, [loadTermsAcceptance]);
+
+  const handleAcceptTerms = async () => {
+    if (isAcceptingTerms) return;
+
+    setIsAcceptingTerms(true);
+    setTermsError('');
+    try {
+      const { data: sessionData, error: sessionError } =
+        await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+
+      if (sessionData?.session) {
+        const { error } = await supabase.rpc('accept_visitor_terms');
+        if (error) throw error;
+      } else {
+        globalThis.localStorage.setItem(
+          `shelf_visitor_terms_accepted_${user.id}`,
+          new Date().toISOString()
+        );
+      }
+      setTermsStatus('accepted');
+    } catch (error) {
+      console.error('Unable to save visitor terms acceptance:', error);
+      setTermsError(
+        'We could not save your acceptance. Please check your connection and try again.'
+      );
+    } finally {
+      setIsAcceptingTerms(false);
+    }
+  };
 
   const ownerPendingRequests = ownerCommunityBookRequests.filter(
     (request) =>
@@ -446,6 +522,83 @@ function VisitorDashboardContent() {
           : 'bg-shelf-bg text-slate-800'
       }`}
     >
+      {termsStatus !== 'accepted' && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/70 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="visitor-terms-title"
+            className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800"
+          >
+            <div className="bg-shelf-primary px-6 py-5 text-white">
+              <h2 id="visitor-terms-title" className="text-lg font-extrabold">
+                Terms and Conditions
+              </h2>
+              <p className="mt-1 text-sm text-slate-200">
+                Please review these terms before using your visitor account.
+              </p>
+            </div>
+
+            <div className="space-y-4 overflow-y-auto px-6 py-5 text-sm leading-6 text-slate-700 dark:text-slate-200">
+              <p>
+                By using SHELF ILMS, you agree to provide accurate account
+                information and keep your password and visitor QR pass secure.
+              </p>
+              <p>
+                Follow each library's borrowing instructions and return library
+                and community books by their due dates. You are responsible for
+                arranging community-book handovers and returns with the owner.
+              </p>
+              <p>
+                When you publish a personal book for lending, its listing is
+                visible to other visitors. If a request is approved, the contact
+                and handover information you provide may be shared with that
+                requester to arrange the exchange.
+              </p>
+              <p>
+                Use the service respectfully and do not submit misleading,
+                unlawful, or harmful content. SHELF may restrict access when
+                necessary to protect users, libraries, or the service.
+              </p>
+
+              {termsStatus === 'loading' && (
+                <p role="status" className="font-semibold text-slate-500">
+                  Checking your acceptance status...
+                </p>
+              )}
+
+              {termsError && (
+                <div role="alert" className="space-y-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  <p>{termsError}</p>
+                  {termsStatus === 'error' && (
+                    <button
+                      type="button"
+                      onClick={loadTermsAcceptance}
+                      className="font-bold text-shelf-primary underline"
+                    >
+                      Try again
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {termsStatus === 'required' && (
+              <div className="border-t border-slate-200 px-6 py-4 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={handleAcceptTerms}
+                  disabled={isAcceptingTerms}
+                  className="w-full rounded-lg bg-shelf-primary px-5 py-3 text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isAcceptingTerms ? 'Saving...' : 'I Agree'}
+                </button>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+
             {/* ANNOUNCEMENT POPUP */}
             {isAnnouncementOpen && announcements[announcementIndex] && (
               <div className="fixed inset-0 z-90 flex items-center justify-center p-4">

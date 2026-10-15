@@ -244,6 +244,7 @@ Deno.serve(async (req: Request) => {
         // Same shape as success so the form cannot be used as a probe.
         return jsonResponse({
           success: true,
+          expiresInSeconds: CODE_TTL_MINUTES * 60,
           message:
             "If that address belongs to a SHELF account, a verification code is on its way.",
         });
@@ -320,6 +321,7 @@ Deno.serve(async (req: Request) => {
 
         return jsonResponse({
           success: true,
+          expiresInSeconds: CODE_TTL_MINUTES * 60,
           message:
             "If that address belongs to a SHELF account, a verification code is on its way.",
         });
@@ -534,12 +536,15 @@ Deno.serve(async (req: Request) => {
           );
         }
 
+        const expired = row?.error === "expired";
+
         return jsonResponse(
           {
             success: false,
             valid: false,
-            error:
-              "That verification code is not valid or has expired. Please request a new one.",
+            error: expired
+              ? "This verification code has expired. Please request a new one."
+              : "That verification code is not valid. Please check it and try again.",
           },
           400,
         );
@@ -657,8 +662,9 @@ Deno.serve(async (req: Request) => {
         return jsonResponse(
           {
             success: false,
-            error:
-              "That verification code is not valid or has expired. Please request a new one.",
+            error: reason === "expired"
+              ? "This verification code has expired. Please request a new one."
+              : "That verification code is not valid. Please check it and try again.",
           },
           400,
         );
