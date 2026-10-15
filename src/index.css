@@ -62,3 +62,33 @@ select:focus-visible {
 .visitor-dashboard.theme-dark .divide-slate-100 > :not(:last-child) {
   border-color: #334155;
 }
+
+.subadmin-dashboard .bg-white.rounded-xl {
+  border-color: #dbe3ed;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 8%);
+}
+
+.subadmin-sidebar nav,
+.subadmin-dashboard main {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(148 163 184 / 55%) transparent;
+}
+
+.subadmin-sidebar nav::-webkit-scrollbar,
+.subadmin-dashboard main::-webkit-scrollbar {
+  width: 8px;
+}
+
+.subadmin-sidebar nav::-webkit-scrollbar-thumb,
+.subadmin-dashboard main::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 9999px;
+  background: rgb(148 163 184 / 55%);
+  background-clip: padding-box;
+}
+
+.subadmin-sidebar nav::-webkit-scrollbar-thumb:hover,
+.subadmin-dashboard main::-webkit-scrollbar-thumb:hover {
+  background: rgb(148 163 184 / 80%);
+  background-clip: padding-box;
+}

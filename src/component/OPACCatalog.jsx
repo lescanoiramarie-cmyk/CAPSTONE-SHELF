@@ -5945,13 +5945,18 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
             <div className="pt-4 border-t border-slate-200 space-y-4">
 
-              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+              <h4 className="flex items-center justify-between text-sm font-bold uppercase tracking-wide text-slate-800">
 
-                <span>
-                  â­ Ratings & Reviews
+                <span className="inline-flex items-center gap-2">
+                  <Star
+                    size={16}
+                    className="shrink-0 fill-amber-400 text-amber-500"
+                    aria-hidden="true"
+                  />
+                  Ratings &amp; Reviews
                 </span>
 
-                <span className="text-slate-400 normal-case font-normal">
+                <span className="text-xs font-normal normal-case tracking-normal text-slate-500">
                   ({reviews.length}{' '}
                   {reviews.length ===
                   1
@@ -5999,31 +6004,11 @@ const handleConfirmCommunityBookReturn = async (request) => {
                       className="text-xs bg-white border border-slate-300 rounded px-2 py-1 font-bold text-amber-600 focus:outline-none"
                     >
 
-                      <option value="5">
-                        â­â­â­â­â­
-                        {' '}
-                        (5/5)
-                      </option>
-
-                      <option value="4">
-                        â­â­â­â­
-                        {' '}
-                        (4/5)
-                      </option>
-
-                      <option value="3">
-                        â­â­â­
-                        {' '}
-                        (3/5)
-                      </option>
-
-                      <option value="2">
-                        â­â­ (2/5)
-                      </option>
-
-                      <option value="1">
-                        â­ (1/5)
-                      </option>
+                      <option value="5">5 stars (5/5)</option>
+                      <option value="4">4 stars (4/5)</option>
+                      <option value="3">3 stars (3/5)</option>
+                      <option value="2">2 stars (2/5)</option>
+                      <option value="1">1 star (1/5)</option>
 
                     </select>
 

@@ -30,7 +30,6 @@ import { exportToExcel, exportToCSV } from '../../lib/excelUtils.js';
 import Papa from 'papaparse';
 import {
   findVisitorByQr,
-  confirmPickup,
 } from '../../data/store.js';
 
 
@@ -257,7 +256,10 @@ function formatDateTime(value) {
 function QRBookBorrowing({
   user,
   onBorrowConfirmed,
+  confirmPickup,
+  confirmReturn,
 }) {
+  const { borrowRequests = [] } = useLibraryData();
   const scannerRef = useRef(null);
 
   const [showScanner, setShowScanner] = useState(false);
@@ -265,6 +267,7 @@ function QRBookBorrowing({
 
   const [visitor, setVisitor] = useState(null);
   const [visitorRequests, setVisitorRequests] = useState([]);
+  const [manualQrValue, setManualQrValue] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -322,8 +325,6 @@ function QRBookBorrowing({
         );
       }
 
-      setVisitor(foundVisitor);
-
       const { data, error: requestError } = await supabase
         .from('borrow_requests')
         .select(
@@ -343,7 +344,7 @@ function QRBookBorrowing({
             fine_amount,
             confirmed_by,
             return_confirmed_by,
-            books!inner(library_id)
+            books!inner(library_id, title, author, isbn, cover_url)
           `
         )
         .eq('visitor_id', foundVisitor.id)
@@ -373,8 +374,13 @@ function QRBookBorrowing({
         fineAmount: r.fine_amount,
         confirmedBy: r.confirmed_by,
         returnConfirmedBy: r.return_confirmed_by,
+        bookAuthor: r.books?.author || '',
+        bookIsbn: r.books?.isbn || '',
+        bookCoverUrl: r.books?.cover_url || '',
       }));
 
+      setVisitor(foundVisitor);
+      setManualQrValue('');
       setVisitorRequests(requests);
 
       const readyRequests = requests.filter(
@@ -522,11 +528,6 @@ function QRBookBorrowing({
             ? {
                 ...item,
                 status: 'borrowed',
-                borrowDate: new Date().toISOString(),
-                dueDate: new Date(
-                  Date.now() +
-                    7 * 24 * 60 * 60 * 1000
-                ).toISOString(),
                 confirmedBy: staffName,
               }
             : item
@@ -555,6 +556,46 @@ function QRBookBorrowing({
     }
   };
 
+  const handleConfirmReturn = async (request) => {
+    if (!request?.id) return;
+
+    setConfirming(true);
+    setError('');
+    setMessage('');
+
+    try {
+      const staffName =
+        user?.name ||
+        user?.fullName ||
+        user?.email ||
+        'Sub-Admin';
+
+      await confirmReturn(request.id, staffName);
+
+      setVisitorRequests((current) =>
+        current.map((item) =>
+          item.id === request.id
+            ? { ...item, status: 'returned', returnConfirmedBy: staffName }
+            : item
+        )
+      );
+      setMessage(
+        `"${request.bookTitle}" has been returned. The copy is available again and the reservation queue has been updated.`
+      );
+    } catch (err) {
+      console.error('Book return confirmation error:', err);
+      setError(err?.message || 'Unable to confirm this book return.');
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const handleManualQrSubmit = async (event) => {
+    event.preventDefault();
+    if (loading) return;
+    await handleQrScan(manualQrValue);
+  };
+
   const clearVisitor = async () => {
     await stopScanner();
 
@@ -564,7 +605,29 @@ function QRBookBorrowing({
     setError('');
   };
 
-  const readyRequests = visitorRequests.filter(
+  const displayedVisitorRequests = visitorRequests.map((request) => {
+    const sharedRequest = borrowRequests.find(
+      (item) => String(item.id) === String(request.id)
+    );
+
+    if (!sharedRequest) return request;
+
+    return {
+      ...request,
+      requestDate: sharedRequest.requestDate || request.requestDate,
+      pickupDeadline: sharedRequest.pickupDeadline || request.pickupDeadline,
+      borrowDate: sharedRequest.borrowDate || request.borrowDate,
+      dueDate: sharedRequest.dueDate || request.dueDate,
+      returnDate: sharedRequest.returnDate || request.returnDate,
+      fineAmount: sharedRequest.fineAmount ?? request.fineAmount,
+    };
+  });
+
+  const activeVisitorRequests = displayedVisitorRequests.filter(
+    (request) => ['ready_for_pickup', 'borrowed'].includes(request.status)
+  );
+
+  const readyRequests = activeVisitorRequests.filter(
     (r) => r.status === 'ready_for_pickup'
   );
 
@@ -577,25 +640,44 @@ function QRBookBorrowing({
         <div className="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h2 className="text-lg font-extrabold text-slate-800">
-              Book Borrowing
+              Book Borrowing &amp; Returning
             </h2>
 
             <p className="text-xs text-slate-500 mt-1">
-              Scan the visitor's QR code to verify the borrower and
-              process the book pickup.
+              Step 1 — scan the visitor's QR code or enter the QR value manually.
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={startScanner}
-            disabled={scanning}
-            className="bg-shelf-primary text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:opacity-90 transition disabled:opacity-50"
-          >
-            {scanning
-              ? 'Scanner Active'
-              : 'Scan Visitor QR'}
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <form onSubmit={handleManualQrSubmit} className="flex gap-2">
+              <label className="sr-only" htmlFor="subadmin-visitor-qr">
+                Visitor QR value
+              </label>
+              <input
+                id="subadmin-visitor-qr"
+                value={manualQrValue}
+                onChange={(event) => setManualQrValue(event.target.value)}
+                placeholder="Enter visitor QR value"
+                autoComplete="off"
+                className="min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
+              />
+              <button
+                type="submit"
+                disabled={loading || !manualQrValue.trim()}
+                className="rounded-lg bg-shelf-primary px-4 py-2 text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading ? 'Checking...' : 'Submit'}
+              </button>
+            </form>
+            <button
+              type="button"
+              onClick={startScanner}
+              disabled={scanning || loading}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+            >
+              {scanning ? 'Scanner Active' : 'Scan with Camera'}
+            </button>
+          </div>
         </div>
 
         {/* CAMERA SCANNER */}
@@ -635,13 +717,13 @@ function QRBookBorrowing({
 
         {/* STATUS MESSAGE */}
         {message && (
-          <div className="mx-5 mt-5 bg-blue-50 border border-blue-200 text-blue-800 rounded-lg px-4 py-3 text-sm">
+          <div role="status" className="mx-5 mt-5 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 font-sans text-sm text-blue-800">
             {message}
           </div>
         )}
 
         {error && (
-          <div className="mx-5 mt-5 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
+          <div role="alert" className="mx-5 mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-700">
             {error}
           </div>
         )}
@@ -662,7 +744,7 @@ function QRBookBorrowing({
 
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Verified Visitor
+                        Step 2 — Review requests for verified visitor
                   </p>
                 </div>
 
@@ -707,16 +789,29 @@ function QRBookBorrowing({
                   return (
                     <div
                       key={request.id}
-                      className="border border-slate-200 rounded-xl p-4 bg-white shadow-sm"
+                      className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
                     >
                       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
 
-                        <div>
+                        <div className="flex min-w-0 items-start gap-3">
+                          {request.bookCoverUrl && (
+                            <img
+                              src={request.bookCoverUrl}
+                              alt={`${request.bookTitle} cover`}
+                              className="h-20 w-14 shrink-0 rounded border border-slate-200 object-cover"
+                            />
+                          )}
+                          <div className="min-w-0">
                           <p className="text-base font-extrabold text-slate-800">
                             {request.bookTitle}
                           </p>
 
                           <div className="mt-2 space-y-1 text-xs text-slate-500">
+                            {request.bookAuthor && <p>Author: {request.bookAuthor}</p>}
+                            {request.bookIsbn && <p>ISBN: {request.bookIsbn}</p>}
+                            <p>
+                              Status: <span className="font-semibold text-amber-700">Ready for pickup</span>
+                            </p>
                             <p>
                               Request Date:{' '}
                               {formatDateTime(
@@ -737,6 +832,7 @@ function QRBookBorrowing({
                               )}
                             </p>
                           </div>
+                          </div>
                         </div>
 
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
@@ -756,9 +852,7 @@ function QRBookBorrowing({
                               disabled={confirming}
                               className="bg-shelf-primary text-white px-5 py-2.5 rounded-lg text-xs font-bold hover:opacity-90 transition disabled:opacity-50"
                             >
-                              {confirming
-                                ? 'Confirming...'
-                                : 'Confirm Borrowing'}
+                              {confirming ? 'Confirming...' : 'Confirm Borrowing'}
                             </button>
                           )}
                         </div>
@@ -770,7 +864,7 @@ function QRBookBorrowing({
             )}
 
             {/* ACTIVE BORROWS */}
-            {visitorRequests.some(
+            {activeVisitorRequests.some(
               (r) => r.status === 'borrowed'
             ) && (
               <div className="space-y-3">
@@ -779,40 +873,68 @@ function QRBookBorrowing({
                   Active Borrowed Books
                 </h3>
 
-                {visitorRequests
+                {activeVisitorRequests
                   .filter(
                     (r) => r.status === 'borrowed'
                   )
                   .map((request) => (
                     <div
                       key={request.id}
-                      className="border border-blue-200 bg-blue-50 rounded-xl p-4"
+                      className="rounded-xl border border-blue-200 bg-blue-50 p-4 shadow-sm"
                     >
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
 
-                        <div>
-                          <p className="font-extrabold text-blue-900">
-                            {request.bookTitle}
-                          </p>
-
-                          <p className="text-xs text-blue-700 mt-1">
-                            Borrowed:{' '}
-                            {formatDateTime(
-                              request.borrowDate
+                        <div className="flex min-w-0 items-start gap-3">
+                          {request.bookCoverUrl && (
+                            <img
+                              src={request.bookCoverUrl}
+                              alt={`${request.bookTitle} cover`}
+                              className="h-20 w-14 shrink-0 rounded border border-blue-200 object-cover"
+                            />
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-extrabold text-blue-900">
+                              {request.bookTitle}
+                            </p>
+                            {request.bookAuthor && (
+                              <p className="mt-1 text-xs text-blue-700">
+                                Author: {request.bookAuthor}
+                              </p>
                             )}
-                          </p>
+                            {request.bookIsbn && (
+                              <p className="text-xs text-blue-700">
+                                ISBN: {request.bookIsbn}
+                              </p>
+                            )}
+                            <p className="mt-1 text-xs font-semibold text-blue-700">
+                              Status: Borrowed
+                            </p>
+
+                            <p className="mt-1 text-xs text-blue-700">
+                              Borrowed:{' '}
+                              {formatDateTime(request.borrowDate)}
+                            </p>
+                          </div>
                         </div>
 
-                        <div className="text-left md:text-right">
-                          <p className="text-[10px] uppercase tracking-wider font-bold text-blue-600">
-                            Due Date
-                          </p>
+                        <div className="flex flex-col items-start gap-2 md:items-end">
+                          <div className="text-left md:text-right">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
+                              Due Date
+                            </p>
 
-                          <p className="text-sm font-extrabold text-blue-900">
-                            {formatDateTime(
-                              request.dueDate
-                            )}
-                          </p>
+                            <p className="text-sm font-extrabold text-blue-900">
+                              {formatDateTime(request.dueDate)}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleConfirmReturn(request)}
+                            disabled={confirming}
+                            className="rounded-lg bg-emerald-700 px-5 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {confirming ? 'Confirming...' : 'Confirm Return'}
+                          </button>
                         </div>
 
                       </div>
@@ -822,7 +944,7 @@ function QRBookBorrowing({
             )}
 
             {/* NO REQUESTS */}
-            {!visitorRequests.length && (
+            {!activeVisitorRequests.length && (
               <div className="border border-dashed border-slate-300 rounded-xl p-8 text-center">
                 <p className="text-sm font-bold text-slate-600">
                   No active book requests found.
@@ -874,7 +996,7 @@ export default function SubAdminDashboard() {
   communication: false,
 });
   const [workspaceTab, setWorkspaceTab] = useState('reports');
-  const { addBooksBulk } = useLibrary();
+  const { addBooksBulk, confirmPickup, confirmReturn } = useLibrary();
 
   useEffect(() => {
     if (!focusRequestId || section === 'overview') return;
@@ -1139,10 +1261,10 @@ const branchNotifications = useMemo(() => {
   };
 
   return (
-    <div className="h-screen overflow-hidden bg-shelf-bg text-slate-800 flex">
+    <div className="subadmin-dashboard flex h-screen overflow-hidden bg-shelf-bg text-slate-800">
 
       {/* SIDEBAR */}
-      <aside className="w-60 h-screen sticky top-0 bg-shelf-primary text-white flex flex-col shrink-0">
+      <aside className="subadmin-sidebar sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-slate-700/50 bg-shelf-primary text-white shadow-lg">
 
         <div className="p-5 border-b border-white/10">
           <p className="font-extrabold tracking-wider">
@@ -1481,6 +1603,8 @@ const branchNotifications = useMemo(() => {
             onBorrowConfirmed={
               handleBorrowConfirmed
             }
+            confirmPickup={confirmPickup}
+            confirmReturn={confirmReturn}
           />
         )}
 
