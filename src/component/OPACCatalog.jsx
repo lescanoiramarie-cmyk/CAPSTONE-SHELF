@@ -5947,12 +5947,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
 
               <h4 className="flex items-center justify-between text-sm font-bold uppercase tracking-wide text-slate-800">
 
-                <span className="inline-flex items-center gap-2">
-                  <Star
-                    size={16}
-                    className="shrink-0 fill-amber-400 text-amber-500"
-                    aria-hidden="true"
-                  />
+                <span>
                   Ratings &amp; Reviews
                 </span>
 
@@ -5980,7 +5975,7 @@ const handleConfirmCommunityBookReturn = async (request) => {
                     Leave a Review:
                   </label>
 
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-2">
 
                     <span className="text-xs text-slate-500 mr-1">
                       Rating:
@@ -6004,13 +5999,32 @@ const handleConfirmCommunityBookReturn = async (request) => {
                       className="text-xs bg-white border border-slate-300 rounded px-2 py-1 font-bold text-amber-600 focus:outline-none"
                     >
 
-                      <option value="5">5 stars (5/5)</option>
-                      <option value="4">4 stars (4/5)</option>
-                      <option value="3">3 stars (3/5)</option>
-                      <option value="2">2 stars (2/5)</option>
-                      <option value="1">1 star (1/5)</option>
+                      <option value="5">5/5</option>
+                      <option value="4">4/5</option>
+                      <option value="3">3/5</option>
+                      <option value="2">2/5</option>
+                      <option value="1">1/5</option>
 
                     </select>
+
+                    <span
+                      role="img"
+                      aria-label={`${userRating} out of 5 stars`}
+                      className="inline-flex items-center gap-0.5"
+                    >
+                      {Array.from({ length: 5 }, (_, index) => (
+                        <Star
+                          key={index}
+                          size={14}
+                          className={
+                            index < userRating
+                              ? 'fill-amber-400 text-amber-500'
+                              : 'text-slate-300'
+                          }
+                          aria-hidden="true"
+                        />
+                      ))}
+                    </span>
 
                   </div>
 
