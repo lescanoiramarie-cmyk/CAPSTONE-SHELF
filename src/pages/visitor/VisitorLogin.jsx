@@ -148,7 +148,9 @@ const LOCATION_OPTIONS = {
   ],
 };
 
-const RESET_CODE_TTL_SECONDS = 15 * 60;
+const OTP_CODE_TTL_SECONDS = 10 * 60;
+const OTP_RESEND_COOLDOWN_SECONDS = 60;
+const RESET_CODE_TTL_SECONDS = 10 * 60;
 const RESET_CODE_RESEND_COOLDOWN_SECONDS = 60;
 
 // =========================================================
@@ -208,6 +210,12 @@ export default function VisitorLogin() {
   const [error, setError] = useState('');
   const [canResendVisitorOtp, setCanResendVisitorOtp] =
     useState(false);
+  const [otpExpiresAt, setOtpExpiresAt] = useState(null);
+  const [otpResendAvailableAt, setOtpResendAvailableAt] =
+    useState(null);
+  const [otpTimeRemaining, setOtpTimeRemaining] = useState(0);
+  const [otpResendRemaining, setOtpResendRemaining] = useState(0);
+  const [isOtpResending, setIsOtpResending] = useState(false);
 
   const [
     isResendingVisitorOtp,
@@ -270,6 +278,8 @@ export default function VisitorLogin() {
     setShowResetPassword,
   ] = useState(false);
 
+  const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false);
+
   useEffect(() => {
     if (view !== 'forgot' || resetStep !== 'verify') {
       return undefined;
@@ -296,6 +306,30 @@ export default function VisitorLogin() {
     resetStep,
     view,
   ]);
+
+  useEffect(() => {
+    if (view !== 'otp') {
+      return undefined;
+    }
+
+    const updateOtpCountdown = () => {
+      const now = Date.now();
+      setOtpTimeRemaining(
+        otpExpiresAt
+          ? Math.max(0, Math.ceil((otpExpiresAt - now) / 1000))
+          : 0
+      );
+      setOtpResendRemaining(
+        otpResendAvailableAt
+          ? Math.max(0, Math.ceil((otpResendAvailableAt - now) / 1000))
+          : 0
+      );
+    };
+
+    updateOtpCountdown();
+    const timer = setInterval(updateOtpCountdown, 1000);
+    return () => clearInterval(timer);
+  }, [otpExpiresAt, otpResendAvailableAt, view]);
 
   const resetPasswordValid =
     resetPassword.length >= 12 &&
@@ -1305,6 +1339,21 @@ export default function VisitorLogin() {
         trimmedEmail
       );
 
+      const now = Date.now();
+      const expiresAt =
+        result?.otpExpiresAt
+          ? Date.parse(result.otpExpiresAt)
+          : now + OTP_CODE_TTL_SECONDS * 1000;
+      setOtpExpiresAt(
+        Number.isFinite(expiresAt)
+          ? expiresAt
+          : now + OTP_CODE_TTL_SECONDS * 1000
+      );
+      setOtpResendAvailableAt(
+        now + OTP_RESEND_COOLDOWN_SECONDS * 1000
+      );
+      setOtpTimeRemaining(OTP_CODE_TTL_SECONDS);
+      setOtpResendRemaining(OTP_RESEND_COOLDOWN_SECONDS);
       setOtpInput('');
       setError('');
       setView('otp');
@@ -1355,6 +1404,14 @@ export default function VisitorLogin() {
 
     const cleanOtp =
       otpInput.trim();
+
+    if (!otpExpiresAt || Date.now() >= otpExpiresAt) {
+      setOtpTimeRemaining(0);
+      setError(
+        'This verification code has expired. Please request a new one.'
+      );
+      return;
+    }
 
     if (!/^\d{6}$/.test(cleanOtp)) {
       setError(
@@ -1451,11 +1508,28 @@ export default function VisitorLogin() {
         return;
       }
 
+      setIsOtpResending(true);
+
       try {
-        await resendVisitorOtp(
+        const result = await resendVisitorOtp(
           pendingVisitorId
         );
 
+        const now = Date.now();
+        const expiresAt =
+          result?.expiresAt
+            ? Date.parse(result.expiresAt)
+            : now + OTP_CODE_TTL_SECONDS * 1000;
+        setOtpExpiresAt(
+          Number.isFinite(expiresAt)
+            ? expiresAt
+            : now + OTP_CODE_TTL_SECONDS * 1000
+        );
+        setOtpResendAvailableAt(
+          now + OTP_RESEND_COOLDOWN_SECONDS * 1000
+        );
+        setOtpTimeRemaining(OTP_CODE_TTL_SECONDS);
+        setOtpResendRemaining(OTP_RESEND_COOLDOWN_SECONDS);
         setOtpInput('');
 
         setError(
@@ -1471,6 +1545,8 @@ export default function VisitorLogin() {
           err?.message ||
             'Unable to resend verification code.'
         );
+      } finally {
+        setIsOtpResending(false);
       }
     };
 
@@ -1536,9 +1612,13 @@ export default function VisitorLogin() {
         );
 
         const now = Date.now();
+        const returnedExpiresInSeconds =
+          Number(result?.expiresInSeconds);
         const expiresInSeconds =
-          Number(result?.expiresInSeconds) ||
-          RESET_CODE_TTL_SECONDS;
+          Number.isFinite(returnedExpiresInSeconds) &&
+          returnedExpiresInSeconds >= 0
+            ? returnedExpiresInSeconds
+            : RESET_CODE_TTL_SECONDS;
         setResetExpiresAt(
           now + expiresInSeconds * 1000
         );
@@ -1586,9 +1666,13 @@ export default function VisitorLogin() {
     try {
       const result = await requestPasswordResetCode(resetEmail);
       const now = Date.now();
+      const returnedExpiresInSeconds =
+        Number(result?.expiresInSeconds);
       const expiresInSeconds =
-        Number(result?.expiresInSeconds) ||
-        RESET_CODE_TTL_SECONDS;
+        Number.isFinite(returnedExpiresInSeconds) &&
+        returnedExpiresInSeconds >= 0
+          ? returnedExpiresInSeconds
+          : RESET_CODE_TTL_SECONDS;
 
       setResetCode('');
       setResetExpiresAt(now + expiresInSeconds * 1000);
@@ -2085,6 +2169,20 @@ export default function VisitorLogin() {
                 </p>
               </div>
 
+              <p
+                className={`text-center text-xs font-semibold ${
+                  otpTimeRemaining > 0
+                    ? 'text-slate-600'
+                    : 'text-red-700'
+                }`}
+                role="status"
+                aria-live="polite"
+              >
+                {otpTimeRemaining > 0
+                  ? `Code expires in ${String(Math.floor(otpTimeRemaining / 60)).padStart(2, '0')}:${String(otpTimeRemaining % 60).padStart(2, '0')}.`
+                  : 'This code has expired. Request a new code to continue.'}
+              </p>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   6-Digit Code
@@ -2115,10 +2213,12 @@ export default function VisitorLogin() {
               <button
                 type="submit"
                 disabled={
-                  otpInput.length !== 6
+                  otpInput.length !== 6 ||
+                  otpTimeRemaining === 0
                 }
                 className={`w-full py-2.5 rounded-lg font-bold text-sm transition shadow-sm ${
-                  otpInput.length === 6
+                  otpInput.length === 6 &&
+                  otpTimeRemaining > 0
                     ? 'bg-shelf-primary text-white hover:opacity-95'
                     : 'bg-slate-300 text-slate-500 cursor-not-allowed'
                 }`}
@@ -2131,9 +2231,17 @@ export default function VisitorLogin() {
                 onClick={
                   handleResendOtp
                 }
-                className="w-full text-xs font-semibold text-shelf-primary hover:underline"
+                disabled={
+                  isOtpResending ||
+                  otpResendRemaining > 0
+                }
+                className="w-full text-xs font-semibold text-shelf-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Resend Verification Code
+                {isOtpResending
+                  ? 'Sending Code...'
+                  : otpResendRemaining > 0
+                    ? `Resend Code in ${otpResendRemaining}s`
+                    : 'Resend Code'}
               </button>
             </form>
           )}
@@ -3118,33 +3226,102 @@ export default function VisitorLogin() {
                         </button>
                       </div>
                     </div>
+                       
+                    {/* PASSWORD REQUIREMENTS CHECKLIST */}
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+                      <p className="text-xs font-bold text-slate-700">
+                        Password requirements
+                      </p>
 
+                      {[
+                        {
+                          label: 'At least 12 characters',
+                          met: resetPassword.length >= 12,
+                        },
+                        {
+                          label: 'At least one uppercase letter (A–Z)',
+                          met: /[A-Z]/.test(resetPassword),
+                        },
+                        {
+                          label: 'At least one lowercase letter (a–z)',
+                          met: /[a-z]/.test(resetPassword),
+                        },
+                        {
+                          label: 'At least one number (0–9)',
+                          met: /[0-9]/.test(resetPassword),
+                        },
+                        {
+                          label: 'At least one special character (!@#$...)',
+                          met: /[^A-Za-z0-9]/.test(resetPassword),
+                        },
+                      ].map((rule) => (
+                        <div
+                          key={rule.label}
+                          className={`flex items-center gap-2 text-xs ${
+                            rule.met
+                              ? 'text-green-700'
+                              : 'text-slate-500'
+                          }`}
+                        >
+                          <span
+                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                              rule.met
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-slate-200 text-slate-500'
+                            }`}
+                            aria-hidden="true"
+                          >
+                            {rule.met ? '✓' : '•'}
+                          </span>
+                          <span>{rule.label}</span>
+                        </div>
+                      ))}
+                    </div>     
+                    
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
                         Confirm new password
                       </label>
 
-                      <input
-                        type={
-                          showResetPassword
-                            ? 'text'
-                            : 'password'
-                        }
-                        name="reset_confirm_password"
-                        required
-                        autoComplete="new-password"
-                        placeholder="••••••••"
-                        value={
-                          resetConfirmPassword
-                        }
-                        onChange={(event) =>
-                          setResetConfirmPassword(
-                            event.target
-                              .value
-                          )
-                        }
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
-                      />
+                      <div className="relative">
+                        <input
+                          type={
+                            showResetConfirmPassword
+                              ? 'text'
+                              : 'password'
+                          }
+                          name="reset_confirm_password"
+                          required
+                          autoComplete="new-password"
+                          placeholder="••••••••"
+                          value={resetConfirmPassword}
+                          onChange={(event) =>
+                            setResetConfirmPassword(event.target.value)
+                          }
+                          className="w-full px-4 py-2.5 pr-12 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setShowResetConfirmPassword(
+                              !showResetConfirmPassword
+                            )
+                          }
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                          aria-label={
+                            showResetConfirmPassword
+                              ? 'Hide confirm password'
+                              : 'Show confirm password'
+                          }
+                        >
+                          {showResetConfirmPassword ? (
+                            <EyeOff size={18} />
+                          ) : (
+                            <Eye size={18} />
+                          )}
+                        </button>
+                      </div>
                     </div>
 
                     {resetPassword.length >

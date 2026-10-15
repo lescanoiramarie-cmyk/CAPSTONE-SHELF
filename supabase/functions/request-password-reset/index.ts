@@ -3,36 +3,35 @@ import { createClient } from "@supabase/supabase-js";
 // ============================================================================
 // REQUEST PASSWORD RESET
 //
-// One function, two operations, so the whole reset lifecycle stays server-side:
+// One function, three operations:
 //
-//   request  email a 6-digit code to the account address
-//   apply    exchange a verified code for a new password
+//   request  -> email a 6-digit verification code
+//   verify   -> verify a code without consuming it
+//   apply    -> exchange a verified code for a new password
 //
-// The service role key never reaches the browser. Applying a new password
-// requires writing to auth.users, which the anon key cannot do, so the exchange
-// has to happen here.
+// The service role key never reaches the browser.
+// Password changes are performed server-side through the Supabase Admin API.
 //
-// Response shape is { success, error } to match send-visitor-otp.
-//
-// Both operations answer identically whether or not the account exists. A
-// different response for an unknown address would let anyone enumerate which
-// emails hold a SHELF account.
+// Both request and unknown-account cases use an indistinguishable success
+// response where appropriate to reduce account/email enumeration.
 // ============================================================================
 
 const supabaseUrl =
   Deno.env.get("SUPABASE_URL") || "";
+
 const serviceRoleKey =
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ||
-    "";
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+
 const resendApiKey =
   Deno.env.get("RESEND_API_KEY") || "";
 
-const CODE_TTL_MINUTES = 15;
+const CODE_TTL_MINUTES = 10;
 const MAX_CODE_ATTEMPTS = 5;
-const SENDER = "SHELF ILMS <support@shelf-ilms.me>";
 
-// Must match the policy the client enforces at registration, so a password set
-// here cannot be weaker than one set at registration.
+const SENDER =
+  "SHELF ILMS <support@shelf-ilms.me>";
+
+// Must match the password policy used during visitor registration.
 const PASSWORD_MIN_LENGTH = 12;
 
 const corsHeaders = {
@@ -43,10 +42,14 @@ const corsHeaders = {
     "POST, OPTIONS",
 };
 
+// ============================================================================
+// RESPONSE HELPER
+// ============================================================================
+
 function jsonResponse(
   body: Record<string, unknown>,
   status = 200,
-) {
+): Response {
   return new Response(
     JSON.stringify(body),
     {
@@ -60,29 +63,28 @@ function jsonResponse(
   );
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
 // ============================================================================
-// 6 DIGIT CODE
+// 6-DIGIT CODE
 //
-// crypto.getRandomValues rather than Math.random. Math.random is not a CSPRNG
-// and its output is predictable from previously observed values.
+// crypto.getRandomValues() is used instead of Math.random() because it is
+// suitable for security-sensitive random values.
 // ============================================================================
 
 function generateCode(): string {
-  const values = new Uint32Array(1);
+  const values =
+    new Uint32Array(1);
+
   crypto.getRandomValues(values);
 
-  return (100000 +
-    (values[0] % 900000)).toString();
+  return (
+    100000 +
+    (values[0] % 900000)
+  ).toString();
 }
+
+// ============================================================================
+// SHA-256
+// ============================================================================
 
 async function sha256Hex(
   value: string,
@@ -97,15 +99,23 @@ async function sha256Hex(
     new Uint8Array(digest),
   )
     .map((byte) =>
-      byte.toString(16).padStart(2, "0"))
+      byte
+        .toString(16)
+        .padStart(2, "0"),
+    )
     .join("");
 }
+
+// ============================================================================
+// PASSWORD POLICY
+// ============================================================================
 
 function isAcceptablePassword(
   value: string,
 ): boolean {
   return (
-    value.length >= PASSWORD_MIN_LENGTH &&
+    value.length >=
+      PASSWORD_MIN_LENGTH &&
     /[A-Z]/.test(value) &&
     /[a-z]/.test(value) &&
     /[0-9]/.test(value) &&
@@ -113,13 +123,45 @@ function isAcceptablePassword(
   );
 }
 
+// ============================================================================
+// AUDIT LOG CLIENT TYPE
+//
+// Do not use ReturnType<typeof createClient> here.
+//
+// Supabase's generated generic types can become incompatible with the generic
+// SupabaseClient expected by helper functions under Deno TypeScript.
+//
+// The audit helper only needs the small portion of the client used below.
+// ============================================================================
+
+// ============================================================================
+// AUDIT EVENT
+//
+// The Supabase PostgREST query builder is thenable rather than typed as a
+// native Promise. Using PromiseLike here matches the actual return type of
+// .insert() while keeping the helper independent from Supabase's generated
+// generic client type.
+// ============================================================================
+
+type AuditClient = {
+  from: (
+    table: string,
+  ) => {
+    insert: (
+      values: Record<string, unknown>,
+    ) => PromiseLike<{
+      error: unknown;
+    }>;
+  };
+};
+
 async function writeAuditEvent(
-  admin: ReturnType<typeof createClient>,
+  admin: AuditClient,
   action: string,
   details: Record<string, unknown>,
-) {
+): Promise<void> {
   try {
-    const { error } =
+    const result =
       await admin
         .from("audit_logs")
         .insert({
@@ -129,10 +171,10 @@ async function writeAuditEvent(
           details,
         });
 
-    if (error) {
+    if (result.error) {
       console.error(
         `Audit write failed for ${action}:`,
-        error,
+        result.error,
       );
     }
   } catch (auditError) {
@@ -143,7 +185,15 @@ async function writeAuditEvent(
   }
 }
 
+// ============================================================================
+// MAIN EDGE FUNCTION
+// ============================================================================
+
 Deno.serve(async (req: Request) => {
+  // --------------------------------------------------------------------------
+  // CORS PREFLIGHT
+  // --------------------------------------------------------------------------
+
   if (req.method === "OPTIONS") {
     return new Response("ok", {
       headers: corsHeaders,
@@ -151,15 +201,24 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    // ------------------------------------------------------------------------
+    // METHOD
+    // ------------------------------------------------------------------------
+
     if (req.method !== "POST") {
       return jsonResponse(
         {
           success: false,
-          error: "Method not allowed.",
+          error:
+            "Method not allowed.",
         },
         405,
       );
     }
+
+    // ------------------------------------------------------------------------
+    // ENVIRONMENT
+    // ------------------------------------------------------------------------
 
     if (
       !supabaseUrl ||
@@ -179,7 +238,14 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    let body: Record<string, unknown>;
+    // ------------------------------------------------------------------------
+    // REQUEST BODY
+    // ------------------------------------------------------------------------
+
+    let body: Record<
+      string,
+      unknown
+    >;
 
     try {
       body = await req.json();
@@ -194,13 +260,28 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const operation = String(
-      body?.operation || "request",
-    ).trim().toLowerCase();
+    // ------------------------------------------------------------------------
+    // COMMON VALUES
+    // ------------------------------------------------------------------------
 
-    const email = String(
-      body?.email || "",
-    ).trim().toLowerCase();
+    const operation =
+      String(
+        body?.operation ||
+          "request",
+      )
+        .trim()
+        .toLowerCase();
+
+    const email =
+      String(
+        body?.email || "",
+      )
+        .trim()
+        .toLowerCase();
+
+    // ------------------------------------------------------------------------
+    // SERVICE-ROLE CLIENT
+    // ------------------------------------------------------------------------
 
     const admin = createClient(
       supabaseUrl,
@@ -213,14 +294,24 @@ Deno.serve(async (req: Request) => {
       },
     );
 
-    // ==========================================================================
-    // OPERATION: REQUEST — EMAIL A CODE
-    // ==========================================================================
+    // =========================================================================
+    // OPERATION: REQUEST
+    //
+    // Create a reset code and email it to the account address.
+    // =========================================================================
 
     if (operation === "request") {
-      const accountKind = String(
-        body?.accountKind || "visitor",
-      ).trim().toLowerCase();
+      const accountKind =
+        String(
+          body?.accountKind ||
+            "visitor",
+        )
+          .trim()
+          .toLowerCase();
+
+      // ----------------------------------------------------------------------
+      // RESEND CONFIGURATION
+      // ----------------------------------------------------------------------
 
       if (!resendApiKey) {
         console.error(
@@ -237,39 +328,65 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      // ----------------------------------------------------------------------
+      // EMAIL VALIDATION
+      //
+      // Do not reveal whether an address exists.
+      // ----------------------------------------------------------------------
+
       if (
         !email.includes("@") ||
         email.length > 254
       ) {
-        // Same shape as success so the form cannot be used as a probe.
         return jsonResponse({
           success: true,
-          expiresInSeconds: CODE_TTL_MINUTES * 60,
+          expiresInSeconds:
+            CODE_TTL_MINUTES * 60,
           message:
             "If that address belongs to a SHELF account, a verification code is on its way.",
         });
       }
 
-      const code = generateCode();
-      const codeHash =
-        await sha256Hex(`${email}:${code}`);
+      // ----------------------------------------------------------------------
+      // GENERATE CODE
+      // ----------------------------------------------------------------------
 
+      const code =
+        generateCode();
+
+      const codeHash =
+        await sha256Hex(
+          `${email}:${code}`,
+        );
+
+      // IMPORTANT:
+      // expiresAt must be declared BEFORE it is used.
       const expiresAt =
         new Date(
           Date.now() +
-            CODE_TTL_MINUTES * 60 * 1000,
+            CODE_TTL_MINUTES *
+              60 *
+              1000,
         ).toISOString();
 
-      const { data: issued, error: issueError } =
-        await admin.rpc(
-          "issue_password_reset_code",
-          {
-            p_email: email,
-            p_code_hash: codeHash,
-            p_account_kind: accountKind,
-            p_expires_at: expiresAt,
-          },
-        );
+      // ----------------------------------------------------------------------
+      // ISSUE RESET CODE THROUGH RPC
+      // ----------------------------------------------------------------------
+
+      const {
+        data: issued,
+        error: issueError,
+      } = await admin.rpc(
+        "issue_password_reset_code",
+        {
+          p_email: email,
+          p_code_hash: codeHash,
+          p_account_kind:
+            accountKind,
+          p_expires_at:
+            expiresAt,
+        },
+      );
 
       if (issueError) {
         console.error(
@@ -287,12 +404,22 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const result = Array.isArray(issued)
-        ? issued[0]
-        : issued;
+      // RPC may return either a row or an array containing one row.
+      const result =
+        Array.isArray(issued)
+          ? issued[0]
+          : issued;
+
+      // ----------------------------------------------------------------------
+      // HANDLE RPC RESULT
+      // ----------------------------------------------------------------------
 
       if (!result?.issued) {
-        if (result?.reason === "cooldown") {
+        // Cooldown
+        if (
+          result?.reason ===
+          "cooldown"
+        ) {
           return jsonResponse(
             {
               success: false,
@@ -303,7 +430,11 @@ Deno.serve(async (req: Request) => {
           );
         }
 
-        if (result?.reason === "rate_limited") {
+        // Rate limit
+        if (
+          result?.reason ===
+          "rate_limited"
+        ) {
           return jsonResponse(
             {
               success: false,
@@ -314,18 +445,24 @@ Deno.serve(async (req: Request) => {
           );
         }
 
-        // not_found or anything unexpected: respond identically to success.
+        // Unknown account / unavailable account.
+        // Keep the response indistinguishable from a successful request.
         console.warn(
           "Password reset requested for an address without a usable account.",
         );
 
         return jsonResponse({
           success: true,
-          expiresInSeconds: CODE_TTL_MINUTES * 60,
+          expiresInSeconds:
+            CODE_TTL_MINUTES * 60,
           message:
             "If that address belongs to a SHELF account, a verification code is on its way.",
         });
       }
+
+      // ----------------------------------------------------------------------
+      // SEND EMAIL THROUGH RESEND
+      // ----------------------------------------------------------------------
 
       const resendResponse =
         await fetch(
@@ -351,15 +488,20 @@ Deno.serve(async (req: Request) => {
                   padding: 20px;
                   color: #111827;
                 ">
-                  <h2>SHELF ILMS Password Reset</h2>
+                  <h2>
+                    SHELF ILMS Password Reset
+                  </h2>
+
                   <p style="text-align: left;">
                     Hello,
                   </p>
+
                   <p style="text-align: left;">
                     Use the verification code below to
                     choose a new password for your SHELF
                     ILMS account.
                   </p>
+
                   <div style="
                     font-size: 32px;
                     font-weight: bold;
@@ -369,19 +511,28 @@ Deno.serve(async (req: Request) => {
                     text-align: center;
                     border-radius: 8px;
                     margin: 20px 0;
-                  ">${code}</div>
+                  ">
+                    ${code}
+                  </div>
+
                   <p style="text-align: left;">
                     This code expires in
-                    <strong>${CODE_TTL_MINUTES} minutes</strong>
+                    <strong>
+                      ${CODE_TTL_MINUTES} minutes
+                    </strong>
                     and can be used
-                    <strong>${MAX_CODE_ATTEMPTS} times</strong>
+                    <strong>
+                      ${MAX_CODE_ATTEMPTS} times
+                    </strong>
                     at most.
                   </p>
+
                   <p style="text-align: left;">
                     If you did not request a password
-                    reset, you can ignore this email. Your
-                    current password will keep working.
+                    reset, you can ignore this email.
+                    Your current password will keep working.
                   </p>
+
                   <p style="text-align: left;">
                     Regards,<br />
                     <strong>SHELF ILMS</strong>
@@ -391,6 +542,10 @@ Deno.serve(async (req: Request) => {
             }),
           },
         );
+
+      // ----------------------------------------------------------------------
+      // READ RESEND RESPONSE
+      // ----------------------------------------------------------------------
 
       let resendData:
         | Record<string, unknown>
@@ -403,11 +558,16 @@ Deno.serve(async (req: Request) => {
         resendData = null;
       }
 
+      // ----------------------------------------------------------------------
+      // HANDLE EMAIL FAILURE
+      // ----------------------------------------------------------------------
+
       if (!resendResponse.ok) {
         console.error(
           "Resend password reset error:",
           {
-            status: resendResponse.status,
+            status:
+              resendResponse.status,
             data: resendData,
           },
         );
@@ -415,7 +575,11 @@ Deno.serve(async (req: Request) => {
         await writeAuditEvent(
           admin,
           "security.password_reset.email_failed",
-          { email, status: resendResponse.status },
+          {
+            email,
+            status:
+              resendResponse.status,
+          },
         );
 
         return jsonResponse(
@@ -428,13 +592,18 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      // ----------------------------------------------------------------------
+      // AUDIT CODE SENT
+      // ----------------------------------------------------------------------
+
       await writeAuditEvent(
         admin,
         "security.password_reset.code_sent",
         {
           email,
           accountKind:
-            result.account_kind ?? accountKind,
+            result.account_kind ??
+            accountKind,
           expiresAt,
         },
       );
@@ -449,23 +618,30 @@ Deno.serve(async (req: Request) => {
 
       return jsonResponse({
         success: true,
+        expiresInSeconds:
+          CODE_TTL_MINUTES * 60,
         message:
           "If that address belongs to a SHELF account, a verification code is on its way.",
       });
     }
 
-    // ==========================================================================
-    // OPERATION: VERIFY — CHECK A CODE WITHOUT SPENDING IT
+    // =========================================================================
+    // OPERATION: VERIFY
     //
-    // Lets the UI reject a bad code before the visitor types a new password.
-    // The apply operation re-verifies, because a client-side pass proves
-    // nothing on its own.
-    // ==========================================================================
+    // Check the code without consuming it.
+    //
+    // The APPLY operation verifies the code again server-side.
+    // =========================================================================
 
     if (operation === "verify") {
-      const code = String(
-        body?.code || "",
-      ).trim();
+      const code =
+        String(
+          body?.code || "",
+        ).trim();
+
+      // ----------------------------------------------------------------------
+      // CODE FORMAT
+      // ----------------------------------------------------------------------
 
       if (!/^\d{6}$/.test(code)) {
         return jsonResponse(
@@ -479,20 +655,29 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      // ----------------------------------------------------------------------
+      // HASH CODE
+      // ----------------------------------------------------------------------
+
       const codeHash =
-        await sha256Hex(`${email}:${code}`);
+        await sha256Hex(
+          `${email}:${code}`,
+        );
+
+      // ----------------------------------------------------------------------
+      // VERIFY RPC
+      // ----------------------------------------------------------------------
 
       const {
         data: verified,
         error: verifyError,
-      } =
-        await admin.rpc(
-          "verify_password_reset_code",
-          {
-            p_email: email,
-            p_code_hash: codeHash,
-          },
-        );
+      } = await admin.rpc(
+        "verify_password_reset_code",
+        {
+          p_email: email,
+          p_code_hash: codeHash,
+        },
+      );
 
       if (verifyError) {
         console.error(
@@ -511,18 +696,27 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const row = Array.isArray(verified)
-        ? verified[0]
-        : verified;
+      const row =
+        Array.isArray(verified)
+          ? verified[0]
+          : verified;
+
+      // ----------------------------------------------------------------------
+      // INVALID CODE
+      // ----------------------------------------------------------------------
 
       if (!row?.valid) {
-        const locked = row?.error === "locked";
+        const locked =
+          row?.error === "locked";
 
         if (locked) {
           await writeAuditEvent(
             admin,
             "security.password_reset.code_rejected",
-            { email, reason: "locked" },
+            {
+              email,
+              reason: "locked",
+            },
           );
 
           return jsonResponse(
@@ -536,7 +730,8 @@ Deno.serve(async (req: Request) => {
           );
         }
 
-        const expired = row?.error === "expired";
+        const expired =
+          row?.error === "expired";
 
         return jsonResponse(
           {
@@ -550,24 +745,36 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      // ----------------------------------------------------------------------
+      // VALID CODE
+      // ----------------------------------------------------------------------
+
       return jsonResponse({
         success: true,
         valid: true,
       });
     }
 
-    // ==========================================================================
-    // OPERATION: APPLY — EXCHANGE THE CODE FOR A NEW PASSWORD
-    // ==========================================================================
+    // =========================================================================
+    // OPERATION: APPLY
+    //
+    // Verify the code again and update the Supabase Auth password.
+    // =========================================================================
 
     if (operation === "apply") {
-      const code = String(
-        body?.code || "",
-      ).trim();
+      const code =
+        String(
+          body?.code || "",
+        ).trim();
 
-      const newPassword = String(
-        body?.newPassword || "",
-      );
+      const newPassword =
+        String(
+          body?.newPassword || "",
+        );
+
+      // ----------------------------------------------------------------------
+      // CODE FORMAT
+      // ----------------------------------------------------------------------
 
       if (!/^\d{6}$/.test(code)) {
         return jsonResponse(
@@ -580,8 +787,14 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      // ----------------------------------------------------------------------
+      // PASSWORD POLICY
+      // ----------------------------------------------------------------------
+
       if (
-        !isAcceptablePassword(newPassword)
+        !isAcceptablePassword(
+          newPassword,
+        )
       ) {
         return jsonResponse(
           {
@@ -593,7 +806,10 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      if (newPassword.length > 200) {
+      // Prevent excessively large password payloads.
+      if (
+        newPassword.length > 200
+      ) {
         return jsonResponse(
           {
             success: false,
@@ -604,20 +820,29 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      // ----------------------------------------------------------------------
+      // HASH CODE
+      // ----------------------------------------------------------------------
+
       const codeHash =
-        await sha256Hex(`${email}:${code}`);
+        await sha256Hex(
+          `${email}:${code}`,
+        );
+
+      // ----------------------------------------------------------------------
+      // VERIFY CODE AGAIN
+      // ----------------------------------------------------------------------
 
       const {
         data: verified,
         error: verifyError,
-      } =
-        await admin.rpc(
-          "verify_password_reset_code",
-          {
-            p_email: email,
-            p_code_hash: codeHash,
-          },
-        );
+      } = await admin.rpc(
+        "verify_password_reset_code",
+        {
+          p_email: email,
+          p_code_hash: codeHash,
+        },
+      );
 
       if (verifyError) {
         console.error(
@@ -635,14 +860,25 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const row = Array.isArray(verified)
-        ? verified[0]
-        : verified;
+      const row =
+        Array.isArray(verified)
+          ? verified[0]
+          : verified;
 
-      if (!row?.valid || !row?.user_id) {
-        const reason = row?.error;
+      // ----------------------------------------------------------------------
+      // INVALID / EXPIRED / LOCKED
+      // ----------------------------------------------------------------------
 
-        if (reason === "locked") {
+      if (
+        !row?.valid ||
+        !row?.user_id
+      ) {
+        const reason =
+          row?.error;
+
+        if (
+          reason === "locked"
+        ) {
           return jsonResponse(
             {
               success: false,
@@ -656,26 +892,38 @@ Deno.serve(async (req: Request) => {
         await writeAuditEvent(
           admin,
           "security.password_reset.code_rejected",
-          { email, reason: reason ?? "unknown" },
+          {
+            email,
+            reason:
+              reason ?? "unknown",
+          },
         );
 
         return jsonResponse(
           {
             success: false,
-            error: reason === "expired"
-              ? "This verification code has expired. Please request a new one."
-              : "That verification code is not valid. Please check it and try again.",
+            error:
+              reason === "expired"
+                ? "This verification code has expired. Please request a new one."
+                : "That verification code is not valid. Please check it and try again.",
           },
           400,
         );
       }
 
+      // ----------------------------------------------------------------------
+      // UPDATE SUPABASE AUTH PASSWORD
+      // ----------------------------------------------------------------------
+
       const {
         error: updateError,
       } =
         await admin.auth.admin.updateUserById(
-          row.user_id as string,
-          { password: newPassword },
+          String(row.user_id),
+          {
+            password:
+              newPassword,
+          },
         );
 
       if (updateError) {
@@ -694,25 +942,49 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      // Spend the code only after the password actually changed, so a failed
-      // write does not consume a valid code.
-      await admin.rpc(
+      // ----------------------------------------------------------------------
+      // CONSUME CODE
+      //
+      // The code is consumed only after the password update succeeds.
+      // ----------------------------------------------------------------------
+
+      const {
+        error: consumeError,
+      } = await admin.rpc(
         "consume_password_reset_code",
-        { p_email: email },
+        {
+          p_email: email,
+        },
       );
+
+      if (consumeError) {
+        // Password has already changed successfully.
+        // Log the issue instead of reporting a false password-update failure.
+        console.error(
+          "consume_password_reset_code failed after successful password update:",
+          consumeError,
+        );
+      }
+
+      // ----------------------------------------------------------------------
+      // AUDIT COMPLETION
+      // ----------------------------------------------------------------------
 
       await writeAuditEvent(
         admin,
         "security.password_reset.completed",
         {
           email,
-          accountKind: row.account_kind,
+          accountKind:
+            row.account_kind,
         },
       );
 
       console.log(
         "Password reset completed.",
-        { email },
+        {
+          email,
+        },
       );
 
       return jsonResponse({
@@ -722,14 +994,23 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // =========================================================================
+    // INVALID OPERATION
+    // =========================================================================
+
     return jsonResponse(
       {
         success: false,
-        error: "Invalid operation.",
+        error:
+          "Invalid operation.",
       },
       400,
     );
   } catch (error) {
+    // =========================================================================
+    // UNEXPECTED ERROR
+    // =========================================================================
+
     console.error(
       "request-password-reset error:",
       error,

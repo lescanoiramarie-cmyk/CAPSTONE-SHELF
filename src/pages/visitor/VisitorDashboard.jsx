@@ -523,7 +523,7 @@ function VisitorDashboardContent() {
       }`}
     >
       {termsStatus !== 'accepted' && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/70 p-4">
+        <div className="fixed inset-0 z-110 flex items-center justify-center bg-slate-950/70 p-4">
           <section
             role="dialog"
             aria-modal="true"

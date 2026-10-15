@@ -1583,6 +1583,9 @@ export async function registerVisitor({
 
   return {
     visitorId,
+    otpExpiresAt:
+      normalizeText(emailData?.expiresAt) ||
+      new Date(Date.now() + 10 * 60 * 1000).toISOString(),
   };
 }
 
@@ -1745,6 +1748,9 @@ export async function resendOtp(
 
   return {
     success: true,
+    expiresAt:
+      normalizeText(emailData?.expiresAt) ||
+      new Date(Date.now() + 10 * 60 * 1000).toISOString(),
   };
 }
 
@@ -2088,10 +2094,15 @@ export async function requestPasswordResetCode(
     );
   }
 
+  const expiresInSeconds =
+    Number(data?.expiresInSeconds);
+
   return {
     success: true,
     expiresInSeconds:
-      Number(data?.expiresInSeconds) || 15 * 60,
+      Number.isFinite(expiresInSeconds) && expiresInSeconds >= 0
+        ? expiresInSeconds
+        : 10 * 60,
     message:
       normalizeText(
         data?.message

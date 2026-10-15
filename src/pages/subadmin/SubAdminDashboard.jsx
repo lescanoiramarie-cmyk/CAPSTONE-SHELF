@@ -9,6 +9,7 @@ import {
   Clock3,
   MapPinned,
   QrCode,
+  Building2,
   Upload,
   UsersRound,
 } from 'lucide-react';
@@ -59,7 +60,17 @@ function StatCard({ label, value, tone = 'default' }) {
           <p className="mt-1 text-3xl font-extrabold">{value}</p>
         </div>
         <span className="rounded-lg bg-white/70 p-2 text-current shadow-sm" aria-hidden="true">
-          {tone === 'amber' ? <Clock3 size={18} /> : tone === 'red' ? <AlertTriangle size={18} /> : tone === 'blue' ? <UsersRound size={18} /> : <Activity size={18} />}
+          {tone === 'amber' ? (
+  <Clock3 size={18} />
+) : tone === 'red' ? (
+  <AlertTriangle size={18} />
+) : tone === 'blue' ? (
+  <UsersRound size={18} />
+) : tone === 'book' ? (
+  <BookOpen size={18} />
+) : (
+  <Activity size={18} />
+)}
         </span>
       </div>
     </div>
@@ -1013,6 +1024,28 @@ export default function SubAdminDashboard() {
   // ============================================================
   const currentLibraryId = user?.libraryId || user?.assignedBranch || '';
 
+  
+const currentBranchName = useMemo(() => {
+  const assignedId = String(currentLibraryId || '');
+
+  if (!assignedId) return '';
+
+  const assignedLibrary = libraries.find(
+    (library) =>
+      String(library.id) === assignedId ||
+      String(library.libraryId) === assignedId ||
+      String(library.library_id) === assignedId
+  );
+
+  return (
+    assignedLibrary?.name ||
+    assignedLibrary?.libraryName ||
+    assignedLibrary?.library_name ||
+    ''
+  );
+}, [libraries, currentLibraryId]);
+
+
   // 1. Filter Books para sa branch ng Sub-Admin lang
   const branchBooks = useMemo(() => {
     if (!currentLibraryId) return [];
@@ -1391,32 +1424,51 @@ const branchNotifications = useMemo(() => {
       )}
         </nav>
 
-        <div className="p-4 border-t border-white/10 space-y-2">
+        
+<div className="p-4 border-t border-white/10 space-y-3">
+  <p className="text-xs text-slate-400">
+    Signed in as
+  </p>
 
-          <p className="text-xs text-slate-300">
-            Signed in as
-          </p>
+  <div className="min-w-0">
+    <p className="text-sm font-bold text-white wrap-break-words">
+      {user?.name || 'Sub-Admin'}
+    </p>
 
-          <p className="text-sm font-bold">
-            {user?.name}
-          </p>
+    <div className="mt-1 flex items-start gap-2">
+      <Building2
+        size={14}
+        className="mt-0.5 shrink-0 text-amber-300"
+      />
 
-          <button
-            type="button"
-            onClick={logout}
-            className="w-full bg-white/10 hover:bg-white/20 text-xs px-3 py-2 rounded-lg border border-white/20 transition"
-          >
-            Sign Out
-          </button>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-amber-300">
+                Sub-Admin
+              </p>
 
+              <p className="text-xs text-slate-300 wrap-break-words">
+                {currentBranchName || 'Branch not found'}
+              </p>
+            </div>
+          </div>
         </div>
+
+        <button
+          type="button"
+          onClick={logout}
+          className="w-full bg-white/10 hover:bg-white/20 text-xs px-3 py-2 rounded-lg border border-white/20 transition"
+        >
+          Sign Out
+        </button>
+      </div>
+
       </aside>
 
       {/* MAIN CONTENT */}
       <main className="h-screen min-w-0 flex-1 space-y-6 overflow-y-auto p-4 sm:p-6 lg:p-8">
         <DashboardWelcome
           name={user?.name?.split(' ')[0]}
-          description={`Manage circulation, reservations, and inventory${user?.assignedBranchName ? ` for ${user.assignedBranchName}` : ' for your branch'}.`}
+          description={`Manage circulation, reservations, and inventory${currentBranchName ? ` for ${currentBranchName}` : ' for your assigned branch'}.`}
           showNotifications={true}
         // NEW: In-app notifications
           notifications={branchNotifications}
@@ -1463,6 +1515,7 @@ const branchNotifications = useMemo(() => {
               <StatCard
                 label="Branch Books"
                 value={branchBooks.length}
+                tone="book"
               />
 
             </div>

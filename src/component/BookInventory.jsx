@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLibrary } from '../context/useLibrary';
+import { supabase } from '../lib/supabaseClient';
 
 export default function BookInventory() {
   const { 
@@ -18,8 +19,79 @@ export default function BookInventory() {
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [mutationError, setMutationError] = useState('');
+  const [selectedCoverFile, setSelectedCoverFile] = useState(null);
+  const [coverPreview, setCoverPreview] = useState('');
+  const [isDraggingCover, setIsDraggingCover] = useState(false);
   const getBookCopies = (book) =>
     Number(book?.totalCopies ?? book?.total_copies ?? book?.copies ?? 0);
+
+  
+const MAX_COVER_SIZE = 5 * 1024 * 1024;
+
+const handleCoverSelect = (file) => {
+  if (!file) return;
+
+  if (!['image/jpeg', 'image/png'].includes(file.type)) {
+    setMutationError('Pumili lamang ng JPG o PNG image.');
+    return;
+  }
+
+  if (file.size > MAX_COVER_SIZE) {
+    setMutationError('Maximum file size ay 5 MB.');
+    return;
+  }
+
+  setMutationError('');
+  setSelectedCoverFile(file);
+  setCoverPreview(URL.createObjectURL(file));
+};
+
+useEffect(() => {
+  if (!selectedCoverFile || !coverPreview) return;
+
+  return () => URL.revokeObjectURL(coverPreview);
+}, [selectedCoverFile, coverPreview]);
+
+const handleRemoveCover = () => {
+  setSelectedCoverFile(null);
+  setCoverPreview('');
+  setForm((previous) => ({
+    ...previous,
+    coverUrl: ''
+  }));
+};
+
+const uploadBookCover = async (file) => {
+  if (!supabase) {
+    throw new Error('Hindi available ang Supabase connection.');
+  }
+
+  const extension = file.type === 'image/png' ? 'png' : 'jpg';
+  const filePath = `books/${crypto.randomUUID()}.${extension}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('book-covers')
+    .upload(filePath, file, {
+      contentType: file.type,
+      cacheControl: '3600',
+      upsert: false
+    });
+
+  if (uploadError) {
+    throw new Error(`Cover upload failed: ${uploadError.message}`);
+  }
+
+  const { data } = supabase.storage
+    .from('book-covers')
+    .getPublicUrl(filePath);
+
+  if (!data?.publicUrl) {
+    throw new Error('Hindi makuha ang public URL ng cover image.');
+  }
+
+  return data.publicUrl;
+};
+
 
   const [form, setForm] = useState({
     title: '',
@@ -41,6 +113,8 @@ export default function BookInventory() {
 
   const handleOpenAdd = () => {
     setEditingId(null);
+    setSelectedCoverFile(null);
+    setCoverPreview('');
     setForm({
       title: '',
       author: '',
@@ -57,6 +131,8 @@ export default function BookInventory() {
 
   const handleOpenEdit = (book) => {
     setEditingId(book.id);
+    setSelectedCoverFile(null);
+    setCoverPreview('');
     setForm({
       title: book.title || '',
       author: book.author || '',
@@ -71,30 +147,45 @@ export default function BookInventory() {
     setShowForm(true);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    setMutationError('');
+  
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setSaving(true);
+  setMutationError('');
 
-    try {
-      if (editingId) {
-        await updateBook(editingId, {
-          ...form,
-          totalCopies: form.copies,
-        });
-      } else {
-        await addBook({
-          ...form,
-          totalCopies: form.copies,
-        });
-      }
-      setShowForm(false);
-    } catch (err) {
-      setMutationError(err.message || 'Failed to save book');
-    } finally {
-      setSaving(false);
+  try {
+    // Keep the existing cover URL unless a new image is selected.
+    let coverUrl = form.coverUrl;
+
+    // Upload the selected image to Supabase Storage.
+    if (selectedCoverFile) {
+      coverUrl = await uploadBookCover(selectedCoverFile);
     }
-  };
+
+    // Save the book details together with the cover URL.
+    const bookPayload = {
+      ...form,
+      coverUrl,
+      totalCopies: form.copies,
+    };
+
+    if (editingId) {
+      await updateBook(editingId, bookPayload);
+    } else {
+      await addBook(bookPayload);
+    }
+
+    // Reset the selected image after a successful save.
+    setSelectedCoverFile(null);
+    setCoverPreview('');
+    setShowForm(false);
+  } catch (err) {
+    setMutationError(err.message || 'Failed to save book');
+  } finally {
+    setSaving(false);
+  }
+};
+
 
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this book?')) {
@@ -330,14 +421,81 @@ export default function BookInventory() {
                 </select>
               </div>
 
+              
               <div>
-                <label className="block text-slate-700 font-semibold mb-1">Cover Image URL</label>
+                <label className="block text-slate-700 font-semibold mb-1">
+                  Book Cover Image
+                </label>
+
                 <input
-                  type="text"
-                  value={form.coverUrl}
-                  onChange={(e) => setForm({ ...form, coverUrl: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  id="book-cover-input"
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  className="hidden"
+                  onChange={(e) => {
+                    handleCoverSelect(e.target.files?.[0]);
+                    e.target.value = '';
+                  }}
                 />
+
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDraggingCover(true);
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    setIsDraggingCover(false);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDraggingCover(false);
+                    handleCoverSelect(e.dataTransfer.files?.[0]);
+                  }}
+                  onClick={() => document.getElementById('book-cover-input')?.click()}
+                  className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition ${
+                    isDraggingCover
+                      ? 'border-indigo-500 bg-indigo-50'
+                      : 'border-slate-300 hover:border-indigo-400 hover:bg-slate-50'
+                  }`}
+                >
+                  {coverPreview || form.coverUrl ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <img
+                        src={coverPreview || form.coverUrl}
+                        alt="Book cover preview"
+                        className="w-28 h-40 object-cover rounded-lg shadow-sm"
+                      />
+
+                      <p className="text-slate-600">
+                        Click here or drag another image to replace the cover.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="py-3">
+                      <p className="text-2xl mb-2">📚</p>
+                      <p className="font-semibold text-slate-700">
+                        Drag and drop your book cover here
+                      </p>
+                      <p className="text-slate-500 mt-1">
+                        or click to browse your files
+                      </p>
+                      <p className="text-slate-400 mt-2">
+                        JPG or PNG · Maximum 5 MB
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {(coverPreview || form.coverUrl) && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveCover}
+                    className="mt-2 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-lg"
+                  >
+                    Remove cover
+                  </button>
+                )}
               </div>
 
               <div>

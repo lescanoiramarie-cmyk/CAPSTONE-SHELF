@@ -394,7 +394,7 @@ Deno.serve(async (req: Request) => {
                   </div>
 
                   <p>
-                    This code will expire in approximately
+                    This code will expire in
                     <strong>10 minutes</strong>.
                   </p>
 
@@ -548,6 +548,7 @@ Deno.serve(async (req: Request) => {
         type: "otp",
         message:
           "Verification email sent successfully.",
+        expiresAt: otpExpiresAt,
       });
     }
 
