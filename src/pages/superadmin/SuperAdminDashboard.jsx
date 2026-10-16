@@ -25,7 +25,10 @@ import {
   AlertTriangle,
   BookOpen,
   Building2,
+  ChevronDown,
+  ChevronUp,
   FileSpreadsheet,
+  Globe,
   MapPinned,
   MessageSquare,
   ShieldCheck,
@@ -58,39 +61,6 @@ ChartJS.register(
   Tooltip,
   Legend
 );
-
-const NAV = [
-  {
-    id: 'overview',
-    label: 'Overview & Analytics',
-    Icon: Activity,
-  },
-  {
-    id: 'inventory',
-    label: 'Inventory',
-    Icon: BookOpen,
-  },
-  {
-    id: 'map',
-    label: 'Libraries & Map',
-    Icon: MapPinned,
-  },
-  {
-    id: 'accounts',
-    label: 'Staff Accounts',
-    Icon: ShieldCheck,
-  },
-  {
-    id: 'workspace',
-    label: 'Reports and Services',
-    Icon: FileSpreadsheet,
-  },
-  {
-    id: 'communication',
-    label: 'Communication',
-    Icon: MessageSquare,
-  },
-];
 
 function StatCard({
   label,
@@ -188,6 +158,7 @@ export default function SuperAdminDashboard() {
     user,
     logout,
   } = useAuth();
+
   const handleSuperAdminLogout = async () => {
     mainScrollRef.current?.scrollTo({
       top: 0,
@@ -201,9 +172,11 @@ export default function SuperAdminDashboard() {
     });
     await logout();
   };
+
   const {
     addLibrary,
   } = useLibrary();
+
   const {
     books,
     visitors,
@@ -211,8 +184,13 @@ export default function SuperAdminDashboard() {
     attendanceLogs,
     libraries,
   } = useLibraryData();
-  const [section, setSection] =
-    useState('overview');
+
+  const [section, setSection] = useState('overview');
+  const [activeTab, setActiveTab] = useState('reports');
+
+  // Sidebar Collapsible States
+  const [workspaceOpen, setWorkspaceOpen] = useState(true);
+  const [communicationOpen, setCommunicationOpen] = useState(true);
 
   // ============================================================
   // IMPORT / EXPORT
@@ -221,6 +199,7 @@ export default function SuperAdminDashboard() {
     importTarget,
     setImportTarget,
   ] = useState('books');
+
   const handleFileUpload = (
     event
   ) => {
@@ -285,12 +264,12 @@ export default function SuperAdminDashboard() {
     name: '',
     campus: '',
     address: '',
+    emailDomain: '',
     lat: '14.085000',
     lng: '121.149000',
     hours: '8:00 AM - 5:00 PM',
     status: 'Open',
   });
-
   const [mapPosition, setMapPosition] = useState([14.0850, 121.1490]);
 
   const handleCoordinateChange = (lat, lng) => {
@@ -374,6 +353,7 @@ export default function SuperAdminDashboard() {
         setStaffLoading(false);
       }
     };
+
   useEffect(() => {
     if (
       section === 'accounts'
@@ -578,10 +558,8 @@ export default function SuperAdminDashboard() {
         (position) => {
           const latitude = position.coords.latitude;
           const longitude = position.coords.longitude;
-
           setMapPosition([latitude, longitude]);
           handleCoordinateChange(latitude.toFixed(6), longitude.toFixed(6));
-
           setLibraryMessage(
             'Location captured successfully.'
           );
@@ -618,9 +596,31 @@ export default function SuperAdminDashboard() {
       try {
         setSavingLibrary(true);
         setLibraryMessage('');
-        await addLibrary(
-          libraryForm
-        );
+       
+        const formattedDomain = libraryForm.emailDomain ? libraryForm.emailDomain.toLowerCase().trim() : null;
+        const payload = {
+          name: libraryForm.name.trim(),
+          campus: libraryForm.campus.trim(),
+          address: libraryForm.address.trim(),
+          email_domain: formattedDomain,
+          emailDomain: formattedDomain,
+          lat: libraryForm.lat,
+          lng: libraryForm.lng,
+          hours: libraryForm.hours,
+          status: libraryForm.status,
+        };
+
+        await addLibrary(payload);
+
+        const { error: directInsertError } = await supabase
+          .from('libraries')
+          .update({ email_domain: formattedDomain })
+          .eq('name', libraryForm.name.trim());
+
+        if (directInsertError) {
+          console.warn('Direct domain update notice:', directInsertError.message);
+        }
+
         setLibraryMessage(
           'Library added successfully.'
         );
@@ -628,6 +628,7 @@ export default function SuperAdminDashboard() {
           name: '',
           campus: '',
           address: '',
+          emailDomain: '',
           lat: '14.085000',
           lng: '121.149000',
           hours:
@@ -770,43 +771,186 @@ export default function SuperAdminDashboard() {
             Super-Admin Console
           </p>
         </div>
+
+        {/* NAVIGATION */}
         <nav className="flex-1 space-y-1 p-3">
-          {NAV.map(
-            ({ Icon, ...item }) => (
-              <button
-                type="button"
-                key={item.id}
-                onClick={() => {
-                  setSection(
-                    item.id
-                  );
-                  setStaffError('');
-                  setStaffMessage('');
-                  if (
-                    item.id !==
-                    'map'
-                  ) {
-                    setShowAddLibrary(
-                      false
-                    );
-                    setLibraryMessage(
-                      ''
-                    );
-                  }
-                }}
-                className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
-                  section ===
-                  item.id
-                    ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
-                    : 'text-slate-300 hover:bg-white/5'
-                }`}
-              >
-                <Icon size={18} className="mr-3 inline-block align-[-3px]" aria-hidden="true" />
-                {item.label}
-              </button>
-            )
-          )}
+          {/* OVERVIEW */}
+          <button
+            type="button"
+            onClick={() => {
+              setSection('overview');
+              setStaffError('');
+              setStaffMessage('');
+            }}
+            className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
+              section === 'overview'
+                ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
+                : 'text-slate-300 hover:bg-white/5'
+            }`}
+          >
+            <Activity size={18} className="mr-3 inline-block align-[-3px]" />
+            Overview & Analytics
+          </button>
+
+          {/* INVENTORY */}
+          <button
+            type="button"
+            onClick={() => {
+              setSection('inventory');
+              setStaffError('');
+              setStaffMessage('');
+            }}
+            className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
+              section === 'inventory'
+                ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
+                : 'text-slate-300 hover:bg-white/5'
+            }`}
+          >
+            <BookOpen size={18} className="mr-3 inline-block align-[-3px]" />
+            Inventory
+          </button>
+
+          {/* LIBRARIES & MAP */}
+          <button
+            type="button"
+            onClick={() => {
+              setSection('map');
+              setStaffError('');
+              setStaffMessage('');
+            }}
+            className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
+              section === 'map'
+                ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
+                : 'text-slate-300 hover:bg-white/5'
+            }`}
+          >
+            <MapPinned size={18} className="mr-3 inline-block align-[-3px]" />
+            Libraries & Map
+          </button>
+
+          {/* STAFF ACCOUNTS */}
+          <button
+            type="button"
+            onClick={() => {
+              setSection('accounts');
+              setStaffError('');
+              setStaffMessage('');
+            }}
+            className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
+              section === 'accounts'
+                ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
+                : 'text-slate-300 hover:bg-white/5'
+            }`}
+          >
+            <ShieldCheck size={18} className="mr-3 inline-block align-[-3px]" />
+            Staff Accounts
+          </button>
+
+          {/* REPORTS & SERVICES COLLAPSIBLE */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setWorkspaceOpen((prev) => !prev)}
+              className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm transition ${
+                section === 'workspace'
+                  ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
+                  : 'text-slate-300 hover:bg-white/5'
+              }`}
+            >
+              <span className="flex items-center gap-3">
+                <FileSpreadsheet size={18} />
+                Reports & Services
+              </span>
+              {workspaceOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+
+            {workspaceOpen && (
+              <div className="ml-5 mt-1 space-y-1 border-l border-white/20 pl-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSection('workspace');
+                    setActiveTab('reports');
+                  }}
+                  className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition ${
+                    section === 'workspace' && activeTab === 'reports'
+                      ? 'font-bold text-amber-300 bg-white/10'
+                      : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  Reports
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSection('workspace');
+                    setActiveTab('analytics');
+                  }}
+                  className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition ${
+                    section === 'workspace' && activeTab === 'analytics'
+                      ? 'font-bold text-amber-300 bg-white/10'
+                      : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  Analytics
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* COMMUNICATION COLLAPSIBLE */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setCommunicationOpen((prev) => !prev)}
+              className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm transition ${
+                section === 'communication'
+                  ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
+                  : 'text-slate-300 hover:bg-white/5'
+              }`}
+            >
+              <span className="flex items-center gap-3">
+                <MessageSquare size={18} />
+                Communication
+              </span>
+              {communicationOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+
+            {communicationOpen && (
+              <div className="ml-5 mt-1 space-y-1 border-l border-white/20 pl-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSection('communication');
+                    setActiveTab('feedback');
+                  }}
+                  className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition ${
+                    section === 'communication' && activeTab === 'feedback'
+                      ? 'font-bold text-amber-300 bg-white/10'
+                      : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  Feedback
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSection('communication');
+                    setActiveTab('announcements');
+                  }}
+                  className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition ${
+                    section === 'communication' && activeTab === 'announcements'
+                      ? 'font-bold text-amber-300 bg-white/10'
+                      : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  Announcements
+                </button>
+              </div>
+            )}
+          </div>
         </nav>
+
         <div className="space-y-2 border-t border-white/10 p-4">
           <p className="text-xs text-slate-300">
             Signed in as
@@ -836,7 +980,7 @@ export default function SuperAdminDashboard() {
           actions={[
             { label: 'View Inventory', Icon: BookOpen, onClick: () => setSection('inventory') },
             { label: 'Manage Staff', Icon: ShieldCheck, onClick: () => setSection('accounts') },
-            { label: 'Open Reports', Icon: FileSpreadsheet, onClick: () => setSection('workspace') },
+            { label: 'Open Reports', Icon: FileSpreadsheet, onClick: () => { setSection('workspace'); setActiveTab('reports'); } },
           ]}
         />
 
@@ -1009,7 +1153,7 @@ export default function SuperAdminDashboard() {
                             }))
                           }
                           placeholder="e.g. Tanauan City Public Library"
-                          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                           required
                         />
                       </div>
@@ -1029,7 +1173,7 @@ export default function SuperAdminDashboard() {
                             }))
                           }
                           placeholder="e.g. Tanauan City"
-                          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                         />
                       </div>
 
@@ -1048,9 +1192,37 @@ export default function SuperAdminDashboard() {
                             }))
                           }
                           placeholder="Complete library address"
-                          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                           required
                         />
+                      </div>
+
+                      {/* Allowed Student Email Domain */}
+                      <div className="md:col-span-2">
+                        <label className="mb-1 block text-xs font-medium text-slate-700">
+                          Allowed Student Email Domain
+                        </label>
+                        <div className="relative rounded-lg shadow-sm">
+                          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                            <Globe size={16} />
+                          </div>
+                          <input
+                            type="text"
+                            name="email_domain"
+                            value={libraryForm.emailDomain}
+                            onChange={(e) =>
+                              setLibraryForm((prev) => ({
+                                ...prev,
+                                emailDomain: e.target.value,
+                              }))
+                            }
+                            placeholder="e.g. g.batstate-u.edu.ph"
+                            className="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                          />
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-1.5 leading-normal">
+                          Leave this field blank to allow registration from all email domains, or enter a specific institutional domain (e.g., g.batstate-u.edu.ph) to restrict registration exclusively to verified partner school students.
+                        </p>
                       </div>
 
                       {/* MAP PICKER COMPONENT */}
@@ -1175,14 +1347,12 @@ export default function SuperAdminDashboard() {
               <h2 className="text-lg font-bold text-slate-800">Staff Accounts</h2>
               <p className="mt-1 text-sm text-slate-500">Manage database-backed sub-admin and circulation staff accounts.</p>
             </div>
-
             {staffError && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{staffError}</div>
             )}
             {staffMessage && (
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{staffMessage}</div>
             )}
-
             <form onSubmit={handleCreateStaff} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="mb-5">
                 <h3 className="text-sm font-bold text-slate-800">Create Sub-Admin Account</h3>
@@ -1218,7 +1388,6 @@ export default function SuperAdminDashboard() {
                 </button>
               </div>
             </form>
-
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
               <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
                 <div>
@@ -1283,7 +1452,7 @@ export default function SuperAdminDashboard() {
         {/* REPORTS AND SERVICES */}
         {section === 'workspace' && (
           <AdminWorkspace
-            initialTab="reports"
+            initialTab={activeTab}
             mode="reports"
             user={user}
             libraries={libraries}
@@ -1297,7 +1466,7 @@ export default function SuperAdminDashboard() {
         {/* COMMUNICATION (FEEDBACK & ANNOUNCEMENTS) */}
         {section === 'communication' && (
           <AdminWorkspace
-            initialTab="feedback"
+            initialTab={activeTab}
             mode="communication"
             user={user}
             libraries={libraries}

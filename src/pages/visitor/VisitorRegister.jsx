@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Check, Circle, Eye, EyeOff, Camera, X } from 'lucide-react';
-
 import { useAuth } from '../../context/useAuth.js';
+import { supabase } from '../../lib/supabaseClient.js';
 import libraryBg from '../../assets/library.jpg';
 
 function PasswordRequirement({ valid, children }) {
@@ -29,7 +29,6 @@ function PasswordRequirement({ valid, children }) {
 export default function VisitorLogin() {
   const [showScanner, setShowScanner] = useState(false);
   const scannerRef = useRef(null);
-
   const [view, setView] = useState('login');
   const [error, setError] = useState('');
 
@@ -67,13 +66,11 @@ export default function VisitorLogin() {
     loginVisitor,
     loginAsVisitorSession,
   } = useAuth();
-
   const navigate = useNavigate();
 
   // =========================================================
   // PASSWORD VALIDATION
   // =========================================================
-
   const passwordRequirements = {
     minLength: formData.password.length >= 8,
     uppercase: /[A-Z]/.test(formData.password),
@@ -96,7 +93,6 @@ export default function VisitorLogin() {
   // =========================================================
   // QR SCANNER
   // =========================================================
-
   const startScanner = () => {
     setError('');
     setShowScanner(true);
@@ -112,13 +108,11 @@ export default function VisitorLogin() {
     } catch (err) {
       console.error('Scanner cleanup error:', err);
     }
-
     setShowScanner(false);
   };
 
   useEffect(() => {
     if (!showScanner) return;
-
     let isMounted = true;
     let scanner = null;
 
@@ -126,7 +120,6 @@ export default function VisitorLogin() {
       try {
         scanner = new Html5Qrcode('visitor-qr-reader');
         scannerRef.current = scanner;
-
         await scanner.start(
           { facingMode: 'environment' },
           {
@@ -135,9 +128,7 @@ export default function VisitorLogin() {
           },
           async (decodedText) => {
             if (!isMounted) return;
-
             const qrValue = decodedText.trim();
-
             try {
               if (scannerRef.current) {
                 await scannerRef.current.stop();
@@ -147,20 +138,16 @@ export default function VisitorLogin() {
             } catch (err) {
               console.error('Scanner stop error:', err);
             }
-
             setShowScanner(false);
-
             setLoginData({
               identifier: qrValue,
               password: '',
             });
-
             try {
               await loginVisitor({
                 identifier: qrValue,
                 password: '',
               });
-
               navigate('/visitor');
             } catch (err) {
               setError(
@@ -200,18 +187,15 @@ export default function VisitorLogin() {
   // =========================================================
   // UNIFIED LOGIN
   // =========================================================
-
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
 
     const identifier = loginData.identifier.trim();
-
     if (!identifier) {
       setError('Please enter your email, account ID, or QR pass ID.');
       return;
     }
-
     if (!loginData.password) {
       setError('Please enter your password.');
       return;
@@ -227,12 +211,10 @@ export default function VisitorLogin() {
         navigate('/visitor');
         return;
       }
-
       if (result.role === 'subadmin') {
         navigate('/subadmin');
         return;
       }
-
       if (result.role === 'superadmin') {
         navigate('/superadmin');
         return;
@@ -245,9 +227,8 @@ export default function VisitorLogin() {
   };
 
   // =========================================================
-  // VISITOR REGISTRATION
+  // VISITOR REGISTRATION WITH DEDUPLICATED DOMAIN VERIFICATION
   // =========================================================
-
   const handleRegister = async (e) => {
     e.preventDefault();
     setError('');
@@ -262,10 +243,63 @@ export default function VisitorLogin() {
       return;
     }
 
-    try {
-      await registerVisitor(formData);
+    // Kinukuha ang parehong ilalagay na email
+    const rawPersonal = (formData.email || '').toLowerCase().trim();
+    const rawStudent = (formData.studentEmail || '').toLowerCase().trim();
 
-      setPendingEmail(formData.email.trim());
+    // Tukuyin ang active email at domain
+    const activeEmail = rawStudent || rawPersonal;
+    const activeDomain = activeEmail.split('@')[1];
+
+    if (!activeEmail || !activeDomain) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
+    try {
+      // 1. Fetch whitelisted email domains mula sa 'libraries' table sa Supabase
+      const { data: libraryRecords, error: libError } = await supabase
+        .from('libraries')
+        .select('email_domain')
+        .not('email_domain', 'is', null)
+        .neq('email_domain', '');
+
+      if (libError) {
+        throw new Error(`Failed to check partner school whitelist: ${libError.message}`);
+      }
+
+      // 2. DEDUPLICATION: Kumuha ng UNIQUE list ng allowed domains gamit ang Set
+      const allowedDomains = Array.from(
+        new Set(
+          (libraryRecords || [])
+            .map((lib) => lib.email_domain?.toLowerCase().trim())
+            .filter(Boolean)
+        )
+      );
+
+      // 3. Strict Check: Tingnan kung ang domain ay tugma sa kahit anong allowedDomain
+      const isDomainAllowed = allowedDomains.some(
+        (domain) => activeDomain === domain || activeDomain.endsWith('.' + domain)
+      );
+
+      // STRICT BLOCK: PAHINTOIN KAPAG HINDI AUTHORIZED (MALINIS AT WALANG DUPLICATE OUTPUT)
+      if (!isDomainAllowed) {
+        const formattedDomainsList = allowedDomains.map((d) => `@${d}`).join(', ');
+        setError(
+          allowedDomains.length > 0
+            ? `Registration restricted! @${activeDomain} is not an authorized partner school email. Allowed domains: ${formattedDomainsList}`
+            : 'Registration restricted! No active partner school email domains configured.'
+        );
+        return; // HAHARANGIN DITO AT HINDI MAG-PROCEED SA OTP SCREEN
+      }
+
+      // 4. Kapag pumasa sa check, itinutuloy ang registration
+      await registerVisitor({
+        ...formData,
+        email: activeEmail,
+      });
+
+      setPendingEmail(activeEmail);
       setOtpInput('');
       setView('otp');
       setError('');
@@ -277,13 +311,11 @@ export default function VisitorLogin() {
   // =========================================================
   // OTP VERIFICATION & RESEND
   // =========================================================
-
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
     setError('');
 
     const cleanOtp = otpInput.trim();
-
     if (cleanOtp.length !== 6) {
       setError('Please enter the complete 6-digit verification code.');
       return;
@@ -291,7 +323,6 @@ export default function VisitorLogin() {
 
     try {
       const visitor = await verifyVisitorOtp(pendingEmail, cleanOtp);
-
       setError('');
       setRegisteredVisitor(visitor);
       setView('success');
@@ -302,7 +333,6 @@ export default function VisitorLogin() {
 
   const handleResendOtp = async () => {
     setError('');
-
     if (!pendingEmail) {
       setError('Registration session not found. Please register again.');
       return;
@@ -320,11 +350,9 @@ export default function VisitorLogin() {
   // =========================================================
   // RESET TO LOGIN
   // =========================================================
-
   const resetToLogin = () => {
     setView('login');
     setError('');
-
     setFormData({
       fullName: '',
       contactNumber: '',
@@ -335,16 +363,13 @@ export default function VisitorLogin() {
       password: '',
       confirmPassword: '',
     });
-
     setLoginData({
       identifier: '',
       password: '',
     });
-
     setOtpInput('');
     setPendingEmail('');
     setRegisteredVisitor(null);
-
     setShowLoginPassword(false);
     setShowRegisterPassword(false);
     setShowConfirmPassword(false);
@@ -377,28 +402,24 @@ export default function VisitorLogin() {
         <div className="relative z-10 flex items-center gap-3">
           <span className="text-xl font-bold tracking-wider">SHELF ILMS</span>
         </div>
-
         <div className="relative z-10 space-y-4 max-w-lg">
           <span className="inline-block px-3 py-1 bg-white/10 backdrop-blur-md text-xs font-semibold rounded-full border border-white/20">
             Digital Library Management System
           </span>
-
           <h1 className="text-4xl font-extrabold leading-tight">
             Explore Learning Resources & Campus Libraries.
           </h1>
-
           <p className="text-sm text-slate-300">
             Access your library account, explore available resources, manage
             your borrowing activity, and use your digital library pass.
           </p>
         </div>
-
         <div className="relative z-10 text-xs text-slate-400">
           © SHELF System. All rights reserved.
         </div>
       </div>
 
-      {/* RIGHT FORM PANEL - Optimized for mobile padding & sizing */}
+      {/* RIGHT FORM PANEL */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-8 lg:p-12 overflow-y-auto">
         <div className="w-full max-w-md bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-slate-200 space-y-6 my-auto">
           {/* HEADER */}
@@ -409,7 +430,6 @@ export default function VisitorLogin() {
               {view === 'success' && 'Registration Successful'}
               {view === 'login' && 'SHELF ILMS Login'}
             </h2>
-
             <p className="text-xs text-slate-500">
               {view === 'register' &&
                 'Fill in your personal and institutional details to receive your digital library pass.'}
@@ -486,7 +506,7 @@ export default function VisitorLogin() {
                 />
               </div>
 
-              {/* SCHOOL NAME / INSTITUTION */}
+              {/* SCHOOL NAME */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   School / Institution Name
@@ -506,11 +526,10 @@ export default function VisitorLogin() {
               {/* STUDENT / INSTITUTIONAL EMAIL */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Student / Institutional Email
+                  Student / Institutional Email (Partner School Domain)
                 </label>
                 <input
                   type="email"
-                  required
                   placeholder="student@g.batstate-u.edu.ph"
                   value={formData.studentEmail}
                   onChange={(e) =>
@@ -518,6 +537,9 @@ export default function VisitorLogin() {
                   }
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                 />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Must be an official student email from a registered partner school.
+                </p>
               </div>
 
               <div>
@@ -719,17 +741,14 @@ export default function VisitorLogin() {
               <h3 className="text-sm font-bold text-shelf-text">
                 Welcome, {registeredVisitor.fullName}!
               </h3>
-
               <div className="flex justify-center">
                 <div className="p-3 bg-white rounded-lg shadow-sm inline-block border border-slate-200 max-w-full overflow-hidden">
                   <QRCodeSVG value={registeredVisitor.qrCode} size={150} className="w-full h-auto max-w-[150px]" />
                 </div>
               </div>
-
               <p className="text-xs font-mono font-bold text-shelf-primary break-all">
                 {registeredVisitor.qrCode}
               </p>
-
               <button
                 type="button"
                 onClick={() => {
@@ -751,11 +770,9 @@ export default function VisitorLogin() {
                   <div className="bg-shelf-primary text-white rounded-xl p-4 text-center">
                     <h3 className="font-bold text-sm">Scan Your QR Pass</h3>
                   </div>
-
                   <div className="rounded-xl overflow-hidden border-2 border-shelf-primary bg-black">
                     <div id="visitor-qr-reader" className="w-full" />
                   </div>
-
                   <button
                     type="button"
                     onClick={stopScanner}
