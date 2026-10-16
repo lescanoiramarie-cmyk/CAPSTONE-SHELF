@@ -12,12 +12,11 @@ import {
   Building2,
   Upload,
   UsersRound,
+  Info,
 } from 'lucide-react';
 import VisitorScanDetails from '../../component/VisitorScanDetails.jsx';
-
 import { useAuth } from '../../context/useAuth.js';
 import { useLibrary, useLibraryData } from '../../context/useLibrary.js';
-
 import AttendanceScanner from '../../component/AttendanceScanner.jsx';
 import BookTransactions from '../../component/BookTransactions.jsx';
 import BookInventory from '../../component/BookInventory.jsx';
@@ -25,14 +24,12 @@ import ReservationQueue from '../../component/ReservationQueue.jsx';
 import AdminWorkspace from '../../component/AdminWorkspace.jsx';
 import DashboardWelcome from '../../component/DashboardWelcome.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
-
 import { supabase } from '../../lib/supabaseClient.js';
 import { exportToExcel, exportToCSV } from '../../lib/excelUtils.js';
 import Papa from 'papaparse';
 import {
   findVisitorByQr,
 } from '../../data/store.js';
-
 
 const NAV = [
   { id: 'overview', label: 'Overview', Icon: Activity },
@@ -43,7 +40,6 @@ const NAV = [
   { id: 'map', label: 'Branch Map', Icon: MapPinned },
 ];
 
-
 function StatCard({ label, value, tone = 'default' }) {
   const tones = {
     default: 'bg-white border-slate-200 border-l-slate-300 text-slate-800',
@@ -51,7 +47,6 @@ function StatCard({ label, value, tone = 'default' }) {
     red: 'bg-red-50 border-red-200 border-l-red-500 text-red-700',
     blue: 'bg-blue-50 border-blue-200 border-l-blue-500 text-blue-800',
   };
-
   return (
     <div className={`rounded-r-xl border border-l-4 p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${tones[tone]}`}>
       <div className="flex items-start justify-between gap-3">
@@ -61,48 +56,42 @@ function StatCard({ label, value, tone = 'default' }) {
         </div>
         <span className="rounded-lg bg-white/70 p-2 text-current shadow-sm" aria-hidden="true">
           {tone === 'amber' ? (
-  <Clock3 size={18} />
-) : tone === 'red' ? (
-  <AlertTriangle size={18} />
-) : tone === 'blue' ? (
-  <UsersRound size={18} />
-) : tone === 'book' ? (
-  <BookOpen size={18} />
-) : (
-  <Activity size={18} />
-)}
+            <Clock3 size={18} />
+          ) : tone === 'red' ? (
+            <AlertTriangle size={18} />
+          ) : tone === 'blue' ? (
+            <UsersRound size={18} />
+          ) : tone === 'book' ? (
+            <BookOpen size={18} />
+          ) : (
+            <Activity size={18} />
+          )}
         </span>
       </div>
     </div>
   );
 }
 
-
 function AttendanceTrendChart({ attendance = [] }) {
   const dailyCounts = Array.from({ length: 7 }, (_, index) => {
     const date = new Date();
     date.setHours(0, 0, 0, 0);
     date.setDate(date.getDate() - (6 - index));
-
     const count = attendance.filter((record) => {
       const timestamp = record.timeIn || record.time_in;
       if (!timestamp) return false;
-
       const recordDate = new Date(timestamp);
       return (
         !Number.isNaN(recordDate.getTime()) &&
         recordDate.toDateString() === date.toDateString()
       );
     }).length;
-
     return {
       label: date.toLocaleDateString('en-US', { weekday: 'short' }),
       count,
     };
   });
-
   const maxCount = Math.max(1, ...dailyCounts.map((day) => day.count));
-
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <h3 className="text-sm font-bold text-slate-800">
@@ -111,7 +100,6 @@ function AttendanceTrendChart({ attendance = [] }) {
       <p className="mt-1 text-xs text-slate-500">
         Daily attendance for the last seven days
       </p>
-
       {attendance.length === 0 ? (
         <p className="py-10 text-center text-sm text-slate-500">
           No attendance records available for this branch.
@@ -126,7 +114,6 @@ function AttendanceTrendChart({ attendance = [] }) {
               <span className="text-xs font-semibold text-slate-600">
                 {day.count}
               </span>
-
               <div className="flex h-28 w-full items-end justify-center">
                 <div
                   title={`${day.label}: ${day.count} visitors`}
@@ -140,7 +127,6 @@ function AttendanceTrendChart({ attendance = [] }) {
                   }}
                 />
               </div>
-
               <span className="text-xs text-slate-500">
                 {day.label}
               </span>
@@ -158,11 +144,9 @@ function BorrowingStatusChart({ requests = [] }) {
       .toLowerCase()
       .trim()
       .replace(/[\s-]+/g, '_');
-
   const isOverdue = (request) => {
     const status = getStatus(request);
     const dueDate = request.dueDate || request.due_date;
-
     return (
       status === 'borrowed' &&
       dueDate &&
@@ -170,7 +154,6 @@ function BorrowingStatusChart({ requests = [] }) {
       new Date(dueDate) < new Date()
     );
   };
-
   const statuses = [
     {
       key: 'pending',
@@ -207,9 +190,7 @@ function BorrowingStatusChart({ requests = [] }) {
       count: requests.filter((r) => getStatus(r) === 'returned').length,
     },
   ];
-
   const maxCount = Math.max(1, ...statuses.map((item) => item.count));
-
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <h3 className="text-sm font-bold text-slate-800">
@@ -218,7 +199,6 @@ function BorrowingStatusChart({ requests = [] }) {
       <p className="mt-1 text-xs text-slate-500">
         Book requests and transactions for your assigned branch
       </p>
-
       {requests.length === 0 ? (
         <p className="py-10 text-center text-sm text-slate-500">
           No borrowing records available for this branch.
@@ -235,7 +215,6 @@ function BorrowingStatusChart({ requests = [] }) {
                   {item.count}
                 </span>
               </div>
-
               <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                 <div
                   title={`${item.label}: ${item.count} requests`}
@@ -254,10 +233,8 @@ function BorrowingStatusChart({ requests = [] }) {
   );
 }
 
-
 function formatDateTime(value) {
   if (!value) return '—';
-
   return new Date(value).toLocaleString('en-PH', {
     dateStyle: 'medium',
     timeStyle: 'short',
@@ -272,17 +249,13 @@ function QRBookBorrowing({
 }) {
   const { borrowRequests = [] } = useLibraryData();
   const scannerRef = useRef(null);
-
   const [showScanner, setShowScanner] = useState(false);
   const [scanning, setScanning] = useState(false);
-
   const [visitor, setVisitor] = useState(null);
   const [visitorRequests, setVisitorRequests] = useState([]);
   const [manualQrValue, setManualQrValue] = useState('');
-
   const [loading, setLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
-
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -294,19 +267,16 @@ function QRBookBorrowing({
         } catch {
           // Scanner may already be stopped.
         }
-
         try {
           await scannerRef.current.clear();
         } catch {
           // Scanner may already be cleared.
         }
-
         scannerRef.current = null;
       }
     } catch (err) {
       console.error('QR scanner cleanup error:', err);
     }
-
     setScanning(false);
     setShowScanner(false);
   };
@@ -325,17 +295,14 @@ function QRBookBorrowing({
     setMessage('');
     setVisitor(null);
     setVisitorRequests([]);
-
     try {
       const currentLibraryId = user?.libraryId || user?.assignedBranch;
       const foundVisitor = await findVisitorByQr(qrValue, currentLibraryId);
-
       if (!foundVisitor) {
         throw new Error(
           'Visitor not found. Please scan a valid SHELF ILMS visitor QR code.'
         );
       }
-
       const { data, error: requestError } = await supabase
         .from('borrow_requests')
         .select(
@@ -364,11 +331,9 @@ function QRBookBorrowing({
         .order('request_date', {
           ascending: false,
         });
-
       if (requestError) {
         throw requestError;
       }
-
       const requests = (data || []).map((r) => ({
         id: r.id,
         bookId: r.book_id,
@@ -389,15 +354,12 @@ function QRBookBorrowing({
         bookIsbn: r.books?.isbn || '',
         bookCoverUrl: r.books?.cover_url || '',
       }));
-
       setVisitor(foundVisitor);
       setManualQrValue('');
       setVisitorRequests(requests);
-
       const readyRequests = requests.filter(
         (r) => r.status === 'ready_for_pickup'
       );
-
       if (readyRequests.length === 0) {
         if (
           requests.some((r) => r.status === 'borrowed')
@@ -419,7 +381,6 @@ function QRBookBorrowing({
       }
     } catch (err) {
       console.error('QR borrowing lookup error:', err);
-
       setError(
         err?.message ||
           'Unable to process the visitor QR code.'
@@ -431,17 +392,13 @@ function QRBookBorrowing({
 
   useEffect(() => {
     if (!showScanner) return;
-
     let cancelled = false;
     let scanner;
-
     const startCamera = async () => {
       try {
         setScanning(true);
-
         scanner = new Html5Qrcode('book-borrowing-qr-reader');
         scannerRef.current = scanner;
-
         await scanner.start(
           { facingMode: 'environment' },
           {
@@ -454,28 +411,21 @@ function QRBookBorrowing({
           },
           async (decodedText) => {
             if (cancelled) return;
-
             const qrValue = decodedText.trim();
-
             if (!qrValue) return;
-
             try {
               await scanner.stop();
             } catch {
               // Ignore if already stopped.
             }
-
             try {
               await scanner.clear();
             } catch {
               // Ignore if already cleared.
             }
-
             scannerRef.current = null;
-
             setScanning(false);
             setShowScanner(false);
-
             await handleQrScan(qrValue);
           },
           () => {
@@ -484,7 +434,6 @@ function QRBookBorrowing({
         );
       } catch (err) {
         console.error('Unable to start QR scanner:', err);
-
         if (!cancelled) {
           setScanning(false);
           setError(
@@ -493,12 +442,9 @@ function QRBookBorrowing({
         }
       }
     };
-
     startCamera();
-
     return () => {
       cancelled = true;
-
       if (scannerRef.current) {
         scannerRef.current
           .stop()
@@ -507,7 +453,6 @@ function QRBookBorrowing({
             scannerRef.current
               ?.clear()
               .catch(() => {});
-
             scannerRef.current = null;
           });
       }
@@ -516,23 +461,19 @@ function QRBookBorrowing({
 
   const handleConfirmBorrow = async (request) => {
     if (!request?.id) return;
-
     setConfirming(true);
     setError('');
     setMessage('');
-
     try {
       const staffName =
         user?.name ||
         user?.fullName ||
         user?.email ||
         'Sub-Admin';
-
       await confirmPickup(
         request.id,
         staffName
       );
-
       setVisitorRequests((current) =>
         current.map((item) =>
           item.id === request.id
@@ -544,11 +485,9 @@ function QRBookBorrowing({
             : item
         )
       );
-
       setMessage(
         `"${request.bookTitle}" has been successfully borrowed by ${request.visitorName}.`
       );
-
       if (onBorrowConfirmed) {
         onBorrowConfirmed(request.id);
       }
@@ -557,7 +496,6 @@ function QRBookBorrowing({
         'Book borrowing confirmation error:',
         err
       );
-
       setError(
         err?.message ||
           'Unable to confirm this book borrowing.'
@@ -569,20 +507,16 @@ function QRBookBorrowing({
 
   const handleConfirmReturn = async (request) => {
     if (!request?.id) return;
-
     setConfirming(true);
     setError('');
     setMessage('');
-
     try {
       const staffName =
         user?.name ||
         user?.fullName ||
         user?.email ||
         'Sub-Admin';
-
       await confirmReturn(request.id, staffName);
-
       setVisitorRequests((current) =>
         current.map((item) =>
           item.id === request.id
@@ -609,7 +543,6 @@ function QRBookBorrowing({
 
   const clearVisitor = async () => {
     await stopScanner();
-
     setVisitor(null);
     setVisitorRequests([]);
     setMessage('');
@@ -620,9 +553,7 @@ function QRBookBorrowing({
     const sharedRequest = borrowRequests.find(
       (item) => String(item.id) === String(request.id)
     );
-
     if (!sharedRequest) return request;
-
     return {
       ...request,
       requestDate: sharedRequest.requestDate || request.requestDate,
@@ -637,28 +568,23 @@ function QRBookBorrowing({
   const activeVisitorRequests = displayedVisitorRequests.filter(
     (request) => ['ready_for_pickup', 'borrowed'].includes(request.status)
   );
-
   const readyRequests = activeVisitorRequests.filter(
     (r) => r.status === 'ready_for_pickup'
   );
 
   return (
     <div className="space-y-6">
-
       {/* QR BORROWING HEADER */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-
         <div className="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h2 className="text-lg font-extrabold text-slate-800">
               Book Borrowing &amp; Returning
             </h2>
-
             <p className="text-xs text-slate-500 mt-1">
               Step 1 — scan the visitor's QR code or enter the QR value manually.
             </p>
           </div>
-
           <div className="flex flex-col gap-2 sm:flex-row">
             <form onSubmit={handleManualQrSubmit} className="flex gap-2">
               <label className="sr-only" htmlFor="subadmin-visitor-qr">
@@ -690,23 +616,19 @@ function QRBookBorrowing({
             </button>
           </div>
         </div>
-
         {/* CAMERA SCANNER */}
         {showScanner && (
           <div className="p-5 bg-slate-50 border-b border-slate-200">
             <div className="max-w-md mx-auto bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-
               <div className="p-4 border-b border-slate-200 flex items-center justify-between">
                 <div>
                   <p className="text-sm font-bold text-slate-800">
                     Scan Visitor QR Code
                   </p>
-
                   <p className="text-xs text-slate-500 mt-1">
                     Position the visitor QR code inside the box.
                   </p>
                 </div>
-
                 <button
                   type="button"
                   onClick={stopScanner}
@@ -715,7 +637,6 @@ function QRBookBorrowing({
                   Close
                 </button>
               </div>
-
               <div className="p-4">
                 <div
                   id="book-borrowing-qr-reader"
@@ -725,45 +646,37 @@ function QRBookBorrowing({
             </div>
           </div>
         )}
-
         {/* STATUS MESSAGE */}
         {message && (
           <div role="status" className="mx-5 mt-5 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 font-sans text-sm text-blue-800">
             {message}
           </div>
         )}
-
         {error && (
           <div role="alert" className="mx-5 mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-700">
             {error}
           </div>
         )}
-
         {/* LOADING */}
         {loading && (
           <div className="p-8 text-center text-sm text-slate-500">
             Verifying visitor QR code and checking borrow requests...
           </div>
         )}
-
         {/* VERIFIED VISITOR */}
         {!loading && visitor && (
           <div className="p-5 space-y-5">
-
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                         Step 2 — Review requests for verified visitor
                   </p>
                 </div>
-
                 <div className="flex items-center gap-2">
                   <span className="bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-full text-xs font-bold">
                     QR Verified
                   </span>
-
                   <button
                     type="button"
                     onClick={clearVisitor}
@@ -775,35 +688,29 @@ function QRBookBorrowing({
               </div>
               <VisitorScanDetails visitor={visitor} />
             </div>
-
             {/* READY FOR PICKUP */}
             {readyRequests.length > 0 && (
               <div className="space-y-3">
-
                 <div>
                   <h3 className="text-sm font-extrabold text-slate-800">
                     Books Ready for Pickup
                   </h3>
-
                   <p className="text-xs text-slate-500 mt-1">
                     Confirm the book only after checking the physical
                     book and the visitor's identity.
                   </p>
                 </div>
-
                 {readyRequests.map((request) => {
                   const expired =
                     request.pickupDeadline &&
                     new Date(request.pickupDeadline) <
                       new Date();
-
                   return (
                     <div
                       key={request.id}
                       className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
                     >
                       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-
                         <div className="flex min-w-0 items-start gap-3">
                           {request.bookCoverUrl && (
                             <img
@@ -816,7 +723,6 @@ function QRBookBorrowing({
                           <p className="text-base font-extrabold text-slate-800">
                             {request.bookTitle}
                           </p>
-
                           <div className="mt-2 space-y-1 text-xs text-slate-500">
                             {request.bookAuthor && <p>Author: {request.bookAuthor}</p>}
                             {request.bookIsbn && <p>ISBN: {request.bookIsbn}</p>}
@@ -829,7 +735,6 @@ function QRBookBorrowing({
                                 request.requestDate
                               )}
                             </p>
-
                             <p
                               className={
                                 expired
@@ -845,9 +750,7 @@ function QRBookBorrowing({
                           </div>
                           </div>
                         </div>
-
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-
                           {expired ? (
                             <span className="bg-red-100 text-red-700 px-4 py-2 rounded-lg text-xs font-bold text-center">
                               Pickup Deadline Expired
@@ -873,17 +776,14 @@ function QRBookBorrowing({
                 })}
               </div>
             )}
-
             {/* ACTIVE BORROWS */}
             {activeVisitorRequests.some(
               (r) => r.status === 'borrowed'
             ) && (
               <div className="space-y-3">
-
                 <h3 className="text-sm font-extrabold text-slate-800">
                   Active Borrowed Books
                 </h3>
-
                 {activeVisitorRequests
                   .filter(
                     (r) => r.status === 'borrowed'
@@ -894,7 +794,6 @@ function QRBookBorrowing({
                       className="rounded-xl border border-blue-200 bg-blue-50 p-4 shadow-sm"
                     >
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-
                         <div className="flex min-w-0 items-start gap-3">
                           {request.bookCoverUrl && (
                             <img
@@ -920,20 +819,17 @@ function QRBookBorrowing({
                             <p className="mt-1 text-xs font-semibold text-blue-700">
                               Status: Borrowed
                             </p>
-
                             <p className="mt-1 text-xs text-blue-700">
                               Borrowed:{' '}
                               {formatDateTime(request.borrowDate)}
                             </p>
                           </div>
                         </div>
-
                         <div className="flex flex-col items-start gap-2 md:items-end">
                           <div className="text-left md:text-right">
                             <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
                               Due Date
                             </p>
-
                             <p className="text-sm font-extrabold text-blue-900">
                               {formatDateTime(request.dueDate)}
                             </p>
@@ -947,43 +843,36 @@ function QRBookBorrowing({
                             {confirming ? 'Confirming...' : 'Confirm Return'}
                           </button>
                         </div>
-
                       </div>
                     </div>
                   ))}
               </div>
             )}
-
             {/* NO REQUESTS */}
             {!activeVisitorRequests.length && (
               <div className="border border-dashed border-slate-300 rounded-xl p-8 text-center">
                 <p className="text-sm font-bold text-slate-600">
                   No active book requests found.
                 </p>
-
                 <p className="text-xs text-slate-400 mt-1">
                   This visitor does not currently have a book ready
                   for pickup or an active borrowed book.
                 </p>
               </div>
             )}
-
           </div>
         )}
       </div>
-
       {/* EXISTING BOOK TRANSACTIONS */}
       <div>
         <div className="mb-3">
           <h2 className="text-lg font-extrabold text-slate-800">
             Transaction Records
           </h2>
-
           <p className="text-xs text-slate-500 mt-1">
             View and manage existing book transaction records.
           </p>
         </div>
-
         <BookTransactions />
       </div>
     </div>
@@ -992,21 +881,20 @@ function QRBookBorrowing({
 
 export default function SubAdminDashboard() {
   const { user, logout } = useAuth();
-
   const {
     books,
     borrowRequests,
     attendanceLogs,
     libraries,
   } = useLibraryData();
-
   const [section, setSection] = useState('overview');
   const [focusRequestId, setFocusRequestId] = useState(null);
   const [expandedGroups, setExpandedGroups] = useState({
-  reports: true,
-  communication: false,
-});
+    reports: true,
+    communication: false,
+  });
   const [workspaceTab, setWorkspaceTab] = useState('reports');
+  const [showImportGuide, setShowImportGuide] = useState(false);
   const { addBooksBulk, confirmPickup, confirmReturn } = useLibrary();
 
   useEffect(() => {
@@ -1023,28 +911,23 @@ export default function SubAdminDashboard() {
   // BRANCH SPECIFIC DATA & IMPORT / EXPORT LOGIC
   // ============================================================
   const currentLibraryId = user?.libraryId || user?.assignedBranch || '';
-
-  
-const currentBranchName = useMemo(() => {
-  const assignedId = String(currentLibraryId || '');
-
-  if (!assignedId) return '';
-
-  const assignedLibrary = libraries.find(
-    (library) =>
-      String(library.id) === assignedId ||
-      String(library.libraryId) === assignedId ||
-      String(library.library_id) === assignedId
-  );
-
-  return (
-    assignedLibrary?.name ||
-    assignedLibrary?.libraryName ||
-    assignedLibrary?.library_name ||
-    ''
-  );
-}, [libraries, currentLibraryId]);
-
+ 
+  const currentBranchName = useMemo(() => {
+    const assignedId = String(currentLibraryId || '');
+    if (!assignedId) return '';
+    const assignedLibrary = libraries.find(
+      (library) =>
+        String(library.id) === assignedId ||
+        String(library.libraryId) === assignedId ||
+        String(library.library_id) === assignedId
+    );
+    return (
+      assignedLibrary?.name ||
+      assignedLibrary?.libraryName ||
+      assignedLibrary?.library_name ||
+      ''
+    );
+  }, [libraries, currentLibraryId]);
 
   // 1. Filter Books para sa branch ng Sub-Admin lang
   const branchBooks = useMemo(() => {
@@ -1075,143 +958,127 @@ const currentBranchName = useMemo(() => {
   );
 
   const [notificationNow, setNotificationNow] = useState(() => Date.now());
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setNotificationNow(Date.now());
+    }, 60_000);
+    return () => clearInterval(intervalId);
+  }, []);
 
-useEffect(() => {
-  const intervalId = setInterval(() => {
-    setNotificationNow(Date.now());
-  }, 60_000);
-
-  return () => clearInterval(intervalId);
-}, []);
-
-const branchNotifications = useMemo(() => {
-  if (!currentLibraryId) return [];
-
-  const now = notificationNow;
-  const oneDay = 24 * 60 * 60 * 1000;
-  const items = [];
-
-  const formatTime = (value) => {
-    if (!value) return 'Date unavailable';
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) return 'Date unavailable';
-
-    return date.toLocaleString('en-PH', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
+  const branchNotifications = useMemo(() => {
+    if (!currentLibraryId) return [];
+    const now = notificationNow;
+    const oneDay = 24 * 60 * 60 * 1000;
+    const items = [];
+    const formatTime = (value) => {
+      if (!value) return 'Date unavailable';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return 'Date unavailable';
+      return date.toLocaleString('en-PH', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
+    };
+    branchBorrowRequests.forEach((request) => {
+      const bookTitle = request.bookTitle || 'Untitled book';
+      const visitorName = request.visitorName || 'Visitor';
+      const requestDate = request.requestDate
+        ? new Date(request.requestDate).getTime()
+        : NaN;
+      const pickupDeadline = request.pickupDeadline
+        ? new Date(request.pickupDeadline).getTime()
+        : NaN;
+      const dueDate = request.dueDate
+        ? new Date(request.dueDate).getTime()
+        : NaN;
+      
+      // Recently queued reservations from this branch.
+      if (
+        ['queued', 'pending'].includes(
+          String(request.status || '').toLowerCase()
+        ) &&
+        Number.isFinite(requestDate) &&
+        requestDate <= now &&
+        requestDate >= now - oneDay
+      ) {
+        items.push({
+          id: `reservation-${request.id}`,
+          requestId: request.id,
+          title: 'New reservation request',
+          message: `${visitorName} — ${bookTitle}`,
+          timeLabel: `Requested ${formatTime(request.requestDate)}`,
+          timestamp: requestDate,
+          priority: 3,
+          section: 'queue',
+        });
+      }
+      // Pickups that expire within the next 24 hours.
+      if (
+        request.status === 'ready_for_pickup' &&
+        Number.isFinite(pickupDeadline) &&
+        pickupDeadline >= now &&
+        pickupDeadline <= now + oneDay
+      ) {
+        items.push({
+          id: `pickup-${request.id}`,
+          requestId: request.id,
+          title: 'Pickup deadline approaching',
+          message: `${bookTitle} for ${visitorName}`,
+          timeLabel: `Deadline ${formatTime(request.pickupDeadline)}`,
+          timestamp: pickupDeadline,
+          priority: 2,
+          section: 'queue',
+        });
+      }
+      // Books whose recorded due date has passed.
+      if (
+        request.status === 'borrowed' &&
+        Number.isFinite(dueDate) &&
+        dueDate < now
+      ) {
+        items.push({
+          id: `overdue-${request.id}`,
+          requestId: request.id,
+          title: 'Overdue book',
+          message: `${bookTitle} — ${visitorName}`,
+          timeLabel: `Due ${formatTime(request.dueDate)}`,
+          timestamp: dueDate,
+          priority: 1,
+          section: 'transactions',
+        });
+      }
     });
-  };
-
-  branchBorrowRequests.forEach((request) => {
-    const bookTitle = request.bookTitle || 'Untitled book';
-    const visitorName = request.visitorName || 'Visitor';
-    const requestDate = request.requestDate
-      ? new Date(request.requestDate).getTime()
-      : NaN;
-    const pickupDeadline = request.pickupDeadline
-      ? new Date(request.pickupDeadline).getTime()
-      : NaN;
-    const dueDate = request.dueDate
-      ? new Date(request.dueDate).getTime()
-      : NaN;
-
-    // Recently queued reservations from this branch.
-    if (
-      ['queued', 'pending'].includes(
-        String(request.status || '').toLowerCase()
-      ) &&
-      Number.isFinite(requestDate) &&
-      requestDate <= now &&
-      requestDate >= now - oneDay
-    ) {
-      items.push({
-        id: `reservation-${request.id}`,
-        requestId: request.id,
-        title: 'New reservation request',
-        message: `${visitorName} — ${bookTitle}`,
-        timeLabel: `Requested ${formatTime(request.requestDate)}`,
-        timestamp: requestDate,
-        priority: 3,
-        section: 'queue',
-      });
-    }
-
-    // Pickups that expire within the next 24 hours.
-    if (
-      request.status === 'ready_for_pickup' &&
-      Number.isFinite(pickupDeadline) &&
-      pickupDeadline >= now &&
-      pickupDeadline <= now + oneDay
-    ) {
-      items.push({
-        id: `pickup-${request.id}`,
-        requestId: request.id,
-        title: 'Pickup deadline approaching',
-        message: `${bookTitle} for ${visitorName}`,
-        timeLabel: `Deadline ${formatTime(request.pickupDeadline)}`,
-        timestamp: pickupDeadline,
-        priority: 2,
-        section: 'queue',
-      });
-    }
-
-    // Books whose recorded due date has passed.
-    if (
-      request.status === 'borrowed' &&
-      Number.isFinite(dueDate) &&
-      dueDate < now
-    ) {
-      items.push({
-        id: `overdue-${request.id}`,
-        requestId: request.id,
-        title: 'Overdue book',
-        message: `${bookTitle} — ${visitorName}`,
-        timeLabel: `Due ${formatTime(request.dueDate)}`,
-        timestamp: dueDate,
-        priority: 1,
-        section: 'transactions',
-      });
-    }
-  });
-
-  return items
-    .sort((a, b) => a.priority - b.priority || b.timestamp - a.timestamp)
-    .slice(0, 20);
-}, [branchBorrowRequests, currentLibraryId, notificationNow]);
+    return items
+      .sort((a, b) => a.priority - b.priority || b.timestamp - a.timestamp)
+      .slice(0, 20);
+  }, [branchBorrowRequests, currentLibraryId, notificationNow]);
 
   // 3. Import File Handler para sa Branch
   const [importError, setImportError] = useState('');
   const [importMessage, setImportMessage] = useState('');
   const [importingBooks, setImportingBooks] = useState(false);
-
+  
   const handleFileUpload = (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
-
     if (!file) return;
     setImportError('');
     setImportMessage('');
-
     if (!currentLibraryId) {
       setImportError('Your account has no assigned branch. Contact a super-admin.');
       return;
     }
-
     const extension = file.name.split('.').pop()?.toLowerCase();
     if (!['csv', 'json'].includes(extension)) {
       setImportError('Choose a .csv or .json book file.');
       return;
     }
-
     setImportingBooks(true);
     const importRows = async (records) => {
       try {
         if (!Array.isArray(records)) {
           throw new Error('The file must contain a JSON array of book records.');
         }
-
         const booksToInsert = records.map((record) => ({
           ...record,
           library_id: currentLibraryId,
@@ -1224,7 +1091,6 @@ const branchNotifications = useMemo(() => {
         setImportingBooks(false);
       }
     };
-
     if (extension === 'json') {
       file.text()
         .then((text) => importRows(JSON.parse(text)))
@@ -1234,7 +1100,6 @@ const branchNotifications = useMemo(() => {
         });
       return;
     }
-
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
@@ -1244,7 +1109,6 @@ const branchNotifications = useMemo(() => {
           setImportingBooks(false);
           return;
         }
-
         importRows(data);
       },
       error: (error) => {
@@ -1254,28 +1118,22 @@ const branchNotifications = useMemo(() => {
     });
   };
 
-  const [locallyConfirmedPickups, setLocallyConfirmedPickups] =
-    useState([]);
-
+  const [locallyConfirmedPickups, setLocallyConfirmedPickups] = useState([]);
   const today = new Date().toDateString();
-
   const todaysVisits = branchAttendance.filter(
     (a) => new Date(a.timeIn).toDateString() === today
   ).length;
-
   const pendingPickups =
     branchBorrowRequests.filter(
       (r) =>
         r.status === 'ready_for_pickup' &&
         !locallyConfirmedPickups.includes(r.id)
     ).length;
-
   const activeBorrows =
     branchBorrowRequests.filter(
       (r) =>
         (r.status === 'borrowed' || locallyConfirmedPickups.includes(r.id))
     ).length;
-
   const overdue =
     branchBorrowRequests.filter(
       (r) =>
@@ -1288,180 +1146,163 @@ const branchNotifications = useMemo(() => {
       if (current.includes(requestId)) {
         return current;
       }
-
       return [...current, requestId];
     });
   };
 
   return (
     <div className="subadmin-dashboard flex h-screen overflow-hidden bg-shelf-bg text-slate-800">
-
       {/* SIDEBAR */}
       <aside className="subadmin-sidebar sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-slate-700/50 bg-shelf-primary text-white shadow-lg">
-
         <div className="p-5 border-b border-white/10">
           <p className="font-extrabold tracking-wider">
             SHELF ILMS
           </p>
-
           <p className="text-xs text-slate-300 mt-1">
             Sub-Admin Console
           </p>
         </div>
-
         <nav className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1">
-
-      {NAV.map(({ Icon, ...item }) => (
-        <button
-          key={item.id}
-          type="button"
-          onClick={() => setSection(item.id)}
-          className={`w-full text-left text-sm px-3 py-2.5 rounded-lg transition ${
-            section === item.id
-              ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
-              : 'text-slate-300 hover:bg-white/5'
-          }`}
-        >
-          <Icon
-            size={18}
-            className="mr-3 inline-block align-[-3px]"
-            aria-hidden="true"
-          />
-          {item.label}
-        </button>
-      ))}
-
-      {/* REPORTS & SERVICES */}
-      <button
-        type="button"
-        onClick={() =>
-          setExpandedGroups((prev) => ({
-            ...prev,
-            reports: !prev.reports,
-          }))
-        }
-        aria-expanded={expandedGroups.reports}
-        className="w-full flex items-center justify-between text-left text-sm px-3 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 transition"
-      >
-        <span>Reports &amp; Services</span>
-        <ChevronDown
-          size={16}
-          className={`transition-transform ${
-            expandedGroups.reports ? 'rotate-180' : ''
-          }`}
-        />
-      </button>
-
-      {expandedGroups.reports && (
-        <div className="ml-3 border-l border-white/15 pl-2 space-y-1">
-          {[
-            { id: 'reports', label: 'Reports' },
-            { id: 'analytics', label: 'Analytics' },
-          ].map((item) => (
+          {NAV.map(({ Icon, ...item }) => (
             <button
               key={item.id}
               type="button"
-              onClick={() => {
-                setWorkspaceTab(item.id);
-                setSection('workspace');
-              }}
-              className={`w-full text-left text-sm px-3 py-2 rounded-lg transition ${
-                section === 'workspace' && workspaceTab === item.id
-                  ? 'bg-white/15 font-bold text-amber-300'
+              onClick={() => setSection(item.id)}
+              className={`w-full text-left text-sm px-3 py-2.5 rounded-lg transition ${
+                section === item.id
+                  ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
                   : 'text-slate-300 hover:bg-white/5'
               }`}
             >
+              <Icon
+                size={18}
+                className="mr-3 inline-block align-[-3px]"
+                aria-hidden="true"
+              />
               {item.label}
             </button>
           ))}
-        </div>
-      )}
-
-      {/* COMMUNICATION */}
-      <button
-        type="button"
-        onClick={() =>
-          setExpandedGroups((prev) => ({
-            ...prev,
-            communication: !prev.communication,
-          }))
-        }
-        aria-expanded={expandedGroups.communication}
-        className="w-full flex items-center justify-between text-left text-sm px-3 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 transition"
-      >
-        <span>Communication</span>
-        <ChevronDown
-          size={16}
-          className={`transition-transform ${
-            expandedGroups.communication ? 'rotate-180' : ''
-          }`}
-        />
-      </button>
-
-      {expandedGroups.communication && (
-        <div className="ml-3 border-l border-white/15 pl-2 space-y-1">
-          {[
-            { id: 'feedback', label: 'Feedback' },
-            { id: 'announcements', label: 'Announcements' },
-          ].map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => {
-                setWorkspaceTab(item.id);
-                setSection('workspace');
-              }}
-              className={`w-full text-left text-sm px-3 py-2 rounded-lg transition ${
-                section === 'workspace' && workspaceTab === item.id
-                  ? 'bg-white/15 font-bold text-amber-300'
-                  : 'text-slate-300 hover:bg-white/5'
+          {/* REPORTS & SERVICES */}
+          <button
+            type="button"
+            onClick={() =>
+              setExpandedGroups((prev) => ({
+                ...prev,
+                reports: !prev.reports,
+              }))
+            }
+            aria-expanded={expandedGroups.reports}
+            className="w-full flex items-center justify-between text-left text-sm px-3 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 transition"
+          >
+            <span>Reports &amp; Services</span>
+            <ChevronDown
+              size={16}
+              className={`transition-transform ${
+                expandedGroups.reports ? 'rotate-180' : ''
               }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      )}
+            />
+          </button>
+          {expandedGroups.reports && (
+            <div className="ml-3 border-l border-white/15 pl-2 space-y-1">
+              {[
+                { id: 'reports', label: 'Reports' },
+                { id: 'analytics', label: 'Analytics' },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setWorkspaceTab(item.id);
+                    setSection('workspace');
+                  }}
+                  className={`w-full text-left text-sm px-3 py-2 rounded-lg transition ${
+                    section === 'workspace' && workspaceTab === item.id
+                      ? 'bg-white/15 font-bold text-amber-300'
+                      : 'text-slate-300 hover:bg-white/5'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {/* COMMUNICATION */}
+          <button
+            type="button"
+            onClick={() =>
+              setExpandedGroups((prev) => ({
+                ...prev,
+                communication: !prev.communication,
+              }))
+            }
+            aria-expanded={expandedGroups.communication}
+            className="w-full flex items-center justify-between text-left text-sm px-3 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 transition"
+          >
+            <span>Communication</span>
+            <ChevronDown
+              size={16}
+              className={`transition-transform ${
+                expandedGroups.communication ? 'rotate-180' : ''
+              }`}
+            />
+          </button>
+          {expandedGroups.communication && (
+            <div className="ml-3 border-l border-white/15 pl-2 space-y-1">
+              {[
+                { id: 'feedback', label: 'Feedback' },
+                { id: 'announcements', label: 'Announcements' },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setWorkspaceTab(item.id);
+                    setSection('workspace');
+                  }}
+                  className={`w-full text-left text-sm px-3 py-2 rounded-lg transition ${
+                    section === 'workspace' && workspaceTab === item.id
+                      ? 'bg-white/15 font-bold text-amber-300'
+                      : 'text-slate-300 hover:bg-white/5'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
         </nav>
-
-        
-<div className="p-4 border-t border-white/10 space-y-3">
-  <p className="text-xs text-slate-400">
-    Signed in as
-  </p>
-
-  <div className="min-w-0">
-    <p className="text-sm font-bold text-white wrap-break-words">
-      {user?.name || 'Sub-Admin'}
-    </p>
-
-    <div className="mt-1 flex items-start gap-2">
-      <Building2
-        size={14}
-        className="mt-0.5 shrink-0 text-amber-300"
-      />
-
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-amber-300">
-                Sub-Admin
-              </p>
-
-              <p className="text-xs text-slate-300 wrap-break-words">
-                {currentBranchName || 'Branch not found'}
-              </p>
+       
+        <div className="p-4 border-t border-white/10 space-y-3">
+          <p className="text-xs text-slate-400">
+            Signed in as
+          </p>
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-white wrap-break-words">
+              {user?.name || 'Sub-Admin'}
+            </p>
+            <div className="mt-1 flex items-start gap-2">
+              <Building2
+                size={14}
+                className="mt-0.5 shrink-0 text-amber-300"
+              />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-amber-300">
+                  Sub-Admin
+                </p>
+                <p className="text-xs text-slate-300 wrap-break-words">
+                  {currentBranchName || 'Branch not found'}
+                </p>
+              </div>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={logout}
+            className="w-full bg-white/10 hover:bg-white/20 text-xs px-3 py-2 rounded-lg border border-white/20 transition"
+          >
+            Sign Out
+          </button>
         </div>
-
-        <button
-          type="button"
-          onClick={logout}
-          className="w-full bg-white/10 hover:bg-white/20 text-xs px-3 py-2 rounded-lg border border-white/20 transition"
-        >
-          Sign Out
-        </button>
-      </div>
-
       </aside>
 
       {/* MAIN CONTENT */}
@@ -1470,13 +1311,11 @@ const branchNotifications = useMemo(() => {
           name={user?.name?.split(' ')[0]}
           description={`Manage circulation, reservations, and inventory${currentBranchName ? ` for ${currentBranchName}` : ' for your assigned branch'}.`}
           showNotifications={true}
-        // NEW: In-app notifications
           notifications={branchNotifications}
           onNotificationClick={(notification) => {
             setFocusRequestId(notification.requestId);
             setSection(notification.section);
           }}
-
           actions={[
             { label: 'Scan Visitor QR', Icon: QrCode, onClick: () => setSection('attendance') },
             { label: 'Open Inventory', Icon: BookOpen, onClick: () => setSection('inventory') },
@@ -1488,39 +1327,33 @@ const branchNotifications = useMemo(() => {
         {section === 'overview' && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-
               <StatCard
                 label="Visits Today"
                 value={todaysVisits}
                 tone="blue"
               />
-
               <StatCard
                 label="Pending Pickups"
                 value={pendingPickups}
                 tone="amber"
               />
-
               <StatCard
                 label="Active Borrows"
                 value={activeBorrows}
               />
-
               <StatCard
                 label="Overdue Items"
                 value={overdue}
                 tone="red"
               />
-
               <StatCard
                 label="Branch Books"
                 value={branchBooks.length}
                 tone="book"
               />
-
             </div>
 
-             {/* OVERVIEW CHARTS */}
+            {/* OVERVIEW CHARTS */}
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
               <AttendanceTrendChart attendance={branchAttendance} />
               <BorrowingStatusChart requests={branchBorrowRequests} />
@@ -1531,16 +1364,21 @@ const branchNotifications = useMemo(() => {
               <div className="border-b border-slate-100 pb-3 flex flex-col md:flex-row md:items-center justify-between gap-2">
                 <div>
                   <h3 className="text-sm font-bold text-slate-800">
-                    Branch Data Management & Reports
+                    Branch Data Management &amp; Reports
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
                     Export records or import data specifically for your assigned library branch.
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <label className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg cursor-pointer transition">
-                    <Upload size={14} className="mr-1.5 inline-block align-[-2px]" aria-hidden="true" />
+                {/* IMPORT BUTTON WITH REACT HOVER TOOLTIP */}
+                <div 
+                  className="relative inline-block"
+                  onMouseEnter={() => setShowImportGuide(true)}
+                  onMouseLeave={() => setShowImportGuide(false)}
+                >
+                  <label className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg cursor-pointer transition flex items-center shadow-sm">
+                    <Upload size={14} className="mr-1.5 inline-block" aria-hidden="true" />
                     {importingBooks ? 'Importing...' : 'Import Books'}
                     <input
                       type="file"
@@ -1550,22 +1388,47 @@ const branchNotifications = useMemo(() => {
                       className="hidden"
                     />
                   </label>
+
+                  {/* HOVER TOOLTIP CARD (Nakalagay sa taas ng button) */}
+                  {showImportGuide && (
+                    <div className="absolute right-0 bottom-full mb-2 w-80 p-4 bg-sky-50 border border-sky-200 rounded-xl shadow-2xl z-50 text-xs text-sky-950 pointer-events-none transition-all">
+                      <div className="flex items-center gap-1.5 font-bold text-sky-900 mb-2">
+                        <Info size={16} className="text-sky-600" />
+                        <span>Book Import Guide</span>
+                      </div>
+                      
+                      <div className="space-y-1.5 leading-relaxed">
+                        <p>
+                          <span className="font-semibold text-rose-600">Required:</span>{' '}
+                          <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">title</code>,{' '}
+                          <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">author</code>,{' '}
+                          <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">ISBN</code>,{' '}
+                          <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">category</code>,{' '}
+                          <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">stock count</code>
+                        </p>
+                        <p>
+                          <span className="font-semibold text-slate-600">Optional:</span>{' '}
+                          <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">shelf_location</code>,{' '}
+                          <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">summary</code>,{' '}
+                          <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">cover_url</code>
+                        </p>
+                        <p className="pt-1.5 text-[11px] text-sky-700 italic border-t border-sky-200/80 mt-2">
+                          Accepts .CSV format or JSON array files.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div className="border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900">
-                <p className="font-bold">Book import fields</p>
-                <p className="mt-1">Required: title, author, ISBN, category, and stock count (a positive whole number). Optional: shelf_location, summary, cover_url. Accepts CSV or a JSON array.</p>
-              </div>
               {importError && (
-                <p role="alert" className="border border-red-200 bg-red-50 p-3 text-sm text-red-800">{importError}</p>
+                <p role="alert" className="border border-red-200 bg-red-50 p-3 text-sm text-red-800 rounded-lg">{importError}</p>
               )}
               {importMessage && (
-                <p role="status" className="border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{importMessage}</p>
+                <p role="status" className="border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 rounded-lg">{importMessage}</p>
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-
                 {/* BRANCH BOOKS EXPORT */}
                 <div className="p-3.5 border border-slate-100 bg-slate-50/50 rounded-lg flex items-center justify-between">
                   <div>
@@ -1613,7 +1476,6 @@ const branchNotifications = useMemo(() => {
                     </button>
                   </div>
                 </div>
-
               </div>
             </div>
           </div>

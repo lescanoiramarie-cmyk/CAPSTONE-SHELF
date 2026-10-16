@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Search, X } from 'lucide-react';
 import { useLibrary } from '../context/useLibrary';
 import { supabase } from '../lib/supabaseClient';
 
@@ -22,76 +23,75 @@ export default function BookInventory() {
   const [selectedCoverFile, setSelectedCoverFile] = useState(null);
   const [coverPreview, setCoverPreview] = useState('');
   const [isDraggingCover, setIsDraggingCover] = useState(false);
+  
   const getBookCopies = (book) =>
     Number(book?.totalCopies ?? book?.total_copies ?? book?.copies ?? 0);
 
-  
-const MAX_COVER_SIZE = 5 * 1024 * 1024;
+  const MAX_COVER_SIZE = 5 * 1024 * 1024;
 
-const handleCoverSelect = (file) => {
-  if (!file) return;
+  const handleCoverSelect = (file) => {
+    if (!file) return;
 
-  if (!['image/jpeg', 'image/png'].includes(file.type)) {
-    setMutationError('Pumili lamang ng JPG o PNG image.');
-    return;
-  }
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      setMutationError('Pumili lamang ng JPG o PNG image.');
+      return;
+    }
 
-  if (file.size > MAX_COVER_SIZE) {
-    setMutationError('Maximum file size ay 5 MB.');
-    return;
-  }
+    if (file.size > MAX_COVER_SIZE) {
+      setMutationError('Maximum file size ay 5 MB.');
+      return;
+    }
 
-  setMutationError('');
-  setSelectedCoverFile(file);
-  setCoverPreview(URL.createObjectURL(file));
-};
+    setMutationError('');
+    setSelectedCoverFile(file);
+    setCoverPreview(URL.createObjectURL(file));
+  };
 
-useEffect(() => {
-  if (!selectedCoverFile || !coverPreview) return;
+  useEffect(() => {
+    if (!selectedCoverFile || !coverPreview) return;
 
-  return () => URL.revokeObjectURL(coverPreview);
-}, [selectedCoverFile, coverPreview]);
+    return () => URL.revokeObjectURL(coverPreview);
+  }, [selectedCoverFile, coverPreview]);
 
-const handleRemoveCover = () => {
-  setSelectedCoverFile(null);
-  setCoverPreview('');
-  setForm((previous) => ({
-    ...previous,
-    coverUrl: ''
-  }));
-};
+  const handleRemoveCover = () => {
+    setSelectedCoverFile(null);
+    setCoverPreview('');
+    setForm((previous) => ({
+      ...previous,
+      coverUrl: ''
+    }));
+  };
 
-const uploadBookCover = async (file) => {
-  if (!supabase) {
-    throw new Error('Hindi available ang Supabase connection.');
-  }
+  const uploadBookCover = async (file) => {
+    if (!supabase) {
+      throw new Error('Hindi available ang Supabase connection.');
+    }
 
-  const extension = file.type === 'image/png' ? 'png' : 'jpg';
-  const filePath = `books/${crypto.randomUUID()}.${extension}`;
+    const extension = file.type === 'image/png' ? 'png' : 'jpg';
+    const filePath = `books/${crypto.randomUUID()}.${extension}`;
 
-  const { error: uploadError } = await supabase.storage
-    .from('book-covers')
-    .upload(filePath, file, {
-      contentType: file.type,
-      cacheControl: '3600',
-      upsert: false
-    });
+    const { error: uploadError } = await supabase.storage
+      .from('book-covers')
+      .upload(filePath, file, {
+        contentType: file.type,
+        cacheControl: '3600',
+        upsert: false
+      });
 
-  if (uploadError) {
-    throw new Error(`Cover upload failed: ${uploadError.message}`);
-  }
+    if (uploadError) {
+      throw new Error(`Cover upload failed: ${uploadError.message}`);
+    }
 
-  const { data } = supabase.storage
-    .from('book-covers')
-    .getPublicUrl(filePath);
+    const { data } = supabase.storage
+      .from('book-covers')
+      .getPublicUrl(filePath);
 
-  if (!data?.publicUrl) {
-    throw new Error('Hindi makuha ang public URL ng cover image.');
-  }
+    if (!data?.publicUrl) {
+      throw new Error('Hindi makuha ang public URL ng cover image.');
+    }
 
-  return data.publicUrl;
-};
-
+    return data.publicUrl;
+  };
 
   const [form, setForm] = useState({
     title: '',
@@ -104,7 +104,6 @@ const uploadBookCover = async (file) => {
     summary: ''
   });
 
-  // Alternative term para sa personal/unassigned books
   const getLibraryDisplayName = (libId) => {
     if (!libId) return 'Personal Collection'; 
     const found = libraries?.find((l) => String(l.id) === String(libId));
@@ -147,45 +146,39 @@ const uploadBookCover = async (file) => {
     setShowForm(true);
   };
 
-  
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setSaving(true);
-  setMutationError('');
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setMutationError('');
 
-  try {
-    // Keep the existing cover URL unless a new image is selected.
-    let coverUrl = form.coverUrl;
+    try {
+      let coverUrl = form.coverUrl;
 
-    // Upload the selected image to Supabase Storage.
-    if (selectedCoverFile) {
-      coverUrl = await uploadBookCover(selectedCoverFile);
+      if (selectedCoverFile) {
+        coverUrl = await uploadBookCover(selectedCoverFile);
+      }
+
+      const bookPayload = {
+        ...form,
+        coverUrl,
+        totalCopies: form.copies,
+      };
+
+      if (editingId) {
+        await updateBook(editingId, bookPayload);
+      } else {
+        await addBook(bookPayload);
+      }
+
+      setSelectedCoverFile(null);
+      setCoverPreview('');
+      setShowForm(false);
+    } catch (err) {
+      setMutationError(err.message || 'Failed to save book');
+    } finally {
+      setSaving(false);
     }
-
-    // Save the book details together with the cover URL.
-    const bookPayload = {
-      ...form,
-      coverUrl,
-      totalCopies: form.copies,
-    };
-
-    if (editingId) {
-      await updateBook(editingId, bookPayload);
-    } else {
-      await addBook(bookPayload);
-    }
-
-    // Reset the selected image after a successful save.
-    setSelectedCoverFile(null);
-    setCoverPreview('');
-    setShowForm(false);
-  } catch (err) {
-    setMutationError(err.message || 'Failed to save book');
-  } finally {
-    setSaving(false);
-  }
-};
-
+  };
 
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this book?')) {
@@ -241,15 +234,28 @@ const handleSubmit = async (e) => {
       )}
 
       <div className="flex flex-col sm:flex-row gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-100">
-        <div className="flex-1">
+        {/* SEARCH INPUT WITH CLEAR (X) BUTTON */}
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
           <input
             type="text"
             placeholder="Search by title, author, ISBN, category..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full pl-9 pr-9 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100 transition"
+              aria-label="Clear search input"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
+
         <div className="w-full sm:w-48">
           <select
             value={sortBy}
@@ -266,63 +272,98 @@ const handleSubmit = async (e) => {
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-600">
-            <thead className="bg-slate-50 text-slate-700 font-semibold uppercase text-xs">
+          <table className="w-full text-left text-sm text-slate-600 border-collapse">
+            {/* TABLE HEADER */}
+            <thead className="bg-slate-50/80 text-slate-700 font-bold uppercase text-xs border-b border-slate-100">
               <tr>
-                <th className="p-4">Book</th>
-                <th className="p-4">Category</th>
-                <th className="p-4">Library Location</th>
-                <th className="p-4">Copies</th>
-                <th className="p-4 text-right">Actions</th>
+                <th className="p-4 w-5/12">Book</th>
+                <th className="p-4 w-2/12">Category</th>
+                <th className="p-4 w-3/12">Library Location</th>
+                <th className="p-4 w-1/12 text-center">Copies</th>
+                <th className="p-4 w-1/12 text-right">Actions</th>
               </tr>
             </thead>
+
+            {/* TABLE BODY WITH FULL ROW HOVER */}
             <tbody className="divide-y divide-slate-100">
               {filteredBooks.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="p-6 text-center text-slate-400">
+                  <td colSpan="5" className="p-8 text-center text-slate-400 font-medium">
                     No books found.
                   </td>
                 </tr>
               ) : (
                 filteredBooks.map((book) => (
-                  <tr key={book.id} className="hover:bg-slate-50/50 transition">
-                    <td className="p-4 flex items-center gap-3">
+                  <tr 
+                    key={book.id} 
+                    className="group hover:bg-indigo-50/50 hover:shadow-inner transition-all duration-150 cursor-pointer"
+                  >
+                    {/* BOOK COVER & TITLE */}
+                    <td className="p-4 flex items-center gap-3.5">
                       {book.coverUrl ? (
                         <img
                           src={book.coverUrl}
                           alt={book.title}
-                          className="w-10 h-14 object-cover rounded"
+                          className="w-11 h-16 object-cover rounded shadow-sm border border-slate-200/60 shrink-0"
                         />
                       ) : (
-                        <div className="w-10 h-14 bg-slate-200 rounded flex items-center justify-center text-xs text-slate-400">
+                        <div className="w-11 h-16 bg-slate-100 border border-slate-200/80 rounded flex items-center justify-center text-[10px] font-bold text-slate-400 shrink-0 uppercase tracking-tighter">
                           No Cover
                         </div>
                       )}
-                      <div>
-                        <div className="font-semibold text-slate-800">{book.title}</div>
-                        <div className="text-xs text-slate-400">By {book.author || 'Unknown'}</div>
-                        {book.isbn && <div className="text-[10px] text-slate-400">ISBN: {book.isbn}</div>}
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-800 text-sm group-hover:text-indigo-900 transition-colors truncate">
+                          {book.title}
+                        </div>
+                        <div className="text-xs text-slate-500 font-medium">
+                          By {book.author || 'Unknown'}
+                        </div>
+                        {book.isbn && (
+                          <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                            ISBN: {book.isbn}
+                          </div>
+                        )}
                       </div>
                     </td>
-                    <td className="p-4">
-                      <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs font-medium">
+
+                    {/* CATEGORY */}
+                    <td className="p-4 align-middle">
+                      <span className="inline-block px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md text-xs font-semibold group-hover:bg-white group-hover:shadow-sm transition-all">
                         {book.category}
                       </span>
                     </td>
-                    <td className="p-4 text-xs font-medium text-slate-700">
+
+                    {/* LIBRARY LOCATION */}
+                    <td className="p-4 align-middle text-xs font-semibold text-slate-700">
                       {getLibraryDisplayName(book.libraryId)}
                     </td>
-                    <td className="p-4 font-semibold text-slate-700">{getBookCopies(book)}</td>
-                    <td className="p-4 text-right space-x-2">
+
+                    {/* COPIES (Naka-center para tapat sa Header) */}
+                    <td className="p-4 align-middle text-center">
+                      <span className="inline-flex items-center justify-center font-extrabold text-slate-800 text-sm px-2.5 py-1 rounded-full bg-slate-100 group-hover:bg-indigo-100 group-hover:text-indigo-800 transition-colors">
+                        {getBookCopies(book)}
+                      </span>
+                    </td>
+
+                    {/* ACTIONS */}
+                    <td className="p-4 align-middle text-right space-x-2">
                       <button
-                        onClick={() => handleOpenEdit(book)}
-                        className="px-2 py-1 text-xs text-indigo-600 hover:bg-indigo-50 rounded font-medium"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenEdit(book);
+                        }}
+                        className="px-2.5 py-1 text-xs text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 rounded-md font-bold transition-colors"
                       >
                         Edit
                       </button>
                       <button
-                        onClick={() => handleDelete(book.id)}
-                        className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded font-medium"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(book.id);
+                        }}
+                        className="px-2.5 py-1 text-xs text-red-600 hover:bg-red-100 hover:text-red-800 rounded-md font-bold transition-colors"
                       >
                         Delete
                       </button>
@@ -421,7 +462,6 @@ const handleSubmit = async (e) => {
                 </select>
               </div>
 
-              
               <div>
                 <label className="block text-slate-700 font-semibold mb-1">
                   Book Cover Image
