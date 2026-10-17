@@ -127,9 +127,13 @@ export const AuthProvider = ({ children }) => {
 ];
 
       // 3. I-verify kung ang domain ay kasama sa allowed domains (e.g. g.batstate-u.edu.ph)
-      const isDomainAllowed = allowedDomains.some(
-        (domain) => emailDomain === domain || emailDomain.endsWith('.' + domain)
-      );
+      const isDomainAllowed =
+  emailDomain === 'gmail.com' ||
+  allowedDomains.some(
+    (domain) =>
+      emailDomain === domain ||
+      emailDomain.endsWith('.' + domain)
+  );
 
       // HAHARANGIN KAPAG HINDI KASAMA SA ALLOWED DOMAINS
       if (!isDomainAllowed) {

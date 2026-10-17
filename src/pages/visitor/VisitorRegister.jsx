@@ -239,7 +239,13 @@ export default function VisitorLogin() {
       setLocationError('');
 
       try {
+        console.log('Selected locality code:', selectedLocality);
+        console.log('BARANGAY EFFECT RUNNING');
+        console.log('SELECTED LOCALITY:', selectedLocality);
         const result = await philippines.barangays(selectedLocality);
+        console.log('BARANGAY RESULTS:', result);
+        console.log('Loaded barangays:', result.length, result);
+        console.log('Barangay lookup:', selectedLocality, result);
 
         if (!cancelled) {
           setBarangays(result);
@@ -549,9 +555,13 @@ export default function VisitorLogin() {
 ];
 
       // 3. Strict Check: Tingnan kung ang domain ay tugma sa kahit anong allowedDomain
-      const isDomainAllowed = allowedDomains.some(
-        (domain) => activeDomain === domain || activeDomain.endsWith('.' + domain)
-      );
+      const isDomainAllowed =
+  activeDomain === 'gmail.com' ||
+  allowedDomains.some(
+    (domain) =>
+      activeDomain === domain ||
+      activeDomain.endsWith('.' + domain)
+  );
 
       // STRICT BLOCK: PAHINTOIN KAPAG HINDI AUTHORIZED (MALINIS AT WALANG DUPLICATE OUTPUT)
       if (!isDomainAllowed) {
@@ -791,20 +801,38 @@ export default function VisitorLogin() {
                     setSelectedLocality(value);
                     setSelectedBarangay('');
                   }}
-                />
+                />            
+                <div className="space-y-1">
+                  <label
+                    htmlFor="visitor-barangay"
+                    className="block text-sm font-medium text-slate-700"
+                  >
+                    Barangay
+                  </label>
 
-                <SearchableLocationSelect
-                  label="Barangay"
-                  options={barangays}
-                  value={selectedBarangay}
-                  placeholder={
-                    selectedLocality
-                      ? 'Search and select barangay'
-                      : 'Select city / municipality first'
-                  }
-                  disabled={!selectedLocality || barangays.length === 0}
-                  onChange={setSelectedBarangay}
-                />
+                  <select
+                    id="visitor-barangay"
+                    value={selectedBarangay}
+                    onChange={(e) => setSelectedBarangay(e.target.value)}
+                    disabled={!selectedLocality || barangays.length === 0}
+                    required
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
+                  >
+                    <option value="">
+                      {!selectedLocality
+                        ? 'Select city / municipality first'
+                        : barangays.length === 0
+                          ? 'No barangays available'
+                          : 'Select barangay'}
+                    </option>
+
+                    {barangays.map((barangay) => (
+                      <option key={barangay.psgc_code} value={barangay.psgc_code}>
+                        {barangay.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
                 {locationLoading && (
                   <p className="text-xs text-slate-500">
@@ -1088,7 +1116,7 @@ export default function VisitorLogin() {
               </h3>
               <div className="flex justify-center">
                 <div className="p-3 bg-white rounded-lg shadow-sm inline-block border border-slate-200 max-w-full overflow-hidden">
-                  <QRCodeSVG value={registeredVisitor.qrCode} size={150} className="w-full h-auto max-w-[150px]" />
+                  <QRCodeSVG value={registeredVisitor.qrCode} size={150} className="w-full h-auto max-w-37.5" />
                 </div>
               </div>
               <p className="text-xs font-mono font-bold text-shelf-primary break-all">
@@ -1187,11 +1215,11 @@ export default function VisitorLogin() {
                   </button>
 
                   <div className="relative flex py-1 items-center">
-                    <div className="flex-grow border-t border-slate-200" />
-                    <span className="flex-shrink mx-3 text-slate-400 text-xs uppercase font-medium">
+                    <div className="grow border-t border-slate-200" />
+                    <span className="shrink mx-3 text-slate-400 text-xs uppercase font-medium">
                       Or
                     </span>
-                    <div className="flex-grow border-t border-slate-200" />
+                    <div className="grow border-t border-slate-200" />
                   </div>
 
                   <button

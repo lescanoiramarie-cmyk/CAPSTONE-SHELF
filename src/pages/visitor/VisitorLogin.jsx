@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { Html5Qrcode } from 'html5-qrcode';
+import { philippines } from '@ianlabicani/geoph-lite';
 import {
   Eye,
   EyeOff,
@@ -396,14 +397,145 @@ export default function VisitorLogin() {
     confirmPassword: '',
   });
 
-  const [selectedProvince, setSelectedProvince] =
-    useState('');
+  
+  const [selectedProvince, setSelectedProvince] = useState('');
+  const [selectedCity, setSelectedCity] = useState('');
+  const [barangay, setBarangay] = useState('');
 
-  const [selectedCity, setSelectedCity] =
-    useState('');
+  const [provinceOptions, setProvinceOptions] = useState([]);
+  const [cityOptions, setCityOptions] = useState([]);
+  const [barangayOptions, setBarangayOptions] = useState([]);
+  const [locationLoading, setLocationLoading] = useState(false);
 
-  const [barangay, setBarangay] =
-    useState('');
+  
+  // Load all Philippine provinces on mount.
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadProvinces = async () => {
+      try {
+        setLocationLoading(true);
+
+        const regions = philippines.regions();
+
+        const provinceGroups = await Promise.all(
+          regions.map((region) =>
+            philippines.provinces(region.psgc_code)
+          )
+        );
+
+        if (!cancelled) {
+          const provinces = provinceGroups
+            .flat()
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+          setProvinceOptions(provinces);
+        }
+      } catch (err) {
+        console.error('Failed to load provinces:', err);
+        if (!cancelled) {
+          setError('Unable to load the province list. Please refresh and try again.');
+        }
+      } finally {
+        if (!cancelled) {
+          setLocationLoading(false);
+        }
+      }
+    };
+
+    loadProvinces();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Load cities and municipalities for the selected province.
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCities = async () => {
+      setCityOptions([]);
+      setBarangayOptions([]);
+
+      if (!selectedProvince) return;
+
+      const province = provinceOptions.find(
+        (item) => item.name === selectedProvince
+      );
+
+      if (!province) return;
+
+      try {
+        setLocationLoading(true);
+
+        const localities = await philippines.localities(
+          province.psgc_code
+        );
+
+        if (!cancelled) {
+          setCityOptions(
+            localities.sort((a, b) => a.name.localeCompare(b.name))
+          );
+        }
+      } catch (err) {
+        console.error('Failed to load cities/municipalities:', err);
+      } finally {
+        if (!cancelled) {
+          setLocationLoading(false);
+        }
+      }
+    };
+
+    loadCities();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProvince, provinceOptions]);
+
+  // Load barangays for the selected city or municipality.
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBarangays = async () => {
+      setBarangayOptions([]);
+
+      if (!selectedCity) return;
+
+      const locality = cityOptions.find(
+        (item) => item.name === selectedCity
+      );
+
+      if (!locality) return;
+
+      try {
+        setLocationLoading(true);
+
+        const barangays = await philippines.barangays(
+          locality.psgc_code
+        );
+
+        if (!cancelled) {
+          setBarangayOptions(
+            barangays.sort((a, b) => a.name.localeCompare(b.name))
+          );
+        }
+      } catch (err) {
+        console.error('Failed to load barangays:', err);
+      } finally {
+        if (!cancelled) {
+          setLocationLoading(false);
+        }
+      }
+    };
+
+    loadBarangays();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCity, cityOptions]);
 
   const [loginData, setLoginData] = useState({
     identifier: '',
@@ -2394,158 +2526,148 @@ export default function VisitorLogin() {
                   Residential Location
                 </label>
 
-                {/* PROVINCE */}
+              {/* PROVINCE */}
 
-                <select
-                  value={
-                    selectedProvince
-                  }
-                  onChange={(event) => {
-                    const province =
-                      event.target.value;
+              <select
+                value={selectedProvince}
+                onChange={(event) => {
+                  const provinceName = event.target.value;
 
-                    setSelectedProvince(
-                      province
-                    );
+                  setSelectedProvince(provinceName);
+                  setSelectedCity('');
+                  setBarangay('');
+                  setCityOptions([]);
+                  setBarangayOptions([]);
 
-                    setSelectedCity(
-                      ''
-                    );
+                  setFieldErrors((previous) => ({
+                    ...previous,
+                    province: '',
+                    city: '',
+                    barangay: '',
+                  }));
+                }}
+                disabled={locationLoading && provinceOptions.length === 0}
+                className={`w-full px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 ${
+                  fieldErrors.province
+                    ? 'border-red-400'
+                    : 'border-slate-300'
+                }`}
+              >
+                <option value="">
+                  {provinceOptions.length > 0
+                    ? 'Select Province'
+                    : 'Loading provinces...'}
+                </option>
 
-                    setBarangay('');
-
-                    setFieldErrors({
-                      ...fieldErrors,
-                      province: '',
-                      city: '',
-                      barangay: '',
-                    });
-                  }}
-                  className={`w-full px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 ${
-                    fieldErrors.province
-                      ? 'border-red-400'
-                      : 'border-slate-300'
-                  }`}
-                >
-                  <option value="">
-                    Select Province
+                {provinceOptions.map((province) => (
+                  <option
+                    key={province.psgc_code}
+                    value={province.name}
+                  >
+                    {province.name}
                   </option>
+                ))}
+              </select>
 
-                  {Object.keys(
-                    LOCATION_OPTIONS
-                  ).map(
-                    (province) => (
-                      <option
-                        key={province}
-                        value={province}
-                      >
-                        {province}
-                      </option>
-                    )
-                  )}
-                </select>
-
-                {fieldErrors.province && (
-                  <p className="mt-1 text-[11px] font-medium text-red-600">
-                    {fieldErrors.province}
-                  </p>
-                )}
-
-                {/* CITY / MUNICIPALITY */}
-
-                <select
-                  value={
-                    selectedCity
-                  }
-                  onChange={(event) => {
-                    setSelectedCity(
-                      event.target.value
-                    );
-
-                    setBarangay('');
-
-                    setFieldErrors({
-                      ...fieldErrors,
-                      city: '',
-                      barangay: '',
-                    });
-                  }}
-                  disabled={
-                    !selectedProvince
-                  }
-                  className={`w-full px-3 py-2 border rounded-lg text-sm bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 ${
-                    fieldErrors.city
-                      ? 'border-red-400'
-                      : 'border-slate-300'
-                  }`}
-                >
-                  <option value="">
-                    {selectedProvince
-                      ? 'Select City / Municipality'
-                      : 'Select province first'}
-                  </option>
-
-                  {selectedProvince &&
-                    LOCATION_OPTIONS[
-                      selectedProvince
-                    ]?.map(
-                      (city) => (
-                        <option
-                          key={city}
-                          value={city}
-                        >
-                          {city}
-                        </option>
-                      )
-                    )}
-                </select>
-
-                {fieldErrors.city && (
-                  <p className="mt-1 text-[11px] font-medium text-red-600">
-                    {fieldErrors.city}
-                  </p>
-                )}
-
-                {/* BARANGAY */}
-
-                <input
-                  type="text"
-                  name="user_barangay"
-                  autoComplete="off"
-                  disabled={
-                    !selectedCity
-                  }
-                  placeholder="Enter Barangay"
-                  value={barangay}
-                  onChange={(event) => {
-                    const value =
-                      event.target.value;
-
-                    setBarangay(value);
-
-                    setFieldErrors({
-                      ...fieldErrors,
-                      barangay: '',
-                    });
-                  }}
-                  className={`w-full px-3 py-2 border rounded-lg text-sm disabled:bg-slate-100 disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 ${
-                    fieldErrors.barangay
-                      ? 'border-red-400'
-                      : 'border-slate-300'
-                  }`}
-                />
-
-                {fieldErrors.barangay && (
-                  <p className="mt-1 text-[11px] font-medium text-red-600">
-                    {fieldErrors.barangay}
-                  </p>
-                )}
-
-                <p className="text-[10px] text-slate-500">
-                  Select your province and
-                  city/municipality, then enter
-                  your barangay.
+              {fieldErrors.province && (
+                <p className="mt-1 text-[11px] font-medium text-red-600">
+                  {fieldErrors.province}
                 </p>
+              )}
+               
+              {/* CITY / MUNICIPALITY */}
+
+              <select
+                value={selectedCity}
+                onChange={(event) => {
+                  setSelectedCity(event.target.value);
+                  setBarangay('');
+                  setBarangayOptions([]);
+
+                  setFieldErrors((previous) => ({
+                    ...previous,
+                    city: '',
+                    barangay: '',
+                  }));
+                }}
+                disabled={!selectedProvince || locationLoading}
+                className={`w-full px-3 py-2 border rounded-lg text-sm bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 ${
+                  fieldErrors.city
+                    ? 'border-red-400'
+                    : 'border-slate-300'
+                }`}
+              >
+                <option value="">
+                  {!selectedProvince
+                    ? 'Select province first'
+                    : locationLoading && cityOptions.length === 0
+                      ? 'Loading cities / municipalities...'
+                      : 'Select City / Municipality'}
+                </option>
+
+                {cityOptions.map((city) => (
+                  <option
+                    key={city.psgc_code}
+                    value={city.name}
+                  >
+                    {city.name}
+                  </option>
+                ))}
+              </select>
+
+              {fieldErrors.city && (
+                <p className="mt-1 text-[11px] font-medium text-red-600">
+                  {fieldErrors.city}
+                </p>
+              )}
+                
+              {/* BARANGAY */}
+
+              <select
+                name="user_barangay"
+                value={barangay}
+                onChange={(event) => {
+                  setBarangay(event.target.value);
+
+                  setFieldErrors((previous) => ({
+                    ...previous,
+                    barangay: '',
+                  }));
+                }}
+                disabled={!selectedCity || barangayOptions.length === 0}
+                className={`w-full px-3 py-2 border rounded-lg text-sm bg-white disabled:bg-slate-100 disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 ${
+                  fieldErrors.barangay
+                    ? 'border-red-400'
+                    : 'border-slate-300'
+                }`}
+              >
+                <option value="">
+                  {!selectedCity
+                    ? 'Select city / municipality first'
+                    : barangayOptions.length === 0
+                      ? 'Loading barangays...'
+                      : 'Select Barangay'}
+                </option>
+
+                {barangayOptions.map((item) => (
+                  <option
+                    key={item.psgc_code}
+                    value={item.name}
+                  >
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+
+              {fieldErrors.barangay && (
+                <p className="mt-1 text-[11px] font-medium text-red-600">
+                  {fieldErrors.barangay}
+                </p>
+              )}
+
+              <p className="text-[10px] text-slate-500">
+                Select your province and city/municipality, then choose your barangay.
+              </p>
               </div>
 
               {/* PASSWORD */}
