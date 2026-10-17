@@ -381,6 +381,165 @@ Deno.serve(async (request) => {
       });
     }
 
+
+    /*
+     * UPDATE SUB-ADMIN
+     */
+    if (body.operation === "update") {
+      const userId = String(body.userId || "").trim();
+      const fullName = String(body.fullName || "").trim();
+      const email = String(body.email || "").trim().toLowerCase();
+      const libraryId = String(body.libraryId || "").trim();
+      const password = String(body.password || "");
+
+      if (!userId || !fullName || !email || !libraryId) {
+        return respond(400, {
+          error: "Staff ID, name, email, and assigned library are required.",
+        });
+      }
+
+      if (password && password.length < 10) {
+        return respond(400, {
+          error: "Password must contain at least 10 characters.",
+        });
+      }
+
+      if (userId === EXISTING_SUPERADMIN_ID) {
+        return respond(403, {
+          error: "The existing Super Admin account is protected.",
+        });
+      }
+
+      const { data: profile, error: profileError } = await admin
+        .from("staff_profiles")
+        .select("id, role, library_id, is_active")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (profileError || !profile || profile.role !== "subadmin") {
+        return respond(404, {
+          error: "Sub-admin account not found.",
+        });
+      }
+
+      const { data: library, error: libraryError } = await admin
+        .from("libraries")
+        .select("id")
+        .eq("id", libraryId)
+        .maybeSingle();
+
+      if (libraryError || !library) {
+        return respond(400, {
+          error: "Select a valid library branch.",
+        });
+      }
+
+      const { data: authUser, error: authUserError } =
+        await admin.auth.admin.getUserById(userId);
+
+      if (authUserError || !authUser?.user) {
+        return respond(404, {
+          error: "Sub-admin Auth account not found.",
+        });
+      }
+
+      const { error: authUpdateError } =
+        await admin.auth.admin.updateUserById(userId, {
+          email,
+          ...(password ? { password } : {}),
+          app_metadata: {
+            ...(authUser.user.app_metadata || {}),
+            role: "subadmin",
+            library_id: libraryId,
+            is_active: profile.is_active,
+          },
+          user_metadata: {
+            ...(authUser.user.user_metadata || {}),
+            full_name: fullName,
+          },
+        });
+
+      if (authUpdateError) {
+        return respond(400, {
+          error: authUpdateError.message,
+        });
+      }
+
+      const { error: updateError } = await admin
+        .from("staff_profiles")
+        .update({
+          full_name: fullName,
+          email,
+          library_id: libraryId,
+        })
+        .eq("id", userId);
+
+      if (updateError) {
+        return respond(400, {
+          error: updateError.message,
+        });
+      }
+
+      return respond(200, {
+        success: true,
+        id: userId,
+        message: "Sub-admin account updated successfully.",
+      });
+    }
+
+
+    /*
+     * DELETE SUB-ADMIN
+     */
+    if (body.operation === "delete") {
+      const userId = String(body.userId || "").trim();
+
+      if (!userId) {
+        return respond(400, {
+          error: "A staff account ID is required.",
+        });
+      }
+
+      if (userId === EXISTING_SUPERADMIN_ID) {
+        return respond(403, {
+          error: "The existing Super Admin account is protected.",
+        });
+      }
+
+      const { data: profile, error: profileError } = await admin
+        .from("staff_profiles")
+        .select("id, role")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (profileError) {
+        return respond(400, {
+          error: profileError.message,
+        });
+      }
+
+      if (!profile || profile.role !== "subadmin") {
+        return respond(404, {
+          error: "Sub-admin account not found.",
+        });
+      }
+
+      const { error: deleteAuthError } =
+        await admin.auth.admin.deleteUser(userId);
+
+      if (deleteAuthError) {
+        return respond(400, {
+          error: deleteAuthError.message,
+        });
+      }
+
+      return respond(200, {
+        success: true,
+        id: userId,
+        message: "Sub-admin account deleted successfully.",
+      });
+    }
+
     /*
      * ENABLE / DISABLE SUB-ADMIN
      */
@@ -404,7 +563,7 @@ Deno.serve(async (request) => {
         error: profileError,
       } = await admin
         .from("staff_profiles")
-        .select("id, role, library_id")
+        .select("id, role, library_id, is_active")
         .eq("id", userId)
         .maybeSingle();
 
@@ -419,6 +578,18 @@ Deno.serve(async (request) => {
         });
       }
 
+
+      const {
+        data: authUser,
+        error: authUserError,
+      } = await admin.auth.admin.getUserById(userId);
+
+      if (authUserError || !authUser?.user) {
+        return respond(404, {
+          error: "Sub-admin Auth account not found.",
+        });
+      }
+
       const {
         error: authUpdateError,
       } = await admin.auth.admin.updateUserById(
@@ -429,6 +600,7 @@ Deno.serve(async (request) => {
             : "876000h",
 
           app_metadata: {
+            ...(authUser.user.app_metadata || {}),
             role: "subadmin",
             library_id: profile.library_id,
             is_active: isActive,

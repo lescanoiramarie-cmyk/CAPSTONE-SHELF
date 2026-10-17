@@ -160,7 +160,7 @@ function getPersonalBookAvailabilityLabel(book) {
   } = getPersonalBookCopyAvailability(book);
 
   if (availableCopies === 0) {
-    return 'Borrowed Â· Unavailable';
+    return 'Unavailable';
   }
 
   if (borrowedCopies > 0) {

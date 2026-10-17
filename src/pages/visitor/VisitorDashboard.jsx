@@ -706,8 +706,8 @@ function VisitorDashboardContent() {
               SHELF ILMS
             </span>
 
-            <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-xs">
-              Visitor Portal
+            <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-sm font-medium">
+              Library Visitor
             </span>
           </div>
 
@@ -715,7 +715,7 @@ function VisitorDashboardContent() {
           <div className="grid w-full grid-cols-4 items-center gap-2 sm:ml-auto sm:flex sm:w-auto sm:justify-end sm:gap-3">
 
             {/* WELCOME */}
-            <span className="col-span-4 text-xs text-slate-300 sm:col-span-1 sm:mr-1">
+            <span className="col-span-4 text-sm text-slate-200 sm:col-span-1 sm:mr-1">
               Welcome, <b>{user?.name || 'Visitor'}</b>
             </span>
 

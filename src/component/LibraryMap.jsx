@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Clock3, MapPin } from 'lucide-react';
+import {
+  Clock3,
+  MapPin,
+  Maximize2,
+  Minimize2,
+} from 'lucide-react';
 import {
   MapContainer,
   TileLayer,
@@ -13,15 +18,17 @@ import { useLibraryData } from '../context/useLibrary.js';
 import 'leaflet/dist/leaflet.css';
 import '../lib/leafletIcons.js';
 
-function FocusBranch({ library, markerRef }) {
+
+function ResizeMap({ isFullscreen }) {
   const map = useMap();
 
   useEffect(() => {
-    if (!library) return;
-    const position = [Number(library.lat), Number(library.lng)];
-    map.setView(position, Math.max(map.getZoom(), 15));
-    markerRef.current?.openPopup();
-  }, [library, map, markerRef]);
+    const timeoutId = window.setTimeout(() => {
+      map.invalidateSize();
+    }, 200);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isFullscreen, map]);
 
   return null;
 }
@@ -31,6 +38,7 @@ export default function LibraryMap({
   focusBranchId = null,
   bookContext = null,
   libraryScopeId = null,
+  showLibraryList = true,
 }) {
   const { libraries = [] } = useLibraryData();
   const visibleLibraries = libraryScopeId == null
@@ -42,6 +50,7 @@ export default function LibraryMap({
 
   const [search, setSearch] = useState('');
   const [campusFilter, setCampusFilter] = useState('All');
+  const [isMapFullscreen, setIsMapFullscreen] = useState(false);
   const [showMap, setShowMap] = useState(true);
 
   // =========================================================
@@ -192,21 +201,47 @@ export default function LibraryMap({
       {/* =====================================================
           MAP AND LIBRARY LIST
       ====================================================== */}
-
       <div
         className={
-          showMap
-            ? 'grid grid-cols-1 lg:grid-cols-5 gap-4'
-            : 'grid grid-cols-1 gap-4'
+          showMap && showLibraryList
+          ? 'grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]'
+          : 'grid grid-cols-1 gap-5'
         }
       >
 
         {/* ===================================================
             MAP
         ==================================================== */}
-
         {showMap && (
-          <div className="relative isolate z-0 min-w-0 overflow-hidden rounded-xl border border-slate-200 shadow-sm h-80 lg:h-150">
+          <div
+            className={
+              isMapFullscreen
+                ? 'fixed inset-0 z-9999 h-screen w-screen overflow-hidden bg-white'
+                : 'relative isolate z-0 min-w-0 h-105 lg:h-140 overflow-hidden rounded-xl border border-slate-200 shadow-sm'
+            }
+          >
+            <button
+              type="button"
+              onClick={() => setIsMapFullscreen((current) => !current)}
+              aria-label={
+                isMapFullscreen
+                  ? 'Exit full-screen map'
+                  : 'View map full-screen'
+              }
+              title={
+                isMapFullscreen
+                  ? 'Exit full screen'
+                  : 'View full screen'
+              }
+
+                className="absolute right-3 top-3 z-1200 flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-lg transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-shelf-primary"
+            >
+              {isMapFullscreen ? (
+                <Minimize2 size={20} aria-hidden="true" />
+              ) : (
+                <Maximize2 size={20} aria-hidden="true" />
+              )}
+            </button>
 
             <MapContainer
               center={[14.085, 121.149]}
@@ -214,6 +249,7 @@ export default function LibraryMap({
               scrollWheelZoom
               className="relative z-0 h-full w-full"
             >
+              <ResizeMap isFullscreen={isMapFullscreen} />
 
               <TileLayer
                 attribution="&copy; OpenStreetMap contributors"
@@ -261,24 +297,24 @@ export default function LibraryMap({
 
                       <div className="min-w-45">
 
-                        <h3 className="font-bold text-sm">
+                        <h3 className="text-base font-bold leading-snug text-slate-900">
                           {library.name}
                         </h3>
 
                         {library.campus && (
-                          <p className="text-xs text-slate-500 mt-1">
+                          <p className="mt-1 text-sm leading-relaxed text-slate-600">
                             {library.campus}
                           </p>
                         )}
 
                         {library.address && (
-                          <p className="mt-2 flex items-start gap-1 text-xs text-slate-600">
+                          <p className="mt-2 flex items-start gap-2 text-sm leading-relaxed text-slate-600">
                             <MapPin size={13} className="mt-0.5 shrink-0" aria-hidden="true" /> {library.address}
                           </p>
                         )}
 
                         {library.hours && (
-                          <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                          <p className="mt-2 flex items-center gap-2 text-sm leading-relaxed text-slate-600">
                             <Clock3 size={13} aria-hidden="true" /> {library.hours}
                           </p>
                         )}
@@ -287,10 +323,10 @@ export default function LibraryMap({
                           library.id === focusBranchId &&
                           bookContext && (
                           <div className="mt-2 border-t border-slate-200 pt-2">
-                            <p className="text-xs font-bold text-slate-800">
+                            <p className="text-xs font-bold text-slate-900">
                               {bookContext.title}
                             </p>
-                            <p className="text-xs text-slate-600">
+                            <p className="mt-1 text-sm leading-relaxed text-slate-600">
                               {bookContext.availableCopies} available of{' '}
                               {bookContext.totalCopies} copies
                             </p>
@@ -311,7 +347,7 @@ export default function LibraryMap({
                                 library.id
                               )
                             }
-                            className="mt-2 text-xs font-bold text-shelf-primary hover:underline"
+                            className="mt-3 inline-flex items-center text-sm font-bold text-shelf-primary hover:underline"
                           >
                             Browse Catalog →
                           </button>
@@ -332,13 +368,9 @@ export default function LibraryMap({
         {/* ===================================================
             LIBRARY LIST
         ==================================================== */}
-
+      {showLibraryList && (
         <div
-          className={
-            showMap
-              ? 'lg:col-span-3 space-y-3'
-              : 'space-y-3'
-          }
+          className="min-w-0 space-y-3"
         >
 
           {/* NO RESULTS */}
@@ -359,19 +391,19 @@ export default function LibraryMap({
             (library) => (
               <div
                 key={library.id}
-                className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm"
+                className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
               >
 
                 <div className="flex justify-between items-start gap-3">
 
                   <div>
 
-                    <h3 className="font-bold text-sm text-slate-800">
+                    <h3 className="text-base font-bold leading-snug text-slate-900">
                       {library.name}
                     </h3>
 
                     {library.campus && (
-                      <p className="text-xs text-slate-500">
+                      <p className="mt-1 text-sm leading-relaxed text-slate-600">
                         {library.campus}
                       </p>
                     )}
@@ -394,13 +426,13 @@ export default function LibraryMap({
                 </div>
 
                 {library.address && (
-                  <p className="text-xs text-slate-500 mt-2">
+                  <p className="mt-3 text-sm leading-relaxed text-slate-600">
                     {library.address}
                   </p>
                 )}
 
                 {library.hours && (
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="mt-2 text-sm leading-relaxed text-slate-500">
                     Hours: {library.hours}
                   </p>
                 )}
@@ -413,7 +445,7 @@ export default function LibraryMap({
                         library.id
                       )
                     }
-                    className="mt-3 text-xs font-bold text-shelf-primary hover:underline"
+                    className="mt-4 inline-flex items-center text-sm font-bold text-shelf-primary hover:underline"
                   >
                     Browse Library Catalog →
                   </button>
@@ -424,7 +456,7 @@ export default function LibraryMap({
           )}
 
         </div>
-
+      )}
       </div>
 
     </div>

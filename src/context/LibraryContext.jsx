@@ -918,6 +918,25 @@ export function LibraryProvider({ children }) {
     [withRefresh]
   );
 
+
+  const updateLibrary = useMemo(
+    () =>
+      withRefresh(
+        store.updateLibrary,
+        'updateLibrary'
+      ),
+    [withRefresh]
+  );
+
+  const deleteLibrary = useMemo(
+    () =>
+      withRefresh(
+        store.deleteLibrary,
+        'deleteLibrary'
+      ),
+    [withRefresh]
+  );
+
   const addBook = useMemo(
     () =>
       withRefresh(
@@ -1235,11 +1254,15 @@ export function LibraryProvider({ children }) {
 
       refreshAll,
 
-      // ----------------------------------------------------------------------
+            // ----------------------------------------------------------------------
       // Library management
       // ----------------------------------------------------------------------
 
       addLibrary,
+
+      updateLibrary,
+
+      deleteLibrary,
 
       addBook,
 
@@ -1250,7 +1273,6 @@ export function LibraryProvider({ children }) {
       deleteBook,
 
       loadExternalCatalog,
-
       // ----------------------------------------------------------------------
       // Personal / Community books
       // ----------------------------------------------------------------------
@@ -1327,7 +1349,11 @@ export function LibraryProvider({ children }) {
 
       refreshAll,
 
-      addLibrary,
+            addLibrary,
+
+      updateLibrary,
+
+      deleteLibrary,
 
       addBook,
 

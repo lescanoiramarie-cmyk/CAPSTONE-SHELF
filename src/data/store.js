@@ -458,6 +458,87 @@ export async function addLibrary(library) {
   return mapLibrary(data);
 }
 
+
+/**
+ * Update an existing library.
+ */
+export async function updateLibrary(libraryId, library) {
+  const id = normalizeText(libraryId);
+
+  if (!id || !isValidUuid(id)) {
+    throw new Error('A valid library ID is required.');
+  }
+
+  const name = normalizeText(library?.name);
+
+  if (!name) {
+    throw new Error('Library name is required.');
+  }
+
+  const emailDomain = normalizeText(
+    library?.email_domain ?? library?.emailDomain
+  );
+
+  const { data, error } = await supabase
+    .from('libraries')
+    .update({
+      name,
+      campus: normalizeText(library?.campus) || null,
+      address: normalizeText(library?.address) || null,
+      lat: Number.isFinite(Number(library?.lat))
+        ? Number(library.lat)
+        : null,
+      lng: Number.isFinite(Number(library?.lng))
+        ? Number(library.lng)
+        : null,
+      hours: normalizeText(library?.hours) || null,
+      status: normalizeText(library?.status) || 'Open',
+      email_domain: emailDomain
+        ? emailDomain.toLowerCase()
+        : null,
+    })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    throw cleanErr(error);
+  }
+
+  return mapLibrary(data);
+}
+
+/**
+ * Delete a library by its UUID.
+ */
+export async function deleteLibrary(libraryId) {
+  const id = normalizeText(libraryId);
+
+  if (!id || !isValidUuid(id)) {
+    throw new Error('A valid library ID is required.');
+  }
+
+  const { data, error } = await supabase
+    .from('libraries')
+    .delete()
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
+
+  if (error) {
+    throw cleanErr(error);
+  }
+
+  if (!data) {
+    throw new Error(
+      'Library not found or you do not have permission to delete it.'
+    );
+  }
+
+  return data.id;
+}
+
+
 // ============================================================================
 // FETCH ALL BOOKS
 // ============================================================================

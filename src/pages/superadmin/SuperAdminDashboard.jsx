@@ -175,6 +175,8 @@ export default function SuperAdminDashboard() {
 
   const {
     addLibrary,
+    updateLibrary,
+    deleteLibrary,
   } = useLibrary();
 
   const {
@@ -249,6 +251,9 @@ export default function SuperAdminDashboard() {
     showAddLibrary,
     setShowAddLibrary,
   ] = useState(false);
+
+  const [editingLibraryId, setEditingLibraryId] = useState(null);
+
   const [
     savingLibrary,
     setSavingLibrary,
@@ -309,6 +314,8 @@ export default function SuperAdminDashboard() {
     libraryId: '',
   });
 
+  const [editingStaffId, setEditingStaffId] = useState(null);
+
   // ============================================================
   // LOAD STAFF ACCOUNTS
   // ============================================================
@@ -365,178 +372,210 @@ export default function SuperAdminDashboard() {
   // ============================================================
   // CREATE STAFF ACCOUNT
   // ============================================================
-  const handleCreateStaff =
-    async (event) => {
-      event.preventDefault();
-      if (!supabase) {
-        setStaffError(
-          'Supabase is not configured.'
-        );
-        return;
-      }
-      setStaffError('');
-      setStaffMessage('');
-      const fullName =
-        staffForm.fullName.trim();
-      const email =
-        staffForm.email
-          .trim()
-          .toLowerCase();
-      const password =
-        staffForm.password;
-      const libraryId =
-        staffForm.libraryId;
-      if (
-        !fullName ||
-        !email ||
-        !password ||
-        !libraryId
-      ) {
-        setStaffError(
-          'Please complete all staff account fields.'
-        );
-        return;
-      }
-      if (password.length < 10) {
-        setStaffError(
-          'Password must contain at least 10 characters.'
-        );
-        return;
-      }
-      try {
-        setStaffLoading(true);
-        const {
-          data,
-          error,
-        } =
-          await supabase.functions.invoke(
-            'manage-staff',
-            {
-              body: {
-                operation: 'create',
-                email,
-                fullName,
-                password,
-                libraryId,
-                role: 'subadmin',
-              },
+
+const handleCreateStaff = async (event) => {
+  event.preventDefault();
+
+  if (!supabase) {
+    setStaffError('Supabase is not configured.');
+    return;
+  }
+
+  setStaffError('');
+  setStaffMessage('');
+
+  const fullName = staffForm.fullName.trim();
+  const email = staffForm.email.trim().toLowerCase();
+  const password = staffForm.password;
+  const libraryId = staffForm.libraryId;
+  const isEditing = Boolean(editingStaffId);
+
+  if (!fullName || !email || !libraryId) {
+    setStaffError(
+      'Please complete the name, email, and assigned library fields.'
+    );
+    return;
+  }
+
+  if (!isEditing && !password) {
+    setStaffError('Password is required for a new account.');
+    return;
+  }
+
+  if (password && password.length < 10) {
+    setStaffError('Password must contain at least 10 characters.');
+    return;
+  }
+
+  try {
+    setStaffLoading(true);
+
+    const { data, error } = await supabase.functions.invoke(
+      'manage-staff',
+      {
+        body: isEditing
+          ? {
+              operation: 'update',
+              userId: editingStaffId,
+              fullName,
+              email,
+              libraryId,
+              password,
             }
-          );
-        if (error) {
-          throw error;
-        }
-        if (data?.error) {
-          throw new Error(
-            data.error
-          );
-        }
-        setStaffForm({
-          fullName: '',
-          email: '',
-          password: '',
-          libraryId: '',
-        });
-        await loadStaffAccounts();
-        setStaffMessage(
-          'Sub-admin account created successfully.'
-        );
-      } catch (error) {
-        console.error(
-          'Create staff account error:',
-          error
-        );
-        setStaffError(
-          error.message ||
-            'Unable to create staff account.'
-        );
-      } finally {
-        setStaffLoading(false);
+          : {
+              operation: 'create',
+              email,
+              fullName,
+              password,
+              libraryId,
+              role: 'subadmin',
+            },
       }
-    };
+    );
+
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+
+    setStaffForm({
+      fullName: '',
+      email: '',
+      password: '',
+      libraryId: '',
+    });
+
+    setEditingStaffId(null);
+
+    await loadStaffAccounts();
+
+    setStaffMessage(
+      isEditing
+        ? 'Sub-admin account updated successfully.'
+        : 'Sub-admin account created successfully.'
+    );
+  } catch (error) {
+    console.error('Save staff account error:', error);
+    setStaffError(
+      error.message || 'Unable to save staff account.'
+    );
+  } finally {
+    setStaffLoading(false);
+  }
+};
 
   // ============================================================
   // ENABLE / DISABLE STAFF
   // ============================================================
-  const handleToggleStaff =
-    async (staff) => {
-      if (!supabase) {
-        setStaffError(
-          'Supabase is not configured.'
-        );
-        return;
+
+
+const handleToggleStaff = async (staff) => {
+  if (staff.role === 'superadmin') {
+    setStaffError('Super-admin accounts are protected.');
+    return;
+  }
+
+  const nextIsActive = !staff.is_active;
+  const action = nextIsActive ? 'enable' : 'disable';
+
+  const confirmed = window.confirm(
+    `Are you sure you want to ${action} ${staff.full_name}'s account?`
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setStaffLoading(true);
+    setStaffError('');
+    setStaffMessage('');
+
+    const { data, error } = await supabase.functions.invoke(
+      'manage-staff',
+      {
+        body: {
+          operation: 'set-active',
+          userId: staff.id,
+          isActive: nextIsActive,
+        },
       }
-      if (
-        staff.role ===
-        'superadmin'
-      ) {
-        setStaffError(
-          'Super-admin accounts are protected.'
-        );
-        return;
-      }
-      const nextState =
-        !staff.is_active;
-      const action =
-        nextState
-          ? 'enable'
-          : 'disable';
-      const confirmed =
-        window.confirm(
-          `Are you sure you want to ${action} ${staff.full_name}?`
-        );
-      if (!confirmed) {
-        return;
-      }
-      try {
-        setStaffLoading(true);
-        setStaffError('');
-        setStaffMessage('');
-        const {
-          data,
-          error,
-        } =
-          await supabase.functions.invoke(
-            'manage-staff',
-            {
-              body: {
-                operation:
-                  'set-active',
-                userId:
-                  staff.id,
-                isActive:
-                  nextState,
-              },
-            }
-          );
-        if (error) {
-          throw error;
+    );
+
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+
+    await loadStaffAccounts();
+
+    setStaffMessage(
+      `Sub-admin account ${nextIsActive ? 'enabled' : 'disabled'} successfully.`
+    );
+  } catch (error) {
+    console.error('Toggle staff account error:', error);
+    setStaffError(
+      error.message || 'Unable to update the sub-admin account status.'
+    );
+  } finally {
+    setStaffLoading(false);
+  }
+};
+
+  // EDIT SUB-ADMIN ACCOUNT
+
+const handleEditStaff = (staff) => {
+  setEditingStaffId(staff.id);
+
+  setStaffForm({
+    fullName: staff.full_name || '',
+    email: staff.email || '',
+    password: '',
+    libraryId: staff.library_id || '',
+  });
+
+  setStaffError('');
+  setStaffMessage(
+    `Editing ${staff.full_name}. Update the fields and save your changes.`
+  );
+};
+
+  // DELETE SUB-ADMIN ACCOUNT
+  const handleDeleteStaff = async (staff) => {
+    if (staff.role === 'superadmin') {
+      setStaffError('Super-admin accounts are protected.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Permanently delete the Sub-admin account for ${staff.full_name}?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setStaffLoading(true);
+      setStaffError('');
+      setStaffMessage('');
+
+      const { data, error } = await supabase.functions.invoke(
+        'manage-staff',
+        {
+          body: {
+            operation: 'delete',
+            userId: staff.id,
+          },
         }
-        if (data?.error) {
-          throw new Error(
-            data.error
-          );
-        }
-        await loadStaffAccounts();
-        setStaffMessage(
-          `${staff.full_name} is now ${
-            nextState
-              ? 'active'
-              : 'disabled'
-          }.`
-        );
-      } catch (error) {
-        console.error(
-          'Toggle staff account error:',
-          error
-        );
-        setStaffError(
-          error.message ||
-            'Unable to update staff account.'
-        );
-      } finally {
-        setStaffLoading(false);
-      }
-    };
+      );
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      await loadStaffAccounts();
+      setStaffMessage('Sub-admin account deleted successfully.');
+    } catch (error) {
+      console.error('Delete staff account error:', error);
+      setStaffError(
+        error.message || 'Unable to delete staff account.'
+      );
+    } finally {
+      setStaffLoading(false);
+    }
+  };
 
   // ============================================================
   // CURRENT LOCATION
@@ -596,7 +635,7 @@ export default function SuperAdminDashboard() {
       try {
         setSavingLibrary(true);
         setLibraryMessage('');
-       
+
         const formattedDomain = libraryForm.emailDomain ? libraryForm.emailDomain.toLowerCase().trim() : null;
         const payload = {
           name: libraryForm.name.trim(),
@@ -649,6 +688,116 @@ export default function SuperAdminDashboard() {
         setSavingLibrary(false);
       }
     };
+
+
+  // ============================================================
+  // EDIT LIBRARY
+  // ============================================================
+  const handleEditLibrary = async (event) => {
+    event.preventDefault();
+
+    if (
+      !editingLibraryId ||
+      !libraryForm.name.trim() ||
+      !libraryForm.address.trim() ||
+      !libraryForm.lat ||
+      !libraryForm.lng
+    ) {
+      setLibraryMessage(
+        'Please enter the library name, address, and exact map coordinates.'
+      );
+      return;
+    }
+
+    try {
+      setSavingLibrary(true);
+      setLibraryMessage('');
+
+      const formattedDomain = libraryForm.emailDomain
+        ? libraryForm.emailDomain.toLowerCase().trim()
+        : null;
+
+      await updateLibrary(editingLibraryId, {
+        name: libraryForm.name.trim(),
+        campus: libraryForm.campus.trim(),
+        address: libraryForm.address.trim(),
+        email_domain: formattedDomain,
+        lat: libraryForm.lat,
+        lng: libraryForm.lng,
+        hours: libraryForm.hours,
+        status: libraryForm.status,
+      });
+
+      setLibraryMessage('Library updated successfully.');
+      setEditingLibraryId(null);
+      setShowAddLibrary(false);
+      setLibraryForm({
+        name: '',
+        campus: '',
+        address: '',
+        emailDomain: '',
+        lat: '14.085000',
+        lng: '121.149000',
+        hours: '8:00 AM - 5:00 PM',
+        status: 'Open',
+      });
+    } catch (error) {
+      console.error('Update library error:', error);
+      setLibraryMessage(error.message || 'Failed to update library.');
+    } finally {
+      setSavingLibrary(false);
+    }
+  };
+
+
+  // ============================================================
+  // OPEN LIBRARY FOR EDITING
+  // ============================================================
+  const startEditLibrary = (library) => {
+    setEditingLibraryId(library.id);
+
+    setLibraryForm({
+      name: library.name || '',
+      campus: library.campus || '',
+      address: library.address || '',
+      emailDomain: library.email_domain || library.emailDomain || '',
+      lat: String(library.lat ?? ''),
+      lng: String(library.lng ?? ''),
+      hours: library.hours || '8:00 AM - 5:00 PM',
+      status: library.status || 'Open',
+    });
+
+    setMapPosition([
+      Number(library.lat) || 14.085,
+      Number(library.lng) || 121.149,
+    ]);
+
+    setLibraryMessage('');
+    setShowAddLibrary(true);
+  };
+
+
+  // ============================================================
+  // DELETE LIBRARY
+  // ============================================================
+  const handleDeleteLibrary = async (library) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${library.name}"? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setLibraryMessage('');
+      await deleteLibrary(library.id);
+      setLibraryMessage('Library deleted successfully.');
+    } catch (error) {
+      console.error('Delete library error:', error);
+      setLibraryMessage(
+        error.message || 'Failed to delete library.'
+      );
+    }
+  };
 
   // ============================================================
   // DASHBOARD DATA
@@ -1120,7 +1269,7 @@ export default function SuperAdminDashboard() {
                   <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
                     <div>
                       <h3 className="text-base font-bold text-slate-800">
-                        Add New Library
+                        {editingLibraryId ? 'Edit Library' : 'Add New Library'}
                       </h3>
                       <p className="text-xs text-slate-500">
                         Enter library info and pin exact location on map.
@@ -1136,7 +1285,7 @@ export default function SuperAdminDashboard() {
                   </div>
 
                   {/* FORM */}
-                  <form onSubmit={handleAddLibrary}>
+                  <form onSubmit={editingLibraryId ? handleEditLibrary : handleAddLibrary}>
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       {/* NAME */}
                       <div>
@@ -1335,8 +1484,85 @@ export default function SuperAdminDashboard() {
               </div>
             )}
 
-            {/* HIDE MAIN MAP WHEN ADD LIBRARY MODAL IS OPEN */}
-            {!showAddLibrary && <LibraryMap />}
+            {/* MAIN LIBRARY MAP */}
+{!showAddLibrary && (
+  <LibraryMap showLibraryList={false} />
+)}
+
+            {/* LIBRARY MANAGEMENT LIST */}
+            {!showAddLibrary && (
+              <div className="space-y-3">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <h3 className="text-base font-bold text-slate-800">
+                    Manage Libraries
+                  </h3>
+                  <p className="text-sm text-slate-500">
+                    {libraries.length} registered librar{libraries.length === 1 ? 'y' : 'ies'}
+                  </p>
+                </div>
+
+                {libraries.length === 0 ? (
+                  <div className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">
+                    No libraries have been added yet.
+                  </div>
+                ) : (
+                  libraries.map((library) => (
+                    <div
+                      key={library.id}
+                      className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-slate-800">
+                          {library.name}
+                        </h4>
+
+                        {library.campus && (
+                          <p className="mt-1 text-sm text-slate-600">
+                            Campus: {library.campus}
+                          </p>
+                        )}
+
+                        {library.address && (
+                          <p className="mt-1 wrap-break-words text-sm text-slate-500">
+                            {library.address}
+                          </p>
+                        )}
+
+                        <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">
+                            {library.status || 'Status not set'}
+                          </span>
+
+                          {library.lat != null && library.lng != null && (
+                            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">
+                              Coordinates: {library.lat}, {library.lng}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex shrink-0 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => startEditLibrary(library)}
+                          className="rounded-lg border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteLibrary(library)}
+                          className="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -1355,7 +1581,9 @@ export default function SuperAdminDashboard() {
             )}
             <form onSubmit={handleCreateStaff} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="mb-5">
-                <h3 className="text-sm font-bold text-slate-800">Create Sub-Admin Account</h3>
+                <h3 className="text-sm font-bold text-slate-800">
+                  {editingStaffId ? 'Edit Sub-Admin Account' : 'Create Sub-Admin Account'}
+                </h3>
                 <p className="mt-1 text-xs text-slate-500">Creates a Supabase Auth account and the corresponding staff_profiles record.</p>
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -1368,9 +1596,32 @@ export default function SuperAdminDashboard() {
                   <input type="email" value={staffForm.email} onChange={(e) => setStaffForm((prev) => ({ ...prev, email: e.target.value }))} placeholder="staff@shelf.edu" className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm" required />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-600">Temporary Password</label>
-                  <input type="password" value={staffForm.password} onChange={(e) => setStaffForm((prev) => ({ ...prev, password: e.target.value }))} placeholder="Minimum 10 characters" minLength={10} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm" required />
-                  <p className="mt-1 text-[11px] text-slate-400">Passwords are handled by Supabase Auth.</p>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">
+                    {editingStaffId ? 'New Password (Optional)' : 'Temporary Password'}
+                  </label>
+                  <input
+                    type="password"
+                    value={staffForm.password}
+                    onChange={(e) =>
+                      setStaffForm((prev) => ({
+                        ...prev,
+                        password: e.target.value,
+                      }))
+                    }
+                    placeholder={
+                      editingStaffId
+                        ? 'Leave blank to keep current password'
+                        : 'Minimum 10 characters'
+                    }
+                    minLength={staffForm.password ? 10 : undefined}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+                    required={!editingStaffId}
+                  />
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    {editingStaffId
+                      ? 'Leave blank if you do not want to change the password.'
+                      : 'Passwords are handled by Supabase Auth.'}
+                  </p>
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-600">Assigned Branch</label>
@@ -1382,11 +1633,40 @@ export default function SuperAdminDashboard() {
                   </select>
                 </div>
               </div>
-              <div className="mt-5">
-                <button type="submit" disabled={staffLoading} className="rounded-lg bg-shelf-primary px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#003568] disabled:opacity-50">
-                  {staffLoading ? 'Creating Account...' : 'Create Sub-Admin'}
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button
+                type="submit"
+                disabled={staffLoading}
+                className="rounded-lg bg-shelf-primary px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#003568] disabled:opacity-50"
+              >
+                {staffLoading
+                  ? 'Saving...'
+                  : editingStaffId
+                    ? 'Save Changes'
+                    : 'Create Sub-Admin'}
+              </button>
+
+              {editingStaffId && (
+                <button
+                  type="button"
+                  disabled={staffLoading}
+                  onClick={() => {
+                    setEditingStaffId(null);
+                    setStaffForm({
+                      fullName: '',
+                      email: '',
+                      password: '',
+                      libraryId: '',
+                    });
+                    setStaffError('');
+                    setStaffMessage('');
+                  }}
+                  className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Cancel Edit
                 </button>
-              </div>
+              )}
+            </div>
             </form>
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
               <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
@@ -1428,11 +1708,42 @@ export default function SuperAdminDashboard() {
                         </td>
                         <td className="p-3">
                           {staff.role === 'superadmin' ? (
-                            <span className="text-xs font-semibold text-slate-400">Protected</span>
+                            <span className="text-xs font-semibold text-slate-400">
+                              Protected
+                            </span>
                           ) : (
-                            <button type="button" onClick={() => handleToggleStaff(staff)} disabled={staffLoading} className={`text-xs font-bold disabled:opacity-50 ${staff.is_active ? 'text-red-600 hover:text-red-800' : 'text-emerald-600 hover:text-emerald-800'}`}>
-                              {staff.is_active ? 'Disable' : 'Enable'}
-                            </button>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleEditStaff(staff)}
+                                disabled={staffLoading}
+                                className="rounded-md border border-blue-200 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                              >
+                                Edit
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleToggleStaff(staff)}
+                                disabled={staffLoading}
+                                className={`rounded-md border px-3 py-1.5 text-xs font-bold disabled:opacity-50 ${
+                                  staff.is_active
+                                    ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
+                                    : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                                }`}
+                              >
+                                {staff.is_active ? 'Disable' : 'Enable'}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteStaff(staff)}
+                                disabled={staffLoading}
+                                className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                              >
+                                Delete
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
