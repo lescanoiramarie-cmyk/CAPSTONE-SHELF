@@ -112,9 +112,19 @@ export const AuthProvider = ({ children }) => {
         throw new Error(`Failed to check partner school whitelist: ${libError.message}`);
       }
 
-      const allowedDomains = (libraryRecords || [])
-        .map((lib) => lib.email_domain?.toLowerCase().trim())
-        .filter(Boolean);
+      const allowedDomains = [
+  ...new Set(
+    (libraryRecords || [])
+      .map((lib) =>
+        lib.email_domain
+          ?.toLowerCase()
+          .trim()
+          .replace(/^@+/, '')
+          .replace(/\.$/, '')
+      )
+      .filter(Boolean)
+  ),
+];
 
       // 3. I-verify kung ang domain ay kasama sa allowed domains (e.g. g.batstate-u.edu.ph)
       const isDomainAllowed = allowedDomains.some(

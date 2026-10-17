@@ -6,6 +6,90 @@ import { Check, Circle, Eye, EyeOff, Camera, X } from 'lucide-react';
 import { useAuth } from '../../context/useAuth.js';
 import { supabase } from '../../lib/supabaseClient.js';
 import libraryBg from '../../assets/library.jpg';
+import {
+  philippines,
+} from '@ianlabicani/geoph-lite';
+
+function SearchableLocationSelect({
+  label,
+  options,
+  value,
+  onChange,
+  placeholder,
+  disabled = false,
+}) {
+  const [query, setQuery] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+
+  const selectedOption = options.find(
+    (option) => option.psgc_code === value
+  );
+
+  useEffect(() => {
+    setQuery(selectedOption?.name || '');
+  }, [selectedOption?.name, value]);
+
+  const filteredOptions = options
+    .filter((option) =>
+      option.name.toLowerCase().includes(query.toLowerCase())
+    )
+    .slice(0, 100);
+
+  return (
+    <div className="relative">
+      <label className="block text-xs font-semibold text-slate-700 mb-1">
+        {label}
+      </label>
+
+      <input
+        type="text"
+        required
+        disabled={disabled}
+        autoComplete="off"
+        placeholder={placeholder}
+        value={query}
+        onFocus={() => setIsOpen(true)}
+        onBlur={() => setIsOpen(false)}
+        onChange={(e) => {
+          const nextQuery = e.target.value;
+          setQuery(nextQuery);
+          setIsOpen(true);
+
+          if (value) {
+            onChange('');
+          }
+        }}
+        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 disabled:bg-slate-100 disabled:cursor-not-allowed"
+      />
+
+      {isOpen && !disabled && (
+        <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((option) => (
+              <button
+                key={option.psgc_code}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onChange(option.psgc_code);
+                  setQuery(option.name);
+                  setIsOpen(false);
+                }}
+                className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
+              >
+                {option.name}
+              </button>
+            ))
+          ) : (
+            <p className="px-3 py-2 text-xs text-slate-500">
+              No matching location found.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function PasswordRequirement({ valid, children }) {
   return (
@@ -31,6 +115,153 @@ export default function VisitorLogin() {
   const scannerRef = useRef(null);
   const [view, setView] = useState('login');
   const [error, setError] = useState('');
+
+  // Location
+  const [regions, setRegions] = useState([]);
+  const [provinces, setProvinces] = useState([]);
+  const [localities, setLocalities] = useState([]);
+  const [barangays, setBarangays] = useState([]);
+
+  const [selectedRegion, setSelectedRegion] = useState('');
+  const [selectedProvince, setSelectedProvince] = useState('');
+  const [selectedLocality, setSelectedLocality] = useState('');
+  const [selectedBarangay, setSelectedBarangay] = useState('');
+
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState('');
+
+    useEffect(() => {
+    try {
+      setRegions(philippines.regions());
+    } catch (error) {
+      console.error('Failed to load Philippine regions:', error);
+      setLocationError('Unable to load Philippine regions.');
+    }
+  }, []);
+
+    // Load provinces when a region is selected
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadProvinces = async () => {
+      setProvinces([]);
+      setLocalities([]);
+      setBarangays([]);
+      setSelectedProvince('');
+      setSelectedLocality('');
+      setSelectedBarangay('');
+
+      if (!selectedRegion) return;
+
+      setLocationLoading(true);
+      setLocationError('');
+
+      try {
+        const result = await philippines.provinces(selectedRegion);
+
+        if (!cancelled) {
+          setProvinces(result);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to load provinces:', error);
+          setLocationError('Unable to load provinces. Please try again.');
+        }
+      } finally {
+        if (!cancelled) {
+          setLocationLoading(false);
+        }
+      }
+    };
+
+    loadProvinces();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedRegion]);
+
+  // Load cities and municipalities for the selected province,
+  // or directly under the region when no province exists.
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadLocalities = async () => {
+      setLocalities([]);
+      setBarangays([]);
+      setSelectedLocality('');
+      setSelectedBarangay('');
+
+      const parentCode = selectedProvince || selectedRegion;
+      if (!parentCode) return;
+
+      setLocationLoading(true);
+      setLocationError('');
+
+      try {
+        const result = await philippines.localities(parentCode);
+
+        if (!cancelled) {
+          setLocalities(result);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to load localities:', error);
+          setLocationError(
+            'Unable to load cities and municipalities. Please try again.'
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLocationLoading(false);
+        }
+      }
+    };
+
+    loadLocalities();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProvince, selectedRegion]);
+
+  // Load barangays for the selected city or municipality
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBarangays = async () => {
+      setBarangays([]);
+      setSelectedBarangay('');
+
+      if (!selectedLocality) return;
+
+      setLocationLoading(true);
+      setLocationError('');
+
+      try {
+        const result = await philippines.barangays(selectedLocality);
+
+        if (!cancelled) {
+          setBarangays(result);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to load barangays:', error);
+          setLocationError('Unable to load barangays. Please try again.');
+        }
+      } finally {
+        if (!cancelled) {
+          setLocationLoading(false);
+        }
+      }
+    };
+
+    loadBarangays();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLocality]);
 
   // Password visibility
   const [showLoginPassword, setShowLoginPassword] = useState(false);
@@ -233,6 +464,40 @@ export default function VisitorLogin() {
     e.preventDefault();
     setError('');
 
+        // Validate selected Philippine address
+    const regionName = regions.find(
+      (item) => item.psgc_code === selectedRegion
+    )?.name;
+
+    const provinceName = provinces.find(
+      (item) => item.psgc_code === selectedProvince
+    )?.name;
+
+    const localityName = localities.find(
+      (item) => item.psgc_code === selectedLocality
+    )?.name;
+
+    const barangayName = barangays.find(
+      (item) => item.psgc_code === selectedBarangay
+    )?.name;
+
+    if (!regionName || !localityName || !barangayName) {
+      setError(
+        'Please select a Region, City/Municipality, and Barangay from the dropdown lists.'
+      );
+      return;
+    }
+
+    // Province is optional for regions such as NCR.
+    const completeAddress = [
+      barangayName,
+      localityName,
+      provinceName,
+      regionName,
+    ]
+      .filter(Boolean)
+      .join(', ');
+
     if (!isPasswordValid) {
       setError('Password does not meet all requirements.');
       return;
@@ -269,13 +534,19 @@ export default function VisitorLogin() {
       }
 
       // 2. DEDUPLICATION: Kumuha ng UNIQUE list ng allowed domains gamit ang Set
-      const allowedDomains = Array.from(
-        new Set(
-          (libraryRecords || [])
-            .map((lib) => lib.email_domain?.toLowerCase().trim())
-            .filter(Boolean)
-        )
-      );
+      const allowedDomains = [
+  ...new Set(
+    (libraryRecords || [])
+      .map((lib) =>
+        lib.email_domain
+          ?.toLowerCase()
+          .trim()
+          .replace(/^@+/, '')
+          .replace(/\.$/, '')
+      )
+      .filter(Boolean)
+  ),
+];
 
       // 3. Strict Check: Tingnan kung ang domain ay tugma sa kahit anong allowedDomain
       const isDomainAllowed = allowedDomains.some(
@@ -284,7 +555,9 @@ export default function VisitorLogin() {
 
       // STRICT BLOCK: PAHINTOIN KAPAG HINDI AUTHORIZED (MALINIS AT WALANG DUPLICATE OUTPUT)
       if (!isDomainAllowed) {
-        const formattedDomainsList = allowedDomains.map((d) => `@${d}`).join(', ');
+        const formattedDomainsList = allowedDomains
+  .map((domain) => `@${domain}`)
+  .join(', ');
         setError(
           allowedDomains.length > 0
             ? `Registration restricted! @${activeDomain} is not an authorized partner school email. Allowed domains: ${formattedDomainsList}`
@@ -297,6 +570,7 @@ export default function VisitorLogin() {
       await registerVisitor({
         ...formData,
         email: activeEmail,
+        address: completeAddress,
       });
 
       setPendingEmail(activeEmail);
@@ -370,6 +644,17 @@ export default function VisitorLogin() {
     setOtpInput('');
     setPendingEmail('');
     setRegisteredVisitor(null);
+    setSelectedRegion('');
+    setSelectedProvince('');
+    setSelectedLocality('');
+    setSelectedBarangay('');
+
+    setProvinces([]);
+    setLocalities([]);
+    setBarangays([]);
+
+    setLocationError('');
+    setLocationLoading(false);
     setShowLoginPassword(false);
     setShowRegisterPassword(false);
     setShowConfirmPassword(false);
@@ -458,20 +743,80 @@ export default function VisitorLogin() {
           {/* REGISTRATION FORM */}
           {view === 'register' && (
             <form onSubmit={handleRegister} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Juan Dela Cruz"
-                  value={formData.fullName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, fullName: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
+              {/* PHILIPPINE ADDRESS */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-bold text-slate-700">
+                  Address / Location
+                </h3>
+
+                <SearchableLocationSelect
+                  label="Region"
+                  options={regions}
+                  value={selectedRegion}
+                  placeholder="Search and select region"
+                  onChange={(value) => {
+                    setSelectedRegion(value);
+                    setSelectedProvince('');
+                    setSelectedLocality('');
+                    setSelectedBarangay('');
+                  }}
                 />
+
+                <SearchableLocationSelect
+                  label="Province"
+                  options={provinces}
+                  value={selectedProvince}
+                  placeholder={
+                    selectedRegion ? 'Search and select province' : 'Select region first'
+                  }
+                  disabled={!selectedRegion || provinces.length === 0}
+                  onChange={(value) => {
+                    setSelectedProvince(value);
+                    setSelectedLocality('');
+                    setSelectedBarangay('');
+                  }}
+                />
+
+                <SearchableLocationSelect
+                  label="City / Municipality"
+                  options={localities}
+                  value={selectedLocality}
+                  placeholder={
+                    selectedProvince || selectedRegion
+                      ? 'Search and select city / municipality'
+                      : 'Select region first'
+                  }
+                  disabled={!selectedRegion || localities.length === 0}
+                  onChange={(value) => {
+                    setSelectedLocality(value);
+                    setSelectedBarangay('');
+                  }}
+                />
+
+                <SearchableLocationSelect
+                  label="Barangay"
+                  options={barangays}
+                  value={selectedBarangay}
+                  placeholder={
+                    selectedLocality
+                      ? 'Search and select barangay'
+                      : 'Select city / municipality first'
+                  }
+                  disabled={!selectedLocality || barangays.length === 0}
+                  onChange={setSelectedBarangay}
+                />
+
+                {locationLoading && (
+                  <p className="text-xs text-slate-500">
+                    Loading location data...
+                  </p>
+                )}
+
+                {locationError && (
+                  <p className="text-xs text-red-600">
+                    {locationError}
+                  </p>
+                )}
               </div>
 
               <div>
