@@ -13,6 +13,10 @@ import {
   Upload,
   UsersRound,
   Info,
+  Bell,
+  Sparkles,
+  Calendar,
+  Clock
 } from 'lucide-react';
 import VisitorScanDetails from '../../component/VisitorScanDetails.jsx';
 import { useAuth } from '../../context/useAuth.js';
@@ -22,14 +26,11 @@ import BookTransactions from '../../component/BookTransactions.jsx';
 import BookInventory from '../../component/BookInventory.jsx';
 import ReservationQueue from '../../component/ReservationQueue.jsx';
 import AdminWorkspace from '../../component/AdminWorkspace.jsx';
-import DashboardWelcome from '../../component/DashboardWelcome.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
 import { supabase } from '../../lib/supabaseClient.js';
 import { exportToExcel, exportToCSV } from '../../lib/excelUtils.js';
 import Papa from 'papaparse';
-import {
-  findVisitorByQr,
-} from '../../data/store.js';
+import { findVisitorByQr } from '../../data/store.js';
 
 const NAV = [
   { id: 'overview', label: 'Overview', Icon: Activity },
@@ -241,6 +242,144 @@ function formatDateTime(value) {
   });
 }
 
+// CUSTOM WELCOME COMPONENT WITH UPPER RIGHT NOTIFICATION BELL
+function CustomDashboardWelcome({
+  name,
+  description,
+  notifications = [],
+  onNotificationClick,
+  actions = [],
+}) {
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  return (
+    <div className="relative bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-sm space-y-6">
+      
+      {/* TOP RIGHT ACTION BAR (NOTIFICATION BELL & ONLINE BADGE) */}
+      <div className="absolute top-6 right-6 flex items-center gap-3 z-20">
+        
+        {/* NOTIFICATION BELL BUTTON WITH DROPDOWN */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowNotifications(!showNotifications)}
+            className="w-10 h-10 rounded-full bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 transition shadow-sm relative"
+            aria-label="Notifications"
+          >
+            <Bell size={18} />
+            {notifications.length > 0 && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-extrabold rounded-full flex items-center justify-center shadow-sm">
+                {notifications.length}
+              </span>
+            )}
+          </button>
+
+          {/* NOTIFICATION DROPDOWN MENU */}
+          {showNotifications && (
+            <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-2xl p-3 z-50 text-xs">
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 font-bold text-slate-800">
+                <span>Branch Notifications</span>
+                <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full text-[10px]">
+                  {notifications.length} New
+                </span>
+              </div>
+              
+              <div className="max-h-60 overflow-y-auto space-y-2">
+                {notifications.length === 0 ? (
+                  <p className="text-slate-400 py-3 text-center">No new notifications</p>
+                ) : (
+                  notifications.map((n) => (
+                    <div
+                      key={n.id}
+                      onClick={() => {
+                        if (onNotificationClick) onNotificationClick(n);
+                        setShowNotifications(false);
+                      }}
+                      className="p-2.5 rounded-lg bg-slate-50 hover:bg-blue-50/50 cursor-pointer transition border border-slate-100"
+                    >
+                      <p className="font-bold text-slate-800">{n.title}</p>
+                      <p className="text-slate-500 mt-0.5 line-clamp-1">{n.message}</p>
+                      <p className="text-[10px] text-slate-400 mt-1">{n.timeLabel}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ONLINE STATUS BADGE */}
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-full text-xs font-bold shadow-sm">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>Online</span>
+        </div>
+      </div>
+
+      {/* WELCOME TEXT CONTENT */}
+      <div className="space-y-3 max-w-2xl pr-28 sm:pr-0">
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold uppercase tracking-wider">
+          <Sparkles size={13} className="text-amber-600" />
+          SHELF ILMS
+        </span>
+
+        <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+          Good morning, <span className="text-blue-950">{name || 'Maria'}!</span>
+        </h1>
+
+        <div className="flex flex-wrap items-center gap-4 text-xs font-semibold text-slate-500">
+          <span className="flex items-center gap-1.5">
+            <Calendar size={14} className="text-amber-500" />
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Clock size={14} className="text-amber-500" />
+            {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          </span>
+        </div>
+
+        <p className="text-xs sm:text-sm text-slate-500 leading-relaxed pt-1">
+          {description}
+        </p>
+      </div>
+
+      {/* QUICK ACTIONS BUTTONS */}
+      {actions.length > 0 && (
+        <div className="pt-4 border-t border-slate-100">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
+            Quick Actions
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {actions.map((act, idx) => {
+              const ActionIcon = act.Icon || Activity;
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={act.onClick}
+                  className="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-blue-50/60 border border-slate-200/80 hover:border-blue-300 rounded-xl text-left transition group shadow-sm"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 group-hover:text-blue-600 group-hover:border-blue-200 transition">
+                      <ActionIcon size={16} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-700 group-hover:text-blue-700 transition">
+                      {act.label}
+                    </span>
+                  </div>
+                  <span className="text-xs text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-transform">
+                    ↗
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function QRBookBorrowing({
   user,
   onBorrowConfirmed,
@@ -264,14 +403,10 @@ function QRBookBorrowing({
       if (scannerRef.current) {
         try {
           await scannerRef.current.stop();
-        } catch {
-          // Scanner may already be stopped.
-        }
+        } catch {}
         try {
           await scannerRef.current.clear();
-        } catch {
-          // Scanner may already be cleared.
-        }
+        } catch {}
         scannerRef.current = null;
       }
     } catch (err) {
@@ -328,12 +463,10 @@ function QRBookBorrowing({
         .eq('visitor_id', foundVisitor.id)
         .eq('books.library_id', currentLibraryId)
         .in('status', ['ready_for_pickup', 'borrowed'])
-        .order('request_date', {
-          ascending: false,
-        });
-      if (requestError) {
-        throw requestError;
-      }
+        .order('request_date', { ascending: false });
+
+      if (requestError) throw requestError;
+
       const requests = (data || []).map((r) => ({
         id: r.id,
         bookId: r.book_id,
@@ -354,16 +487,14 @@ function QRBookBorrowing({
         bookIsbn: r.books?.isbn || '',
         bookCoverUrl: r.books?.cover_url || '',
       }));
+
       setVisitor(foundVisitor);
       setManualQrValue('');
       setVisitorRequests(requests);
-      const readyRequests = requests.filter(
-        (r) => r.status === 'ready_for_pickup'
-      );
+
+      const readyRequests = requests.filter((r) => r.status === 'ready_for_pickup');
       if (readyRequests.length === 0) {
-        if (
-          requests.some((r) => r.status === 'borrowed')
-        ) {
+        if (requests.some((r) => r.status === 'borrowed')) {
           setMessage(
             'This visitor has no book ready for pickup. The visitor already has an active borrowed book.'
           );
@@ -381,10 +512,7 @@ function QRBookBorrowing({
       }
     } catch (err) {
       console.error('QR borrowing lookup error:', err);
-      setError(
-        err?.message ||
-          'Unable to process the visitor QR code.'
-      );
+      setError(err?.message || 'Unable to process the visitor QR code.');
     } finally {
       setLoading(false);
     }
@@ -401,44 +529,25 @@ function QRBookBorrowing({
         scannerRef.current = scanner;
         await scanner.start(
           { facingMode: 'environment' },
-          {
-            fps: 10,
-            qrbox: {
-              width: 250,
-              height: 250,
-            },
-            aspectRatio: 1,
-          },
+          { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1 },
           async (decodedText) => {
             if (cancelled) return;
             const qrValue = decodedText.trim();
             if (!qrValue) return;
-            try {
-              await scanner.stop();
-            } catch {
-              // Ignore if already stopped.
-            }
-            try {
-              await scanner.clear();
-            } catch {
-              // Ignore if already cleared.
-            }
+            try { await scanner.stop(); } catch {}
+            try { await scanner.clear(); } catch {}
             scannerRef.current = null;
             setScanning(false);
             setShowScanner(false);
             await handleQrScan(qrValue);
           },
-          () => {
-            // Ignore unsuccessful scan attempts.
-          }
+          () => {}
         );
       } catch (err) {
         console.error('Unable to start QR scanner:', err);
         if (!cancelled) {
           setScanning(false);
-          setError(
-            'Unable to open the camera. Please allow camera access and try again.'
-          );
+          setError('Unable to open the camera. Please allow camera access and try again.');
         }
       }
     };
@@ -446,15 +555,10 @@ function QRBookBorrowing({
     return () => {
       cancelled = true;
       if (scannerRef.current) {
-        scannerRef.current
-          .stop()
-          .catch(() => {})
-          .finally(() => {
-            scannerRef.current
-              ?.clear()
-              .catch(() => {});
-            scannerRef.current = null;
-          });
+        scannerRef.current.stop().catch(() => {}).finally(() => {
+          scannerRef.current?.clear().catch(() => {});
+          scannerRef.current = null;
+        });
       }
     };
   }, [showScanner, handleQrScan]);
@@ -465,41 +569,20 @@ function QRBookBorrowing({
     setError('');
     setMessage('');
     try {
-      const staffName =
-        user?.name ||
-        user?.fullName ||
-        user?.email ||
-        'Sub-Admin';
-      await confirmPickup(
-        request.id,
-        staffName
-      );
+      const staffName = user?.name || user?.fullName || user?.email || 'Sub-Admin';
+      await confirmPickup(request.id, staffName);
       setVisitorRequests((current) =>
         current.map((item) =>
           item.id === request.id
-            ? {
-                ...item,
-                status: 'borrowed',
-                confirmedBy: staffName,
-              }
+            ? { ...item, status: 'borrowed', confirmedBy: staffName }
             : item
         )
       );
-      setMessage(
-        `"${request.bookTitle}" has been successfully borrowed by ${request.visitorName}.`
-      );
-      if (onBorrowConfirmed) {
-        onBorrowConfirmed(request.id);
-      }
+      setMessage(`"${request.bookTitle}" has been successfully borrowed by ${request.visitorName}.`);
+      if (onBorrowConfirmed) onBorrowConfirmed(request.id);
     } catch (err) {
-      console.error(
-        'Book borrowing confirmation error:',
-        err
-      );
-      setError(
-        err?.message ||
-          'Unable to confirm this book borrowing.'
-      );
+      console.error('Book borrowing confirmation error:', err);
+      setError(err?.message || 'Unable to confirm this book borrowing.');
     } finally {
       setConfirming(false);
     }
@@ -511,11 +594,7 @@ function QRBookBorrowing({
     setError('');
     setMessage('');
     try {
-      const staffName =
-        user?.name ||
-        user?.fullName ||
-        user?.email ||
-        'Sub-Admin';
+      const staffName = user?.name || user?.fullName || user?.email || 'Sub-Admin';
       await confirmReturn(request.id, staffName);
       setVisitorRequests((current) =>
         current.map((item) =>
@@ -524,9 +603,7 @@ function QRBookBorrowing({
             : item
         )
       );
-      setMessage(
-        `"${request.bookTitle}" has been returned. The copy is available again and the reservation queue has been updated.`
-      );
+      setMessage(`"${request.bookTitle}" has been returned. The copy is available again.`);
     } catch (err) {
       console.error('Book return confirmation error:', err);
       setError(err?.message || 'Unable to confirm this book return.');
@@ -568,9 +645,7 @@ function QRBookBorrowing({
   const activeVisitorRequests = displayedVisitorRequests.filter(
     (request) => ['ready_for_pickup', 'borrowed'].includes(request.status)
   );
-  const readyRequests = activeVisitorRequests.filter(
-    (r) => r.status === 'ready_for_pickup'
-  );
+  const readyRequests = activeVisitorRequests.filter((r) => r.status === 'ready_for_pickup');
 
   return (
     <div className="space-y-6">
@@ -587,21 +662,19 @@ function QRBookBorrowing({
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <form onSubmit={handleManualQrSubmit} className="flex gap-2">
-              <label className="sr-only" htmlFor="subadmin-visitor-qr">
-                Visitor QR value
-              </label>
+              <label className="sr-only" htmlFor="subadmin-visitor-qr">Visitor QR value</label>
               <input
                 id="subadmin-visitor-qr"
                 value={manualQrValue}
                 onChange={(event) => setManualQrValue(event.target.value)}
                 placeholder="Enter visitor QR value"
                 autoComplete="off"
-                className="min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
+                className="min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               />
               <button
                 type="submit"
                 disabled={loading || !manualQrValue.trim()}
-                className="rounded-lg bg-shelf-primary px-4 py-2 text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-500 disabled:opacity-50"
               >
                 {loading ? 'Checking...' : 'Submit'}
               </button>
@@ -616,36 +689,25 @@ function QRBookBorrowing({
             </button>
           </div>
         </div>
+
         {/* CAMERA SCANNER */}
         {showScanner && (
           <div className="p-5 bg-slate-50 border-b border-slate-200">
             <div className="max-w-md mx-auto bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
               <div className="p-4 border-b border-slate-200 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-bold text-slate-800">
-                    Scan Visitor QR Code
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Position the visitor QR code inside the box.
-                  </p>
+                  <p className="text-sm font-bold text-slate-800">Scan Visitor QR Code</p>
+                  <p className="text-xs text-slate-500 mt-1">Position the visitor QR code inside the box.</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={stopScanner}
-                  className="text-xs font-bold text-red-600 hover:text-red-800"
-                >
-                  Close
-                </button>
+                <button type="button" onClick={stopScanner} className="text-xs font-bold text-red-600 hover:text-red-800">Close</button>
               </div>
               <div className="p-4">
-                <div
-                  id="book-borrowing-qr-reader"
-                  className="w-full"
-                />
+                <div id="book-borrowing-qr-reader" className="w-full" />
               </div>
             </div>
           </div>
         )}
+
         {/* STATUS MESSAGE */}
         {message && (
           <div role="status" className="mx-5 mt-5 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 font-sans text-sm text-blue-800">
@@ -657,12 +719,14 @@ function QRBookBorrowing({
             {error}
           </div>
         )}
+
         {/* LOADING */}
         {loading && (
           <div className="p-8 text-center text-sm text-slate-500">
             Verifying visitor QR code and checking borrow requests...
           </div>
         )}
+
         {/* VERIFIED VISITOR */}
         {!loading && visitor && (
           <div className="p-5 space-y-5">
@@ -670,7 +734,7 @@ function QRBookBorrowing({
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        Step 2 — Review requests for verified visitor
+                    Step 2 — Review requests for verified visitor
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -688,6 +752,7 @@ function QRBookBorrowing({
               </div>
               <VisitorScanDetails visitor={visitor} />
             </div>
+
             {/* READY FOR PICKUP */}
             {readyRequests.length > 0 && (
               <div className="space-y-3">
@@ -696,58 +761,27 @@ function QRBookBorrowing({
                     Books Ready for Pickup
                   </h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    Confirm the book only after checking the physical
-                    book and the visitor's identity.
+                    Confirm the book only after checking the physical book and the visitor's identity.
                   </p>
                 </div>
                 {readyRequests.map((request) => {
-                  const expired =
-                    request.pickupDeadline &&
-                    new Date(request.pickupDeadline) <
-                      new Date();
+                  const expired = request.pickupDeadline && new Date(request.pickupDeadline) < new Date();
                   return (
-                    <div
-                      key={request.id}
-                      className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-                    >
+                    <div key={request.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                         <div className="flex min-w-0 items-start gap-3">
                           {request.bookCoverUrl && (
-                            <img
-                              src={request.bookCoverUrl}
-                              alt={`${request.bookTitle} cover`}
-                              className="h-20 w-14 shrink-0 rounded border border-slate-200 object-cover"
-                            />
+                            <img src={request.bookCoverUrl} alt={`${request.bookTitle} cover`} className="h-20 w-14 shrink-0 rounded border border-slate-200 object-cover" />
                           )}
                           <div className="min-w-0">
-                          <p className="text-base font-extrabold text-slate-800">
-                            {request.bookTitle}
-                          </p>
-                          <div className="mt-2 space-y-1 text-xs text-slate-500">
-                            {request.bookAuthor && <p>Author: {request.bookAuthor}</p>}
-                            {request.bookIsbn && <p>ISBN: {request.bookIsbn}</p>}
-                            <p>
-                              Status: <span className="font-semibold text-amber-700">Ready for pickup</span>
-                            </p>
-                            <p>
-                              Request Date:{' '}
-                              {formatDateTime(
-                                request.requestDate
-                              )}
-                            </p>
-                            <p
-                              className={
-                                expired
-                                  ? 'text-red-600 font-bold'
-                                  : ''
-                              }
-                            >
-                              Pickup Deadline:{' '}
-                              {formatDateTime(
-                                request.pickupDeadline
-                              )}
-                            </p>
-                          </div>
+                            <p className="text-base font-extrabold text-slate-800">{request.bookTitle}</p>
+                            <div className="mt-2 space-y-1 text-xs text-slate-500">
+                              {request.bookAuthor && <p>Author: {request.bookAuthor}</p>}
+                              {request.bookIsbn && <p>ISBN: {request.bookIsbn}</p>}
+                              <p>Status: <span className="font-semibold text-amber-700">Ready for pickup</span></p>
+                              <p>Request Date: {formatDateTime(request.requestDate)}</p>
+                              <p className={expired ? 'text-red-600 font-bold' : ''}>Pickup Deadline: {formatDateTime(request.pickupDeadline)}</p>
+                            </div>
                           </div>
                         </div>
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
@@ -758,13 +792,9 @@ function QRBookBorrowing({
                           ) : (
                             <button
                               type="button"
-                              onClick={() =>
-                                handleConfirmBorrow(
-                                  request
-                                )
-                              }
+                              onClick={() => handleConfirmBorrow(request)}
                               disabled={confirming}
-                              className="bg-shelf-primary text-white px-5 py-2.5 rounded-lg text-xs font-bold hover:opacity-90 transition disabled:opacity-50"
+                              className="bg-blue-600 text-white px-5 py-2.5 rounded-lg text-xs font-bold hover:bg-blue-500 transition disabled:opacity-50"
                             >
                               {confirming ? 'Confirming...' : 'Confirm Borrowing'}
                             </button>
@@ -776,102 +806,61 @@ function QRBookBorrowing({
                 })}
               </div>
             )}
+
             {/* ACTIVE BORROWS */}
-            {activeVisitorRequests.some(
-              (r) => r.status === 'borrowed'
-            ) && (
+            {activeVisitorRequests.some((r) => r.status === 'borrowed') && (
               <div className="space-y-3">
-                <h3 className="text-sm font-extrabold text-slate-800">
-                  Active Borrowed Books
-                </h3>
-                {activeVisitorRequests
-                  .filter(
-                    (r) => r.status === 'borrowed'
-                  )
-                  .map((request) => (
-                    <div
-                      key={request.id}
-                      className="rounded-xl border border-blue-200 bg-blue-50 p-4 shadow-sm"
-                    >
-                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                        <div className="flex min-w-0 items-start gap-3">
-                          {request.bookCoverUrl && (
-                            <img
-                              src={request.bookCoverUrl}
-                              alt={`${request.bookTitle} cover`}
-                              className="h-20 w-14 shrink-0 rounded border border-blue-200 object-cover"
-                            />
-                          )}
-                          <div className="min-w-0">
-                            <p className="font-extrabold text-blue-900">
-                              {request.bookTitle}
-                            </p>
-                            {request.bookAuthor && (
-                              <p className="mt-1 text-xs text-blue-700">
-                                Author: {request.bookAuthor}
-                              </p>
-                            )}
-                            {request.bookIsbn && (
-                              <p className="text-xs text-blue-700">
-                                ISBN: {request.bookIsbn}
-                              </p>
-                            )}
-                            <p className="mt-1 text-xs font-semibold text-blue-700">
-                              Status: Borrowed
-                            </p>
-                            <p className="mt-1 text-xs text-blue-700">
-                              Borrowed:{' '}
-                              {formatDateTime(request.borrowDate)}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-start gap-2 md:items-end">
-                          <div className="text-left md:text-right">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
-                              Due Date
-                            </p>
-                            <p className="text-sm font-extrabold text-blue-900">
-                              {formatDateTime(request.dueDate)}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleConfirmReturn(request)}
-                            disabled={confirming}
-                            className="rounded-lg bg-emerald-700 px-5 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {confirming ? 'Confirming...' : 'Confirm Return'}
-                          </button>
+                <h3 className="text-sm font-extrabold text-slate-800">Active Borrowed Books</h3>
+                {activeVisitorRequests.filter((r) => r.status === 'borrowed').map((request) => (
+                  <div key={request.id} className="rounded-xl border border-blue-200 bg-blue-50 p-4 shadow-sm">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-3">
+                        {request.bookCoverUrl && (
+                          <img src={request.bookCoverUrl} alt={`${request.bookTitle} cover`} className="h-20 w-14 shrink-0 rounded border border-blue-200 object-cover" />
+                        )}
+                        <div className="min-w-0">
+                          <p className="font-extrabold text-blue-900">{request.bookTitle}</p>
+                          {request.bookAuthor && <p className="mt-1 text-xs text-blue-700">Author: {request.bookAuthor}</p>}
+                          {request.bookIsbn && <p className="text-xs text-blue-700">ISBN: {request.bookIsbn}</p>}
+                          <p className="mt-1 text-xs font-semibold text-blue-700">Status: Borrowed</p>
+                          <p className="mt-1 text-xs text-blue-700">Borrowed: {formatDateTime(request.borrowDate)}</p>
                         </div>
                       </div>
+                      <div className="flex flex-col items-start gap-2 md:items-end">
+                        <div className="text-left md:text-right">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600">Due Date</p>
+                          <p className="text-sm font-extrabold text-blue-900">{formatDateTime(request.dueDate)}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleConfirmReturn(request)}
+                          disabled={confirming}
+                          className="rounded-lg bg-emerald-700 px-5 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
+                        >
+                          {confirming ? 'Confirming...' : 'Confirm Return'}
+                        </button>
+                      </div>
                     </div>
-                  ))}
+                  </div>
+                ))}
               </div>
             )}
-            {/* NO REQUESTS */}
+
             {!activeVisitorRequests.length && (
               <div className="border border-dashed border-slate-300 rounded-xl p-8 text-center">
-                <p className="text-sm font-bold text-slate-600">
-                  No active book requests found.
-                </p>
-                <p className="text-xs text-slate-400 mt-1">
-                  This visitor does not currently have a book ready
-                  for pickup or an active borrowed book.
-                </p>
+                <p className="text-sm font-bold text-slate-600">No active book requests found.</p>
+                <p className="text-xs text-slate-400 mt-1">This visitor does not currently have a book ready for pickup or an active borrowed book.</p>
               </div>
             )}
           </div>
         )}
       </div>
+
       {/* EXISTING BOOK TRANSACTIONS */}
       <div>
         <div className="mb-3">
-          <h2 className="text-lg font-extrabold text-slate-800">
-            Transaction Records
-          </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            View and manage existing book transaction records.
-          </p>
+          <h2 className="text-lg font-extrabold text-slate-800">Transaction Records</h2>
+          <p className="text-xs text-slate-500 mt-1">View and manage existing book transaction records.</p>
         </div>
         <BookTransactions />
       </div>
@@ -881,18 +870,10 @@ function QRBookBorrowing({
 
 export default function SubAdminDashboard() {
   const { user, logout } = useAuth();
-  const {
-    books,
-    borrowRequests,
-    attendanceLogs,
-    libraries,
-  } = useLibraryData();
+  const { books, borrowRequests, attendanceLogs, libraries } = useLibraryData();
   const [section, setSection] = useState('overview');
   const [focusRequestId, setFocusRequestId] = useState(null);
-  const [expandedGroups, setExpandedGroups] = useState({
-    reports: true,
-    communication: false,
-  });
+  const [expandedGroups, setExpandedGroups] = useState({ reports: true, communication: false });
   const [workspaceTab, setWorkspaceTab] = useState('reports');
   const [showImportGuide, setShowImportGuide] = useState(false);
   const { addBooksBulk, confirmPickup, confirmReturn } = useLibrary();
@@ -907,11 +888,8 @@ export default function SubAdminDashboard() {
     return () => cancelAnimationFrame(frame);
   }, [focusRequestId, section]);
 
-  // ============================================================
-  // BRANCH SPECIFIC DATA & IMPORT / EXPORT LOGIC
-  // ============================================================
   const currentLibraryId = user?.libraryId || user?.assignedBranch || '';
- 
+
   const currentBranchName = useMemo(() => {
     const assignedId = String(currentLibraryId || '');
     if (!assignedId) return '';
@@ -929,7 +907,6 @@ export default function SubAdminDashboard() {
     );
   }, [libraries, currentLibraryId]);
 
-  // 1. Filter Books para sa branch ng Sub-Admin lang
   const branchBooks = useMemo(() => {
     if (!currentLibraryId) return [];
     return books.filter(
@@ -937,7 +914,6 @@ export default function SubAdminDashboard() {
     );
   }, [books, currentLibraryId]);
 
-  // 2. Filter Attendance Logs para sa branch ng Sub-Admin lang
   const branchAttendance = useMemo(() => {
     if (!currentLibraryId) return [];
     return attendanceLogs.filter(
@@ -951,17 +927,16 @@ export default function SubAdminDashboard() {
   );
 
   const branchBorrowRequests = useMemo(
-    () => borrowRequests.filter((request) =>
-      branchBookIds.has(String(request.bookId || request.book_id))
-    ),
+    () =>
+      borrowRequests.filter((request) =>
+        branchBookIds.has(String(request.bookId || request.book_id))
+      ),
     [borrowRequests, branchBookIds]
   );
 
   const [notificationNow, setNotificationNow] = useState(() => Date.now());
   useEffect(() => {
-    const intervalId = setInterval(() => {
-      setNotificationNow(Date.now());
-    }, 60_000);
+    const intervalId = setInterval(() => setNotificationNow(Date.now()), 60_000);
     return () => clearInterval(intervalId);
   }, []);
 
@@ -974,32 +949,19 @@ export default function SubAdminDashboard() {
       if (!value) return 'Date unavailable';
       const date = new Date(value);
       if (Number.isNaN(date.getTime())) return 'Date unavailable';
-      return date.toLocaleString('en-PH', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      });
+      return date.toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
     };
+
     branchBorrowRequests.forEach((request) => {
       const bookTitle = request.bookTitle || 'Untitled book';
       const visitorName = request.visitorName || 'Visitor';
-      const requestDate = request.requestDate
-        ? new Date(request.requestDate).getTime()
-        : NaN;
-      const pickupDeadline = request.pickupDeadline
-        ? new Date(request.pickupDeadline).getTime()
-        : NaN;
-      const dueDate = request.dueDate
-        ? new Date(request.dueDate).getTime()
-        : NaN;
-      
-      // Recently queued reservations from this branch.
+      const requestDate = request.requestDate ? new Date(request.requestDate).getTime() : NaN;
+      const pickupDeadline = request.pickupDeadline ? new Date(request.pickupDeadline).getTime() : NaN;
+      const dueDate = request.dueDate ? new Date(request.dueDate).getTime() : NaN;
+
       if (
-        ['queued', 'pending'].includes(
-          String(request.status || '').toLowerCase()
-        ) &&
-        Number.isFinite(requestDate) &&
-        requestDate <= now &&
-        requestDate >= now - oneDay
+        ['queued', 'pending'].includes(String(request.status || '').toLowerCase()) &&
+        Number.isFinite(requestDate) && requestDate <= now && requestDate >= now - oneDay
       ) {
         items.push({
           id: `reservation-${request.id}`,
@@ -1012,12 +974,10 @@ export default function SubAdminDashboard() {
           section: 'queue',
         });
       }
-      // Pickups that expire within the next 24 hours.
+
       if (
         request.status === 'ready_for_pickup' &&
-        Number.isFinite(pickupDeadline) &&
-        pickupDeadline >= now &&
-        pickupDeadline <= now + oneDay
+        Number.isFinite(pickupDeadline) && pickupDeadline >= now && pickupDeadline <= now + oneDay
       ) {
         items.push({
           id: `pickup-${request.id}`,
@@ -1030,12 +990,8 @@ export default function SubAdminDashboard() {
           section: 'queue',
         });
       }
-      // Books whose recorded due date has passed.
-      if (
-        request.status === 'borrowed' &&
-        Number.isFinite(dueDate) &&
-        dueDate < now
-      ) {
+
+      if (request.status === 'borrowed' && Number.isFinite(dueDate) && dueDate < now) {
         items.push({
           id: `overdue-${request.id}`,
           requestId: request.id,
@@ -1048,16 +1004,14 @@ export default function SubAdminDashboard() {
         });
       }
     });
-    return items
-      .sort((a, b) => a.priority - b.priority || b.timestamp - a.timestamp)
-      .slice(0, 20);
+
+    return items.sort((a, b) => a.priority - b.priority || b.timestamp - a.timestamp).slice(0, 20);
   }, [branchBorrowRequests, currentLibraryId, notificationNow]);
 
-  // 3. Import File Handler para sa Branch
   const [importError, setImportError] = useState('');
   const [importMessage, setImportMessage] = useState('');
   const [importingBooks, setImportingBooks] = useState(false);
-  
+
   const handleFileUpload = (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -1123,44 +1077,29 @@ export default function SubAdminDashboard() {
   const todaysVisits = branchAttendance.filter(
     (a) => new Date(a.timeIn).toDateString() === today
   ).length;
-  const pendingPickups =
-    branchBorrowRequests.filter(
-      (r) =>
-        r.status === 'ready_for_pickup' &&
-        !locallyConfirmedPickups.includes(r.id)
-    ).length;
-  const activeBorrows =
-    branchBorrowRequests.filter(
-      (r) =>
-        (r.status === 'borrowed' || locallyConfirmedPickups.includes(r.id))
-    ).length;
-  const overdue =
-    branchBorrowRequests.filter(
-      (r) =>
-        r.status === 'borrowed' &&
-        new Date(r.dueDate) < new Date()
-    ).length;
+  const pendingPickups = branchBorrowRequests.filter(
+    (r) => r.status === 'ready_for_pickup' && !locallyConfirmedPickups.includes(r.id)
+  ).length;
+  const activeBorrows = branchBorrowRequests.filter(
+    (r) => r.status === 'borrowed' || locallyConfirmedPickups.includes(r.id)
+  ).length;
+  const overdue = branchBorrowRequests.filter(
+    (r) => r.status === 'borrowed' && new Date(r.dueDate) < new Date()
+  ).length;
 
   const handleBorrowConfirmed = (requestId) => {
-    setLocallyConfirmedPickups((current) => {
-      if (current.includes(requestId)) {
-        return current;
-      }
-      return [...current, requestId];
-    });
+    setLocallyConfirmedPickups((current) =>
+      current.includes(requestId) ? current : [...current, requestId]
+    );
   };
 
   return (
-    <div className="subadmin-dashboard flex h-screen overflow-hidden bg-shelf-bg text-slate-800">
+    <div className="subadmin-dashboard flex h-screen overflow-hidden bg-slate-100 text-slate-800">
       {/* SIDEBAR */}
-      <aside className="subadmin-sidebar sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-slate-700/50 bg-shelf-primary text-white shadow-lg">
+      <aside className="subadmin-sidebar sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-slate-800 bg-[#0a192f] text-white shadow-lg">
         <div className="p-5 border-b border-white/10">
-          <p className="font-extrabold tracking-wider">
-            SHELF ILMS
-          </p>
-          <p className="text-xs text-slate-300 mt-1">
-            Sub-Admin Console
-          </p>
+          <p className="font-extrabold tracking-wider">SHELF ILMS</p>
+          <p className="text-xs text-slate-400 mt-1">Sub-Admin Console</p>
         </div>
         <nav className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1">
           {NAV.map(({ Icon, ...item }) => (
@@ -1170,54 +1109,35 @@ export default function SubAdminDashboard() {
               onClick={() => setSection(item.id)}
               className={`w-full text-left text-sm px-3 py-2.5 rounded-lg transition ${
                 section === item.id
-                  ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
+                  ? 'bg-blue-600/30 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
                   : 'text-slate-300 hover:bg-white/5'
               }`}
             >
-              <Icon
-                size={18}
-                className="mr-3 inline-block align-[-3px]"
-                aria-hidden="true"
-              />
+              <Icon size={18} className="mr-3 inline-block align-[-3px]" aria-hidden="true" />
               {item.label}
             </button>
           ))}
+
           {/* REPORTS & SERVICES */}
           <button
             type="button"
-            onClick={() =>
-              setExpandedGroups((prev) => ({
-                ...prev,
-                reports: !prev.reports,
-              }))
-            }
+            onClick={() => setExpandedGroups((prev) => ({ ...prev, reports: !prev.reports }))}
             aria-expanded={expandedGroups.reports}
             className="w-full flex items-center justify-between text-left text-sm px-3 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 transition"
           >
             <span>Reports &amp; Services</span>
-            <ChevronDown
-              size={16}
-              className={`transition-transform ${
-                expandedGroups.reports ? 'rotate-180' : ''
-              }`}
-            />
+            <ChevronDown size={16} className={`transition-transform ${expandedGroups.reports ? 'rotate-180' : ''}`} />
           </button>
           {expandedGroups.reports && (
             <div className="ml-3 border-l border-white/15 pl-2 space-y-1">
-              {[
-                { id: 'reports', label: 'Reports' },
-                { id: 'analytics', label: 'Analytics' },
-              ].map((item) => (
+              {[{ id: 'reports', label: 'Reports' }, { id: 'analytics', label: 'Analytics' }].map((item) => (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => {
-                    setWorkspaceTab(item.id);
-                    setSection('workspace');
-                  }}
+                  onClick={() => { setWorkspaceTab(item.id); setSection('workspace'); }}
                   className={`w-full text-left text-sm px-3 py-2 rounded-lg transition ${
                     section === 'workspace' && workspaceTab === item.id
-                      ? 'bg-white/15 font-bold text-amber-300'
+                      ? 'bg-blue-600/30 font-bold text-amber-300'
                       : 'text-slate-300 hover:bg-white/5'
                   }`}
                 >
@@ -1226,42 +1146,27 @@ export default function SubAdminDashboard() {
               ))}
             </div>
           )}
+
           {/* COMMUNICATION */}
           <button
             type="button"
-            onClick={() =>
-              setExpandedGroups((prev) => ({
-                ...prev,
-                communication: !prev.communication,
-              }))
-            }
+            onClick={() => setExpandedGroups((prev) => ({ ...prev, communication: !prev.communication }))}
             aria-expanded={expandedGroups.communication}
             className="w-full flex items-center justify-between text-left text-sm px-3 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 transition"
           >
             <span>Communication</span>
-            <ChevronDown
-              size={16}
-              className={`transition-transform ${
-                expandedGroups.communication ? 'rotate-180' : ''
-              }`}
-            />
+            <ChevronDown size={16} className={`transition-transform ${expandedGroups.communication ? 'rotate-180' : ''}`} />
           </button>
           {expandedGroups.communication && (
             <div className="ml-3 border-l border-white/15 pl-2 space-y-1">
-              {[
-                { id: 'feedback', label: 'Feedback' },
-                { id: 'announcements', label: 'Announcements' },
-              ].map((item) => (
+              {[{ id: 'feedback', label: 'Feedback' }, { id: 'announcements', label: 'Announcements' }].map((item) => (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => {
-                    setWorkspaceTab(item.id);
-                    setSection('workspace');
-                  }}
+                  onClick={() => { setWorkspaceTab(item.id); setSection('workspace'); }}
                   className={`w-full text-left text-sm px-3 py-2 rounded-lg transition ${
                     section === 'workspace' && workspaceTab === item.id
-                      ? 'bg-white/15 font-bold text-amber-300'
+                      ? 'bg-blue-600/30 font-bold text-amber-300'
                       : 'text-slate-300 hover:bg-white/5'
                   }`}
                 >
@@ -1273,25 +1178,14 @@ export default function SubAdminDashboard() {
         </nav>
        
         <div className="p-4 border-t border-white/10 space-y-3">
-          <p className="text-xs text-slate-400">
-            Signed in as
-          </p>
+          <p className="text-xs text-slate-400">Signed in as</p>
           <div className="min-w-0">
-            <p className="text-sm font-bold text-white wrap-break-words">
-              {user?.name || 'Sub-Admin'}
-            </p>
+            <p className="text-sm font-bold text-white wrap-break-words">{user?.name || 'Sub-Admin'}</p>
             <div className="mt-1 flex items-start gap-2">
-              <Building2
-                size={14}
-                className="mt-0.5 shrink-0 text-amber-300"
-              />
+              <Building2 size={14} className="mt-0.5 shrink-0 text-amber-300" />
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-amber-300">
-                  Sub-Admin
-                </p>
-                <p className="text-xs text-slate-300 wrap-break-words">
-                  {currentBranchName || 'Branch not found'}
-                </p>
+                <p className="text-xs font-semibold text-amber-300">Sub-Admin</p>
+                <p className="text-xs text-slate-300 wrap-break-words">{currentBranchName || 'Branch not found'}</p>
               </div>
             </div>
           </div>
@@ -1307,10 +1201,11 @@ export default function SubAdminDashboard() {
 
       {/* MAIN CONTENT */}
       <main className="h-screen min-w-0 flex-1 space-y-6 overflow-y-auto p-4 sm:p-6 lg:p-8">
-        <DashboardWelcome
+        
+        {/* CUSTOMIZED WELCOME HERO WITH UPPER RIGHT NOTIFICATIONS */}
+        <CustomDashboardWelcome
           name={user?.name?.split(' ')[0]}
           description={`Manage circulation, reservations, and inventory${currentBranchName ? ` for ${currentBranchName}` : ' for your assigned branch'}.`}
-          showNotifications={true}
           notifications={branchNotifications}
           onNotificationClick={(notification) => {
             setFocusRequestId(notification.requestId);
@@ -1323,34 +1218,15 @@ export default function SubAdminDashboard() {
           ]}
         />
 
-        {/* OVERVIEW */}
+        {/* OVERVIEW SECTION */}
         {section === 'overview' && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-              <StatCard
-                label="Visits Today"
-                value={todaysVisits}
-                tone="blue"
-              />
-              <StatCard
-                label="Pending Pickups"
-                value={pendingPickups}
-                tone="amber"
-              />
-              <StatCard
-                label="Active Borrows"
-                value={activeBorrows}
-              />
-              <StatCard
-                label="Overdue Items"
-                value={overdue}
-                tone="red"
-              />
-              <StatCard
-                label="Branch Books"
-                value={branchBooks.length}
-                tone="book"
-              />
+              <StatCard label="Visits Today" value={todaysVisits} tone="blue" />
+              <StatCard label="Pending Pickups" value={pendingPickups} tone="amber" />
+              <StatCard label="Active Borrows" value={activeBorrows} />
+              <StatCard label="Overdue Items" value={overdue} tone="red" />
+              <StatCard label="Branch Books" value={branchBooks.length} tone="book" />
             </div>
 
             {/* OVERVIEW CHARTS */}
@@ -1370,9 +1246,9 @@ export default function SubAdminDashboard() {
                     Export records or import data specifically for your assigned library branch.
                   </p>
                 </div>
-
-                {/* IMPORT BUTTON WITH REACT HOVER TOOLTIP */}
-                <div 
+                
+                {/* IMPORT BUTTON WITH TOOLTIP */}
+                <div
                   className="relative inline-block"
                   onMouseEnter={() => setShowImportGuide(true)}
                   onMouseLeave={() => setShowImportGuide(false)}
@@ -1389,14 +1265,13 @@ export default function SubAdminDashboard() {
                     />
                   </label>
 
-                  {/* HOVER TOOLTIP CARD (Nakalagay sa taas ng button) */}
                   {showImportGuide && (
                     <div className="absolute right-0 bottom-full mb-2 w-80 p-4 bg-sky-50 border border-sky-200 rounded-xl shadow-2xl z-50 text-xs text-sky-950 pointer-events-none transition-all">
                       <div className="flex items-center gap-1.5 font-bold text-sky-900 mb-2">
                         <Info size={16} className="text-sky-600" />
                         <span>Book Import Guide</span>
                       </div>
-                      
+                     
                       <div className="space-y-1.5 leading-relaxed">
                         <p>
                           <span className="font-semibold text-rose-600">Required:</span>{' '}
@@ -1429,7 +1304,7 @@ export default function SubAdminDashboard() {
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                {/* BRANCH BOOKS EXPORT */}
+                {/* EXPORT BRANCH BOOKS */}
                 <div className="p-3.5 border border-slate-100 bg-slate-50/50 rounded-lg flex items-center justify-between">
                   <div>
                     <p className="flex items-center gap-1.5 text-xs font-bold text-slate-700"><BookOpen size={14} aria-hidden="true" /> Branch Books Inventory</p>
@@ -1453,7 +1328,7 @@ export default function SubAdminDashboard() {
                   </div>
                 </div>
 
-                {/* BRANCH ATTENDANCE EXPORT */}
+                {/* EXPORT BRANCH ATTENDANCE */}
                 <div className="p-3.5 border border-slate-100 bg-slate-50/50 rounded-lg flex items-center justify-between">
                   <div>
                     <p className="flex items-center gap-1.5 text-xs font-bold text-slate-700"><Activity size={14} aria-hidden="true" /> Branch Visitor Attendance</p>
@@ -1481,65 +1356,40 @@ export default function SubAdminDashboard() {
           </div>
         )}
 
-        {focusRequestId &&
-          section !== 'overview' &&
-          (() => {
-            const request = branchBorrowRequests.find(
-              (item) => String(item.id) === String(focusRequestId)
-            );
-            return request ? (
-              <section
-                id={`admin-request-${request.id}`}
-                className="rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-sm"
-              >
-                <h2 className="text-sm font-bold text-amber-900">
-                  Selected request: {request.bookTitle || 'Untitled book'}
-                </h2>
-                <p className="mt-1 text-xs text-amber-800">
-                  {request.visitorName || 'Visitor'} · {request.status}
-                  {request.dueDate ? ` · Due ${formatDateTime(request.dueDate)}` : ''}
-                  {request.pickupDeadline
-                    ? ` · Pickup deadline ${formatDateTime(request.pickupDeadline)}`
-                    : ''}
-                </p>
-              </section>
-            ) : null;
-          })()}
+        {focusRequestId && section !== 'overview' && (() => {
+          const request = branchBorrowRequests.find((item) => String(item.id) === String(focusRequestId));
+          return request ? (
+            <section id={`admin-request-${request.id}`} className="rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-sm">
+              <h2 className="text-sm font-bold text-amber-900">
+                Selected request: {request.bookTitle || 'Untitled book'}
+              </h2>
+              <p className="mt-1 text-xs text-amber-800">
+                {request.visitorName || 'Visitor'} · {request.status}
+                {request.dueDate ? ` · Due ${formatDateTime(request.dueDate)}` : ''}
+                {request.pickupDeadline ? ` · Pickup deadline ${formatDateTime(request.pickupDeadline)}` : ''}
+              </p>
+            </section>
+          ) : null;
+        })()}
 
-        {/* ATTENDANCE */}
-        {section === 'attendance' && (
-          <AttendanceScanner />
-        )}
-
-        {/* BOOK TRANSACTIONS / QR BORROWING */}
+        {/* SECTION ROUTING */}
+        {section === 'attendance' && <AttendanceScanner />}
         {section === 'transactions' && (
           <QRBookBorrowing
             user={user}
-            onBorrowConfirmed={
-              handleBorrowConfirmed
-            }
+            onBorrowConfirmed={handleBorrowConfirmed}
             confirmPickup={confirmPickup}
             confirmReturn={confirmReturn}
           />
         )}
-
-        {/* INVENTORY */}
-        {section === 'inventory' && (
-          <BookInventory />
-        )}
-
-        {/* RESERVATION QUEUE */}
-        {section === 'queue' && (
-          <ReservationQueue user={user} />
-        )}
-
+        {section === 'inventory' && <BookInventory />}
+        {section === 'queue' && <ReservationQueue user={user} />}
         {section === 'map' && (
           <LibraryMap
             libraryScopeId={currentLibraryId}
             focusBranchId={currentLibraryId || null}
           />
         )}
-
         {section === 'workspace' && (
           <AdminWorkspace
             key={workspaceTab}
