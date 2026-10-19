@@ -79,7 +79,8 @@ export function getAIRecommendations(
   borrowRequests,
   allBooks,
   visitorId,
-  searchHistory = []
+  searchHistory = [],
+  popularBorrowCounts = []
 ) {
   if (
     !visitorId ||
@@ -111,14 +112,25 @@ export function getAIRecommendations(
       .map((request) => String(request.bookId ?? request.book_id ?? ''))
       .filter(Boolean)
   );
-  const completedBookIds = new Set(
-    visitorRequests
-      .filter((request) =>
-        completedStatuses.has(String(request.status ?? '').toLowerCase())
-      )
-      .map((request) => String(request.bookId ?? request.book_id ?? ''))
-      .filter(Boolean)
+  const completedBookCounts = new Map();
+  visitorRequests
+    .filter((request) =>
+      completedStatuses.has(String(request.status ?? '').toLowerCase())
+    )
+    .forEach((request) => {
+      const bookId = String(request.bookId ?? request.book_id ?? '');
+      if (bookId) {
+        completedBookCounts.set(bookId, (completedBookCounts.get(bookId) || 0) + 1);
+      }
+    });
+  const completedBookIds = new Set(completedBookCounts.keys());
+  const popularityByBookId = new Map(
+    (Array.isArray(popularBorrowCounts) ? popularBorrowCounts : []).map((item) => [
+      String(item.bookId ?? item.book_id ?? ''),
+      Number(item.borrowCount ?? item.borrow_count) || 0,
+    ])
   );
+  const popularityScore = (book) => popularityByBookId.get(String(book.id)) || 0;
 
   const recentSearches = Array.isArray(searchHistory)
     ? searchHistory
@@ -146,10 +158,12 @@ export function getAIRecommendations(
   const fallbackBooks = availableBooks
     .filter((book) => !activeBookIds.has(String(book.id)))
     .sort((left, right) => {
+      const popularityDifference = popularityScore(right) - popularityScore(left);
       const availabilityDifference =
         Number(right.availableCopies ?? right.available_copies ?? 0) -
         Number(left.availableCopies ?? left.available_copies ?? 0);
       return (
+        popularityDifference ||
         availabilityDifference ||
         String(left.title ?? '').localeCompare(String(right.title ?? ''))
       );
@@ -184,11 +198,12 @@ export function getAIRecommendations(
   };
 
   borrowedBooks.forEach((book) => {
-    addScore(categoryScores, getBookCategoryKey(book.category), 1);
+    const borrowCount = completedBookCounts.get(String(book.id)) || 1;
+    addScore(categoryScores, getBookCategoryKey(book.category), borrowCount);
     addScore(
       authorScores,
       String(book.author ?? '').trim().toLocaleLowerCase(),
-      1
+      borrowCount
     );
   });
 
@@ -306,6 +321,7 @@ export function getAIRecommendations(
     .sort(
       (left, right) =>
         right.score - left.score ||
+        popularityScore(right) - popularityScore(left) ||
         String(left.title ?? '').localeCompare(String(right.title ?? ''))
     )
     .slice(0, 4);

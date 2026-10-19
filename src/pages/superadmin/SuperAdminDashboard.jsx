@@ -45,6 +45,7 @@ import LibraryMap from '../../component/LibraryMap.jsx';
 import AdminWorkspace from '../../component/AdminWorkspace.jsx';
 import DashboardWelcome from '../../component/DashboardWelcome.jsx';
 import { supabase } from '../../lib/supabaseClient.js';
+import { sendDueDateFollowUp } from '../../lib/dueDateFollowUp.js';
 import {
   exportToExcel,
   exportToCSV,
@@ -802,6 +803,80 @@ const handleEditStaff = (staff) => {
   // ============================================================
   // DASHBOARD DATA
   // ============================================================
+  const [notificationNow, setNotificationNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNotificationNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const superAdminNotifications = useMemo(() => {
+    const now = notificationNow;
+    const notifications = [];
+
+    borrowRequests.forEach((request) => {
+      const bookTitle = request.bookTitle || 'Untitled book';
+      const visitorName = request.visitorName || 'Visitor';
+      const status = String(request.status || '').toLowerCase();
+      const requestDate = new Date(request.requestDate || request.request_date).getTime();
+      const dueDate = new Date(request.dueDate || request.due_date).getTime();
+      const pickupDeadline = new Date(request.pickupDeadline || request.pickup_deadline).getTime();
+
+      if (
+        ['queued', 'pending'].includes(status) &&
+        Number.isFinite(requestDate) &&
+        requestDate <= now &&
+        requestDate >= now - 24 * 60 * 60 * 1000
+      ) {
+        notifications.push({
+          id: `request-${request.id}`,
+          title: 'New reservation request',
+          message: `${visitorName} — ${bookTitle}`,
+          timeLabel: `Requested ${new Date(requestDate).toLocaleString()}`,
+          timestamp: requestDate,
+          section: 'workspace',
+        });
+      }
+
+      if (status === 'borrowed' && Number.isFinite(dueDate) && dueDate < now) {
+        notifications.push({
+          id: `overdue-${request.id}`,
+          requestId: request.id,
+          followUp: true,
+          title: 'Overdue book',
+          message: `${bookTitle} — ${visitorName}`,
+          timeLabel: `Due ${new Date(dueDate).toLocaleString()}`,
+          timestamp: dueDate,
+          section: 'overview',
+        });
+      }
+
+      if (
+        status === 'ready_for_pickup' &&
+        Number.isFinite(pickupDeadline) &&
+        pickupDeadline >= now &&
+        pickupDeadline <= now + 24 * 60 * 60 * 1000
+      ) {
+        notifications.push({
+          id: `pickup-${request.id}`,
+          title: 'Pickup deadline approaching',
+          message: `${bookTitle} for ${visitorName}`,
+          timeLabel: `Deadline ${new Date(pickupDeadline).toLocaleString()}`,
+          timestamp: pickupDeadline,
+          section: 'overview',
+        });
+      }
+    });
+
+    return notifications
+      .sort((left, right) => right.timestamp - left.timestamp)
+      .slice(0, 20);
+  }, [borrowRequests, notificationNow]);
+
+  const handleOverdueFollowUp = async (notification) => {
+    await sendDueDateFollowUp(notification.requestId);
+  };
+
   const activeBorrows =
     borrowRequests.filter(
       (request) =>
@@ -1126,6 +1201,14 @@ const handleEditStaff = (staff) => {
         <DashboardWelcome
           name={user?.name?.split(' ')[0]}
           description="System metrics, library operations, staff accounts, and reports at a glance."
+          notifications={superAdminNotifications}
+          onNotificationFollowUp={handleOverdueFollowUp}
+          onNotificationClick={(notification) => {
+            setSection(notification.section);
+            if (notification.section === 'workspace') {
+              setActiveTab('reports');
+            }
+          }}
           actions={[
             { label: 'View Inventory', Icon: BookOpen, onClick: () => setSection('inventory') },
             { label: 'Manage Staff', Icon: ShieldCheck, onClick: () => setSection('accounts') },

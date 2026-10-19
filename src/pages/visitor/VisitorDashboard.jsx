@@ -1096,6 +1096,7 @@ function VisitorDashboardContent() {
             ================================================== */}
 
             <OPACCatalog
+              embedded
               libraryFilter={
                 tab === 'communityBooks' ||
                 tab === 'personalBooks'

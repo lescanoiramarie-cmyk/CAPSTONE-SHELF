@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { philippines } from '@ianlabicani/geoph-lite';
 import {
   Eye,
@@ -194,13 +194,12 @@ export default function VisitorLogin() {
     verifyVisitorOtp,
     resendVisitorOtp,
     resendVisitorOtpByEmail,
-    establishVisitorSessionFromQr,
     requestPasswordResetCode,
     verifyPasswordResetCode,
     applyPasswordReset,
     login,
-    loginVisitor,
     loginAsVisitorSession,
+    establishVisitorSessionFromQr,
   } = useAuth();
 
   // =========================================================
@@ -281,32 +280,43 @@ export default function VisitorLogin() {
 
   const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false);
 
-  useEffect(() => {
-    if (view !== 'forgot' || resetStep !== 'verify') {
-      return undefined;
-    }
+  
+useEffect(() => {
+  if (view !== 'forgot' || resetStep !== 'verify') {
+    return undefined;
+  }
 
-    const timer = setInterval(() => {
-      const now = Date.now();
-      setResetTimeRemaining(
-        resetExpiresAt
-          ? Math.max(0, Math.ceil((resetExpiresAt - now) / 1000))
-          : 0
-      );
-      setResetResendRemaining(
-        resetResendAvailableAt
-          ? Math.max(0, Math.ceil((resetResendAvailableAt - now) / 1000))
-          : 0
-      );
-    }, 1000);
+  const updateResetCountdown = () => {
+    const now = Date.now();
 
-    return () => clearInterval(timer);
-  }, [
-    resetExpiresAt,
-    resetResendAvailableAt,
-    resetStep,
-    view,
-  ]);
+    const remaining = resetExpiresAt
+      ? Math.max(0, Math.ceil((resetExpiresAt - now) / 1000))
+      : 0;
+
+    const resendRemaining = resetResendAvailableAt
+      ? Math.max(0, Math.ceil((resetResendAvailableAt - now) / 1000))
+      : 0;
+
+    setResetTimeRemaining((previous) =>
+      previous === remaining ? previous : remaining
+    );
+
+    setResetResendRemaining((previous) =>
+      previous === resendRemaining ? previous : resendRemaining
+    );
+  };
+
+  updateResetCountdown();
+
+  const timer = setInterval(updateResetCountdown, 1000);
+
+  return () => clearInterval(timer);
+}, [
+  view,
+  resetStep,
+  resetExpiresAt,
+  resetResendAvailableAt,
+]);
 
   useEffect(() => {
     if (view !== 'otp') {
@@ -358,7 +368,14 @@ export default function VisitorLogin() {
   const [showScanner, setShowScanner] = useState(false);
 
   const scannerRef = useRef(null);
+  const scannerStartPromiseRef = useRef(null);
+  const scannerCleanupPromiseRef = useRef(null);
   const fileInputRef = useRef(null);
+  const loginRef = useRef(login);
+
+  useEffect(() => {
+    loginRef.current = login;
+  }, [login]);
 
   // IMPORTANT:
   // This is a synchronous lock.
@@ -541,6 +558,7 @@ export default function VisitorLogin() {
     identifier: '',
     password: '',
   });
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const [otpInput, setOtpInput] =
     useState('');
@@ -593,250 +611,184 @@ export default function VisitorLogin() {
     formData.password ===
       formData.confirmPassword;
 
+  const stopVisitorScanner = useCallback(async () => {
+    if (scannerCleanupPromiseRef.current) {
+      await scannerCleanupPromiseRef.current;
+      return;
+    }
+
+    const scanner = scannerRef.current;
+    if (!scanner) return;
+
+    const cleanup = (async () => {
+      try {
+        if (scannerStartPromiseRef.current) {
+          try {
+            await scannerStartPromiseRef.current;
+          } catch {
+            // A failed start still needs its scanner element cleared.
+          }
+        }
+
+        if (scannerRef.current !== scanner) return;
+
+        const state = scanner.getState();
+        if (
+          state === Html5QrcodeScannerState.SCANNING ||
+          state === Html5QrcodeScannerState.PAUSED
+        ) {
+          await scanner.stop();
+        }
+      } catch (err) {
+        console.warn('QR scanner stop skipped:', err?.message || err);
+      }
+
+      try {
+        await scanner.clear();
+      } catch (err) {
+        console.warn('QR scanner clear skipped:', err?.message || err);
+      } finally {
+        if (scannerRef.current === scanner) {
+          scannerRef.current = null;
+        }
+        scannerStartPromiseRef.current = null;
+      }
+    })();
+
+    scannerCleanupPromiseRef.current = cleanup;
+    try {
+      await cleanup;
+    } finally {
+      if (scannerCleanupPromiseRef.current === cleanup) {
+        scannerCleanupPromiseRef.current = null;
+      }
+    }
+  }, []);
+
+  
   // =========================================================
   // CENTRALIZED QR LOGIN
   // =========================================================
 
   const handleQrLogin = useCallback(
     async (decodedText) => {
-      if (qrLoginLockRef.current) {
-        return;
-      }
+      if (qrLoginLockRef.current) return;
 
-      const qrCode =
-        String(decodedText || '').trim();
+      const qrCode = String(decodedText ?? '').trim();
 
       if (!qrCode) {
         throw new Error(
-          'The QR code does not contain a visitor pass.'
+          'The QR code is empty or does not contain a valid visitor pass.'
         );
       }
 
       qrLoginLockRef.current = true;
+      setError('');
 
       try {
-        await loginVisitor({
+        const result = await loginRef.current({
           identifier: qrCode,
           password: '',
         });
 
+        if (result?.role !== 'visitor') {
+          throw new Error('This QR pass is not linked to a visitor account.');
+        }
+
         navigate('/visitor');
+      } catch (err) {
+        console.error('QR LOGIN ERROR:', err);
+
+        throw new Error(
+          err?.message ||
+            'QR code detected, but visitor authentication failed.',
+          { cause: err }
+        );
       } finally {
         qrLoginLockRef.current = false;
       }
     },
-    [loginVisitor, navigate]
+    [navigate]
   );
 
-  // =========================================================
-  // START CAMERA SCANNER
-  // =========================================================
-
-  const startScanner = () => {
+  
+  
+  // START / STOP CAMERA SCANNER
+  const startScanner = useCallback(() => {
     setError('');
     setShowScanner(true);
-  };
+  }, []);
 
-  // =========================================================
-  // STOP CAMERA SCANNER
-  // =========================================================
+  const stopScanner = useCallback(async () => {
+    await stopVisitorScanner();
+    setShowScanner(false);
+  }, [stopVisitorScanner]);
 
-  const stopScanner = useCallback(
-    async () => {
-      const scanner =
-        scannerRef.current;
+    // Camera QR scanner — safe start and cleanup
+    useEffect(() => {
+      if (!showScanner) return;
 
-      scannerRef.current = null;
+      let cancelled = false;
+      let processing = false;
 
-      if (scanner) {
+      const startCamera = async () => {
         try {
-          await scanner.stop();
-        } catch (err) {
-          console.warn(
-            'Scanner stop warning:',
-            err
-          );
-        }
+          const scanner = new Html5Qrcode('visitor-qr-reader');
+          scannerRef.current = scanner;
 
-        try {
-          await scanner.clear();
-        } catch (err) {
-          console.warn(
-            'Scanner clear warning:',
-            err
-          );
-        }
-      }
-
-      setShowScanner(false);
-    },
-    []
-  );
-
-  // =========================================================
-  // CAMERA QR SCANNER EFFECT
-  // =========================================================
-
-  useEffect(() => {
-    if (!showScanner) {
-      return undefined;
-    }
-
-    let cancelled = false;
-    let scanner = null;
-    let qrAlreadyProcessed = false;
-
-    const startCameraScanner =
-      async () => {
-        try {
-          scanner =
-            new Html5Qrcode(
-              'visitor-qr-reader'
-            );
-
-          if (cancelled) {
-            try {
-              await scanner.clear();
-            } catch {
-              // Ignore cleanup errors.
-            }
-
-            return;
-          }
-
-          scannerRef.current =
-            scanner;
-
-          await scanner.start(
-            {
-              facingMode:
-                'environment',
-            },
+          const startPromise = scanner.start(
+            { facingMode: 'environment' },
             {
               fps: 10,
-              qrbox: {
-                width: 250,
-                height: 250,
-              },
+              qrbox: { width: 250, height: 250 },
             },
             async (decodedText) => {
-              if (
-                cancelled ||
-                qrAlreadyProcessed
-              ) {
-                return;
-              }
+              if (cancelled || processing) return;
 
-              const qrValue =
-                String(
-                  decodedText || ''
-                ).trim();
-
-              if (!qrValue) {
-                return;
-              }
-
-              qrAlreadyProcessed =
-                true;
+              processing = true;
+              const qrValue = decodedText.trim();
 
               try {
-                await scanner.stop();
-              } catch (err) {
-                console.warn(
-                  'Camera scanner stop:',
-                  err
-                );
-              }
-
-              try {
-                await scanner.clear();
-              } catch (err) {
-                console.warn(
-                  'Camera scanner clear:',
-                  err
-                );
-              }
-
-              scannerRef.current =
-                null;
-
-              if (!cancelled) {
+                await stopVisitorScanner();
+                if (cancelled) return;
                 setShowScanner(false);
-              }
-
-              try {
-                await handleQrLogin(
-                  qrValue
+                await handleQrLogin(qrValue);
+              } catch (err) {
+                setError(
+                  err?.message || 'QR code scanned, but login failed.'
                 );
-              } catch (loginError) {
-                console.error(
-                  'Centralized QR login error:',
-                  loginError
-                );
-
-                if (!cancelled) {
-                  setError(
-                    loginError?.message ||
-                      'QR code was detected, but login failed.'
-                  );
-                }
               }
             },
-            () => {
-              // Continuous scanner errors are intentionally ignored.
-            }
+            () => {}
           );
-        } catch (err) {
-          console.error(
-            'Camera scanner error:',
-            err
-          );
+          scannerStartPromiseRef.current = startPromise;
+          await startPromise;
 
-          scannerRef.current = null;
+          if (cancelled) {
+            await stopVisitorScanner();
+          }
+        } catch (err) {
+          console.error('Camera error:', err);
+
+          await stopVisitorScanner();
 
           if (!cancelled) {
             setShowScanner(false);
-
             setError(
-              'Unable to access the camera. Please allow camera permission or use Upload QR Code Image.'
+              err?.message ||
+                'Unable to access the camera. Please allow camera permission and try again.'
             );
-          }
-
-          if (scanner) {
-            try {
-              await scanner.clear();
-            } catch {
-              // Ignore cleanup errors.
-            }
           }
         }
       };
 
-    startCameraScanner();
+      void startCamera();
 
-    return () => {
-      cancelled = true;
-
-      const activeScanner =
-        scannerRef.current;
-
-      scannerRef.current = null;
-
-      if (activeScanner) {
-        activeScanner
-          .stop()
-          .catch(() => {})
-          .finally(() => {
-            activeScanner
-              .clear()
-              .catch(() => {});
-          });
-      }
-    };
-  }, [
-    showScanner,
-    handleQrLogin,
-  ]);
+      return () => {
+        cancelled = true;
+        void stopVisitorScanner();
+      };
+    }, [showScanner, handleQrLogin, stopVisitorScanner]);
 
   // =========================================================
   // CREATE ENHANCED QR IMAGE
@@ -966,130 +918,82 @@ export default function VisitorLogin() {
     );
   };
 
+
   // =========================================================
   // QR IMAGE UPLOAD
   // =========================================================
 
-  const handleQrImageUpload =
-    async (event) => {
-      const file =
-        event.target.files?.[0];
+  const handleQrImageUpload = async (event) => {
+    const file = event.target.files?.[0];
 
-      event.target.value = '';
+    // Allow the same image to be selected again.
+    event.target.value = '';
 
-      if (!file) {
-        return;
-      }
+    if (!file || isUploadingQr) return;
 
-      if (isUploadingQr) {
-        return;
-      }
+    if (!file.type.startsWith('image/')) {
+      setError('Please select a valid image file.');
+      return;
+    }
 
-      setError('');
-      setIsUploadingQr(true);
+    setError('');
+    setIsUploadingQr(true);
 
-      let qrScanner = null;
+    let qrScanner = null;
+
+    try {
+      qrScanner = new Html5Qrcode(
+        'visitor-qr-file-reader'
+      );
+
+      let decodedText = '';
 
       try {
-        if (
-          !file.type ||
-          !file.type.startsWith(
-            'image/'
-          )
-        ) {
-          throw new Error(
-            'Please upload a valid image containing your QR code.'
-          );
-        }
-
-        qrScanner =
-          new Html5Qrcode(
-            'visitor-qr-file-reader'
-          );
-
-        let decodedText = '';
-
-        // First attempt: original image.
-        try {
-          decodedText =
-            await qrScanner.scanFile(
-              file,
-              false
-            );
-        } catch {
-          // Continue to enhanced image fallback.
-        }
-
-        // Second attempt: enhanced image.
-        if (!decodedText) {
-          try {
-            const enhancedFile =
-              await createEnhancedQrImage(
-                file
-              );
-
-            decodedText =
-              await qrScanner.scanFile(
-                enhancedFile,
-                false
-              );
-          } catch (
-            enhancedError
-          ) {
-            console.log(
-              'Enhanced image scan failed:',
-              enhancedError
-            );
-          }
-        }
-
-        if (!decodedText) {
-          throw new Error(
-            'No QR code was detected in the uploaded image. Please upload a clear image where the entire QR code and its white border are visible.'
-          );
-        }
-
-        const qrValue =
-          String(
-            decodedText || ''
-          ).trim();
-
-        if (!qrValue) {
-          throw new Error(
-            'The QR code does not contain valid data.'
-          );
-        }
-
-        await handleQrLogin(
-          qrValue
-        );
-      } catch (err) {
-        console.error(
-          'QR image login error:',
-          err
-        );
-
-        setError(
-          err?.message ||
-            'Unable to read the QR code from the uploaded image.'
-        );
-      } finally {
-        if (qrScanner) {
-          try {
-            await qrScanner.clear();
-          } catch (
-            cleanupError
-          ) {
-            console.warn(
-              'QR scanner cleanup warning:',
-              cleanupError
-            );
-          }
-        }
-
-        setIsUploadingQr(false);
+        decodedText = await qrScanner.scanFile(file, false);
+      } catch {
+        // Try the enhanced image below.
       }
-    };
+
+      if (!decodedText) {
+        const enhancedFile = await createEnhancedQrImage(file);
+
+        decodedText = await qrScanner.scanFile(
+          enhancedFile,
+          false
+        );
+      }
+
+      const qrValue = String(decodedText ?? '').trim();
+
+      if (!qrValue) {
+        throw new Error(
+          'No QR code was detected. Upload a clear image showing the entire QR code and its white border.'
+        );
+      }
+
+      await handleQrLogin(qrValue);
+    } catch (err) {
+      console.error('QR IMAGE SCAN ERROR:', err);
+
+      setError(
+        err?.message ||
+          'Unable to read the QR image. Try another image or use the camera scanner.'
+      );
+    } finally {
+      try {
+        if (qrScanner) {
+  await qrScanner.clear();
+}
+      } catch (cleanupError) {
+        console.warn(
+          'QR image scanner cleanup warning:',
+          cleanupError
+        );
+      }
+
+      setIsUploadingQr(false);
+    }
+  };
 
   // =========================================================
   // NORMAL LOGIN
@@ -1129,6 +1033,7 @@ export default function VisitorLogin() {
     }
 
     try {
+      setIsLoggingIn(true);
       const result =
         await login({
           identifier,
@@ -1188,6 +1093,8 @@ export default function VisitorLogin() {
       } else {
         setError(message);
       }
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -1299,7 +1206,7 @@ export default function VisitorLogin() {
     };
 
     const trimmedFullName =
-      formData.fullName.trim();
+      formData.fullName.normalize('NFC').trim().replace(/\s+/g, ' ');
 
     const trimmedContactNumber =
       formData.contactNumber.trim();
@@ -1317,6 +1224,12 @@ export default function VisitorLogin() {
     if (!trimmedFullName) {
       errors.fullName =
         'Full name is required.';
+    } else if (
+      !/^[\p{L}\p{M}\p{N} .\u0027\u2018\u2019\u2010-\u2015]+$/u.test(trimmedFullName) ||
+      !/[\p{L}\p{N}]/u.test(trimmedFullName)
+    ) {
+      errors.fullName =
+        'Please use letters, numbers, spaces, apostrophes, periods, or hyphens in your name.';
     }
 
     // -------------------------------------------------------
@@ -1484,8 +1397,17 @@ export default function VisitorLogin() {
       setOtpResendAvailableAt(
         now + OTP_RESEND_COOLDOWN_SECONDS * 1000
       );
-      setOtpTimeRemaining(OTP_CODE_TTL_SECONDS);
-      setOtpResendRemaining(OTP_RESEND_COOLDOWN_SECONDS);
+      setOtpTimeRemaining(
+  Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000))
+);
+setOtpResendRemaining(
+  Math.max(
+    0,
+    Math.ceil(
+      (now + OTP_RESEND_COOLDOWN_SECONDS * 1000 - Date.now()) / 1000
+    )
+  )
+);
       setOtpInput('');
       setError('');
       setView('otp');
@@ -1660,8 +1582,17 @@ export default function VisitorLogin() {
         setOtpResendAvailableAt(
           now + OTP_RESEND_COOLDOWN_SECONDS * 1000
         );
-        setOtpTimeRemaining(OTP_CODE_TTL_SECONDS);
-        setOtpResendRemaining(OTP_RESEND_COOLDOWN_SECONDS);
+        setOtpTimeRemaining(
+  Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000))
+);
+setOtpResendRemaining(
+  Math.max(
+    0,
+    Math.ceil(
+      (now + OTP_RESEND_COOLDOWN_SECONDS * 1000 - Date.now()) / 1000
+    )
+  )
+);
         setOtpInput('');
 
         setError(
@@ -2264,12 +2195,21 @@ export default function VisitorLogin() {
 
                 <button
                   type="button"
-                  onClick={() => {
-                    loginAsVisitorSession(
-                      registeredVisitor
-                    );
+                  onClick={async () => {
+                    try {
+                      setError('');
 
-                    navigate('/visitor');
+                      await establishVisitorSessionFromQr(
+                        registeredVisitor.qrCode
+                      );
+
+                      navigate('/visitor');
+                    } catch (err) {
+                      setError(
+                        err.message ||
+                          'Unable to establish your library session. Please try again.'
+                      );
+                    }
                   }}
                   className="w-full bg-shelf-primary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition"
                 >
@@ -2899,36 +2839,35 @@ export default function VisitorLogin() {
               autoComplete="off"
             >
               {showScanner ? (
-                <div className="space-y-4">
-                  <div className="bg-shelf-primary text-white rounded-xl p-4 text-center">
-                    <h3 className="font-bold text-sm">
-                      Scan QR Code
-                    </h3>
+  <div className="space-y-4">
+    <div className="bg-shelf-primary text-white rounded-xl p-4 text-center">
+      <h3 className="font-bold text-sm">Scan QR Code</h3>
+      <p className="text-[11px] text-slate-300 mt-1">
+        Position the QR code inside the scanning area.
+      </p>
+    </div>
 
-                    <p className="text-[11px] text-slate-300 mt-1">
-                      Position the QR code inside
-                      the scanning area.
-                    </p>
-                  </div>
+    {/* Dapat may element na tumutugma sa scanner ID. */}
+    <div
+      id="visitor-qr-reader"
+      className="w-full min-h-70 overflow-hidden rounded-xl border border-slate-200 bg-slate-50"
+    />
 
-                  <div className="rounded-xl overflow-hidden border-2 border-shelf-primary bg-black">
-                    <div
-                      id="visitor-qr-reader"
-                      className="w-full"
-                    />
-                  </div>
+    <div
+      id="visitor-qr-file-reader"
+      className="hidden"
+      aria-hidden="true"
+    />
 
-                  <button
-                    type="button"
-                    onClick={
-                      stopScanner
-                    }
-                    className="w-full border border-slate-300 text-slate-700 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-50 transition"
-                  >
-                    Cancel Camera
-                  </button>
-                </div>
-              ) : (
+    <button
+      type="button"
+      onClick={stopScanner}
+      className="w-full border border-slate-300 text-slate-700 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-50 transition"
+    >
+      Cancel Camera
+    </button>
+  </div>
+) : (
                 <>
                   {/* LOGIN IDENTIFIER */}
 
@@ -3018,9 +2957,11 @@ export default function VisitorLogin() {
 
                   <button
                     type="submit"
-                    className="w-full bg-shelf-primary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm"
+                    disabled={isLoggingIn}
+                    aria-busy={isLoggingIn}
+                    className="w-full bg-shelf-primary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    Sign In
+                    {isLoggingIn ? 'Signing in...' : 'Sign In'}
                   </button>
 
                   {/* FORGOT PASSWORD */}

@@ -7,7 +7,7 @@ import {
   UserRound,
   LoaderCircle,
 } from 'lucide-react';
-import { FAQS } from '../data/faqData.js';
+import { FAQS, findFAQResponse } from '../data/faqData.js';
 
 const INITIAL_MESSAGE = {
   role: 'bot',
@@ -44,13 +44,8 @@ export default function FAQ() {
     setAsking(true);
 
     try {
-      const apiUrl = import.meta.env.VITE_ANALYTICS_API_URL;
-
-      if (!apiUrl) {
-        throw new Error(
-          'The chatbot service is not configured. Please contact the library administrator.'
-        );
-      }
+      const apiUrl = import.meta.env.VITE_ANALYTICS_API_URL ||
+        'https://shelf-analytics.onrender.com';
 
       const faqCorpus = FAQS.flatMap((group) =>
         group.questions.map((item) => ({
@@ -93,13 +88,17 @@ export default function FAQ() {
         { role: 'bot', text: payload.answer.trim() },
       ]);
     } catch (error) {
+      const localResponse = findFAQResponse(submittedQuestion);
       setMessages((previous) => [
         ...previous,
         {
           role: 'bot',
           text:
-            error.message ||
-            'Sorry, I could not connect to the chatbot. Please try again.',
+            localResponse
+              ? `${localResponse.a}\n\nThe chatbot service is unavailable, so this answer came from the built-in FAQ.`
+              : /failed to fetch|networkerror|connection refused/i.test(error.message || '')
+                ? 'I cannot reach the SHELF assistant service right now, and I could not find this in the built-in FAQ. Please try again later or contact the library.'
+                : error.message || 'The chatbot could not answer this question. Please try again.',
         },
       ]);
     } finally {

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CircleAlert, CircleCheck, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/useAuth.js';
 import { useLibraryData } from '../context/useLibrary.js';
+import { fetchPopularBorrowedBookCounts } from '../data/store.js';
 import {
   getAIRecommendations,
   getVisitorSearchHistory,
@@ -12,6 +13,22 @@ export default function AIRecommendations({ onRequestBorrow }) {
   const { user } = useAuth();
   const { books, borrowRequests } = useLibraryData();
   const [searchHistory, setSearchHistory] = useState([]);
+  const [popularBorrowCounts, setPopularBorrowCounts] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+    fetchPopularBorrowedBookCounts()
+      .then((counts) => {
+        if (active) setPopularBorrowCounts(counts);
+      })
+      .catch((error) => {
+        console.warn('Book popularity is unavailable:', error.message);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     const refreshSearchHistory = (event) => {
@@ -34,16 +51,17 @@ export default function AIRecommendations({ onRequestBorrow }) {
       borrowRequests,
       books,
       user?.id,
-      searchHistory
+      searchHistory,
+      popularBorrowCounts
     );
-  }, [borrowRequests, books, user?.id, searchHistory]);
+  }, [borrowRequests, books, user?.id, searchHistory, popularBorrowCounts]);
 
   if (!recommendations || recommendations.length === 0) {
     return null;
   }
 
   return (
-    <div className="bg-gradient-to-br from-slate-900 to-[#002046] rounded-2xl p-6 text-white shadow-md space-y-4">
+    <div className="bg-linear-to-br from-slate-900 to-shelf-primary rounded-2xl p-6 text-white shadow-md space-y-4">
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-4">
         <div>

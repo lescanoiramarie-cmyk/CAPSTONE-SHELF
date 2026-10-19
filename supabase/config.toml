@@ -34,3 +34,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/request-password-reset/deno.json"
 entrypoint = "./functions/request-password-reset/index.ts"
+
+[functions.login-with-lockout]
+enabled = true
+verify_jwt = false
+import_map = "./functions/login-with-lockout/deno.json"
+entrypoint = "./functions/login-with-lockout/index.ts"

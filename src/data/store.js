@@ -561,6 +561,24 @@ export async function fetchBooks() {
   return (data || []).map(mapBook);
 }
 
+export async function fetchPopularBorrowedBookCounts(limit = 40) {
+  const normalizedLimit = Math.min(
+    100,
+    Math.max(1, Math.trunc(Number(limit) || 40))
+  );
+  const { data, error } = await supabase.rpc(
+    'get_popular_borrowed_book_counts',
+    { p_limit: normalizedLimit }
+  );
+
+  if (error) throw cleanErr(error);
+
+  return (data || []).map((row) => ({
+    bookId: String(row.book_id),
+    borrowCount: Number(row.borrow_count) || 0,
+  }));
+}
+
 // ============================================================================
 // FETCH PERSONAL BOOKS OWNED BY A VISITOR
 // ============================================================================
@@ -960,74 +978,54 @@ export async function fetchBorrowRequests() {
       ? normalRequests
       : [];
 
+  
+  
   // ==========================================================================
   // 4. LOAD COMMUNITY BOOK REQUESTS
   // ==========================================================================
 
   let communityRequests = [];
 
-  if (
-    isValidVisitorId(
-      normalizedVisitorId
-    )
-  ) {
-    try {
-      console.log(
-        'SHELF â€” FETCHING COMMUNITY REQUESTS FOR VISITOR:',
-        normalizedVisitorId
-      );
+  try {
+    // Kunin ang kasalukuyang Supabase Auth session.
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
 
+    if (sessionError) {
+      throw sessionError;
+    }
+
+    // Huwag tawagin ang protected RPC kapag walang authenticated session.
+    if (session?.user?.id && isValidVisitorId(normalizedVisitorId)) {
       const {
         data,
         error,
       } = await supabase.rpc(
         'fetch_my_community_book_requests',
         {
-          p_requester_visitor_id:
-            normalizedVisitorId,
+          p_requester_visitor_id: normalizedVisitorId,
         }
       );
 
       if (error) {
         console.error(
-          'SHELF â€” COMMUNITY REQUEST RPC ERROR:',
+          'SHELF — COMMUNITY REQUEST RPC ERROR:',
           error
         );
       } else {
-        communityRequests =
-          Array.isArray(data)
-            ? data
-            : [];
-
-        console.log(
-          'SHELF â€” COMMUNITY REQUEST RPC RESULT:',
-          {
-            visitorId:
-              normalizedVisitorId,
-
-            count:
-              communityRequests.length,
-
-            data:
-              communityRequests,
-          }
-        );
+        communityRequests = Array.isArray(data) ? data : [];
       }
-
-    } catch (communityError) {
-      console.error(
-        'SHELF â€” COMMUNITY REQUEST FETCH ERROR:',
-        communityError
+    } else {
+      console.warn(
+        'SHELF — Community requests skipped: no authenticated visitor session.'
       );
     }
-
-  } else {
-    console.warn(
-      'SHELF â€” COMMUNITY REQUESTS SKIPPED: no valid visitor ID.',
-      {
-        visitorId:
-          normalizedVisitorId,
-      }
+  } catch (error) {
+    console.error(
+      'SHELF — COMMUNITY REQUEST FETCH ERROR:',
+      error
     );
   }
 
@@ -1451,6 +1449,14 @@ export async function registerVisitor({
     );
   }
 
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    throw new Error('Please enter a valid email address.');
+  }
+
+  if (!/^09\d{9}$/.test(normalizedContactNumber)) {
+    throw new Error('Contact number must be exactly 11 digits and start with 09.');
+  }
+
   if (!normalizedAddress) {
     throw new Error(
       'Address is required.'
@@ -1461,6 +1467,10 @@ export async function registerVisitor({
     throw new Error(
       'Password is required.'
     );
+  }
+
+  if (!isPasswordValid(normalizedPassword)) {
+    throw new Error(PASSWORD_REQUIREMENT_MESSAGE);
   }
 
   const registrationNonce =
@@ -2493,54 +2503,56 @@ export async function loginVisitor({
     );
   }
 
-  const {
-    data: authData,
-    error: authError,
-  } =
-    await supabase.auth.signInWithPassword({
-      email:
-        normalizeEmail(
-          normalizedIdentifier
-        ),
-
-      password:
-        normalizedPassword,
-    });
-
-  if (authError) {
-    const message =
-      normalizeText(
-        authError?.message
-      );
-
-    const lowerMessage =
-      message.toLowerCase();
-
-    if (
-      lowerMessage.includes(
-        'invalid login credentials'
-      )
-    ) {
-      throw new Error(
-        'Invalid login credentials'
-      );
-    }
-
-    if (
-      lowerMessage.includes(
-        'email not confirmed'
-      )
-    ) {
-      throw new Error(
-        'Please verify your email account before logging in.'
-      );
-    }
-
-    throw cleanErr(
-      authError,
-      'Unable to log in to the visitor account.'
-    );
+  
+const {
+  data: loginData,
+  error: loginError,
+} = await supabase.functions.invoke(
+  'login-with-lockout',
+  {
+    body: {
+      email: normalizeEmail(normalizedIdentifier),
+      password: normalizedPassword,
+    },
   }
+);
+
+if (
+  loginError ||
+  !loginData?.success ||
+  !loginData?.session
+) {
+  let details = null;
+
+  try {
+    details = await loginError?.context?.json?.();
+  } catch {
+    details = null;
+  }
+
+  throw new Error(
+    details?.error ||
+      loginData?.error ||
+      'Unable to log in. Please try again.'
+  );
+}
+
+const { data: sessionData, error: sessionError } =
+  await supabase.auth.setSession({
+    access_token: loginData.session.access_token,
+    refresh_token: loginData.session.refresh_token,
+  });
+
+if (sessionError) {
+  throw cleanErr(
+    sessionError,
+    'Unable to establish the login session.'
+  );
+}
+
+const authData = {
+  user: sessionData.user || loginData.user,
+};
 
   if (!authData?.user?.id) {
     throw new Error(
@@ -2756,72 +2768,59 @@ export async function loginStaffAccount(
     );
   }
 
-  const {
-    data,
-    error,
-  } =
-    await supabase.auth.signInWithPassword({
-      email:
-        normalizedEmail,
-
-      password:
-        normalizedPassword,
-    });
-
-  if (error) {
-    console.error(
-      'SUPABASE STAFF LOGIN ERROR:',
-      error
-    );
-
-    await safeSignOut();
-
-    const authErrorMessage =
-      normalizeText(
-        error?.message
-      ).toLowerCase();
-
-    if (
-      authErrorMessage.includes(
-        'user is banned'
-      ) ||
-      authErrorMessage.includes(
-        'user has been banned'
-      ) ||
-      authErrorMessage.includes(
-        'banned'
-      )
-    ) {
-      throw new Error(
-        'This staff account is currently inactive.'
-      );
-    }
-
-    if (
-      authErrorMessage.includes(
-        'invalid login credentials'
-      )
-    ) {
-      throw new Error(
-        'Invalid login credentials'
-      );
-    }
-
-    if (
-      authErrorMessage.includes(
-        'email not confirmed'
-      )
-    ) {
-      throw new Error(
-        'This staff account email has not been confirmed.'
-      );
-    }
-
-    throw cleanErr(
-      error,
-      'Unable to authenticate the staff account.'
-    );
+  
+const {
+  data: loginData,
+  error: loginError,
+} = await supabase.functions.invoke(
+  'login-with-lockout',
+  {
+    body: {
+      email: normalizedEmail,
+      password: normalizedPassword,
+    },
   }
+);
+
+if (
+  loginError ||
+  !loginData?.success ||
+  !loginData?.session
+) {
+  let details = null;
+
+  try {
+    details = await loginError?.context?.json?.();
+  } catch {
+    details = null;
+  }
+
+  const message =
+    details?.error ||
+    loginData?.error ||
+    'Unable to authenticate the staff account.';
+
+  throw new Error(message);
+}
+
+const {
+  data: sessionData,
+  error: sessionError,
+} = await supabase.auth.setSession({
+  access_token: loginData.session.access_token,
+  refresh_token: loginData.session.refresh_token,
+});
+
+if (sessionError) {
+  throw cleanErr(
+    sessionError,
+    'Unable to establish the staff login session.'
+  );
+}
+
+const data = {
+  user: sessionData.user || loginData.user,
+};
 
   if (!data?.user?.id) {
     await safeSignOut();

@@ -33,6 +33,19 @@ function ResizeMap({ isFullscreen }) {
   return null;
 }
 
+function FocusBranch({ library, markerRef }) {
+  const map = useMap();
+  const latitude = Number(library.lat);
+  const longitude = Number(library.lng);
+
+  useEffect(() => {
+    map.setView([latitude, longitude], Math.max(map.getZoom(), 15));
+    markerRef.current?.openPopup();
+  }, [latitude, longitude, map, markerRef]);
+
+  return null;
+}
+
 export default function LibraryMap({
   onBrowseLibrary,
   focusBranchId = null,

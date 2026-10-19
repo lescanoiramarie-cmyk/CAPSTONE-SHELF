@@ -6,10 +6,12 @@ import { LibraryProvider } from './context/LibraryContext.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 
 // =========================================================
-// ONE LOGIN PAGE
+// PUBLIC & VISITOR PAGES
 // =========================================================
 
+import LandingPage from './pages/visitor/LandingPage.jsx'; // INIDAGDAG
 import VisitorLogin from './pages/visitor/VisitorLogin.jsx';
+import OPACCatalog from './component/OPACCatalog.jsx';
 
 // =========================================================
 // DASHBOARDS
@@ -28,12 +30,39 @@ export default function App() {
           <Routes>
 
             {/* =================================================
-                ONE LOGIN PAGE FOR ALL USERS
+                MAIN LANDING PAGE (HOMEPAGE FOR GUESTS)
                ================================================= */}
 
             <Route
               path="/"
+              element={<LandingPage />}
+            />
+
+            {/* =================================================
+                PUBLIC CATALOG
+               ================================================= */}
+
+            <Route
+              path="/catalog"
+              element={<OPACCatalog activeView="catalog" />}
+            />
+
+            {/* =================================================
+                VISITOR LOGIN / SIGN IN
+               ================================================= */}
+
+            <Route
+              path="/visitor-login"
               element={<VisitorLogin />}
+            />
+
+            {/* =================================================
+                PUBLIC VISITOR REGISTER / SIGN UP PAGE
+               ================================================= */}
+
+            <Route
+              path="/visitor-register"
+              element={<Navigate to="/visitor-login" replace />}
             />
 
             {/* =================================================

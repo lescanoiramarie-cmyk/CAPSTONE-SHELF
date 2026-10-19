@@ -74,16 +74,26 @@ Deno.serve(async (request: Request) => {
     .eq("qr_code", qrCode)
     .maybeSingle();
 
+  
+  if (visitorError) {
+    console.error("QR sign-in visitor lookup failed:", visitorError.message);
+    return respond(origin, 500, {
+      error: "Unable to validate the visitor record. Please try again.",
+    });
+  }
+
   if (
-    visitorError ||
     !visitor?.auth_user_id ||
     !visitor.email ||
-    !visitor.otp_verified ||
-    !visitor.is_active ||
+    visitor.otp_verified !== true ||
+    visitor.is_active !== true ||
     !visitor.qr_code ||
     visitor.qr_code !== qrCode
   ) {
-    return respond(origin, 401, { error: "This QR pass could not be used to sign in." });
+    console.warn("QR sign-in rejected: visitor validation failed.");
+    return respond(origin, 401, {
+      error: "This QR pass could not be used to sign in.",
+    });
   }
 
   const { data: account, error: accountError } =

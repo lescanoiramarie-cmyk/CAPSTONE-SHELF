@@ -4,14 +4,15 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const resetSecret = Deno.env.get("STAFF_PASSWORD_RESET_SECRET") || "";
-const allowedOrigin =
-  Deno.env.get("APP_ORIGIN") || "http://localhost:5173";
 
 const EXISTING_SUPERADMIN_ID =
   "919c949a-ee98-4137-8a98-072ec8aa5fb1";
 
 const headers = {
-  "Access-Control-Allow-Origin": allowedOrigin,
+  // The function still requires and verifies a Super Admin JWT for all
+  // staff operations. Wildcard CORS allows the configured frontend host
+  // to reach the function without making the endpoint unauthenticated.
+  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-staff-reset-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -446,6 +447,7 @@ Deno.serve(async (request) => {
       const { error: authUpdateError } =
         await admin.auth.admin.updateUserById(userId, {
           email,
+          email_confirm: true,
           ...(password ? { password } : {}),
           app_metadata: {
             ...(authUser.user.app_metadata || {}),

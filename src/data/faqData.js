@@ -81,14 +81,35 @@ export const FAQS = [
 ];
 
 export function findFAQResponse(question) {
-  const queryTerms = String(question || '').toLowerCase().split(/[^a-z0-9]+/).filter((term) => term.length > 3);
-  if (queryTerms.length === 0) return null;
+  const ignoredTerms = new Set([
+    'how', 'what', 'where', 'when', 'does', 'do', 'can', 'my', 'the',
+    'and', 'for', 'your', 'you', 'are', 'is', 'a', 'to', 'i', 'me',
+  ]);
+  const canonicalTerm = (term) => {
+    if (['borrow', 'borrowing', 'borrowed', 'reserve', 'reservation'].includes(term)) {
+      return 'request';
+    }
+    return term;
+  };
+  const extractTerms = (value) => String(value || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((term) => term.length > 2 && !ignoredTerms.has(term))
+    .map(canonicalTerm);
 
-  return FAQS.flatMap((group) => group.questions).find((item) => {
-    const terms = item.q.toLowerCase().split(/[^a-z0-9]+/).filter((term) => term.length > 3);
-    const matches = terms.filter((term) => queryTerms.some((queryTerm) => (
-      queryTerm.startsWith(term.slice(0, 4)) || term.startsWith(queryTerm.slice(0, 4))
-    ))).length;
-    return matches >= Math.min(2, terms.length);
-  }) || null;
+  const queryTerms = new Set(extractTerms(question));
+  if (queryTerms.size === 0) return null;
+
+  let bestMatch = null;
+  let bestScore = 0;
+  FAQS.flatMap((group) => group.questions).forEach((item) => {
+    const terms = new Set(extractTerms(item.q));
+    const matches = [...queryTerms].filter((term) => terms.has(term)).length;
+    if (matches > bestScore) {
+      bestMatch = item;
+      bestScore = matches;
+    }
+  });
+
+  return bestScore >= Math.min(2, queryTerms.size) ? bestMatch : null;
 }

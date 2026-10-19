@@ -86,6 +86,15 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    let payload: Record<string, unknown>;
+    try {
+      payload = await req.json();
+    } catch {
+      return jsonResponse({ error: "Invalid JSON request body." }, 400);
+    }
+
+    const isManualFollowUp = payload.operation === "follow-up";
+
     const supabaseUrl =
       Deno.env.get("SUPABASE_URL");
 
@@ -114,21 +123,24 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (notificationSecret) {
+    if (!isManualFollowUp) {
       const requestSecret =
         req.headers.get(
           "x-due-notification-secret",
         );
 
       if (
+        !notificationSecret ||
         requestSecret !==
         notificationSecret
       ) {
         return jsonResponse(
           {
-            error: "Unauthorized.",
+            error: notificationSecret
+              ? "Unauthorized."
+              : "Scheduled due-date notifications are not configured with a secret.",
           },
-          401,
+          notificationSecret ? 401 : 503,
         );
       }
     }
@@ -138,6 +150,137 @@ Deno.serve(async (req: Request) => {
         supabaseUrl,
         serviceRoleKey,
       );
+
+    if (isManualFollowUp) {
+      const authorization = req.headers.get("Authorization");
+      const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+      if (!authorization || !anonKey) {
+        return jsonResponse({ error: "A signed-in Super Admin session is required." }, 401);
+      }
+
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authorization } },
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const { data: authData, error: authError } = await userClient.auth.getUser();
+      if (authError || !authData.user) {
+        return jsonResponse({ error: "Your session is invalid or expired." }, 401);
+      }
+
+      const { data: staff, error: staffError } = await supabaseAdmin
+        .from("staff_profiles")
+        .select("id, role, library_id, is_active")
+        .eq("id", authData.user.id)
+        .maybeSingle();
+      if (
+        staffError ||
+        !staff ||
+        staff.is_active !== true ||
+        !["superadmin", "subadmin"].includes(staff.role) ||
+        authData.user.app_metadata?.role !== staff.role
+      ) {
+        return jsonResponse({ error: "Only active library staff can send a follow-up." }, 403);
+      }
+
+      const borrowRequestId = String(payload.borrowRequestId || "").trim();
+      if (!borrowRequestId) {
+        return jsonResponse({ error: "A borrow request ID is required." }, 400);
+      }
+
+      const { data: request, error: lookupError } = await supabaseAdmin
+        .from("borrow_requests")
+        .select("id, visitor_id, book_id, book_title, status, due_date, return_date")
+        .eq("id", borrowRequestId)
+        .maybeSingle();
+      if (lookupError || !request) {
+        return jsonResponse({ error: "Borrow request not found." }, 404);
+      }
+      if (staff.role === "subadmin") {
+        if (!staff.library_id || !request.book_id) {
+          return jsonResponse({ error: "This request is not assigned to your branch." }, 403);
+        }
+        const { data: requestBook, error: bookError } = await supabaseAdmin
+          .from("books")
+          .select("library_id")
+          .eq("id", request.book_id)
+          .maybeSingle();
+        if (bookError || requestBook?.library_id !== staff.library_id) {
+          return jsonResponse({ error: "You can only follow up on loans from your assigned branch." }, 403);
+        }
+      }
+      if (request.status !== "borrowed" || request.return_date || !request.due_date) {
+        return jsonResponse({ error: "This request is no longer an active loan." }, 409);
+      }
+
+      const today = getDateOnly(new Date());
+      const dueDate = getDateOnly(request.due_date);
+      if (dueDate.getTime() > today.getTime()) {
+        return jsonResponse({ error: "This book is not due yet." }, 400);
+      }
+
+      const notificationDate = today.toISOString().slice(0, 10);
+      const { error: claimError } = await supabaseAdmin
+        .from("due_date_notifications")
+        .insert({
+          borrow_request_id: request.id,
+          visitor_id: request.visitor_id,
+          notification_type: "follow_up",
+          notification_date: notificationDate,
+        });
+      if (claimError?.code === "23505") {
+        return jsonResponse({ error: "A follow-up was already sent for this loan today." }, 409);
+      }
+      if (claimError) {
+        console.error("Follow-up notification claim failed:", claimError);
+        return jsonResponse({ error: "Unable to record the follow-up." }, 500);
+      }
+
+      const { data: visitor, error: visitorError } = await supabaseAdmin
+        .from("visitors")
+        .select("email, full_name")
+        .eq("id", request.visitor_id)
+        .maybeSingle();
+      if (visitorError || !visitor?.email) {
+        await supabaseAdmin
+          .from("due_date_notifications")
+          .delete()
+          .eq("borrow_request_id", request.id)
+          .eq("notification_type", "follow_up")
+          .eq("notification_date", notificationDate);
+        return jsonResponse({ error: "The visitor email address could not be found." }, 404);
+      }
+
+      const overdueDays = getOverdueDays(request.due_date);
+      const bookTitle = escapeHtml(request.book_title || "Library book");
+      const firstName = escapeHtml(visitor.full_name?.split(" ")[0] || "Visitor");
+      const dueLabel = formatDate(request.due_date);
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${resendApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: "SHELF ILMS <support@shelf-ilms.me>",
+          to: [visitor.email],
+          subject: "SHELF ILMS: Follow-up for your overdue book",
+          html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px"><h2>Overdue book follow-up</h2><p>Hello ${firstName},</p><p>Please return <strong>${bookTitle}</strong>, which was due on <strong>${dueLabel}</strong>.</p><p>Overdue days: ${overdueDays}<br />Current fine: ₱${(overdueDays * FINE_PER_DAY).toFixed(2)}</p><p>Please contact the library if you have already returned this book.</p><p>Regards,<br /><strong>SHELF ILMS</strong></p></div>`,
+        }),
+      });
+      const emailResult = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        await supabaseAdmin
+          .from("due_date_notifications")
+          .delete()
+          .eq("borrow_request_id", request.id)
+          .eq("notification_type", "follow_up")
+          .eq("notification_date", notificationDate);
+        console.error("Follow-up email failed:", emailResult);
+        return jsonResponse({ error: "Unable to send the follow-up email." }, 502);
+      }
+
+      return jsonResponse({ success: true, sent: true });
+    }
 
     const {
       data: requests,

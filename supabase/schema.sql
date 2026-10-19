@@ -12,6 +12,7 @@ create extension if not exists postgis with schema extensions;
 create table if not exists libraries (
   id text primary key,
   name text not null,
+  email_domain text,
   campus text,
   address text,
   lat double precision,
@@ -183,6 +184,7 @@ alter table attendance_logs
 
 create table if not exists announcements (
   id uuid primary key default gen_random_uuid(),
+  library_id uuid references libraries(id) on delete set null,
   title text not null,
   message text not null,
   published boolean not null default true,
@@ -190,6 +192,20 @@ create table if not exists announcements (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+create table if not exists due_date_notifications (
+  id uuid primary key default gen_random_uuid(),
+  borrow_request_id uuid not null,
+  visitor_id text not null,
+  notification_type text not null
+    constraint due_date_notifications_type_check
+    check (notification_type in ('due_soon', 'due_today', 'overdue', 'follow_up')),
+  notification_date date not null,
+  sent_at timestamptz not null default now(),
+  unique (borrow_request_id, notification_type, notification_date)
+);
+
+alter table due_date_notifications enable row level security;
 
 create table if not exists visitor_feedback (
   id uuid primary key default gen_random_uuid(),
@@ -422,9 +438,41 @@ create policy "public write attendance_logs" on attendance_logs for all using (t
 drop policy if exists "public read announcements" on announcements;
 create policy "public read announcements" on announcements for select using (published = true);
 drop policy if exists "admin manage announcements" on announcements;
-create policy "admin manage announcements" on announcements for all
-  using ((auth.jwt() -> 'app_metadata' ->> 'role') in ('superadmin', 'subadmin'))
-  with check ((auth.jwt() -> 'app_metadata' ->> 'role') in ('superadmin', 'subadmin'));
+create policy "admin manage announcements" on announcements for all to authenticated
+  using (
+    exists (
+      select 1 from staff_profiles staff
+      where staff.id = auth.uid()
+        and staff.is_active
+        and staff.role = 'superadmin'
+        and coalesce(auth.jwt() -> 'app_metadata' ->> 'role', staff.role) = staff.role
+    )
+    or exists (
+      select 1 from staff_profiles staff
+      where staff.id = auth.uid()
+        and staff.is_active
+        and staff.role = 'subadmin'
+        and staff.library_id = announcements.library_id
+        and coalesce(auth.jwt() -> 'app_metadata' ->> 'role', staff.role) = staff.role
+    )
+  )
+  with check (
+    exists (
+      select 1 from staff_profiles staff
+      where staff.id = auth.uid()
+        and staff.is_active
+        and staff.role = 'superadmin'
+        and coalesce(auth.jwt() -> 'app_metadata' ->> 'role', staff.role) = staff.role
+    )
+    or exists (
+      select 1 from staff_profiles staff
+      where staff.id = auth.uid()
+        and staff.is_active
+        and staff.role = 'subadmin'
+        and staff.library_id = announcements.library_id
+        and coalesce(auth.jwt() -> 'app_metadata' ->> 'role', staff.role) = staff.role
+    )
+  );
 
 drop policy if exists "public submit feedback" on visitor_feedback;
 create policy "public submit feedback" on visitor_feedback for insert with check (true);
@@ -819,3 +867,29 @@ begin
   perform release_copy_and_promote(v_req.book_id);
 end;
 $$ language plpgsql security definer;
+
+create or replace function public.get_popular_borrowed_book_counts(
+  p_limit integer default 40
+)
+returns table(book_id text, borrow_count bigint)
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select request.book_id::text, count(*)::bigint
+  from public.borrow_requests request
+  where request.book_id is not null
+    and (
+      request.status in ('borrowed', 'returned')
+      or request.borrow_date is not null
+    )
+  group by request.book_id
+  order by count(*) desc, request.book_id::text
+  limit least(greatest(coalesce(p_limit, 40), 1), 100);
+$$;
+
+revoke all on function public.get_popular_borrowed_book_counts(integer)
+  from public, anon, authenticated;
+grant execute on function public.get_popular_borrowed_book_counts(integer)
+  to anon, authenticated;

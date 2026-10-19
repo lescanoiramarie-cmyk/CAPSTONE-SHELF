@@ -127,6 +127,7 @@ export default function AdminWorkspace({
 
   const [analyticsLibraryId, setAnalyticsLibraryId] = useState('');
   const [timeframe, setTimeframe] = useState('7d');
+  const [activityTypeFilter, setActivityTypeFilter] = useState('all');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   const [reportSort, setReportSort] = useState('time');
@@ -212,9 +213,6 @@ export default function AdminWorkspace({
       if (reportSort === 'name') {
         return a.person.localeCompare(b.person);
       }
-      if (reportSort === 'type') {
-        return a.type.localeCompare(b.type);
-      }
       return new Date(b.time) - new Date(a.time);
     });
   }, [
@@ -225,6 +223,13 @@ export default function AdminWorkspace({
     scopedAttendance,
     scopedBorrows,
   ]);
+
+  const filteredReportRows = useMemo(
+    () => activityTypeFilter === 'all'
+      ? reportRows
+      : reportRows.filter((row) => row.type === activityTypeFilter),
+    [activityTypeFilter, reportRows]
+  );
 
   useEffect(() => {
     if (!supabase || !['feedback', 'announcements'].includes(tab)) {
@@ -245,10 +250,14 @@ export default function AdminWorkspace({
         }
         result = await query;
       } else if (tab === 'announcements') {
-        result = await supabase
+        let query = supabase
           .from('announcements')
           .select('*')
           .order('created_at', { ascending: false });
+        if (isSubAdmin) {
+          query = query.eq('library_id', currentLibraryId);
+        }
+        result = await query;
       }
       if (!active) return;
       if (result.error) {
@@ -404,7 +413,7 @@ export default function AdminWorkspace({
       setError(analyticsWindow.error);
       return;
     }
-    const rows = reportRows.map((row) => ({
+    const rows = filteredReportRows.map((row) => ({
       ...row,
       time: new Date(row.time).toISOString(),
     }));
@@ -474,10 +483,15 @@ export default function AdminWorkspace({
       setError('Please enter both the title and message.');
       return;
     }
+    if (isSubAdmin && !currentLibraryId) {
+      setError('Your account is not assigned to a library branch.');
+      return;
+    }
     try {
       const values = {
         title,
         message: messageText,
+        library_id: isSubAdmin ? currentLibraryId : null,
         created_by: user?.name || user?.email || 'Admin',
         published: true,
       };
@@ -493,10 +507,14 @@ export default function AdminWorkspace({
         return;
       }
 
-      const { data, error: fetchError } = await supabase
+      let query = supabase
         .from('announcements')
         .select('*')
         .order('created_at', { ascending: false });
+      if (isSubAdmin) {
+        query = query.eq('library_id', currentLibraryId);
+      }
+      const { data, error: fetchError } = await query;
 
       if (fetchError) {
         setError(`Saved, but list could not refresh: ${fetchError.message}`);
@@ -732,6 +750,19 @@ export default function AdminWorkspace({
                   />
                 </div>
                 <label className="block text-sm font-semibold text-slate-700">
+                  Activity type
+                  <select
+                    value={activityTypeFilter}
+                    onChange={(event) => setActivityTypeFilter(event.target.value)}
+                    className="mt-2 block w-full min-w-44 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal text-slate-700 outline-none transition focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20"
+                  >
+                    <option value="all">All activities</option>
+                    <option value="Visitor">Visitor check-ins</option>
+                    <option value="Book transaction">Book transactions</option>
+                    <option value="Book return">Book returns</option>
+                  </select>
+                </label>
+                <label className="block text-sm font-semibold text-slate-700">
                   Sort activities
                   <select
                     value={reportSort}
@@ -740,7 +771,6 @@ export default function AdminWorkspace({
                   >
                     <option value="time">Newest first</option>
                     <option value="name">Visitor name</option>
-                    <option value="type">Activity type</option>
                   </select>
                 </label>
               </div>
@@ -791,7 +821,7 @@ export default function AdminWorkspace({
                 <div>
                   <p className="text-sm font-medium text-slate-500">Visitor check-ins</p>
                   <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
-                    {reportRows.filter((row) => row.type === 'Visitor').length}
+                    {filteredReportRows.filter((row) => row.type === 'Visitor').length}
                   </p>
                 </div>
                 <span className="rounded-xl bg-blue-50 px-3 py-2 text-lg font-extrabold text-blue-700 group-hover:bg-blue-600 group-hover:text-white transition-colors">
@@ -806,7 +836,7 @@ export default function AdminWorkspace({
                 <div>
                   <p className="text-sm font-medium text-slate-500">Book requests</p>
                   <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
-                    {reportRows.filter((row) => row.type === 'Book transaction').length}
+                    {filteredReportRows.filter((row) => row.type === 'Book transaction').length}
                   </p>
                 </div>
                 <span className="rounded-xl bg-violet-50 px-3 py-2 text-lg font-extrabold text-violet-700 group-hover:bg-violet-600 group-hover:text-white transition-colors">
@@ -821,7 +851,7 @@ export default function AdminWorkspace({
                 <div>
                   <p className="text-sm font-medium text-slate-500">Book returns</p>
                   <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
-                    {reportRows.filter((row) => row.type === 'Book return').length}
+                    {filteredReportRows.filter((row) => row.type === 'Book return').length}
                   </p>
                 </div>
                 <span className="rounded-xl bg-emerald-50 px-3 py-2 text-lg font-extrabold text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
@@ -859,7 +889,7 @@ export default function AdminWorkspace({
                 <p className="mt-1 text-sm text-slate-500">Review visits, book transactions, and returns.</p>
               </div>
               <span className="mt-2 inline-flex w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 sm:mt-0">
-                {reportRows.length} records
+                {filteredReportRows.length} records
               </span>
             </div>
 
@@ -876,7 +906,7 @@ export default function AdminWorkspace({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {reportRows.map((row, index) => (
+                  {filteredReportRows.map((row, index) => (
                     <tr
                       key={`${row.type}-${row.time}-${index}`}
                       className="transition-colors hover:bg-blue-50/40 cursor-pointer group"
@@ -908,7 +938,7 @@ export default function AdminWorkspace({
               </table>
             </div>
 
-            {reportRows.length === 0 && (
+            {filteredReportRows.length === 0 && (
               <div className="px-6 py-14 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-lg font-bold text-slate-500">
                   —

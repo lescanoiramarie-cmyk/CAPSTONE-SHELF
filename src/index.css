@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Smooth scrolling para sa Landing Page at In-page anchor links */
+html {
+  scroll-behavior: smooth;
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
@@ -14,6 +19,22 @@
 
 .book-card-grid {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+}
+
+.personal-book-card-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 1023px) {
+  .personal-book-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 639px) {
+  .personal-book-card-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 input:focus-visible,
@@ -51,6 +72,10 @@ select:focus-visible {
 .visitor-dashboard.theme-dark .text-slate-500,
 .visitor-dashboard.theme-dark .text-slate-400 {
   color: #a8b5c7;
+}
+
+.visitor-dashboard.theme-dark .text-shelf-primary {
+  color: #93c5fd;
 }
 
 .visitor-dashboard.theme-dark .border-slate-100,

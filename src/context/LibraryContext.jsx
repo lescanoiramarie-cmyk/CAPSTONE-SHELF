@@ -18,7 +18,7 @@ import { LibraryContext } from './libraryContext.js';
 // functions directly.
 //
 // Authentication:
-//   Visitors      → Supabase Auth or SHELF local QR session
+//   Visitors      → Supabase Auth session plus SHELF route/UI session
 //   Staff/Admin   → Supabase Auth + staff profile
 //
 // Community books:
@@ -54,107 +54,36 @@ export function LibraryProvider({ children }) {
   // GET CURRENT VISITOR ID
   // ==========================================================================
   //
-  // SHELF supports:
-  //
-  // 1. Supabase Auth visitor sessions
-  // 2. SHELF local QR visitor sessions
-  //
-  // QR login may not create a Supabase Auth session, so the local session
-  // remains an important fallback.
+  // Resolve the visitor only from a real Supabase Auth session. A local
+  // SHELF session controls protected-route UI state but is not proof of
+  // identity for private RPCs or transaction history.
   // ==========================================================================
 
   const getCurrentVisitorId = useCallback(async () => {
-    // ------------------------------------------------------------------------
-    // 1. Try the SHELF local visitor session first.
-    // ------------------------------------------------------------------------
-
+    // Community-request RPCs are granted to authenticated visitors only.
+    // Do not trust the local SHELF UI session as proof of identity: it can
+    // exist without a Supabase access token and would make PostgREST execute
+    // the RPC as anon, producing 401 / permission denied errors.
     try {
-      const rawSession =
-        localStorage.getItem('shelf_ilms_session_v1');
+      const { data: authData, error: authError } =
+        await supabase.auth.getSession();
 
-      if (rawSession) {
-        const parsedSession =
-          JSON.parse(rawSession);
-
-        const localVisitorId =
-          parsedSession?.role &&
-          parsedSession.role !== 'visitor'
-            ? null
-            : parsedSession?.user?.id ||
-              parsedSession?.user?.visitorId ||
-              parsedSession?.user?.visitor_id ||
-              parsedSession?.visitor?.id ||
-              parsedSession?.visitor?.visitorId ||
-              parsedSession?.visitor?.visitor_id ||
-              parsedSession?.id ||
-              parsedSession?.visitorId ||
-              parsedSession?.visitor_id ||
-              null;
-
-        if (localVisitorId) {
-          console.log(
-            'SHELF — VISITOR ID FROM LOCAL SESSION:',
-            localVisitorId
-          );
-
-          return localVisitorId;
-        }
+      if (authError) {
+        console.warn('SHELF Supabase session lookup failed:', authError);
+        return null;
       }
-    } catch (error) {
-      console.warn(
-        'SHELF local visitor session lookup failed:',
-        error
-      );
-    }
 
-    // ------------------------------------------------------------------------
-    // 2. Fallback to Supabase Auth.
-    // ------------------------------------------------------------------------
-
-    try {
-      const {
-        data: authData,
-      } = await supabase.auth.getSession();
-
-      const authUserId =
-        authData?.session?.user?.id || null;
-
-      if (authUserId) {
-        try {
-          const visitor =
-            await store.getVisitor(authUserId);
-
-          if (visitor?.id) {
-            console.log(
-              'SHELF — VISITOR ID FROM SUPABASE AUTH:',
-              visitor.id
-            );
-
-            return visitor.id;
-          }
-        } catch (error) {
-          console.warn(
-            'SHELF could not resolve visitor from Supabase Auth:',
-            error
-          );
-        }
+      const authUserId = authData?.session?.user?.id || null;
+      if (!authUserId) {
+        return null;
       }
+
+      const visitor = await store.getVisitor(authUserId);
+      return visitor?.id || null;
     } catch (error) {
-      console.warn(
-        'SHELF Supabase session lookup failed:',
-        error
-      );
+      console.warn('SHELF could not resolve authenticated visitor:', error);
+      return null;
     }
-
-    // ------------------------------------------------------------------------
-    // 3. No visitor identity available.
-    // ------------------------------------------------------------------------
-
-    console.warn(
-      'SHELF — NO CURRENT VISITOR ID FOUND.'
-    );
-
-    return null;
   }, []);
 
   // ==========================================================================

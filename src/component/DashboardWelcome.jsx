@@ -18,6 +18,7 @@ export default function DashboardWelcome({
   actions = [],
   notifications = [],
   onNotificationClick,
+  onNotificationFollowUp,
   showNotifications = true,
 }) {
 
@@ -31,6 +32,10 @@ export default function DashboardWelcome({
 const [readNotificationIds, setReadNotificationIds] = useState(
   () => new Set()
 );
+const [followUpRequestId, setFollowUpRequestId] = useState(null);
+const [followUpSentIds, setFollowUpSentIds] = useState(() => new Set());
+const [followUpError, setFollowUpError] = useState('');
+const [followUpErrorRequestId, setFollowUpErrorRequestId] = useState(null);
 
 const unreadCount = notifications.filter(
   (notification) => !readNotificationIds.has(notification.id)
@@ -107,7 +112,7 @@ const markAllNotificationsRead = () => {
       <div
         role="status"
         aria-live="polite"
-        className={`absolute right-5 top-5 z-10 inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-semibold ${
+        className={`absolute right-20 top-5 z-10 inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-semibold ${
           isOnline
             ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
             : 'border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300'
@@ -187,7 +192,7 @@ const markAllNotificationsRead = () => {
           {/* Notifications and connection status */}
         </div>
 
-<div className="relative z-20 flex w-full shrink-0 items-center gap-3 sm:w-auto">
+<div className="absolute right-5 top-5 z-20">
   {showNotifications && (
     <div className="relative">
       <button
@@ -211,7 +216,7 @@ const markAllNotificationsRead = () => {
       </button>
 
       {notificationsOpen && (
-        <div className="absolute left-0 top-full z-50 mt-3 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-600 dark:bg-slate-800">
+        <div className="absolute right-0 top-full z-50 mt-3 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-600 dark:bg-slate-800">
           <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-700">
             <div>
               <h2 className="text-sm font-bold text-slate-900 dark:text-white">
@@ -243,45 +248,84 @@ const markAllNotificationsRead = () => {
                 const isRead = readNotificationIds.has(notification.id);
 
                 return (
-                  <button
+                  <div
                     key={notification.id}
-                    type="button"
-                    onClick={() => {
-                      setReadNotificationIds((previous) => {
-                        const next = new Set(previous);
-                        next.add(notification.id);
-                        return next;
-                      });
-
-                      setNotificationsOpen(false);
-                      onNotificationClick?.(notification);
-                    }}
-                    className={`block w-full border-b border-slate-100 px-4 py-3 text-left transition last:border-b-0 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700/70 ${
+                    className={`border-b border-slate-100 last:border-b-0 dark:border-slate-700 ${
                       isRead
                         ? 'opacity-65'
                         : 'bg-amber-50/60 dark:bg-amber-400/5'
                     }`}
                   >
-                    <div className="flex items-start gap-3">
-                      <span
-                        className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
-                          isRead ? 'bg-slate-300' : 'bg-amber-500'
-                        }`}
-                      />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReadNotificationIds((previous) => {
+                          const next = new Set(previous);
+                          next.add(notification.id);
+                          return next;
+                        });
+                        setNotificationsOpen(false);
+                        onNotificationClick?.(notification);
+                      }}
+                      className="block w-full px-4 py-3 text-left transition hover:bg-slate-50 dark:hover:bg-slate-700/70"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span
+                          className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
+                            isRead ? 'bg-slate-300' : 'bg-amber-500'
+                          }`}
+                        />
 
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-bold text-slate-800 dark:text-slate-100">
-                          {notification.title}
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold text-slate-800 dark:text-slate-100">
+                            {notification.title}
+                          </span>
+                          <span className="mt-1 block text-xs leading-5 text-slate-600 dark:text-slate-300">
+                            {notification.message}
+                          </span>
+                          <span className="mt-1 block text-[11px] font-medium text-slate-400">
+                            {notification.timeLabel}
+                          </span>
                         </span>
-                        <span className="mt-1 block text-xs leading-5 text-slate-600 dark:text-slate-300">
-                          {notification.message}
-                        </span>
-                        <span className="mt-1 block text-[11px] font-medium text-slate-400">
-                          {notification.timeLabel}
-                        </span>
-                      </span>
-                    </div>
-                  </button>
+                      </div>
+                    </button>
+                    {notification.followUp && onNotificationFollowUp && (
+                      <div className="flex items-center justify-between gap-3 px-4 pb-3 pl-9">
+                        <p className="min-w-0 text-[11px] text-red-700 dark:text-red-300" role="status">
+                          {followUpError && followUpErrorRequestId === notification.requestId
+                            ? followUpError
+                            : followUpSentIds.has(notification.id)
+                              ? 'Follow-up sent today.'
+                              : ''}
+                        </p>
+                        <button
+                          type="button"
+                          disabled={followUpRequestId === notification.requestId || followUpSentIds.has(notification.id)}
+                          onClick={async () => {
+                            setFollowUpRequestId(notification.requestId);
+                            setFollowUpError('');
+                            setFollowUpErrorRequestId(null);
+                            try {
+                              await onNotificationFollowUp(notification);
+                              setFollowUpSentIds((previous) => new Set([...previous, notification.id]));
+                            } catch (error) {
+                              setFollowUpError(error?.message || 'Unable to send follow-up.');
+                              setFollowUpErrorRequestId(notification.requestId);
+                            } finally {
+                              setFollowUpRequestId(null);
+                            }
+                          }}
+                          className="shrink-0 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40"
+                        >
+                          {followUpRequestId === notification.requestId
+                            ? 'Sending...'
+                            : followUpSentIds.has(notification.id)
+                              ? 'Sent'
+                              : 'Follow up'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 );
               })
             )}
