@@ -781,9 +781,9 @@ export async function fetchBorrowRequests() {
     } = await supabase.auth.getSession();
 
     if (sessionError) {
-      console.warn(
-        'SHELF â€” unable to read Supabase auth session:',
-        sessionError
+      throw cleanErr(
+        sessionError,
+        'Unable to check the current authentication session.'
       );
     }
 
@@ -832,6 +832,7 @@ export async function fetchBorrowRequests() {
           'SHELF â€” unable to resolve Auth user to visitor:',
           visitorLookupError
         );
+        throw visitorLookupError;
       }
     }
 
@@ -885,6 +886,7 @@ export async function fetchBorrowRequests() {
       'SHELF â€” VISITOR ID RESOLUTION ERROR:',
       visitorResolveError
     );
+    throw visitorResolveError;
   }
 
   console.log(
@@ -905,9 +907,9 @@ export async function fetchBorrowRequests() {
     } = await supabase.auth.getSession();
 
     if (sessionError) {
-      console.warn(
-        'SHELF â€” unable to check Supabase session:',
-        sessionError
+      throw cleanErr(
+        sessionError,
+        'Unable to check the current authentication session.'
       );
     }
 
@@ -971,6 +973,7 @@ export async function fetchBorrowRequests() {
       'SHELF â€” NORMAL BORROW REQUESTS ERROR:',
       normalError
     );
+    throw normalError;
   }
 
   const libraryBorrowRequests =
@@ -1014,6 +1017,10 @@ export async function fetchBorrowRequests() {
           'SHELF — COMMUNITY REQUEST RPC ERROR:',
           error
         );
+        throw cleanErr(
+          error,
+          'Unable to load your community book requests.'
+        );
       } else {
         communityRequests = Array.isArray(data) ? data : [];
       }
@@ -1027,6 +1034,7 @@ export async function fetchBorrowRequests() {
       'SHELF — COMMUNITY REQUEST FETCH ERROR:',
       error
     );
+    throw error;
   }
 
   // ==========================================================================

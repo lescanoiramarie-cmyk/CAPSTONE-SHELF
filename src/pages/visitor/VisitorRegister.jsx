@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../../context/useAuth.js';
 import libraryBg from '../../assets/library.jpg';
 import { philippines } from '@ianlabicani/geoph-lite';
+import { validateVisitorFullName } from '../../lib/visitorValidation.js';
 
 
 function SearchableLocationSelect({
@@ -121,25 +122,6 @@ function PasswordRequirement({ valid, children }) {
 }
 
 
-
-function validateFullName(value) {
-  const name = value.normalize('NFC').trim().replace(/\s+/g, ' ');
-
-  if (!name) {
-    return 'Please enter your full name.';
-  }
-
-  if (!/^[\p{L}\p{M} .\u0027\u2018\u2019\u2010-\u2015]+$/u.test(name)) {
-    return 'Please use letters, spaces, apostrophes, periods, or hyphens in your name.';
-  }
-
-  const letterCount = (name.match(/\p{L}/gu) || []).length;
-  if (letterCount < 2) {
-    return 'Please enter at least two letters in your name.';
-  }
-
-  return '';
-}
 
 function validateContactNumber(value) {
   return /^09\d{9}$/.test(value);
@@ -514,7 +496,7 @@ useEffect(() => {
   return;
 }
 
-    const fullNameError = validateFullName(fullName);
+    const fullNameError = validateVisitorFullName(fullName);
 
     if (fullNameError) {
       setError(fullNameError);
@@ -1207,7 +1189,7 @@ useEffect(() => {
                   }}
                   onBlur={() => {
                     if (formData.fullName.trim()) {
-                      const nameError = validateFullName(formData.fullName);
+                      const nameError = validateVisitorFullName(formData.fullName);
                       if (nameError) setError(nameError);
                       else setError('');
                     }

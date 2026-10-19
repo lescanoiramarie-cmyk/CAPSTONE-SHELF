@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../../context/useAuth.js';
 
 import libraryBg from '../../assets/library.jpg';
+import { validateVisitorFullName } from '../../lib/visitorValidation.js';
 
 // =========================================================
 // LOCATION OPTIONS
@@ -153,6 +154,7 @@ const OTP_CODE_TTL_SECONDS = 10 * 60;
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
 const RESET_CODE_TTL_SECONDS = 10 * 60;
 const RESET_CODE_RESEND_COOLDOWN_SECONDS = 60;
+const preventPasswordClipboard = (event) => event.preventDefault();
 
 // =========================================================
 // PASSWORD REQUIREMENT COMPONENT
@@ -186,7 +188,7 @@ function PasswordRequirement({ valid, children }) {
 // VISITOR LOGIN
 // =========================================================
 
-export default function VisitorLogin() {
+export default function VisitorLogin({ initialView = 'login' }) {
   const navigate = useNavigate();
 
   const {
@@ -206,7 +208,7 @@ export default function VisitorLogin() {
   // STATE
   // =========================================================
 
-  const [view, setView] = useState('login');
+  const [view, setView] = useState(initialView);
   const [error, setError] = useState('');
   const [canResendVisitorOtp, setCanResendVisitorOtp] =
     useState(false);
@@ -385,6 +387,7 @@ useEffect(() => {
 
   // Prevent repeated QR login attempts while a QR is being processed.
   const qrLoginLockRef = useRef(false);
+  const loginRequestLockRef = useRef(false);
 
   const [isUploadingQr, setIsUploadingQr] =
     useState(false);
@@ -1004,6 +1007,8 @@ useEffect(() => {
   ) => {
     event.preventDefault();
 
+    if (loginRequestLockRef.current) return;
+
     setError('');
     setCanResendVisitorOtp(false);
 
@@ -1031,6 +1036,8 @@ useEffect(() => {
 
       return;
     }
+
+    loginRequestLockRef.current = true;
 
     try {
       setIsLoggingIn(true);
@@ -1094,6 +1101,7 @@ useEffect(() => {
         setError(message);
       }
     } finally {
+      loginRequestLockRef.current = false;
       setIsLoggingIn(false);
     }
   };
@@ -1221,16 +1229,7 @@ useEffect(() => {
     // FULL NAME
     // -------------------------------------------------------
 
-    if (!trimmedFullName) {
-      errors.fullName =
-        'Full name is required.';
-    } else if (
-      !/^[\p{L}\p{M}\p{N} .\u0027\u2018\u2019\u2010-\u2015]+$/u.test(trimmedFullName) ||
-      !/[\p{L}\p{N}]/u.test(trimmedFullName)
-    ) {
-      errors.fullName =
-        'Please use letters, numbers, spaces, apostrophes, periods, or hyphens in your name.';
-    }
+    errors.fullName = validateVisitorFullName(trimmedFullName);
 
     // -------------------------------------------------------
     // CONTACT NUMBER
@@ -2342,8 +2341,9 @@ setOtpResendRemaining(
                   placeholder="Juan Dela Cruz"
                   value={formData.fullName}
                   onChange={(event) => {
-                    const value =
-                      event.target.value;
+                    const value = event.target.value
+                      .normalize('NFC')
+                      .replace(/\s{2,}/g, ' ');
 
                     setFormData({
                       ...formData,
@@ -2352,8 +2352,16 @@ setOtpResendRemaining(
 
                     setFieldErrors({
                       ...fieldErrors,
-                      fullName: '',
+                      fullName: value ? validateVisitorFullName(value) : '',
                     });
+                  }}
+                  onBlur={() => {
+                    if (formData.fullName.trim()) {
+                      setFieldErrors({
+                        ...fieldErrors,
+                        fullName: validateVisitorFullName(formData.fullName),
+                      });
+                    }
                   }}
                   className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 ${
                     fieldErrors.fullName
@@ -2391,6 +2399,13 @@ setOtpResendRemaining(
                       event.target.value
                         .replace(/\D/g, '')
                         .slice(0, 11);
+                    const contactNumberError = value
+                      ? !value.startsWith('09')
+                        ? 'Contact number must start with 09.'
+                        : value.length < 11
+                          ? 'Contact number must contain exactly 11 digits.'
+                          : ''
+                      : '';
 
                     setFormData({
                       ...formData,
@@ -2399,9 +2414,10 @@ setOtpResendRemaining(
 
                     setFieldErrors({
                       ...fieldErrors,
-                      contactNumber: '',
+                      contactNumber: contactNumberError,
                     });
                   }}
+                  aria-invalid={Boolean(fieldErrors.contactNumber)}
                   className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 ${
                     fieldErrors.contactNumber
                       ? 'border-red-400'
@@ -2627,6 +2643,10 @@ setOtpResendRemaining(
                     name="new_password"
                     minLength={12}
                     autoComplete="new-password"
+                    onCopy={preventPasswordClipboard}
+                    onCut={preventPasswordClipboard}
+                    onPaste={preventPasswordClipboard}
+                    onDrop={preventPasswordClipboard}
                     placeholder="Example: Juan@Library2026"
                     value={
                       formData.password
@@ -2741,6 +2761,10 @@ setOtpResendRemaining(
                     name="confirm_password"
                     minLength={12}
                     autoComplete="new-password"
+                    onCopy={preventPasswordClipboard}
+                    onCut={preventPasswordClipboard}
+                    onPaste={preventPasswordClipboard}
+                    onDrop={preventPasswordClipboard}
                     placeholder="Re-enter password"
                     value={
                       formData.confirmPassword
@@ -2917,6 +2941,10 @@ setOtpResendRemaining(
                         name="visitor_login_password"
                         required={loginData.identifier.includes('@')}
                         autoComplete="new-password"
+                        onCopy={preventPasswordClipboard}
+                        onCut={preventPasswordClipboard}
+                        onPaste={preventPasswordClipboard}
+                        onDrop={preventPasswordClipboard}
                         placeholder="••••••••"
                         value={
                           loginData.password
@@ -3248,6 +3276,10 @@ setOtpResendRemaining(
                           name="reset_new_password"
                           required
                           autoComplete="new-password"
+                          onCopy={preventPasswordClipboard}
+                          onCut={preventPasswordClipboard}
+                          onPaste={preventPasswordClipboard}
+                          onDrop={preventPasswordClipboard}
                           placeholder="••••••••"
                           value={
                             resetPassword
@@ -3356,6 +3388,10 @@ setOtpResendRemaining(
                           name="reset_confirm_password"
                           required
                           autoComplete="new-password"
+                          onCopy={preventPasswordClipboard}
+                          onCut={preventPasswordClipboard}
+                          onPaste={preventPasswordClipboard}
+                          onDrop={preventPasswordClipboard}
                           placeholder="••••••••"
                           value={resetConfirmPassword}
                           onChange={(event) =>

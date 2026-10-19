@@ -159,6 +159,10 @@ export default function SuperAdminDashboard() {
     user,
     logout,
   } = useAuth();
+  const superAdminName =
+    user?.role === 'superadmin'
+      ? 'Jeffrey Castillo'
+      : user?.name || 'System Super Administrator';
 
   const handleSuperAdminLogout = async () => {
     mainScrollRef.current?.scrollTo({
@@ -1180,8 +1184,10 @@ const handleEditStaff = (staff) => {
             Signed in as
           </p>
           <p className="text-sm font-bold">
-            {user?.name ||
-              'System Super Administrator'}
+            {superAdminName}
+          </p>
+          <p className="text-xs font-semibold text-amber-300">
+            Super Admin
           </p>
           <button
             type="button"
@@ -1199,7 +1205,7 @@ const handleEditStaff = (staff) => {
         className="ml-60 min-w-0 flex-1 space-y-6 overflow-y-auto p-4 sm:p-6 lg:p-8"
       >
         <DashboardWelcome
-          name={user?.name?.split(' ')[0]}
+          name={superAdminName.split(' ')[0]}
           description="System metrics, library operations, staff accounts, and reports at a glance."
           notifications={superAdminNotifications}
           onNotificationFollowUp={handleOverdueFollowUp}

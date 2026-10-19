@@ -109,8 +109,8 @@ BEGIN
     END,
     updated_at = pg_catalog.now()
   RETURNING
-    login_attempt_lockouts.failed_attempts,
-    login_attempt_lockouts.locked_until
+    current_lock.failed_attempts,
+    current_lock.locked_until
   INTO v_attempts, v_locked_until;
 
   RETURN QUERY

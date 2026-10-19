@@ -120,7 +120,16 @@ export default function QrScanner({
 
           const startPromise = scanner.start(
             { facingMode: 'environment' },
-            { fps: 10, qrbox: { width: 250, height: 250 } },
+            {
+              fps: 10,
+              aspectRatio: 1,
+              qrbox: (viewfinderWidth, viewfinderHeight) => {
+                const size = Math.floor(
+                  Math.min(viewfinderWidth, viewfinderHeight, 280) * 0.8
+                );
+                return { width: size, height: size };
+              },
+            },
             async (decodedText) => {
               if (cancelled || scanHandledRef.current) return;
               scanHandledRef.current = true;
@@ -215,7 +224,10 @@ export default function QrScanner({
               </button>
             </div>
             <div className="mx-auto aspect-square w-full overflow-hidden rounded-lg border border-slate-300 bg-black">
-              <div id={scannerId} className="h-full min-h-0 w-full" />
+              <div
+                id={scannerId}
+                className="h-full min-h-0 w-full [&_video]:h-full [&_video]:w-full [&_video]:object-cover [&_canvas]:h-full [&_canvas]:w-full"
+              />
             </div>
             <button
               type="button"

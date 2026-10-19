@@ -264,7 +264,7 @@ const featuredBooks = books
               <span>Browse Catalog</span>
             </button>
             <button
-              onClick={() => navigate('/visitor-register')}
+              onClick={() => navigate('/visitor-login')}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all duration-200 shadow-md shadow-blue-600/20 flex items-center gap-1.5 transform hover:-translate-y-0.5"
             >
               <LogIn size={14} />
@@ -315,7 +315,7 @@ const featuredBooks = books
             </button>
 
             <button 
-              onClick={() => navigate('/visitor-register')} 
+              onClick={() => navigate('/visitor-login')}
               className="w-full sm:w-auto px-6 py-3.5 bg-slate-800/90 hover:bg-slate-700/90 text-slate-200 hover:text-white border border-slate-700/80 text-sm font-bold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-sm backdrop-blur-sm"
             >
               <LogIn size={16} className="text-blue-400" />

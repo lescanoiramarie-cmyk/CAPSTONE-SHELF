@@ -609,6 +609,7 @@ $$;
 drop function if exists public.verify_visitor_otp(text, text);
 drop function if exists public.find_visitor_by_qr(text);
 drop function if exists public.scan_attendance(text, text);
+drop function if exists public.scan_attendance(text, uuid);
 
 create or replace function public.register_visitor(
   p_auth_user_id uuid,
@@ -701,48 +702,88 @@ end;
 $$ language plpgsql security definer;
 grant execute on function public.find_visitor_by_qr(text) to anon, authenticated;
 
-create or replace function scan_attendance(p_qr text, p_library_id text)
-returns table(log_id text, visitor_id text, visitor_name text) as $$
-declare v record;
-declare v_log_id text;
+create or replace function public.scan_attendance(
+  p_qr text,
+  p_library_id text
+)
+returns table(log_id text, visitor_id text, visitor_name text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_visitor record;
+  v_log_id text;
+  library_id_type text;
 begin
-  select * into v from visitors where visitors.qr_code = trim(p_qr);
-  if v.id is null then
+  select *
+    into v_visitor
+    from public.visitors
+   where qr_code = btrim(p_qr);
+
+  if v_visitor.id is null then
     raise exception 'QR code not recognized. Please check the pass and try again.';
   end if;
-  insert into attendance_logs (visitor_id, visitor_name, library_id)
-    values (v.id, v.full_name, p_library_id)
-    returning attendance_logs.id into v_log_id;
-  return query select v_log_id, v.id, v.full_name;
+
+  select format_type(attribute.atttypid, attribute.atttypmod)
+    into library_id_type
+    from pg_catalog.pg_attribute as attribute
+   where attribute.attrelid = 'public.attendance_logs'::regclass
+     and attribute.attname = 'library_id'
+     and not attribute.attisdropped;
+
+  if library_id_type is null then
+    raise exception 'attendance_logs.library_id column is missing.';
+  end if;
+
+  execute format(
+    'INSERT INTO public.attendance_logs (visitor_id, visitor_name, library_id) VALUES ($1, $2, $3::%s) RETURNING id::text',
+    library_id_type
+  )
+    into v_log_id
+    using v_visitor.id, v_visitor.full_name, p_library_id;
+
+  return query
+  select v_log_id, v_visitor.id::text, v_visitor.full_name::text;
 end;
-$$ language plpgsql security definer;
-grant execute on function public.scan_attendance(text, text) to anon, authenticated;
+$$;
+revoke all on function public.scan_attendance(text, text)
+  from public, anon, authenticated;
+grant execute on function public.scan_attendance(text, text) to service_role;
 
 -- Internal helper: give back a copy and promote the next queued visitor.
 create or replace function release_copy_and_promote(p_book_id text)
-returns void as $$
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
 declare v_next borrow_requests%rowtype;
 begin
-  update books set available_copies = available_copies + 1 where id = p_book_id;
+  update public.books
+     set available_copies = available_copies + 1
+   where id::text = p_book_id;
 
-  select * into v_next from borrow_requests
-    where book_id = p_book_id and status = 'queued'
+  select * into v_next from public.borrow_requests
+    where book_id::text = p_book_id and status = 'queued'
     order by queue_position asc
     limit 1;
 
   if v_next.id is not null then
-    update borrow_requests
+    update public.borrow_requests
       set status = 'ready_for_pickup', pickup_deadline = now() + interval '24 hours', queue_position = null
       where id = v_next.id;
 
-    update books set available_copies = available_copies - 1 where id = p_book_id;
+    update public.books
+       set available_copies = available_copies - 1
+     where id::text = p_book_id;
 
-    update borrow_requests br
+    update public.borrow_requests br
       set queue_position = sub.rn
       from (
         select id, row_number() over (order by queue_position asc) as rn
-        from borrow_requests
-        where book_id = p_book_id and status = 'queued'
+        from public.borrow_requests
+        where book_id::text = p_book_id and status = 'queued'
       ) sub
       where br.id = sub.id;
   end if;

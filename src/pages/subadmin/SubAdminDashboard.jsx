@@ -249,6 +249,7 @@ function CustomDashboardWelcome({
   description,
   notifications = [],
   onNotificationClick,
+
   onNotificationFollowUp,
   actions = [],
 }) {
@@ -257,6 +258,7 @@ function CustomDashboardWelcome({
   const [followUpSentIds, setFollowUpSentIds] = useState(() => new Set());
   const [followUpError, setFollowUpError] = useState('');
   const [followUpErrorId, setFollowUpErrorId] = useState(null);
+
 
   return (
     <div className="relative bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-sm space-y-6">
@@ -306,25 +308,37 @@ function CustomDashboardWelcome({
                       <p className="font-bold text-slate-800">{n.title}</p>
                       <p className="text-slate-500 mt-0.5 line-clamp-1">{n.message}</p>
                       <p className="text-[10px] text-slate-400 mt-1">{n.timeLabel}</p>
+
                       {n.followUp && onNotificationFollowUp && (
                         <div className="mt-2 flex items-center justify-between gap-2">
                           <p className="min-w-0 text-[10px] text-red-700" role="status">
-                            {followUpErrorId === n.requestId ? followUpError :
-                              followUpSentIds.has(n.id) ? 'Follow-up sent today.' : ''}
+                            {followUpErrorId === n.requestId
+                              ? followUpError
+                              : followUpSentIds.has(n.id)
+                                ? 'Follow-up sent today.'
+                                : ''}
                           </p>
                           <button
                             type="button"
-                            disabled={followUpRequestId === n.requestId || followUpSentIds.has(n.id)}
+                            disabled={
+                              followUpRequestId === n.requestId ||
+                              followUpSentIds.has(n.id)
+                            }
                             onClick={async (event) => {
                               event.stopPropagation();
                               setFollowUpRequestId(n.requestId);
                               setFollowUpError('');
                               setFollowUpErrorId(null);
+
                               try {
                                 await onNotificationFollowUp(n);
-                                setFollowUpSentIds((current) => new Set([...current, n.id]));
+                                setFollowUpSentIds(
+                                  (current) => new Set([...current, n.id])
+                                );
                               } catch (error) {
-                                setFollowUpError(error?.message || 'Unable to send follow-up.');
+                                setFollowUpError(
+                                  error?.message || 'Unable to send follow-up.'
+                                );
                                 setFollowUpErrorId(n.requestId);
                               } finally {
                                 setFollowUpRequestId(null);
@@ -332,8 +346,11 @@ function CustomDashboardWelcome({
                             }}
                             className="shrink-0 rounded-md border border-red-200 px-2 py-1 text-[10px] font-bold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            {followUpRequestId === n.requestId ? 'Sending...' :
-                              followUpSentIds.has(n.id) ? 'Sent' : 'Follow up'}
+                            {followUpRequestId === n.requestId
+                              ? 'Sending...'
+                              : followUpSentIds.has(n.id)
+                                ? 'Sent'
+                                : 'Follow up'}
                           </button>
                         </div>
                       )}
@@ -566,7 +583,16 @@ function QRBookBorrowing({
         scannerRef.current = scanner;
         await scanner.start(
           { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1 },
+          {
+            fps: 10,
+            aspectRatio: 1,
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+              const size = Math.floor(
+                Math.min(viewfinderWidth, viewfinderHeight, 280) * 0.8
+              );
+              return { width: size, height: size };
+            },
+          },
           async (decodedText) => {
             if (cancelled) return;
             const qrValue = decodedText.trim();
@@ -739,7 +765,12 @@ function QRBookBorrowing({
                 <button type="button" onClick={stopScanner} className="text-xs font-bold text-red-600 hover:text-red-800">Close</button>
               </div>
               <div className="p-4">
-                <div id="book-borrowing-qr-reader" className="w-full" />
+                <div className="mx-auto aspect-square w-full max-w-80 overflow-hidden rounded-lg border border-slate-300 bg-black">
+                  <div
+                    id="book-borrowing-qr-reader"
+                    className="h-full w-full [&_video]:h-full [&_video]:w-full [&_video]:object-cover [&_canvas]:h-full [&_canvas]:w-full"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -929,7 +960,6 @@ export default function SubAdminDashboard() {
     setFocusRequestId(null);
     setSection(nextSection);
   };
-
   const currentLibraryId = user?.libraryId || user?.assignedBranch || '';
 
   const currentBranchName = useMemo(() => {
@@ -1054,7 +1084,6 @@ export default function SubAdminDashboard() {
   const handleOverdueFollowUp = async (notification) => {
     await sendDueDateFollowUp(notification.requestId);
   };
-
   const [importError, setImportError] = useState('');
   const [importMessage, setImportMessage] = useState('');
   const [importingBooks, setImportingBooks] = useState(false);

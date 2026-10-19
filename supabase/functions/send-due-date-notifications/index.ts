@@ -172,12 +172,15 @@ Deno.serve(async (req: Request) => {
         .select("id, role, library_id, is_active")
         .eq("id", authData.user.id)
         .maybeSingle();
+      const authRole = authData.user.app_metadata?.role;
       if (
         staffError ||
         !staff ||
         staff.is_active !== true ||
         !["superadmin", "subadmin"].includes(staff.role) ||
-        authData.user.app_metadata?.role !== staff.role
+        (authRole !== undefined &&
+          authRole !== null &&
+          authRole !== staff.role)
       ) {
         return jsonResponse({ error: "Only active library staff can send a follow-up." }, 403);
       }

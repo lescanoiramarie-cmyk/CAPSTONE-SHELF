@@ -62,7 +62,7 @@ export default function App() {
 
             <Route
               path="/visitor-register"
-              element={<Navigate to="/visitor-login" replace />}
+              element={<VisitorLogin initialView="register" />}
             />
 
             {/* =================================================
