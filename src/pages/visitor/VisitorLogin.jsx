@@ -2770,7 +2770,7 @@ setOtpResendRemaining(
                       name="visitor_login_identifier"
                       required
                       autoComplete="off"
-                      placeholder="email@example.com or SHELF-QR-123456"
+                      placeholder="email@example.com or a SHELF-QR pass"
                       value={
                         loginData.identifier
                       }

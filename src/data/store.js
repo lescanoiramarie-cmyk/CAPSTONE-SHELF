@@ -210,7 +210,7 @@ const isValidVisitorId = (value) =>
   Boolean(normalizeText(value));
 
 const isValidShelfQr = (value) =>
-  /^SHELF-QR-\d{6}$/i.test(
+  /^SHELF-QR-[0-9A-F]{32}$/i.test(
     normalizeText(value)
   );
 

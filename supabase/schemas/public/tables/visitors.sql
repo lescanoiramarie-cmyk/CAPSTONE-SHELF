@@ -19,7 +19,7 @@ CREATE TABLE "public"."visitors" (
   CONSTRAINT "visitors_email_key" UNIQUE (email),
   CONSTRAINT "visitors_pkey" PRIMARY KEY (id),
   CONSTRAINT "visitors_qr_code_key" UNIQUE (qr_code),
-  CONSTRAINT "visitors_qr_code_shelf_format" CHECK (((qr_code IS NULL) OR ((qr_code)::text ~ '^SHELF-QR-[0-9]{6}$'::text)))
+  CONSTRAINT "visitors_qr_code_shelf_format" CHECK (((qr_code IS NULL) OR ((qr_code)::text ~ '^SHELF-QR-[0-9A-F]{32}$'::text)))
 );
 
 ALTER TABLE "public"."visitors"

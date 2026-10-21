@@ -23,11 +23,27 @@ function responseHeaders(origin: string) {
   };
 }
 
-function respond(origin: string, status: number, body: Record<string, unknown>) {
+function respond(
+  origin: string,
+  status: number,
+  body: Record<string, unknown>,
+  additionalHeaders: Record<string, string> = {},
+) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: responseHeaders(origin),
+    headers: { ...responseHeaders(origin), ...additionalHeaders },
   });
+}
+
+async function hashClientAddress(address: string) {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(address),
+  );
+
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");
 }
 
 Deno.serve(async (request: Request) => {
@@ -52,21 +68,66 @@ Deno.serve(async (request: Request) => {
     return respond(origin, 500, { error: "QR sign-in is not configured." });
   }
 
-  let qrCode = "";
-  try {
-    const body = await request.json();
-    qrCode = String(body?.qrCode || "").trim();
-  } catch {
-    return respond(origin, 400, { error: "Invalid request body." });
-  }
+  const forwardedAddresses =
+    request.headers.get("x-forwarded-for")
+      ?.split(",")
+      .map((address) => address.trim())
+      .filter(Boolean) || [];
+  const clientAddress =
+    request.headers.get("cf-connecting-ip")?.trim() ||
+    request.headers.get("x-real-ip")?.trim() ||
+    forwardedAddresses.at(-1);
 
-  if (!qrCode || qrCode.length > 200) {
-    return respond(origin, 401, { error: "This QR pass could not be used to sign in." });
+  if (!clientAddress) {
+    console.error("QR sign-in rejected: trusted client address is unavailable.");
+    return respond(origin, 503, {
+      error: "QR sign-in is temporarily unavailable. Please try again later.",
+    });
   }
 
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  const { data: rateLimitData, error: rateLimitError } = await admin.rpc(
+    "consume_visitor_qr_login_attempt",
+    { p_client_hash: await hashClientAddress(clientAddress) },
+  );
+
+  if (rateLimitError) {
+    console.error("QR sign-in rate-limit check failed:", rateLimitError.message);
+    return respond(origin, 500, {
+      error: "Unable to validate QR sign-in. Please try again.",
+    });
+  }
+
+  const rateLimit = Array.isArray(rateLimitData)
+    ? rateLimitData[0]
+    : rateLimitData;
+
+  if (!rateLimit?.allowed) {
+    const retryAfter = Math.max(
+      1,
+      Number(rateLimit?.retry_after_seconds) || 900,
+    );
+    return respond(
+      origin,
+      429,
+      { error: "Too many QR sign-in attempts. Please try again later." },
+      { "Retry-After": String(retryAfter) },
+    );
+  }
+
+  let qrCode = "";
+  try {
+    const body = await request.json();
+    qrCode = String(body?.qrCode || "").trim().toUpperCase();
+  } catch {
+    return respond(origin, 400, { error: "Invalid request body." });
+  }
+
+  if (!/^SHELF-QR-[0-9A-F]{32}$/.test(qrCode)) {
+    return respond(origin, 401, { error: "This QR pass could not be used to sign in." });
+  }
 
   const { data: visitor, error: visitorError } = await admin
     .from("visitors")

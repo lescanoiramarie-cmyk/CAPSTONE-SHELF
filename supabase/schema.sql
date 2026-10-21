@@ -82,7 +82,7 @@ create table if not exists visitors (
   otp_expires_at timestamptz,
   otp_verified boolean default false,
   is_active boolean not null default true,
-  qr_code text unique check (qr_code is null or qr_code ~ '^SHELF-QR-[0-9]{6}$'),
+  qr_code text unique check (qr_code is null or qr_code ~ '^SHELF-QR-[0-9A-F]{32}$'),
   registered_at timestamptz default now()
 );
 
@@ -97,7 +97,7 @@ declare
 begin
   perform pg_advisory_xact_lock(hashtext('public.visitors.qr_code'));
   loop
-    qr_value := 'SHELF-QR-' || floor(random() * 900000 + 100000)::text;
+    qr_value := 'SHELF-QR-' || upper(replace(gen_random_uuid()::text, '-', ''));
     exit when not exists (
       select 1 from public.visitors where qr_code = qr_value
     );
