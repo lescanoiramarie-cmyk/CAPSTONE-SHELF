@@ -28,7 +28,19 @@ export const AuthProvider = ({ children }) => {
       if (!raw) {
         return null;
       }
-      return JSON.parse(raw);
+      const restoredUser = JSON.parse(raw);
+      if (
+        restoredUser?.role === 'visitor' &&
+        !/^SHELF-QR-[0-9]{6}$/.test(
+          String(restoredUser.qrCode || '')
+        )
+      ) {
+        return {
+          ...restoredUser,
+          qrCode: null,
+        };
+      }
+      return restoredUser;
     } catch (error) {
       console.error(
         'Failed to restore SHELF session:',

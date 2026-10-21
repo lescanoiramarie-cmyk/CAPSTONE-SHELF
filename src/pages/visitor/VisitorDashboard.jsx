@@ -291,13 +291,17 @@ function VisitorDashboardContent() {
   // =========================================================
 
   const qrCodeRef = useRef(null);
+  const visitorQrCode =
+    /^SHELF-QR-[0-9]{6}$/.test(String(user?.qrCode || ''))
+      ? user.qrCode
+      : null;
 
   // =========================================================
   // SAVE QR CODE AS IMAGE
   // =========================================================
 
   const handleSaveQrAsImage = async () => {
-    if (!user?.qrCode) {
+    if (!visitorQrCode) {
       return;
     }
 
@@ -403,7 +407,7 @@ function VisitorDashboardContent() {
 
       context.textAlign = 'center';
 
-      context.fillText(user.qrCode, canvasWidth / 2, 900);
+      context.fillText(visitorQrCode, canvasWidth / 2, 900);
 
       // Visitor name
       context.fillStyle = '#475569';
@@ -430,7 +434,7 @@ function VisitorDashboardContent() {
 
       link.href = imageUrl;
 
-      link.download = `${user.qrCode}-QR-Pass.png`;
+      link.download = `${visitorQrCode}-QR-Pass.png`;
 
       document.body.appendChild(link);
 
@@ -1275,12 +1279,12 @@ function VisitorDashboardContent() {
                       Library QR Pass
                     </h3>
 
-                    {user?.qrCode ? (
+                    {visitorQrCode ? (
                       <>
                         <div className="mx-auto w-fit rounded-md border border-slate-200 bg-white p-3">
                           <div ref={qrCodeRef}>
                             <QRCodeSVG
-                              value={user.qrCode}
+                              value={visitorQrCode}
                               size={148}
                               level="H"
                               includeMargin
@@ -1289,7 +1293,7 @@ function VisitorDashboardContent() {
                         </div>
 
                         <p className="mt-2 break-all font-mono text-xs font-bold text-shelf-primary dark:text-blue-400">
-                          {user.qrCode}
+                          {visitorQrCode}
                         </p>
 
                         <button
@@ -1305,7 +1309,8 @@ function VisitorDashboardContent() {
                       </>
                     ) : (
                       <p className="text-sm text-slate-500 dark:text-slate-400">
-                        No QR pass is available for this account.
+                        Your QR pass is refreshing. If it does not appear, sign
+                        out and sign in again to load the current visitor pass.
                       </p>
                     )}
                   </section>
