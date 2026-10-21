@@ -2296,6 +2296,8 @@ export async function loginVisitor({
     } = qrLoginResponse;
 
     if (qrLoginError) {
+      console.error('QR sign-in request failed:', qrLoginError);
+
       if (
         qrLoginError.name ===
         'FunctionsFetchError'
@@ -2305,23 +2307,50 @@ export async function loginVisitor({
         );
       }
 
-      throw new Error(
-        qrLoginData?.error ||
-          cleanErr(
-            qrLoginError,
-            'Unable to verify the visitor QR pass.'
-          ).message
-      );
+      let serviceMessage = normalizeText(qrLoginData?.error);
+      if (!serviceMessage && typeof qrLoginError.context?.json === 'function') {
+        try {
+          const responseBody = await qrLoginError.context.json();
+          serviceMessage = normalizeText(responseBody?.error);
+        } catch (responseError) {
+          console.warn('Could not read QR sign-in response details:', responseError);
+        }
+      }
+
+      const normalizedMessage = serviceMessage.toLowerCase();
+      if (
+        normalizedMessage.includes('invalid qr pass or password')
+      ) {
+        throw new Error('The QR pass or password is not valid.');
+      }
+      if (normalizedMessage.includes('could not be used to sign in')) {
+        throw new Error('This visitor account was not found, is disabled, or the QR pass is no longer active.');
+      }
+      if (normalizedMessage.includes('too many qr sign-in attempts')) {
+        throw new Error('Too many QR sign-in attempts. Please wait before trying again.');
+      }
+      if (normalizedMessage.includes('origin is not allowed')) {
+        throw new Error('QR sign-in is not enabled for this site address. Reload the app from its configured URL.');
+      }
+      if (
+        normalizedMessage.includes('temporarily unavailable') ||
+        normalizedMessage.includes('unable to validate') ||
+        normalizedMessage.includes('unable to complete') ||
+        normalizedMessage.includes('unable to verify') ||
+        qrLoginError.name === 'FunctionsRelayError'
+      ) {
+        throw new Error('QR sign-in is temporarily unavailable. Please try again shortly.');
+      }
+
+      throw new Error('Unable to verify the visitor QR pass. Please try again.');
     }
 
     if (
       !qrLoginData?.session?.access_token ||
       !qrLoginData?.session?.refresh_token
     ) {
-      throw new Error(
-        qrLoginData?.error ||
-          'QR sign-in did not return a valid authentication session.'
-      );
+      console.error('QR sign-in returned an invalid session response.');
+      throw new Error('QR sign-in could not be completed. Please try again.');
     }
 
     const {
@@ -2330,12 +2359,8 @@ export async function loginVisitor({
     } = await supabase.auth.setSession(qrLoginData.session);
 
     if (authError) {
-      throw new Error(
-        cleanErr(
-          authError,
-          'Unable to complete QR sign-in.'
-        ).message
-      );
+      console.error('QR sign-in session setup failed:', authError);
+      throw new Error('Unable to complete QR sign-in. Please try again.');
     }
 
     const authUserId =
@@ -2344,9 +2369,8 @@ export async function loginVisitor({
     if (!isValidUuid(authUserId)) {
       await safeSignOut();
 
-      throw new Error(
-        'Supabase did not return a valid visitor authentication session.'
-      );
+      console.error('QR sign-in returned an invalid visitor account ID.');
+      throw new Error('QR sign-in could not be completed. Please try again.');
     }
 
     const {
@@ -2363,10 +2387,8 @@ export async function loginVisitor({
     if (visitorError) {
       await safeSignOut();
 
-      throw cleanErr(
-        visitorError,
-        'Unable to load the visitor profile.'
-      );
+      console.error('QR sign-in visitor profile lookup failed:', visitorError);
+      throw new Error('Unable to load your visitor account. Please try again.');
     }
 
     if (

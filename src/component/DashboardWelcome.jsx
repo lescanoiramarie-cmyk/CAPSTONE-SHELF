@@ -286,6 +286,15 @@ const markAllNotificationsRead = () => {
                           <span className="mt-1 block text-[11px] font-medium text-slate-400">
                             {notification.timeLabel}
                           </span>
+                          {(notification.followUp || notification.status) && (
+                            <span className="mt-2 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                              {notification.followUp
+                                ? followUpSentIds.has(notification.id)
+                                  ? 'Followed up'
+                                  : 'Pending follow-up'
+                                : notification.status}
+                            </span>
+                          )}
                         </span>
                       </div>
                     </button>
@@ -296,7 +305,7 @@ const markAllNotificationsRead = () => {
                             ? followUpError
                             : followUpSentIds.has(notification.id)
                               ? 'Follow-up sent today.'
-                              : ''}
+                              : 'Pending follow-up'}
                         </p>
                         <button
                           type="button"

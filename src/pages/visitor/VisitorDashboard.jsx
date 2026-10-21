@@ -1285,9 +1285,11 @@ function VisitorDashboardContent() {
                           <div ref={qrCodeRef}>
                             <QRCodeSVG
                               value={visitorQrCode}
-                              size={148}
+                              size={200}
                               level="H"
                               includeMargin
+                              fgColor="#000000"
+                              bgColor="#FFFFFF"
                             />
                           </div>
                         </div>

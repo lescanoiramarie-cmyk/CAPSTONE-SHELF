@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { useLibrary } from '../context/useLibrary';
+import { useAuth } from '../context/useAuth.js';
 import { supabase } from '../lib/supabaseClient';
 
 export default function BookInventory() {
+  const { user } = useAuth();
   const { 
     books, 
     addBook, 
@@ -33,12 +35,12 @@ export default function BookInventory() {
     if (!file) return;
 
     if (!['image/jpeg', 'image/png'].includes(file.type)) {
-      setMutationError('Pumili lamang ng JPG o PNG image.');
+      setMutationError('Choose a JPG or PNG image for the book cover.');
       return;
     }
 
     if (file.size > MAX_COVER_SIZE) {
-      setMutationError('Maximum file size ay 5 MB.');
+      setMutationError('Book cover images must be 5 MB or smaller.');
       return;
     }
 
@@ -62,13 +64,25 @@ export default function BookInventory() {
     }));
   };
 
-  const uploadBookCover = async (file) => {
+  const uploadBookCover = async (file, libraryId) => {
     if (!supabase) {
-      throw new Error('Hindi available ang Supabase connection.');
+      throw new Error('Cover uploads are unavailable because the storage service is not configured.');
+    }
+
+    if (!libraryId) {
+      throw new Error('Select a library before uploading a book cover.');
+    }
+
+    const assignedBranch = user?.libraryId || user?.assignedBranch;
+    if (
+      user?.role === 'subadmin' &&
+      String(assignedBranch || '') !== String(libraryId)
+    ) {
+      throw new Error('You can only upload covers for books assigned to your branch.');
     }
 
     const extension = file.type === 'image/png' ? 'png' : 'jpg';
-    const filePath = `books/${crypto.randomUUID()}.${extension}`;
+    const filePath = `books/${libraryId}/${crypto.randomUUID()}.${extension}`;
 
     const { error: uploadError } = await supabase.storage
       .from('book-covers')
@@ -79,7 +93,24 @@ export default function BookInventory() {
       });
 
     if (uploadError) {
-      throw new Error(`Cover upload failed: ${uploadError.message}`);
+      console.error('Book cover upload failed:', uploadError);
+      const uploadMessage = String(uploadError.message || '').toLowerCase();
+      if (
+        uploadError.statusCode === '403' ||
+        uploadMessage.includes('row-level security') ||
+        uploadMessage.includes('not authorized') ||
+        uploadMessage.includes('permission')
+      ) {
+        throw new Error('Cover upload was denied. Verify that your account can manage books for the selected branch.');
+      }
+      if (
+        uploadMessage.includes('network') ||
+        uploadMessage.includes('fetch') ||
+        uploadMessage.includes('connection')
+      ) {
+        throw new Error('Unable to connect to cover storage. Check your connection and try again.');
+      }
+      throw new Error('Unable to upload the book cover. Check the file and try again.');
     }
 
     const { data } = supabase.storage
@@ -87,7 +118,7 @@ export default function BookInventory() {
       .getPublicUrl(filePath);
 
     if (!data?.publicUrl) {
-      throw new Error('Hindi makuha ang public URL ng cover image.');
+      throw new Error('Unable to create a public URL for the book cover.');
     }
 
     return data.publicUrl;
@@ -155,7 +186,7 @@ export default function BookInventory() {
       let coverUrl = form.coverUrl;
 
       if (selectedCoverFile) {
-        coverUrl = await uploadBookCover(selectedCoverFile);
+        coverUrl = await uploadBookCover(selectedCoverFile, form.libraryId);
       }
 
       const bookPayload = {
@@ -174,7 +205,15 @@ export default function BookInventory() {
       setCoverPreview('');
       setShowForm(false);
     } catch (err) {
-      setMutationError(err.message || 'Failed to save book');
+      console.error('Book inventory save failed:', err);
+      const saveMessage = String(err?.message || '').toLowerCase();
+      setMutationError(
+        saveMessage.includes('row-level security') ||
+          saveMessage.includes('permission denied') ||
+          saveMessage.includes('not authorized')
+          ? 'Book changes were denied. Verify that your account can manage inventory for the selected branch.'
+          : err.message || 'Unable to save the book. Please try again.'
+      );
     } finally {
       setSaving(false);
     }

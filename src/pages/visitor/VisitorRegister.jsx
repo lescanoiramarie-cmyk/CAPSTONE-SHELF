@@ -1648,6 +1648,8 @@ useEffect(() => {
                         size={190}
                         level="H"
                         includeMargin
+                        fgColor="#000000"
+                        bgColor="#FFFFFF"
                       />
                     </div>
 

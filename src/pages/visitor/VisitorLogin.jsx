@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
+import {
+  Html5Qrcode,
+  Html5QrcodeScannerState,
+  Html5QrcodeSupportedFormats,
+} from 'html5-qrcode';
 import { philippines } from '@ianlabicani/geoph-lite';
 import {
   Eye,
@@ -19,7 +23,42 @@ const OTP_CODE_TTL_SECONDS = 10 * 60;
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
 const RESET_CODE_TTL_SECONDS = 10 * 60;
 const RESET_CODE_RESEND_COOLDOWN_SECONDS = 60;
+const MAX_QR_IMAGE_SIZE = 10 * 1024 * 1024;
 const preventPasswordClipboard = (event) => event.preventDefault();
+
+function getCameraErrorMessage(error) {
+  if (
+    typeof window !== 'undefined' &&
+    !window.isSecureContext &&
+    !['localhost', '127.0.0.1'].includes(window.location.hostname)
+  ) {
+    return 'Camera access requires a secure connection (HTTPS). Upload a QR image or open this page over HTTPS.';
+  }
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    return 'This browser does not support camera scanning. Upload a QR image instead.';
+  }
+
+  switch (error?.name) {
+    case 'NotAllowedError':
+    case 'PermissionDeniedError':
+    case 'SecurityError':
+      return 'Camera permission was denied. Allow camera access in your browser settings and try again.';
+    case 'NotFoundError':
+    case 'DevicesNotFoundError':
+      return 'No camera was found on this device. Upload a QR image instead.';
+    case 'NotSupportedError':
+      return 'This browser does not support camera scanning. Upload a QR image instead.';
+    case 'NotReadableError':
+    case 'TrackStartError':
+    case 'AbortError':
+      return 'The camera is unavailable or being used by another app. Close other camera apps and try again.';
+    case 'OverconstrainedError':
+      return 'The camera does not support the required scanning settings. Try another camera or upload a QR image.';
+    default:
+      return 'Unable to start the camera. Check camera permissions and try again.';
+  }
+}
 
 // =========================================================
 // PASSWORD REQUIREMENT COMPONENT
@@ -574,14 +613,24 @@ useEffect(() => {
 
       const startCamera = async () => {
         try {
-          const scanner = new Html5Qrcode('visitor-qr-reader');
+          const scanner = new Html5Qrcode('visitor-qr-reader', {
+            formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+            verbose: false,
+          });
           scannerRef.current = scanner;
 
           const startPromise = scanner.start(
-            { facingMode: 'environment' },
+            {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
             {
               fps: 10,
-              qrbox: { width: 250, height: 250 },
+              qrbox: (width, height) => {
+                const size = Math.min(width, height, 280);
+                return { width: size, height: size };
+              },
             },
             async (decodedText) => {
               if (cancelled || processing) return;
@@ -616,8 +665,7 @@ useEffect(() => {
           if (!cancelled) {
             setShowScanner(false);
             setError(
-              err?.message ||
-                'Unable to access the camera. Please allow camera permission and try again.'
+              getCameraErrorMessage(err)
             );
           }
         }
@@ -772,8 +820,16 @@ useEffect(() => {
 
     if (!file || isUploadingQr) return;
 
-    if (!file.type.startsWith('image/')) {
-      setError('Please select a valid image file.');
+    const hasSupportedImageType =
+      ['image/png', 'image/jpeg', 'image/webp'].includes(file.type) ||
+      /\.(png|jpe?g|webp)$/i.test(file.name);
+    if (!hasSupportedImageType) {
+      setError('Choose a PNG, JPG, JPEG, or WEBP image.');
+      return;
+    }
+
+    if (file.size > MAX_QR_IMAGE_SIZE) {
+      setError('QR images must be 10 MB or smaller.');
       return;
     }
 
@@ -784,7 +840,11 @@ useEffect(() => {
 
     try {
       qrScanner = new Html5Qrcode(
-        'visitor-qr-file-reader'
+        'visitor-qr-file-reader',
+        {
+          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+          verbose: false,
+        }
       );
 
       let decodedText = '';
@@ -798,10 +858,16 @@ useEffect(() => {
       if (!decodedText) {
         const enhancedFile = await createEnhancedQrImage(file);
 
-        decodedText = await qrScanner.scanFile(
-          enhancedFile,
-          false
-        );
+        try {
+          decodedText = await qrScanner.scanFile(
+            enhancedFile,
+            false
+          );
+        } catch {
+          throw new Error(
+            'No QR code was found. Upload a clear image showing the entire QR code and its white border.'
+          );
+        }
       }
 
       const qrValue = String(decodedText ?? '').trim();
@@ -817,8 +883,9 @@ useEffect(() => {
       console.error('QR IMAGE SCAN ERROR:', err);
 
       setError(
-        err?.message ||
-          'Unable to read the QR image. Try another image or use the camera scanner.'
+        err?.message === 'Unable to read the uploaded image.'
+          ? 'The image could not be read. Try a PNG, JPG, or WEBP image.'
+          : err?.message || 'Unable to read the QR image. Try another image.'
       );
     } finally {
       try {
@@ -1819,8 +1886,16 @@ setOtpResendRemaining(
 
       <div className="relative w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-8 lg:p-12 overflow-y-auto">
         <div className="w-full max-w-md bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-slate-200 space-y-6 my-auto">
-          {(view === 'register' || view === 'forgot') && (
-            <div className="sticky top-0 z-20 -mt-1 flex justify-start bg-white pb-1">
+          <div className="sticky top-0 z-20 -mt-1 flex items-center justify-between gap-2 bg-white pb-1">
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-shelf-primary"
+            >
+              <ArrowLeft size={16} aria-hidden="true" />
+              Back to landing page
+            </button>
+            {(view === 'register' || view === 'forgot') && (
               <button
                 type="button"
                 onClick={() => {
@@ -1840,8 +1915,8 @@ setOtpResendRemaining(
                 <ArrowLeft size={16} aria-hidden="true" />
                 Back
               </button>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* HEADER */}
 
@@ -1965,6 +2040,8 @@ setOtpResendRemaining(
                       size={220}
                       level="H"
                       includeMargin
+                      fgColor="#000000"
+                      bgColor="#FFFFFF"
                       className="w-full h-auto max-w-50"
                     />
                   </div>
@@ -2644,12 +2721,17 @@ setOtpResendRemaining(
               className="space-y-4"
               autoComplete="off"
             >
+              <div
+                id="visitor-qr-file-reader"
+                className="hidden"
+                aria-hidden="true"
+              />
               {showScanner ? (
   <div className="space-y-4">
     <div className="bg-shelf-primary text-white rounded-xl p-4 text-center">
       <h3 className="font-bold text-sm">Scan QR Code</h3>
       <p className="text-[11px] text-slate-300 mt-1">
-        Position the QR code inside the scanning area.
+        Hold the QR code steady inside the frame.
       </p>
     </div>
 
@@ -2657,12 +2739,6 @@ setOtpResendRemaining(
     <div
       id="visitor-qr-reader"
       className="w-full min-h-70 overflow-hidden rounded-xl border border-slate-200 bg-slate-50"
-    />
-
-    <div
-      id="visitor-qr-file-reader"
-      className="hidden"
-      aria-hidden="true"
     />
 
     <button
@@ -2837,12 +2913,6 @@ setOtpResendRemaining(
                       ? 'Reading QR Code...'
                       : 'Upload QR Code Image'}
                   </button>
-
-                  <div
-                    id="visitor-qr-file-reader"
-                    className="hidden"
-                    aria-hidden="true"
-                  />
 
                   {/* REGISTER LINK */}
 

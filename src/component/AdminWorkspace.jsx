@@ -101,6 +101,8 @@ export default function AdminWorkspace({
   books = [],
   attendanceLogs = [],
   borrowRequests = [],
+  focusedNotificationRequestId = null,
+  focusedNotificationType = null,
 }) {
   const isSubAdmin = user?.role === 'subadmin';
   const currentLibraryId = user?.libraryId || user?.assignedBranch || '';
@@ -149,6 +151,37 @@ export default function AdminWorkspace({
     () => new Map(books.map((book) => [book.id, book])),
     [books]
   );
+  const focusedNotificationRequest = borrowRequests.find(
+    (request) =>
+      String(request.id) === String(focusedNotificationRequestId)
+  );
+  const focusedRequestStatus = String(
+    focusedNotificationRequest?.status || ''
+  ).toLowerCase();
+  const focusedNotificationHandled =
+    (focusedNotificationType === 'reservation' &&
+      !['pending', 'queued'].includes(focusedRequestStatus)) ||
+    (focusedNotificationType === 'pickup' &&
+      focusedRequestStatus !== 'ready_for_pickup') ||
+    (focusedNotificationType === 'overdue' &&
+      focusedRequestStatus !== 'borrowed');
+
+  useEffect(() => {
+    if (
+      !focusedNotificationRequestId ||
+      mode !== 'reports' ||
+      tab !== 'reports'
+    ) {
+      return undefined;
+    }
+
+    const frame = requestAnimationFrame(() => {
+      document
+        .getElementById(`admin-notification-request-${focusedNotificationRequestId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusedNotificationRequestId, mode, tab]);
 
   const analyticsWindow = useMemo(
     () => getTimeframeRange(timeframe, customStartDate, customEndDate),
@@ -709,6 +742,36 @@ export default function AdminWorkspace({
       {error && <p role="alert" className="border border-red-200 bg-red-50 p-3 text-sm text-red-800 rounded-lg">{error}</p>}
       {message && <p role="status" className="border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 rounded-lg">{message}</p>}
       {loading && <p className="text-sm text-slate-500">Loading records...</p>}
+      {focusedNotificationRequestId && mode === 'reports' && tab === 'reports' && (
+        <section
+          id={`admin-notification-request-${focusedNotificationRequestId}`}
+          role="status"
+          className="scroll-mt-6 rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-sm"
+        >
+          {focusedNotificationRequest ? (
+            <>
+              <h2 className="text-sm font-bold text-amber-950">
+                Notification target: {focusedNotificationRequest.bookTitle || 'Untitled book'}
+              </h2>
+              <p className="mt-1 text-xs text-amber-900">
+                {focusedNotificationRequest.visitorName || 'Visitor'}
+                {' · Status: '}
+                {formatStatus(focusedNotificationRequest.status)}
+                {(focusedNotificationRequest.dueDate || focusedNotificationRequest.due_date) && ` · Due ${new Date(focusedNotificationRequest.dueDate || focusedNotificationRequest.due_date).toLocaleString()}`}
+                {focusedNotificationRequest.pickupDeadline && ` · Pickup deadline ${new Date(focusedNotificationRequest.pickupDeadline).toLocaleString()}`}
+              </p>
+              <p className="mt-2 text-[11px] text-amber-800">
+                Request ID: {focusedNotificationRequest.id}
+                {focusedNotificationHandled && ' · This notification has already been handled or is no longer actionable.'}
+              </p>
+            </>
+          ) : (
+            <p className="text-sm font-semibold text-amber-950">
+              The request associated with this notification no longer exists or is no longer available.
+            </p>
+          )}
+        </section>
+      )}
 
       {/* REPORTS TAB */}
       {tab === 'reports' && (

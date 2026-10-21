@@ -194,6 +194,9 @@ export default function SuperAdminDashboard() {
 
   const [section, setSection] = useState('overview');
   const [activeTab, setActiveTab] = useState('reports');
+  const [focusedNotificationRequestId, setFocusedNotificationRequestId] = useState(null);
+  const [focusedNotificationType, setFocusedNotificationType] = useState(null);
+  const [notificationFocusVersion, setNotificationFocusVersion] = useState(0);
 
   // Sidebar Collapsible States
   const [workspaceOpen, setWorkspaceOpen] = useState(true);
@@ -838,11 +841,16 @@ const handleEditStaff = (staff) => {
       ) {
         notifications.push({
           id: `request-${request.id}`,
+          requestId: request.id,
+          recordId: request.id,
+          type: 'reservation',
+          targetSection: 'workspace',
+          targetTab: 'reports',
+          status: 'Pending',
           title: 'New reservation request',
           message: `${visitorName} — ${bookTitle}`,
           timeLabel: `Requested ${new Date(requestDate).toLocaleString()}`,
           timestamp: requestDate,
-          section: 'workspace',
         });
       }
 
@@ -854,12 +862,15 @@ const handleEditStaff = (staff) => {
         notifications.push({
           id: `overdue-${request.id}`,
           requestId: request.id,
+          recordId: request.id,
+          type: 'overdue',
+          targetSection: 'workspace',
+          targetTab: 'reports',
           followUp: true,
           title: 'Overdue book',
           message: `${bookTitle} — ${visitorName}`,
           timeLabel: `Due ${new Date(dueDate).toLocaleString()}`,
           timestamp: dueDate,
-          section: 'overview',
         });
       }
 
@@ -871,11 +882,16 @@ const handleEditStaff = (staff) => {
       ) {
         notifications.push({
           id: `pickup-${request.id}`,
+          requestId: request.id,
+          recordId: request.id,
+          type: 'pickup',
+          targetSection: 'workspace',
+          targetTab: 'reports',
+          status: 'Pending',
           title: 'Pickup deadline approaching',
           message: `${bookTitle} for ${visitorName}`,
           timeLabel: `Deadline ${new Date(pickupDeadline).toLocaleString()}`,
           timestamp: pickupDeadline,
-          section: 'overview',
         });
       }
     });
@@ -1218,10 +1234,13 @@ const handleEditStaff = (staff) => {
           notifications={superAdminNotifications}
           onNotificationFollowUp={handleOverdueFollowUp}
           onNotificationClick={(notification) => {
-            setSection(notification.section);
-            if (notification.section === 'workspace') {
-              setActiveTab('reports');
-            }
+            setFocusedNotificationRequestId(
+              notification.recordId || notification.requestId
+            );
+            setFocusedNotificationType(notification.type);
+            setNotificationFocusVersion((version) => version + 1);
+            setSection(notification.targetSection);
+            setActiveTab(notification.targetTab);
           }}
           actions={[
             { label: 'View Inventory', Icon: BookOpen, onClick: () => setSection('inventory') },
@@ -1860,6 +1879,7 @@ const handleEditStaff = (staff) => {
         {/* REPORTS AND SERVICES */}
         {section === 'workspace' && (
           <AdminWorkspace
+            key={`${focusedNotificationRequestId || 'none'}-${notificationFocusVersion}`}
             initialTab={activeTab}
             mode="reports"
             user={user}
@@ -1868,6 +1888,8 @@ const handleEditStaff = (staff) => {
             visitors={visitors}
             borrowRequests={borrowRequests}
             attendanceLogs={attendanceLogs}
+            focusedNotificationRequestId={focusedNotificationRequestId}
+            focusedNotificationType={focusedNotificationType}
           />
         )}
 

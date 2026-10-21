@@ -5,7 +5,7 @@ function formatDateTime(iso) {
   return new Date(iso).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-export default function ReservationQueue({ user }) {
+export default function ReservationQueue({ user, focusRequestId = null }) {
   const { books, borrowRequests } = useLibraryData();
   const isSubAdmin = user?.role === 'subadmin';
   const branchId = user?.libraryId || user?.assignedBranch;
@@ -50,7 +50,11 @@ export default function ReservationQueue({ user }) {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {readyForPickup.map((r) => (
-                <tr key={r.id}>
+                <tr
+                  key={r.id}
+                  id={`reservation-queue-request-${r.id}`}
+                  className={String(r.id) === String(focusRequestId) ? 'bg-amber-50 ring-2 ring-inset ring-amber-400' : ''}
+                >
                   <td className="p-3 font-semibold text-slate-700">{r.bookTitle}</td>
                   <td className="p-3 text-xs text-slate-500">{r.visitorName}</td>
                   <td className="p-3 text-xs font-mono text-amber-700">{formatDateTime(r.pickupDeadline)}</td>
@@ -75,7 +79,15 @@ export default function ReservationQueue({ user }) {
                 <p className="text-sm font-bold text-slate-800">{book.title}</p>
                 <ol className="mt-2 space-y-1">
                   {queue.map((r) => (
-                    <li key={r.id} className="text-xs text-slate-600 flex justify-between">
+                    <li
+                      key={r.id}
+                      id={`reservation-queue-request-${r.id}`}
+                      className={`flex justify-between text-xs text-slate-600 ${
+                        String(r.id) === String(focusRequestId)
+                          ? 'rounded bg-amber-50 px-2 py-1 ring-2 ring-amber-400'
+                          : ''
+                      }`}
+                    >
                       <span>#{r.queuePosition} — {r.visitorName}</span>
                       <span className="text-slate-400">{formatDateTime(r.requestDate)}</span>
                     </li>

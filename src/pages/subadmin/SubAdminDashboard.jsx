@@ -254,10 +254,14 @@ function CustomDashboardWelcome({
   actions = [],
 }) {
   const [showNotifications, setShowNotifications] = useState(false);
+  const [readNotificationIds, setReadNotificationIds] = useState(() => new Set());
   const [followUpRequestId, setFollowUpRequestId] = useState(null);
   const [followUpSentIds, setFollowUpSentIds] = useState(() => new Set());
   const [followUpError, setFollowUpError] = useState('');
   const [followUpErrorId, setFollowUpErrorId] = useState(null);
+  const unreadCount = notifications.filter(
+    (notification) => !readNotificationIds.has(notification.id)
+  ).length;
 
 
   return (
@@ -275,9 +279,9 @@ function CustomDashboardWelcome({
             aria-label="Notifications"
           >
             <Bell size={18} />
-            {notifications.length > 0 && (
+            {unreadCount > 0 && (
               <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-extrabold rounded-full flex items-center justify-center shadow-sm">
-                {notifications.length}
+                {unreadCount}
               </span>
             )}
           </button>
@@ -288,9 +292,22 @@ function CustomDashboardWelcome({
               <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 font-bold text-slate-800">
                 <span>Branch Notifications</span>
                 <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full text-[10px]">
-                  {notifications.length} New
+                  {unreadCount} Unread
                 </span>
               </div>
+              {notifications.length > 0 && (
+                <button
+                  type="button"
+                  disabled={unreadCount === 0}
+                  onClick={() => setReadNotificationIds((current) => new Set([
+                    ...current,
+                    ...notifications.map((notification) => notification.id),
+                  ]))}
+                  className="mb-2 text-[10px] font-bold text-blue-700 hover:underline disabled:opacity-50"
+                >
+                  Mark all read
+                </button>
+              )}
               
               <div className="max-h-60 overflow-y-auto space-y-2">
                 {notifications.length === 0 ? (
@@ -299,15 +316,38 @@ function CustomDashboardWelcome({
                   notifications.map((n) => (
                     <div
                       key={n.id}
-                      onClick={() => {
-                        if (onNotificationClick) onNotificationClick(n);
-                        setShowNotifications(false);
-                      }}
-                      className="p-2.5 rounded-lg bg-slate-50 hover:bg-blue-50/50 cursor-pointer transition border border-slate-100"
+                      className={`rounded-lg border border-slate-100 p-2.5 transition ${
+                        readNotificationIds.has(n.id)
+                          ? 'bg-white'
+                          : 'bg-blue-50/70'
+                      }`}
                     >
-                      <p className="font-bold text-slate-800">{n.title}</p>
-                      <p className="text-slate-500 mt-0.5 line-clamp-1">{n.message}</p>
-                      <p className="text-[10px] text-slate-400 mt-1">{n.timeLabel}</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReadNotificationIds((current) => new Set([...current, n.id]));
+                          onNotificationClick?.(n);
+                          setShowNotifications(false);
+                        }}
+                        className="block w-full text-left"
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-slate-800">{n.title}</span>
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                            followUpSentIds.has(n.id)
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            {n.followUp
+                              ? followUpSentIds.has(n.id) ? 'Followed up' : 'Pending follow-up'
+                              : n.status || 'Pending'}
+                          </span>
+                        </span>
+                        <span className="mt-0.5 block line-clamp-1 text-slate-500">{n.message}</span>
+                        <span className="mt-1 block text-[10px] text-slate-400">
+                          {n.timeLabel}{' · '}{readNotificationIds.has(n.id) ? 'Read' : 'Unread'}
+                        </span>
+                      </button>
 
                       {n.followUp && onNotificationFollowUp && (
                         <div className="mt-2 flex items-center justify-between gap-2">
@@ -952,6 +992,8 @@ export default function SubAdminDashboard() {
   const { books, borrowRequests, attendanceLogs, libraries } = useLibraryData();
   const [section, setSection] = useState('overview');
   const [focusRequestId, setFocusRequestId] = useState(null);
+  const [focusNotificationType, setFocusNotificationType] = useState(null);
+  const [notificationTargetMessage, setNotificationTargetMessage] = useState('');
   const [expandedGroups, setExpandedGroups] = useState({ reports: true, communication: false });
   const [workspaceTab, setWorkspaceTab] = useState('reports');
   const [showImportGuide, setShowImportGuide] = useState(false);
@@ -960,15 +1002,18 @@ export default function SubAdminDashboard() {
   useEffect(() => {
     if (!focusRequestId || section === 'overview') return;
     const frame = requestAnimationFrame(() => {
-      document
-        .getElementById(`admin-request-${focusRequestId}`)
-        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const target =
+        document.getElementById(`reservation-queue-request-${focusRequestId}`) ||
+        document.getElementById(`admin-request-${focusRequestId}`);
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
     return () => cancelAnimationFrame(frame);
   }, [focusRequestId, section]);
 
   const navigateToSection = (nextSection) => {
     setFocusRequestId(null);
+    setFocusNotificationType(null);
+    setNotificationTargetMessage('');
     setSection(nextSection);
   };
   const currentLibraryId = user?.libraryId || user?.assignedBranch || '';
@@ -1053,12 +1098,15 @@ export default function SubAdminDashboard() {
         items.push({
           id: `reservation-${request.id}`,
           requestId: request.id,
+          recordId: request.id,
+          type: 'reservation',
+          targetSection: 'queue',
+          status: 'Pending',
           title: 'New reservation request',
           message: `${visitorName} — ${bookTitle}`,
           timeLabel: `Requested ${formatTime(request.requestDate)}`,
           timestamp: requestDate,
           priority: 3,
-          section: 'queue',
         });
       }
 
@@ -1069,12 +1117,15 @@ export default function SubAdminDashboard() {
         items.push({
           id: `pickup-${request.id}`,
           requestId: request.id,
+          recordId: request.id,
+          type: 'pickup',
+          targetSection: 'queue',
+          status: 'Pending',
           title: 'Pickup deadline approaching',
           message: `${bookTitle} for ${visitorName}`,
           timeLabel: `Deadline ${formatTime(request.pickupDeadline)}`,
           timestamp: pickupDeadline,
           priority: 2,
-          section: 'queue',
         });
       }
 
@@ -1086,13 +1137,15 @@ export default function SubAdminDashboard() {
         items.push({
           id: `overdue-${request.id}`,
           requestId: request.id,
+          recordId: request.id,
+          type: 'overdue',
+          targetSection: 'transactions',
           followUp: true,
           title: 'Overdue book',
           message: `${bookTitle} — ${visitorName}`,
           timeLabel: `Due ${formatTime(request.dueDate)}`,
           timestamp: dueDate,
           priority: 1,
-          section: 'transactions',
         });
       }
     });
@@ -1304,8 +1357,18 @@ export default function SubAdminDashboard() {
           notifications={branchNotifications}
           onNotificationFollowUp={handleOverdueFollowUp}
           onNotificationClick={(notification) => {
-            setFocusRequestId(notification.requestId);
-            setSection(notification.section);
+            const requestId = notification.recordId || notification.requestId;
+            const target = branchBorrowRequests.find(
+              (request) => String(request.id) === String(requestId)
+            );
+            setFocusRequestId(requestId);
+            setFocusNotificationType(notification.type);
+            setNotificationTargetMessage(
+              target
+                ? ''
+                : 'This notification refers to a request that no longer exists in your assigned branch or has already been removed.'
+            );
+            setSection(notification.targetSection);
           }}
           actions={[
             { label: 'Scan Visitor QR', Icon: QrCode, onClick: () => navigateToSection('attendance') },
@@ -1454,6 +1517,14 @@ export default function SubAdminDashboard() {
 
         {focusRequestId && section !== 'overview' && (() => {
           const request = branchBorrowRequests.find((item) => String(item.id) === String(focusRequestId));
+          const status = String(request?.status || '').toLowerCase();
+          const handled =
+            (focusNotificationType === 'reservation' &&
+              !['pending', 'queued'].includes(status)) ||
+            (focusNotificationType === 'pickup' &&
+              status !== 'ready_for_pickup') ||
+            (focusNotificationType === 'overdue' &&
+              status !== 'borrowed');
           return request ? (
             <section id={`admin-request-${request.id}`} className="rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-sm">
               <h2 className="text-sm font-bold text-amber-900">
@@ -1464,8 +1535,17 @@ export default function SubAdminDashboard() {
                 {request.dueDate ? ` · Due ${formatDateTime(request.dueDate)}` : ''}
                 {request.pickupDeadline ? ` · Pickup deadline ${formatDateTime(request.pickupDeadline)}` : ''}
               </p>
+              {handled && (
+                <p className="mt-2 text-xs font-semibold text-amber-900">
+                  This notification has already been handled or is no longer actionable.
+                </p>
+              )}
             </section>
-          ) : null;
+          ) : (
+            <section id={`admin-request-${focusRequestId}`} role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              {notificationTargetMessage || 'This request was removed or is no longer available in your assigned branch.'}
+            </section>
+          );
         })()}
 
         {/* SECTION ROUTING */}
@@ -1479,7 +1559,9 @@ export default function SubAdminDashboard() {
           />
         )}
         {section === 'inventory' && <BookInventory />}
-        {section === 'queue' && <ReservationQueue user={user} />}
+        {section === 'queue' && (
+          <ReservationQueue user={user} focusRequestId={focusRequestId} />
+        )}
         {section === 'map' && (
           <LibraryMap
             libraryScopeId={currentLibraryId}
