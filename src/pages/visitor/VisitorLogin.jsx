@@ -13,7 +13,6 @@ import {
 
 import { useAuth } from '../../context/useAuth.js';
 
-import libraryBg from '../../assets/library.jpg';
 import { validateVisitorFullName } from '../../lib/visitorValidation.js';
 
 const OTP_CODE_TTL_SECONDS = 10 * 60;
@@ -1783,13 +1782,7 @@ setOtpResendRemaining(
       ===================================================== */}
 
       <div
-        className="hidden lg:flex lg:w-1/2 bg-shelf-primary text-white p-12 flex-col justify-between relative overflow-hidden bg-cover bg-center"
-        style={{
-          backgroundImage: `linear-gradient(
-            rgba(0, 32, 70, 0.85),
-            rgba(0, 32, 70, 0.85)
-          ), url(${libraryBg})`,
-        }}
+        className="shelf-landing-backdrop hidden lg:flex lg:w-1/2 text-white p-12 flex-col justify-between relative overflow-hidden"
       >
         <div className="relative z-10 flex items-center gap-3">
           <span className="text-xl font-bold tracking-wider">

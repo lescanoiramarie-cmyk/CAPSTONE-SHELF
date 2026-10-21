@@ -15,7 +15,9 @@ import {
   User,
   Mail,
   Send,
-  X
+  X,
+  CircleCheck,
+  MapPin
 } from 'lucide-react';
 
 // =========================================================
@@ -142,8 +144,7 @@ export default function LandingPage() {
   );
 
 const featuredLibraries = libraries
-  .filter((library) => !library.isSampleLocation)
-  .slice(0, 3);
+  .filter((library) => !library.isSampleLocation);
 
 
 const featuredBooks = books
@@ -167,7 +168,6 @@ const featuredBooks = books
     {
       id: 1,
       type: 'System Notice',
-      categoryColor: 'blue',
       title: 'Extended Library Hours During Midterms',
       shortContent: 'All participating campus libraries will remain open until 8:00 PM during exam week to support student revision.',
       fullContent: 'To help students prepare for their upcoming midterm examinations, all campus libraries under the SHELF network will extend their operating hours up to 8:00 PM starting October 20 until October 31, 2026. Discussion rooms, computer laboratories, and silent study zones will remain open. Security and library staff will be on duty during these extended hours.',
@@ -177,7 +177,6 @@ const featuredBooks = books
     {
       id: 2,
       type: 'New Arrival',
-      categoryColor: 'amber',
       title: '2026 Tech & Science Collection Added',
       shortContent: 'Over 200 new titles in computer science, engineering, and digital media have been added to the public catalog.',
       fullContent: 'We are excited to announce that over 200 physical and digital books have been added to our catalog! Highlights include the latest editions on Artificial Intelligence, Web Development, Data Structures, Robotics, and Renewable Energy Systems. Visit your campus library or check out the OPAC online catalog to place a reservation today.',
@@ -198,7 +197,7 @@ const featuredBooks = books
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans relative">
+    <div className="landing-page min-h-screen bg-slate-50 text-slate-800 font-sans relative">
      
       {/* NAVBAR WITH ICONS & HOVER STYLES */}
       <header className="bg-slate-900/95 backdrop-blur-md text-white shadow-lg sticky top-0 z-40 border-b border-slate-800">
@@ -235,21 +234,21 @@ const featuredBooks = books
               href="#featured"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:text-white hover:bg-slate-700/80 transition-all duration-200"
             >
-              <Sparkles size={14} className="text-amber-400" />
+              <Sparkles size={14} className="text-blue-400" />
               <span>Featured Books</span>
             </a>
             <a
               href="#announcements"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:text-white hover:bg-slate-700/80 transition-all duration-200"
             >
-              <Megaphone size={14} className="text-emerald-400" />
+              <Megaphone size={14} className="text-blue-400" />
               <span>Announcements</span>
             </a>
             <a
               href="#feedback"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:text-white hover:bg-slate-700/80 transition-all duration-200"
             >
-              <MessageSquare size={14} className="text-sky-400" />
+              <MessageSquare size={14} className="text-blue-400" />
               <span>Feedback</span>
             </a>
           </nav>
@@ -275,14 +274,10 @@ const featuredBooks = books
       </header>
 
       {/* HERO SECTION WITH ANIMATED INTERCONNECTED DOTS */}
-      <section className="relative bg-slate-900 text-white py-24 px-6 overflow-hidden border-b border-slate-800">
+      <section className="shelf-landing-backdrop relative text-white py-24 px-6 overflow-hidden border-b border-slate-800">
         
         {/* ANIMATED CONSTELLATION CANVAS */}
         <ParticleConstellation />
-
-        {/* BACKGROUND GLOW ACCENTS */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-150 h-87.5 bg-blue-600/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute top-10 right-10 w-72 h-72 bg-sky-500/10 rounded-full blur-2xl pointer-events-none" />
 
         <div className="max-w-4xl mx-auto text-center space-y-8 relative z-10">
           {/* BADGE LABEL */}
@@ -294,7 +289,7 @@ const featuredBooks = books
           {/* MAIN HEADLINE */}
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight leading-tight text-white">
             Discover & Borrow Books Across <br className="hidden sm:inline" />
-            <span className="text-transparent bg-clip-text bg-linear-to-r from-blue-400 via-sky-300 to-indigo-300">
+            <span className="text-transparent bg-clip-text bg-linear-to-r from-blue-300 to-blue-500">
               Campus Libraries
             </span>
           </h1>
@@ -326,7 +321,7 @@ const featuredBooks = books
           {/* QUICK STATS COUNTER */}          
           <div className="pt-6 flex items-center justify-center gap-6 sm:gap-10 text-xs font-semibold text-slate-400 border-t border-slate-800/80 max-w-lg mx-auto">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span className="w-2 h-2 rounded-full bg-blue-300"></span>
               <span>
                 {books.filter((book) => book.bookType === 'library').length.toLocaleString()} Books
               </span>
@@ -340,7 +335,7 @@ const featuredBooks = books
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
               <span>24/7 OPAC Access</span>
             </div>
           </div>
@@ -353,51 +348,77 @@ const featuredBooks = books
           <h2 className="text-3xl font-bold text-slate-900">Participating Campus Libraries</h2>
           <p className="text-slate-600 mt-2">Explore member libraries offering integrated borrowing and resources.</p>
         </div>
-        <div className="grid md:grid-cols-3 gap-6">
-          {featuredLibraries.map((lib, idx) => (
-            <div
-              key={idx}
+        <div
+          className="landing-library-scroller"
+          role="region"
+          aria-label="Participating libraries"
+          tabIndex={0}
+          onWheel={(event) => {
+            const scroller = event.currentTarget;
+            const maxScrollLeft = scroller.scrollWidth - scroller.clientWidth;
+            const canScroll =
+              event.deltaY < 0
+                ? scroller.scrollLeft > 0
+                : event.deltaY !== 0 && scroller.scrollLeft < maxScrollLeft;
+
+            if (maxScrollLeft > 0 && canScroll && Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+              event.preventDefault();
+              scroller.scrollLeft += event.deltaY;
+            }
+          }}
+        >
+          {featuredLibraries.map((lib) => {
+            const isOpen = String(lib.status || '').toLowerCase() === 'open';
+            return (
+            <button
+              key={lib.id}
+              type="button"
               onClick={() => navigate('/catalog')}
-              className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 cursor-pointer transition-all duration-300 hover:-translate-y-1.5 hover:shadow-lg hover:border-blue-300 group flex flex-col justify-between"
+              className="landing-library-card group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:border-blue-300 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
             >
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full uppercase tracking-wider border border-emerald-100 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    {lib.status}
+                  <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider border flex items-center gap-1.5 ${
+                    isOpen
+                      ? 'border-blue-200 bg-blue-50 text-blue-700'
+                      : 'border-slate-200 bg-slate-100 text-slate-600'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${isOpen ? 'bg-blue-600' : 'bg-slate-400'}`}></span>
+                    {lib.status || 'Status unavailable'}
                   </span>
                  
-                  <div className="w-10 h-10 rounded-xl bg-slate-50 group-hover:bg-blue-50 group-hover:text-blue-600 text-slate-400 flex items-center justify-center transition-colors">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0h4m-4 0V11m0 0V7m0 4h4m-4 0H7" />
-                    </svg>
+                  <div className="w-10 h-10 rounded-xl bg-slate-50 text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 flex items-center justify-center transition-colors">
+                    <Building2 size={20} aria-hidden="true" />
                   </div>
                 </div>
                 <h3 className="text-lg font-bold text-slate-800 group-hover:text-blue-600 transition-colors leading-snug">
                   {lib.name}
                 </h3>
-               
-                <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
-                  <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  {lib.address || lib.campus || 'Library location available in SHELF'}
+                {lib.campus && (
+                  <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                    <Building2 size={14} className="shrink-0 text-slate-400" aria-hidden="true" />
+                    {lib.campus}
+                  </p>
+                )}
+                <p className="text-xs text-slate-500 mt-2 flex items-center gap-1.5">
+                  <MapPin size={14} className="text-slate-400 shrink-0" aria-hidden="true" />
+                  {lib.address || 'Library location available in SHELF'}
                 </p>
               </div>
               <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
                 <span className="text-xs font-bold text-blue-600 bg-blue-50/80 px-2.5 py-1 rounded-md">
                   {books.filter(
                     (book) =>
-                      String(book.libraryId || '') === String(lib.id)
+                      String(book.libraryId || book.library_id || '') === String(lib.id)
                   ).length} cataloged books
                 </span>
                 <span className="text-xs font-bold text-slate-400 group-hover:text-blue-600 transition-colors flex items-center gap-1">
-                  Explore <span className="group-hover:translate-x-1 transition-transform">&rarr;</span>
+                  Explore <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" aria-hidden="true" />
                 </span>
               </div>
-            </div>
-          ))}
+            </button>
+            );
+          })}
         </div>
       </section>
 
@@ -414,7 +435,7 @@ const featuredBooks = books
               onClick={() => navigate('/catalog')}
               className="flex w-fit items-center gap-1 font-bold text-blue-600 transition hover:text-blue-800 group"
             >
-              View All Books <span className="group-hover:translate-x-1 transition-transform">&rarr;</span>
+              View All Books <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" aria-hidden="true" />
             </button>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 xl:grid-cols-4 xl:gap-6">
@@ -472,20 +493,17 @@ const featuredBooks = books
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {announcementsList.map((item) => {
             const IconComponent = item.icon || Megaphone;
-            const isBlue = item.categoryColor === 'blue';
             return (
               <div
                 key={item.id}
                 onClick={() => setSelectedAnnouncement(item)}
                 className="group relative bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl hover:border-blue-300 flex flex-col justify-between overflow-hidden cursor-pointer"
               >
-                <div className={`absolute top-0 left-0 right-0 h-1.5 transition-colors duration-300 ${isBlue ? 'bg-blue-600' : 'bg-amber-500'}`} />
+                <div className="absolute top-0 left-0 right-0 h-1.5 bg-blue-600 transition-colors duration-300" />
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                      isBlue ? 'bg-blue-50 text-blue-700 border border-blue-200/60' : 'bg-amber-50 text-amber-700 border border-amber-200/60'
-                    }`}>
-                      <IconComponent size={14} className={isBlue ? 'text-blue-600' : 'text-amber-600'} />
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200/60 bg-blue-50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-blue-700">
+                      <IconComponent size={14} className="text-blue-600" />
                       {item.type}
                     </span>
                   </div>
@@ -532,12 +550,12 @@ const featuredBooks = books
           </div>
           <div className="bg-slate-800/60 backdrop-blur-md p-6 sm:p-8 rounded-2xl border border-slate-700/80 shadow-2xl">
             {submitted ? (
-              <div className="p-6 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded-xl text-center space-y-2">
-                <div className="w-12 h-12 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-xl font-bold">
-                  ✓
+              <div className="p-6 bg-blue-500/10 border border-blue-500/30 text-blue-200 rounded-xl text-center space-y-2">
+                <div className="w-12 h-12 bg-blue-500/20 text-blue-300 rounded-full flex items-center justify-center mx-auto">
+                  <CircleCheck size={24} aria-hidden="true" />
                 </div>
-                <h3 className="font-bold text-base text-emerald-200">Feedback Submitted!</h3>
-                <p className="text-xs text-emerald-300/80">
+                <h3 className="font-bold text-base text-blue-100">Feedback Submitted!</h3>
+                <p className="text-xs text-blue-200/80">
                   Thank you for taking the time to share your feedback. We appreciate your input!
                 </p>
               </div>
@@ -620,9 +638,7 @@ const featuredBooks = books
             </button>
             {/* CATEGORY BADGE */}
             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-              selectedAnnouncement.categoryColor === 'blue'
-                ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                : 'bg-amber-50 text-amber-700 border border-amber-200'
+              'bg-blue-50 text-blue-700 border border-blue-200'
             }`}>
               {selectedAnnouncement.type}
             </span>

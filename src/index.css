@@ -5,6 +5,66 @@ html {
   scroll-behavior: smooth;
 }
 
+.landing-page {
+  overflow-x: clip;
+}
+
+.shelf-landing-backdrop {
+  background-color: #0f172a;
+  background-image:
+    radial-gradient(ellipse at 50% 45%, rgb(37 99 235 / 22%), transparent 50%),
+    radial-gradient(ellipse at 90% 10%, rgb(14 165 233 / 12%), transparent 38%),
+    linear-gradient(135deg, #0f172a 0%, #0b1220 100%);
+}
+
+.landing-library-scroller {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(min(82%, 20rem), 1fr);
+  gap: 1.25rem;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: 0;
+  scroll-snap-type: x mandatory;
+  scrollbar-color: rgb(148 163 184 / 55%) transparent;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.landing-library-scroller::-webkit-scrollbar {
+  height: 8px;
+}
+
+.landing-library-scroller::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 9999px;
+  background: rgb(148 163 184 / 55%);
+  background-clip: padding-box;
+}
+
+.landing-library-scroller::-webkit-scrollbar-thumb:hover {
+  background: rgb(100 116 139 / 75%);
+  background-clip: padding-box;
+}
+
+.landing-library-card {
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+@media (min-width: 640px) {
+  .landing-library-scroller {
+    grid-auto-columns: minmax(0, calc((100% - 2.5rem) / 2.5));
+  }
+}
+
+@media (min-width: 1024px) {
+  .landing-library-scroller {
+    grid-auto-columns: minmax(0, calc((100% - 3.75rem) / 3.5));
+  }
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
