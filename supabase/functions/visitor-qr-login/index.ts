@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const configuredOrigins = (
   Deno.env.get("APP_ORIGINS") ||
@@ -64,7 +65,7 @@ Deno.serve(async (request: Request) => {
     return respond(origin, 405, { error: "Method not allowed." });
   }
 
-  if (!supabaseUrl || !serviceRoleKey) {
+  if (!supabaseUrl || !anonKey || !serviceRoleKey) {
     return respond(origin, 500, { error: "QR sign-in is not configured." });
   }
 
@@ -118,15 +119,17 @@ Deno.serve(async (request: Request) => {
   }
 
   let qrCode = "";
+  let password = "";
   try {
     const body = await request.json();
     qrCode = String(body?.qrCode || "").trim().toUpperCase();
+    password = String(body?.password || "");
   } catch {
     return respond(origin, 400, { error: "Invalid request body." });
   }
 
-  if (!/^SHELF-QR-[0-9A-F]{32}$/.test(qrCode)) {
-    return respond(origin, 401, { error: "This QR pass could not be used to sign in." });
+  if (!/^SHELF-QR-(?:[0-9]{6}|[0-9A-F]{32})$/.test(qrCode) || !password) {
+    return respond(origin, 401, { error: "Invalid QR pass or password." });
   }
 
   const { data: visitor, error: visitorError } = await admin
@@ -168,21 +171,85 @@ Deno.serve(async (request: Request) => {
     (account.user.banned_until &&
       Date.parse(account.user.banned_until) > Date.now())
   ) {
-    return respond(origin, 401, { error: "This QR pass could not be used to sign in." });
+    return respond(origin, 401, { error: "Invalid QR pass or password." });
   }
 
-  const { data: link, error: linkError } =
-    await admin.auth.admin.generateLink({
-      type: "magiclink",
-      email: visitor.email,
-      options: { redirectTo: origin },
+  let loginResponse: Response;
+  try {
+    loginResponse = await fetch(
+      `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/login-with-lockout`,
+      {
+        method: "POST",
+        headers: {
+          "apikey": anonKey,
+          "Authorization": `Bearer ${anonKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: visitor.email,
+          password,
+        }),
+      },
+    );
+  } catch (error) {
+    console.error("QR sign-in credential check failed:", error);
+    return respond(origin, 503, {
+      error: "Unable to verify your password right now. Please try again.",
     });
-
-  const tokenHash = link?.properties?.hashed_token;
-  if (linkError || !tokenHash) {
-    console.error("QR sign-in token generation failed:", linkError?.message);
-    return respond(origin, 500, { error: "Unable to create a QR sign-in session." });
   }
 
-  return respond(origin, 200, { tokenHash });
+  let loginData: Record<string, unknown>;
+  try {
+    const responseBody: unknown = await loginResponse.json();
+    if (
+      !responseBody ||
+      typeof responseBody !== "object" ||
+      Array.isArray(responseBody)
+    ) {
+      return respond(origin, 502, {
+        error: "Unable to complete QR sign-in. Please try again.",
+      });
+    }
+    loginData = responseBody as Record<string, unknown>;
+  } catch (error) {
+    console.error("QR sign-in received an invalid login response:", error);
+    return respond(origin, 502, {
+      error: "Unable to complete QR sign-in. Please try again.",
+    });
+  }
+
+  const sessionValue = loginData.session;
+  const session =
+    typeof sessionValue === "object" && sessionValue !== null
+      ? sessionValue as Record<string, unknown>
+      : undefined;
+  const userValue = loginData.user;
+  const user =
+    typeof userValue === "object" && userValue !== null
+      ? userValue as Record<string, unknown>
+      : undefined;
+
+  if (
+    !loginResponse.ok ||
+    loginData.success !== true ||
+    typeof session?.access_token !== "string" ||
+    typeof session.refresh_token !== "string" ||
+    user?.id !== visitor.auth_user_id
+  ) {
+    const status = loginResponse.ok
+      ? 401
+      : loginResponse.status;
+    const errorMessage =
+      typeof loginData.error === "string"
+        ? loginData.error
+        : "Invalid QR pass or password.";
+    return respond(origin, status, { error: errorMessage });
+  }
+
+  return respond(origin, 200, {
+    session: {
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+    },
+  });
 });

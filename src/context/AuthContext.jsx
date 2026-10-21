@@ -205,9 +205,9 @@ export const AuthProvider = ({ children }) => {
   // =========================================================
   // ESTABLISH VISITOR SESSION FROM QR PASS
   // =========================================================
-  const establishVisitorSessionFromQr = async (qrCode) => {
+  const establishVisitorSessionFromQr = async (qrCode, password) => {
     try {
-      return await store.establishVisitorSessionFromQr(qrCode);
+      return await store.establishVisitorSessionFromQr(qrCode, password);
     } catch (error) {
       console.error('Establish visitor session error:', error);
       throw error;
@@ -394,7 +394,7 @@ export const AuthProvider = ({ children }) => {
       try {
         const visitor = await store.loginVisitor({
           identifier: normalizedIdentifier,
-          password: '',
+          password: normalizedPassword,
         });
         if (!visitor) {
           throw new Error('Visitor account was not found.');

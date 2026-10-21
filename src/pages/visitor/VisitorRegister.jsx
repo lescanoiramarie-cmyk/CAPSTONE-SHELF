@@ -207,14 +207,7 @@ export default function VisitorLogin() {
     verifyPasswordResetCode,
     applyPasswordReset,
     login,
-    loginVisitor,
-    establishVisitorSessionFromQr,
   } = useAuth();
-
-  const loginVisitorRef = useRef(loginVisitor);
-  useEffect(() => {
-    loginVisitorRef.current = loginVisitor;
-  }, [loginVisitor]);
 
   const stopVisitorScanner = useCallback(async () => {
     if (scannerCleanupPromiseRef.current) {
@@ -843,15 +836,18 @@ useEffect(() => {
               if (cancelled) return;
               setShowScanner(false);
 
-              await loginVisitorRef.current({
-                identifier: qrValue,
-                password: '',
-              });
-              navigate('/visitor');
+              if (!/^SHELF-QR-(?:[0-9]{6}|[0-9A-F]{32})$/i.test(qrValue)) {
+                throw new Error('This is not a valid SHELF visitor QR pass.');
+              }
+              setLoginData((current) => ({
+                ...current,
+                identifier: qrValue.toUpperCase(),
+              }));
+              setError('');
             } catch (err) {
               if (!cancelled) {
                 setError(
-                  err.message || 'QR code scanned, but login failed.'
+                  err.message || 'Unable to read a valid visitor QR pass.'
                 );
               }
             }
@@ -906,29 +902,32 @@ useEffect(() => {
         // Ignore scanner cleanup errors.
       }
 
-      await loginVisitor({
-        identifier: decodedText.trim(),
-        password: '',
-      });
-
-      navigate('/visitor');
+      const qrValue = decodedText.trim();
+      if (!/^SHELF-QR-(?:[0-9]{6}|[0-9A-F]{32})$/i.test(qrValue)) {
+        throw new Error('This is not a valid SHELF visitor QR pass.');
+      }
+      setLoginData((current) => ({
+        ...current,
+        identifier: qrValue.toUpperCase(),
+      }));
     } catch (err) {
       setError(
-        err.message || 'Unable to read this QR image or sign in with it.'
+        err.message || 'Unable to read a valid visitor QR image.'
       );
     } finally {
       setBusy(false);
     }
   };
 
-  const qrPassValue =
+  const candidateQrPass =
     registeredVisitor?.qr_code ||
     registeredVisitor?.visitor?.qr_code ||
     registeredVisitor?.qrCode ||
-    registeredVisitor?.visitor?.qrCode ||
-    registeredVisitor?.id ||
-    registeredVisitor?.visitor?.id ||
-    pendingEmail;
+    registeredVisitor?.visitor?.qrCode;
+  const qrPassValue =
+    /^SHELF-QR-[0-9]{6}$/i.test(String(candidateQrPass || ''))
+      ? String(candidateQrPass).toUpperCase()
+      : '';
 
   return (
     <div className="flex min-h-screen w-full bg-shelf-bg">
@@ -1641,18 +1640,27 @@ useEffect(() => {
                     formData.fullName}
                 </p>
 
-                <div className="flex justify-center">
-                  <QRCodeSVG
-                    value={String(qrPassValue)}
-                    size={190}
-                    level="H"
-                    includeMargin
-                  />
-                </div>
+                {qrPassValue ? (
+                  <>
+                    <div className="flex justify-center">
+                      <QRCodeSVG
+                        value={qrPassValue}
+                        size={190}
+                        level="H"
+                        includeMargin
+                      />
+                    </div>
 
-                <p className="mt-3 break-all text-xs text-slate-500">
-                  {qrPassValue}
-                </p>
+                    <p className="mt-3 break-all text-xs text-slate-500">
+                      {qrPassValue}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-red-600" role="alert">
+                    Your QR pass could not be loaded. Please sign in and contact
+                    library staff to have it reissued.
+                  </p>
+                )}
               </div>
 
               <p className="text-xs text-slate-500">
@@ -1664,25 +1672,30 @@ useEffect(() => {
                 type="button"
                 onClick={async () => {
                   try {
-                    if (establishVisitorSessionFromQr && registeredVisitor) {
-                      await establishVisitorSessionFromQr(registeredVisitor);
-                    }
+                    setBusy(true);
+                    await login({
+                      identifier: pendingEmail,
+                      password: formData.password,
+                    });
                     navigate('/visitor');
                   } catch (err) {
                     setError(
                       err.message ||
-                        'Your account is verified. Please sign in to continue.'
+                        'Your account is verified, but sign-in failed. Please sign in with your email and password.'
                     );
                     setView('login');
                     setLoginData({
                       identifier: pendingEmail,
                       password: '',
                     });
+                  } finally {
+                    setBusy(false);
                   }
                 }}
-                className="w-full rounded-lg bg-shelf-primary py-2.5 text-sm font-bold text-white hover:opacity-95"
+                disabled={busy}
+                className="w-full rounded-lg bg-shelf-primary py-2.5 text-sm font-bold text-white hover:opacity-95 disabled:opacity-60"
               >
-                Enter Library Portal
+                {busy ? 'Signing in...' : 'Enter Library Portal'}
               </button>
 
               <button

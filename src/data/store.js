@@ -210,7 +210,7 @@ const isValidVisitorId = (value) =>
   Boolean(normalizeText(value));
 
 const isValidShelfQr = (value) =>
-  /^SHELF-QR-[0-9A-F]{32}$/i.test(
+  /^SHELF-QR-(?:[0-9]{6}|[0-9A-F]{32})$/i.test(
     normalizeText(value)
   );
 
@@ -2002,132 +2002,17 @@ export async function verifyVisitorOtp(
 // ============================================================================
 // ESTABLISH VISITOR SESSION FROM QR PASS
 //
-// Exchanges a verified visitor QR pass for a real Supabase Auth session using
-// the same visitor-qr-login exchange used by QR sign-in.
-//
-// Registration previously stopped at loginAsVisitorSession(), which only sets
-// local state. Every subsequent RPC then ran as anon, so borrow requests,
-// community requests and audit reads all failed or returned nothing.
+// A QR pass identifies the visitor but never authenticates on its own.
 // ============================================================================
 
 export async function establishVisitorSessionFromQr(
-  qrCode
+  qrCode,
+  password
 ) {
-  const normalizedQr =
-    normalizeQr(qrCode);
-
-  const {
-    data: qrLoginData,
-    error: qrLoginError,
-  } =
-    await supabase.functions.invoke(
-      'visitor-qr-login',
-      {
-        body: {
-          qrCode:
-            normalizedQr,
-        },
-      }
-    );
-
-  if (qrLoginError) {
-    throw new Error(
-      qrLoginData?.error ||
-        cleanErr(
-          qrLoginError,
-          'Unable to start your library session.'
-        ).message
-    );
-  }
-
-  if (!qrLoginData?.tokenHash) {
-    throw new Error(
-      'QR sign-in did not return a valid authentication token.'
-    );
-  }
-
-  const {
-    data: authData,
-    error: authError,
-  } =
-    await supabase.auth.verifyOtp({
-      token_hash:
-        qrLoginData.tokenHash,
-      type: 'magiclink',
-    });
-
-  if (authError) {
-    throw new Error(
-      cleanErr(
-        authError,
-        'Unable to complete your library session.'
-      ).message
-    );
-  }
-
-  const authUserId =
-    normalizeText(
-      authData?.user?.id
-    );
-
-  if (!isValidUuid(authUserId)) {
-    await safeSignOut();
-
-    throw new Error(
-      'Supabase did not return a valid visitor authentication session.'
-    );
-  }
-
-  const {
-    data: visitor,
-    error: visitorError,
-  } =
-    await supabase
-      .from('visitors')
-      .select(
-        'id, full_name, email, otp_verified, qr_code, is_active, auth_user_id'
-      )
-      .eq(
-        'auth_user_id',
-        authUserId
-      )
-      .maybeSingle();
-
-  if (visitorError) {
-    await safeSignOut();
-
-    throw cleanErr(
-      visitorError,
-      'Unable to load the visitor profile.'
-    );
-  }
-
-  if (
-    !visitor ||
-    visitor.qr_code !== normalizedQr ||
-    visitor.is_active !== true ||
-    visitor.otp_verified !== true
-  ) {
-    await safeSignOut();
-
-    throw new Error(
-      'This QR pass could not be used to sign in.'
-    );
-  }
-
-  return {
-    id:
-      visitor.id,
-
-    fullName:
-      visitor.full_name,
-
-    email:
-      visitor.email,
-
-    qrCode:
-      visitor.qr_code,
-  };
+  return loginVisitor({
+    identifier: qrCode,
+    password,
+  });
 }
 
 // ============================================================================
@@ -2369,6 +2254,12 @@ export async function loginVisitor({
       normalizedIdentifier
     )
   ) {
+    if (!normalizedPassword) {
+      throw new Error(
+        'Password is required to sign in with a visitor QR pass.'
+      );
+    }
+
     const normalizedQr =
       normalizeQr(
         normalizedIdentifier
@@ -2380,6 +2271,7 @@ export async function loginVisitor({
         {
           body: {
             qrCode: normalizedQr,
+            password: normalizedPassword,
           },
         }
       );
@@ -2422,20 +2314,20 @@ export async function loginVisitor({
       );
     }
 
-    if (!qrLoginData?.tokenHash) {
+    if (
+      !qrLoginData?.session?.access_token ||
+      !qrLoginData?.session?.refresh_token
+    ) {
       throw new Error(
         qrLoginData?.error ||
-          'QR sign-in did not return a valid authentication token.'
+          'QR sign-in did not return a valid authentication session.'
       );
     }
 
     const {
       data: authData,
       error: authError,
-    } = await supabase.auth.verifyOtp({
-      token_hash: qrLoginData.tokenHash,
-      type: 'magiclink',
-    });
+    } = await supabase.auth.setSession(qrLoginData.session);
 
     if (authError) {
       throw new Error(

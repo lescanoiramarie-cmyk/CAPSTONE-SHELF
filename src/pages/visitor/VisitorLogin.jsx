@@ -66,7 +66,6 @@ export default function VisitorLogin({ initialView = 'login' }) {
     verifyPasswordResetCode,
     applyPasswordReset,
     login,
-    establishVisitorSessionFromQr,
   } = useAuth();
 
   // =========================================================
@@ -238,12 +237,6 @@ useEffect(() => {
   const scannerStartPromiseRef = useRef(null);
   const scannerCleanupPromiseRef = useRef(null);
   const fileInputRef = useRef(null);
-  const loginRef = useRef(login);
-
-  useEffect(() => {
-    loginRef.current = login;
-  }, [login]);
-
   // IMPORTANT:
   // This is a synchronous lock.
   // It prevents two submit events from entering
@@ -251,7 +244,6 @@ useEffect(() => {
   const registrationLockRef = useRef(false);
 
   // Prevent repeated QR login attempts while a QR is being processed.
-  const qrLoginLockRef = useRef(false);
   const loginRequestLockRef = useRef(false);
 
   const [isUploadingQr, setIsUploadingQr] =
@@ -535,13 +527,11 @@ useEffect(() => {
 
   
   // =========================================================
-  // CENTRALIZED QR LOGIN
+  // Scan a visitor QR pass and place it in the sign-in form.
   // =========================================================
 
   const handleQrLogin = useCallback(
     async (decodedText) => {
-      if (qrLoginLockRef.current) return;
-
       const qrCode = String(decodedText ?? '').trim();
 
       if (!qrCode) {
@@ -550,33 +540,17 @@ useEffect(() => {
         );
       }
 
-      qrLoginLockRef.current = true;
-      setError('');
-
-      try {
-        const result = await loginRef.current({
-          identifier: qrCode,
-          password: '',
-        });
-
-        if (result?.role !== 'visitor') {
-          throw new Error('This QR pass is not linked to a visitor account.');
-        }
-
-        navigate('/visitor');
-      } catch (err) {
-        console.error('QR LOGIN ERROR:', err);
-
-        throw new Error(
-          err?.message ||
-            'QR code detected, but visitor authentication failed.',
-          { cause: err }
-        );
-      } finally {
-        qrLoginLockRef.current = false;
+      if (!/^SHELF-QR-(?:[0-9]{6}|[0-9A-F]{32})$/i.test(qrCode)) {
+        throw new Error('This is not a valid SHELF visitor QR pass.');
       }
+
+      setLoginData((current) => ({
+        ...current,
+        identifier: qrCode.toUpperCase(),
+      }));
+      setError('');
     },
-    [navigate]
+    []
   );
 
   
@@ -623,7 +597,7 @@ useEffect(() => {
                 await handleQrLogin(qrValue);
               } catch (err) {
                 setError(
-                  err?.message || 'QR code scanned, but login failed.'
+                  err?.message || 'Unable to read a valid visitor QR pass.'
                 );
               }
             },
@@ -891,10 +865,7 @@ useEffect(() => {
       return;
     }
 
-    const isEmail =
-      identifier.includes('@');
-
-    if (isEmail && !password) {
+    if (!password) {
       setError(
         'Please enter your password.'
       );
@@ -1354,45 +1325,8 @@ setOtpResendRemaining(
           cleanOtp
         );
 
-      // -----------------------------------------------------
-      // ESTABLISH A REAL SUPABASE SESSION
-      //
-      // The local session below is not enough on its own.
-      // Visitor data is read through RLS policies and
-      // security-definer RPCs that key off auth.uid(), so
-      // without this exchange every request after
-      // registration runs as anon and returns nothing.
-      // -----------------------------------------------------
-
-      let sessionVisitor =
-        visitor;
-
-      if (visitor?.qrCode) {
-        try {
-          sessionVisitor =
-            await establishVisitorSessionFromQr(
-              visitor.qrCode
-            );
-        } catch (sessionError) {
-          console.error(
-            'ESTABLISH VISITOR SESSION ERROR:',
-            sessionError
-          );
-
-          setError(
-            sessionError?.message ||
-              'Your account was verified, but we could not start your library session. Please sign in with your email and password.'
-          );
-
-          setView('login');
-
-          return;
-        }
-      }
-
       setRegisteredVisitor(
-        sessionVisitor ||
-          visitor
+        visitor
       );
 
       setError('');
@@ -1770,9 +1704,6 @@ setOtpResendRemaining(
     registrationLockRef.current =
       false;
 
-    qrLoginLockRef.current =
-      false;
-
     setView('login');
     setError('');
 
@@ -1954,7 +1885,7 @@ setOtpResendRemaining(
 
             <p className="text-xs text-slate-500">
               {view === 'login' &&
-                'Sign in using your email and password.'}
+                'Sign in using your email and password, or scan your QR pass and enter your password.'}
 
               {view === 'register' &&
                 'Fill in your personal details to receive your digital library pass.'}
@@ -1963,7 +1894,7 @@ setOtpResendRemaining(
                 'Enter the one-time verification code sent to your email.'}
 
               {view === 'success' &&
-                'Keep your QR pass private. It signs you in and is used for library attendance and circulation.'}
+                'Keep your QR pass private. It identifies your account and is used for library attendance and circulation; your password is still required to sign in.'}
 
               {view === 'forgot' &&
                 resetStep === 'request' &&
@@ -2053,31 +1984,24 @@ setOtpResendRemaining(
                 </p>
 
                 <p className="text-xs text-slate-500">
-                  Keep this QR pass private. Use it to sign in and present it
-                  for attendance, book pickup, and returns at the library.
+                  Use this QR pass with your password to sign in, and present
+                  it for attendance, book pickup, and returns at the library.
                 </p>
 
                 <button
                   type="button"
-                  onClick={async () => {
-                    try {
-                      setError('');
-
-                      await establishVisitorSessionFromQr(
-                        registeredVisitor.qrCode
-                      );
-
-                      navigate('/visitor');
-                    } catch (err) {
-                      setError(
-                        err.message ||
-                          'Unable to establish your library session. Please try again.'
-                      );
-                    }
+                  onClick={() => {
+                    setLoginData({
+                      identifier:
+                        registeredVisitor.email || pendingEmail,
+                      password: '',
+                    });
+                    setError('');
+                    setView('login');
                   }}
                   className="w-full bg-shelf-primary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition"
                 >
-                  Enter Library Portal
+                  Sign In to Library Portal
                 </button>
               </div>
             )}
@@ -2770,7 +2694,7 @@ setOtpResendRemaining(
                       name="visitor_login_identifier"
                       required
                       autoComplete="off"
-                      placeholder="email@example.com or a SHELF-QR pass"
+                      placeholder="email@example.com or SHELF-QR-123456"
                       value={
                         loginData.identifier
                       }
@@ -2804,7 +2728,7 @@ setOtpResendRemaining(
                             : 'password'
                         }
                         name="visitor_login_password"
-                        required={loginData.identifier.includes('@')}
+                        required
                         autoComplete="new-password"
                         onCopy={preventPasswordClipboard}
                         onCut={preventPasswordClipboard}

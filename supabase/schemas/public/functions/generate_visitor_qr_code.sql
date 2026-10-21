@@ -13,9 +13,7 @@ begin
 
   loop
     qr_value := 'SHELF-QR-' ||
-      pg_catalog.upper(
-        pg_catalog.replace(pg_catalog.gen_random_uuid()::text, '-', '')
-      );
+      pg_catalog.floor(pg_catalog.random() * 900000 + 100000)::integer::text;
 
     exit when not exists (
       select 1
