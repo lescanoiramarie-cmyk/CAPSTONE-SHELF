@@ -5252,12 +5252,40 @@ export async function requestBorrow(
     );
   }
 
-  const resolvedVisitorId =
-    isValidUuid(normalizedVisitorId)
-      ? normalizedVisitorId
-      : await resolveVisitorAuthUserId(
-          normalizedVisitorId
-        );
+  let {
+    data: { user: authenticatedUser },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !authenticatedUser?.id) {
+    const {
+      data: refreshedAuth,
+      error: refreshError,
+    } = await supabase.auth.refreshSession();
+
+    authenticatedUser = refreshedAuth?.user;
+
+    if (refreshError || !authenticatedUser?.id) {
+      throw new Error(
+        'Your visitor sign-in session has expired. Please sign in again before requesting a book.'
+      );
+    }
+  }
+
+  const authenticatedVisitor =
+    await getVisitor(authenticatedUser.id);
+
+  if (
+    !authenticatedVisitor ||
+    (
+      normalizedVisitorId !== authenticatedVisitor.id &&
+      normalizedVisitorId !== authenticatedUser.id
+    )
+  ) {
+    throw new Error(
+      'Your current sign-in does not match this visitor account. Please sign out and sign in again.'
+    );
+  }
 
   const {
     data,
@@ -5267,7 +5295,7 @@ export async function requestBorrow(
       'request_borrow',
       {
         p_visitor_id:
-          resolvedVisitorId,
+          authenticatedUser.id,
 
         p_book_id:
           normalizedBookId,
@@ -5447,10 +5475,8 @@ export async function requestBorrow(
         'The visitor or book ID is invalid. ' +
           'Visitor: ' +
           normalizedVisitorId +
-          ', Book: ' +
+          ', authenticated visitor: verified, Book: ' +
           normalizedBookId +
-          ', Resolved visitor auth_user_id: ' +
-          resolvedVisitorId +
           '. Supabase error: ' +
           message +
           '. Check DevTools Network for full error.'
