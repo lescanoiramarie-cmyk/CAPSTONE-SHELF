@@ -144,7 +144,18 @@ export default function LandingPage() {
   );
 
 const featuredLibraries = libraries
-  .filter((library) => !library.isSampleLocation);
+  .filter((library) => {
+    if (library.isSampleLocation) return false;
+    const libraryDetails = [
+      library.name,
+      library.campus,
+      library.address,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return !libraryDetails.includes('laguna');
+  });
 
 
 const featuredBooks = books
@@ -330,7 +341,7 @@ const featuredBooks = books
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-blue-400"></span>
               <span>
-                {libraries.filter((library) => !library.isSampleLocation).length} Libraries
+                {featuredLibraries.length} Libraries
               </span>
             </div>
 

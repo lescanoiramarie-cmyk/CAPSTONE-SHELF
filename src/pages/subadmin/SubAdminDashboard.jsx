@@ -1570,7 +1570,8 @@ export default function SubAdminDashboard() {
         )}
         {section === 'workspace' && (
           <AdminWorkspace
-            key={workspaceTab}
+            key={`${workspaceTab}-${['feedback', 'announcements'].includes(workspaceTab) ? 'communication' : 'reports'}`}
+            mode={['feedback', 'announcements'].includes(workspaceTab) ? 'communication' : 'reports'}
             initialTab={workspaceTab}
             user={user}
             libraries={libraries}
