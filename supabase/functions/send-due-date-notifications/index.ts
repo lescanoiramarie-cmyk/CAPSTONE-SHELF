@@ -155,7 +155,7 @@ Deno.serve(async (req: Request) => {
       const authorization = req.headers.get("Authorization");
       const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
       if (!authorization || !anonKey) {
-        return jsonResponse({ error: "A signed-in Super Admin session is required." }, 401);
+        return jsonResponse({ error: "A signed-in staff session is required." }, 401);
       }
 
       const userClient = createClient(supabaseUrl, anonKey, {
@@ -172,16 +172,14 @@ Deno.serve(async (req: Request) => {
         .select("id, role, library_id, is_active")
         .eq("id", authData.user.id)
         .maybeSingle();
-      const authRole = authData.user.app_metadata?.role;
-      if (
-        staffError ||
-        !staff ||
-        staff.is_active !== true ||
-        !["superadmin", "subadmin"].includes(staff.role) ||
-        (authRole !== undefined &&
-          authRole !== null &&
-          authRole !== staff.role)
-      ) {
+      if (staffError) {
+        console.error("Follow-up staff profile lookup failed:", staffError);
+        return jsonResponse({ error: "Unable to verify your staff profile." }, 500);
+      }
+      if (!staff || staff.is_active !== true) {
+        return jsonResponse({ error: "Your staff account is not active." }, 403);
+      }
+      if (!["superadmin", "subadmin"].includes(staff.role)) {
         return jsonResponse({ error: "Only active library staff can send a follow-up." }, 403);
       }
 

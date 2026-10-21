@@ -32,9 +32,15 @@ function SearchableLocationSelect({
     (option) => option.psgc_code === value
   );
 
-  useEffect(() => {
-    setQuery(selectedOption?.name || '');
-  }, [selectedOption?.name, value]);
+  const [previousValue, setPreviousValue] = useState(value);
+  const [skipValueSync, setSkipValueSync] = useState(false);
+  if (value !== previousValue) {
+    setPreviousValue(value);
+    if (!skipValueSync) {
+      setQuery(selectedOption?.name || '');
+    }
+    setSkipValueSync(false);
+  }
 
   const filteredOptions = options
     .filter((option) =>
@@ -64,7 +70,10 @@ function SearchableLocationSelect({
           setQuery(nextQuery);
           setIsOpen(true);
 
-          if (value) onChange('');
+          if (value) {
+            setSkipValueSync(true);
+            onChange('');
+          }
         }}
         className="box-border h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
       />

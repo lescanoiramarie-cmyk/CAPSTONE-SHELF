@@ -3,6 +3,7 @@ import {
   useState,
   useCallback,
   useMemo,
+  useRef,
 } from 'react';
 
 import { supabase } from '../lib/supabaseClient';
@@ -49,6 +50,7 @@ export function LibraryProvider({ children }) {
   const [data, setData] = useState(emptyData);
   const [loading, setLoading] = useState(true);
   const [connectionError, setConnectionError] = useState('');
+  const refreshSequenceRef = useRef(0);
 
   // ==========================================================================
   // GET CURRENT VISITOR ID
@@ -91,6 +93,7 @@ export function LibraryProvider({ children }) {
   // ==========================================================================
 
   const refreshAll = useCallback(async () => {
+    const refreshSequence = ++refreshSequenceRef.current;
     try {
       // ----------------------------------------------------------------------
       // Resolve current visitor first.
@@ -456,6 +459,10 @@ export function LibraryProvider({ children }) {
       // Update centralized application state.
       // ----------------------------------------------------------------------
 
+      if (refreshSequence !== refreshSequenceRef.current) {
+        return;
+      }
+
       setData({
         externalCatalogBooks: Array.isArray(externalCatalogBooks)
           ? externalCatalogBooks
@@ -526,6 +533,10 @@ export function LibraryProvider({ children }) {
         ownerCommunityRequestLoadError,
       };
     } catch (err) {
+      if (refreshSequence !== refreshSequenceRef.current) {
+        return;
+      }
+
       console.error(
         'SHELF refreshAll error:',
         err
@@ -538,7 +549,9 @@ export function LibraryProvider({ children }) {
 
       throw err;
     } finally {
-      setLoading(false);
+      if (refreshSequence === refreshSequenceRef.current) {
+        setLoading(false);
+      }
     }
   }, [getCurrentVisitorId]);
 

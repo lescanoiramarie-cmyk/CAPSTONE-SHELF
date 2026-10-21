@@ -122,7 +122,6 @@ export default function QrScanner({
             { facingMode: 'environment' },
             {
               fps: 10,
-              aspectRatio: 1,
               qrbox: (viewfinderWidth, viewfinderHeight) => {
                 const size = Math.floor(
                   Math.min(viewfinderWidth, viewfinderHeight, 280) * 0.8
@@ -223,7 +222,7 @@ export default function QrScanner({
                 <X size={18} aria-hidden="true" />
               </button>
             </div>
-            <div className="mx-auto aspect-square w-full overflow-hidden rounded-lg border border-slate-300 bg-black">
+            <div className="mx-auto aspect-[4/3] w-full overflow-hidden rounded-lg border border-slate-300 bg-black">
               <div
                 id={scannerId}
                 className="h-full min-h-0 w-full [&_video]:h-full [&_video]:w-full [&_video]:object-cover [&_canvas]:h-full [&_canvas]:w-full"

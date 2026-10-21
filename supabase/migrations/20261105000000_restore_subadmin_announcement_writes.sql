@@ -47,7 +47,7 @@ create trigger on_auth_user_visitor_domain_validate
   for each row execute function public.enforce_visitor_email_domain();
 
 alter table public.announcements
-  add column if not exists library_id uuid references public.libraries(id) on delete set null;
+  add column if not exists library_id text references public.libraries(id) on delete set null;
 
 drop policy if exists "staff manage announcements" on public.announcements;
 

@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import QRCode from "qrcode";
 
 const corsHeaders = {
@@ -63,7 +63,7 @@ function generateOtp(): string {
 // ============================================================================
 
 async function writeAuditEvent(
-  admin: ReturnType<typeof createClient>,
+  admin: SupabaseClient,
   action: string,
   details: Record<string, unknown>,
 ) {

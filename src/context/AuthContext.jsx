@@ -43,6 +43,20 @@ export const AuthProvider = ({ children }) => {
     }
   });
 
+  useEffect(() => {
+    if (!supabase?.auth) return undefined;
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session)) {
+        setUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   // =========================================================
   // SESSION STORAGE
   // =========================================================

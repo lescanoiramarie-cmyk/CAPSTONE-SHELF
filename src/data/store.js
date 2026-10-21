@@ -2530,12 +2530,12 @@ if (
   !loginData?.success ||
   !loginData?.session
 ) {
-  let details = null;
+  let details;
 
   try {
     details = await loginError?.context?.json?.();
-  } catch {
-    details = null;
+  } catch (error) {
+    console.warn('Unable to read visitor login error details:', error);
   }
 
   throw new Error(
@@ -2795,12 +2795,12 @@ if (
   !loginData?.success ||
   !loginData?.session
 ) {
-  let details = null;
+  let details;
 
   try {
     details = await loginError?.context?.json?.();
-  } catch {
-    details = null;
+  } catch (error) {
+    console.warn('Unable to read staff login error details:', error);
   }
 
   const message =

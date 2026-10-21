@@ -365,15 +365,19 @@ function VisitorDashboardContent() {
 
       const qrImage = new Image();
 
-      await new Promise((resolve, reject) => {
-        qrImage.onload = resolve;
+      try {
+        await new Promise((resolve, reject) => {
+          qrImage.onload = resolve;
 
-        qrImage.onerror = () => {
-          reject(new Error('Unable to generate the QR image.'));
-        };
+          qrImage.onerror = () => {
+            reject(new Error('Unable to generate the QR image.'));
+          };
 
-        qrImage.src = svgUrl;
-      });
+          qrImage.src = svgUrl;
+        });
+      } finally {
+        URL.revokeObjectURL(svgUrl);
+      }
 
       const qrSize = 700;
 
@@ -391,8 +395,6 @@ function VisitorDashboardContent() {
       );
 
       context.drawImage(qrImage, qrX, qrY, qrSize, qrSize);
-
-      URL.revokeObjectURL(svgUrl);
 
       // QR pass ID
       context.fillStyle = '#002046';

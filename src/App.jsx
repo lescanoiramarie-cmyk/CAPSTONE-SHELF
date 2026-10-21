@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 import { AuthProvider } from './context/AuthContext.jsx';
@@ -5,116 +6,72 @@ import { LibraryProvider } from './context/LibraryContext.jsx';
 
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 
-// =========================================================
-// PUBLIC & VISITOR PAGES
-// =========================================================
-
-import LandingPage from './pages/visitor/LandingPage.jsx'; // INIDAGDAG
-import VisitorLogin from './pages/visitor/VisitorLogin.jsx';
-import OPACCatalog from './component/OPACCatalog.jsx';
-
-// =========================================================
-// DASHBOARDS
-// =========================================================
-
-import VisitorDashboard from './pages/visitor/VisitorDashboard.jsx';
-import SubAdminDashboard from './pages/subadmin/SubAdminDashboard.jsx';
-import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard.jsx';
+const LandingPage = lazy(() => import('./pages/visitor/LandingPage.jsx'));
+const VisitorLogin = lazy(() => import('./pages/visitor/VisitorLogin.jsx'));
+const OPACCatalog = lazy(() => import('./component/OPACCatalog.jsx'));
+const VisitorDashboard = lazy(
+  () => import('./pages/visitor/VisitorDashboard.jsx')
+);
+const SubAdminDashboard = lazy(
+  () => import('./pages/subadmin/SubAdminDashboard.jsx')
+);
+const SuperAdminDashboard = lazy(
+  () => import('./pages/superadmin/SuperAdminDashboard.jsx')
+);
 
 export default function App() {
   return (
     <AuthProvider>
       <LibraryProvider>
         <BrowserRouter>
-
-          <Routes>
-
-            {/* =================================================
-                MAIN LANDING PAGE (HOMEPAGE FOR GUESTS)
-               ================================================= */}
-
-            <Route
-              path="/"
-              element={<LandingPage />}
-            />
-
-            {/* =================================================
-                PUBLIC CATALOG
-               ================================================= */}
-
-            <Route
-              path="/catalog"
-              element={<OPACCatalog activeView="catalog" />}
-            />
-
-            {/* =================================================
-                VISITOR LOGIN / SIGN IN
-               ================================================= */}
-
-            <Route
-              path="/visitor-login"
-              element={<VisitorLogin />}
-            />
-
-            {/* =================================================
-                PUBLIC VISITOR REGISTER / SIGN UP PAGE
-               ================================================= */}
-
-            <Route
-              path="/visitor-register"
-              element={<VisitorLogin initialView="register" />}
-            />
-
-            {/* =================================================
-                VISITOR DASHBOARD
-               ================================================= */}
-
-            <Route
-              path="/visitor"
-              element={
-                <ProtectedRoute allowedRoles={['visitor']}>
-                  <VisitorDashboard />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* =================================================
-                SUB-ADMIN / CIRCULATION DESK DASHBOARD
-               ================================================= */}
-
-            <Route
-              path="/subadmin"
-              element={
-                <ProtectedRoute allowedRoles={['subadmin']}>
-                  <SubAdminDashboard />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* =================================================
-                SUPER ADMIN DASHBOARD
-               ================================================= */}
-
-            <Route
-              path="/superadmin"
-              element={
-                <ProtectedRoute allowedRoles={['superadmin']}>
-                  <SuperAdminDashboard />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* =================================================
-                FALLBACK
-               ================================================= */}
-
-            <Route
-              path="*"
-              element={<Navigate to="/" replace />}
-            />
-
-          </Routes>
-
+          <Suspense
+            fallback={
+              <main
+                role="status"
+                className="flex min-h-screen items-center justify-center text-sm font-semibold text-slate-600"
+              >
+                Loading SHELF...
+              </main>
+            }
+          >
+            <Routes>
+              <Route path="/" element={<LandingPage />} />
+              <Route
+                path="/catalog"
+                element={<OPACCatalog activeView="catalog" />}
+              />
+              <Route path="/visitor-login" element={<VisitorLogin />} />
+              <Route
+                path="/visitor-register"
+                element={<VisitorLogin initialView="register" />}
+              />
+              <Route
+                path="/visitor"
+                element={
+                  <ProtectedRoute allowedRoles={['visitor']}>
+                    <VisitorDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/subadmin"
+                element={
+                  <ProtectedRoute allowedRoles={['subadmin']}>
+                    <SubAdminDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/superadmin"
+                element={
+                  <ProtectedRoute allowedRoles={['superadmin']}>
+                    <SuperAdminDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
         </BrowserRouter>
       </LibraryProvider>
     </AuthProvider>

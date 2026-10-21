@@ -305,16 +305,17 @@ export default function OPACCatalog({
   const [personalBookToRemove, setPersonalBookToRemove] = useState(null);
   const [personalBookRemovalError, setPersonalBookRemovalError] = useState('');
   const [removingPersonalBookId, setRemovingPersonalBookId] = useState(null);
+  const readingListUserId = user?.id;
 
   const refreshReadingList = useCallback(async () => {
-    if (!user?.id) {
+    if (!readingListUserId) {
       setReadingListBookIds([]);
       setReadingListBooks([]);
       return;
     }
     setReadingListLoading(true);
     try {
-      const list = await fetchReadingList(user.id);
+      const list = await fetchReadingList(readingListUserId);
       const ids = (list || []).map((book) => String(book.id));
       setReadingListBooks(list || []);
       setReadingListBookIds(ids);
@@ -325,15 +326,15 @@ export default function OPACCatalog({
     } finally {
       setReadingListLoading(false);
     }
-  }, [user?.id]);
+  }, [readingListUserId]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!readingListUserId) return;
     const refreshTimer = setTimeout(() => {
       void refreshReadingList();
     }, 0);
     return () => clearTimeout(refreshTimer);
-  }, [refreshReadingList, user?.id]);
+  }, [refreshReadingList, readingListUserId]);
 
   const isBookInReadingList = (bookId) =>
     readingListBookIds.includes(String(bookId));
@@ -416,6 +417,7 @@ export default function OPACCatalog({
   // =========================================================
   const [reviews, setReviews] = useState([]);
   const [userRating, setUserRating] = useState(5);
+  const [hoverRating, setHoverRating] = useState(0);
   const [userComment, setUserComment] = useState('');
   const [loadingReviews, setLoadingReviews] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -3407,26 +3409,38 @@ export default function OPACCatalog({
                   </label>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-slate-500 mr-1">Rating:</span>
-                    <select
-                      value={userRating}
-                      onChange={(event) => setUserRating(Number(event.target.value))}
-                      className="text-xs bg-white border border-slate-300 rounded px-2 py-1 font-bold text-amber-600 focus:outline-none"
+                    <div
+                      className="inline-flex items-center gap-0.5"
+                      role="group"
+                      aria-label="Book rating"
+                      onMouseLeave={() => setHoverRating(0)}
                     >
-                      <option value="5">5/5</option>
-                      <option value="4">4/5</option>
-                      <option value="3">3/5</option>
-                      <option value="2">2/5</option>
-                      <option value="1">1/5</option>
-                    </select>
-                    <span role="img" aria-label={`${userRating} out of 5 stars`} className="inline-flex items-center gap-0.5">
-                      {Array.from({ length: 5 }, (_, index) => (
-                        <Star
-                          key={index}
-                          size={14}
-                          className={index < userRating ? 'fill-amber-400 text-amber-500' : 'text-slate-300'}
-                          aria-hidden="true"
-                        />
-                      ))}
+                      {Array.from({ length: 5 }, (_, index) => {
+                        const rating = index + 1;
+                        const displayedRating = hoverRating || userRating;
+                        return (
+                          <button
+                            key={rating}
+                            type="button"
+                            onMouseEnter={() => setHoverRating(rating)}
+                            onClick={() => setUserRating(rating)}
+                            aria-label={`${rating} out of 5 stars`}
+                            aria-pressed={userRating === rating}
+                            className="rounded-sm p-0.5 transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                          >
+                            <Star
+                              size={18}
+                              className={rating <= displayedRating
+                                ? 'fill-amber-400 text-amber-500'
+                                : 'text-slate-300'}
+                              aria-hidden="true"
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <span className="min-w-8 text-xs font-bold text-amber-600">
+                      {hoverRating || userRating}/5
                     </span>
                   </div>
                 </div>

@@ -184,7 +184,7 @@ alter table attendance_logs
 
 create table if not exists announcements (
   id uuid primary key default gen_random_uuid(),
-  library_id uuid references libraries(id) on delete set null,
+  library_id text references libraries(id) on delete set null,
   title text not null,
   message text not null,
   published boolean not null default true,

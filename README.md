@@ -26,8 +26,8 @@ set Supabase Auth email OTP length to 6 and use an email template that renders
 `{{ .Token }}`.
 Run `schema.sql` once on a fresh database. For an existing pre-migration
 database, rerun it only to complete the base upgrade, then apply
-`20261002_security_features.sql` followed by
-`20261002_visitor_qr_activation.sql`. Do not rerun the base schema after those
+`20261002000000_security_features.sql` followed by
+`20261002000100_visitor_qr_activation.sql`. Do not rerun the base schema after those
 migrations; it reinstates the initial permissive demo policies.
 `src/data/store.js` contains most database operations and business actions,
 while `src/context/LibraryContext.jsx` loads data and subscribes to Supabase

@@ -457,10 +457,14 @@ function QRBookBorrowing({
       if (scannerRef.current) {
         try {
           await scannerRef.current.stop();
-        } catch {}
+        } catch (err) {
+          console.warn('QR scanner stop warning:', err?.message || err);
+        }
         try {
           await scannerRef.current.clear();
-        } catch {}
+        } catch (err) {
+          console.warn('QR scanner clear warning:', err?.message || err);
+        }
         scannerRef.current = null;
       }
     } catch (err) {
@@ -585,7 +589,6 @@ function QRBookBorrowing({
           { facingMode: 'environment' },
           {
             fps: 10,
-            aspectRatio: 1,
             qrbox: (viewfinderWidth, viewfinderHeight) => {
               const size = Math.floor(
                 Math.min(viewfinderWidth, viewfinderHeight, 280) * 0.8
@@ -597,8 +600,16 @@ function QRBookBorrowing({
             if (cancelled) return;
             const qrValue = decodedText.trim();
             if (!qrValue) return;
-            try { await scanner.stop(); } catch {}
-            try { await scanner.clear(); } catch {}
+            try {
+              await scanner.stop();
+            } catch (err) {
+              console.warn('QR scanner stop after scan warning:', err?.message || err);
+            }
+            try {
+              await scanner.clear();
+            } catch (err) {
+              console.warn('QR scanner clear after scan warning:', err?.message || err);
+            }
             scannerRef.current = null;
             setScanning(false);
             setShowScanner(false);
@@ -765,7 +776,7 @@ function QRBookBorrowing({
                 <button type="button" onClick={stopScanner} className="text-xs font-bold text-red-600 hover:text-red-800">Close</button>
               </div>
               <div className="p-4">
-                <div className="mx-auto aspect-square w-full max-w-80 overflow-hidden rounded-lg border border-slate-300 bg-black">
+                <div className="mx-auto aspect-[4/3] w-full max-w-96 overflow-hidden rounded-lg border border-slate-300 bg-black">
                   <div
                     id="book-borrowing-qr-reader"
                     className="h-full w-full [&_video]:h-full [&_video]:w-full [&_video]:object-cover [&_canvas]:h-full [&_canvas]:w-full"
@@ -1023,6 +1034,7 @@ export default function SubAdminDashboard() {
       if (Number.isNaN(date.getTime())) return 'Date unavailable';
       return date.toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
     };
+    const todayDateKey = new Date(now).toISOString().slice(0, 10);
 
     branchBorrowRequests.forEach((request) => {
       const bookTitle = request.bookTitle || 'Untitled book';
@@ -1030,6 +1042,9 @@ export default function SubAdminDashboard() {
       const requestDate = request.requestDate ? new Date(request.requestDate).getTime() : NaN;
       const pickupDeadline = request.pickupDeadline ? new Date(request.pickupDeadline).getTime() : NaN;
       const dueDate = request.dueDate ? new Date(request.dueDate).getTime() : NaN;
+      const dueDateKey = Number.isFinite(dueDate)
+        ? new Date(dueDate).toISOString().slice(0, 10)
+        : '';
 
       if (
         ['queued', 'pending'].includes(String(request.status || '').toLowerCase()) &&
@@ -1063,7 +1078,11 @@ export default function SubAdminDashboard() {
         });
       }
 
-      if (request.status === 'borrowed' && Number.isFinite(dueDate) && dueDate < now) {
+      if (
+        request.status === 'borrowed' &&
+        Number.isFinite(dueDate) &&
+        dueDateKey < todayDateKey
+      ) {
         items.push({
           id: `overdue-${request.id}`,
           requestId: request.id,

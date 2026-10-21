@@ -26,7 +26,7 @@
     "react-draggable": "^4.7.2",
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.18.2",
-    "xlsx": "^0.18.5"
+    "xlsx": "npm:@e965/xlsx@^0.20.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

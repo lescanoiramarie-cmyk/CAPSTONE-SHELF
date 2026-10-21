@@ -20,11 +20,11 @@ export async function sendDueDateFollowUp(borrowRequestId) {
   );
 
   if (error) {
-    let detail = '';
+    let detail;
     try {
       detail = (await error.context?.json?.())?.error || '';
-    } catch {
-      detail = '';
+    } catch (parseError) {
+      console.warn('Unable to read follow-up error details:', parseError);
     }
     throw new Error(detail || error.message || 'Unable to send follow-up.');
   }

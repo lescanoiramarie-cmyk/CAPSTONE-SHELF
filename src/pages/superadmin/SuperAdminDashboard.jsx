@@ -816,6 +816,7 @@ const handleEditStaff = (staff) => {
 
   const superAdminNotifications = useMemo(() => {
     const now = notificationNow;
+    const todayDateKey = new Date(now).toISOString().slice(0, 10);
     const notifications = [];
 
     borrowRequests.forEach((request) => {
@@ -825,6 +826,9 @@ const handleEditStaff = (staff) => {
       const requestDate = new Date(request.requestDate || request.request_date).getTime();
       const dueDate = new Date(request.dueDate || request.due_date).getTime();
       const pickupDeadline = new Date(request.pickupDeadline || request.pickup_deadline).getTime();
+      const dueDateKey = Number.isFinite(dueDate)
+        ? new Date(dueDate).toISOString().slice(0, 10)
+        : '';
 
       if (
         ['queued', 'pending'].includes(status) &&
@@ -842,7 +846,11 @@ const handleEditStaff = (staff) => {
         });
       }
 
-      if (status === 'borrowed' && Number.isFinite(dueDate) && dueDate < now) {
+      if (
+        status === 'borrowed' &&
+        Number.isFinite(dueDate) &&
+        dueDateKey < todayDateKey
+      ) {
         notifications.push({
           id: `overdue-${request.id}`,
           requestId: request.id,
