@@ -12,35 +12,14 @@ CREATE TABLE "public"."visitor_reading_list" (
 ALTER TABLE "public"."visitor_reading_list"
   ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Visitors can delete own reading list item" ON "public"."visitor_reading_list"
-  FOR DELETE
-  TO PUBLIC
-  USING ((visitor_id IN ( SELECT visitors.id
-   FROM public.visitors
-  WHERE (visitors.auth_user_id = auth.uid()))));
-
-CREATE POLICY "Visitors can insert own reading list item" ON "public"."visitor_reading_list"
-  FOR INSERT
-  TO PUBLIC
-  WITH CHECK ((visitor_id IN ( SELECT visitors.id
-   FROM public.visitors
-  WHERE (visitors.auth_user_id = auth.uid()))));
-
 CREATE POLICY "Visitors can manage own reading list" ON "public"."visitor_reading_list"
   FOR ALL
-  TO PUBLIC
-  USING ((visitor_id IN ( SELECT visitors.id
-   FROM public.visitors
-  WHERE (visitors.auth_user_id = auth.uid()))))
-  WITH CHECK ((visitor_id IN ( SELECT visitors.id
-   FROM public.visitors
-  WHERE (visitors.auth_user_id = auth.uid()))));
-
-CREATE POLICY "Visitors can view own reading list" ON "public"."visitor_reading_list"
-  FOR SELECT
-  TO PUBLIC
-  USING ((visitor_id IN ( SELECT visitors.id
-   FROM public.visitors
-  WHERE (visitors.auth_user_id = auth.uid()))));
+  TO "authenticated"
+  USING ((visitor_id IN ( SELECT visitor.id
+   FROM public.visitors visitor
+  WHERE (visitor.auth_user_id = ( SELECT auth.uid() AS uid)))))
+  WITH CHECK ((visitor_id IN ( SELECT visitor.id
+   FROM public.visitors visitor
+  WHERE (visitor.auth_user_id = ( SELECT auth.uid() AS uid)))));
 
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."visitor_reading_list" TO "anon", "authenticated", "postgres", "service_role";

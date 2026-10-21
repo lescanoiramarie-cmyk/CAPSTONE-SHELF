@@ -50,4 +50,6 @@ BEGIN
 END;
 $function$;
 
-GRANT EXECUTE ON FUNCTION "public"."find_visitor_by_qr"(text, uuid) TO PUBLIC, "anon", "authenticated", "postgres", "service_role";
+GRANT EXECUTE ON FUNCTION "public"."find_visitor_by_qr"(text, uuid) TO "authenticated", "postgres", "service_role";
+
+REVOKE ALL ON FUNCTION "public"."find_visitor_by_qr"(text, uuid) FROM PUBLIC;

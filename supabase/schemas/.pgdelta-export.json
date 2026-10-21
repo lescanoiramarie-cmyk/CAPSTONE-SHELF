@@ -5,6 +5,7 @@
   "loadOrder": [
     "public/default_privileges.sql",
     "public/schema.sql",
+    "shelf_private/schema.sql",
     "_cluster/extensions/pg_cron.sql",
     "_cluster/extensions/pg_net.sql",
     "_cluster/extensions/pgcrypto.sql",
@@ -48,9 +49,8 @@
     "public/functions/confirm_return.sql",
     "public/functions/consume_password_reset_code.sql",
     "public/functions/delete_personal_book.sql",
-    "public/functions/diag_list_community_rpcs.sql",
-    "public/functions/diag_visitor_row.sql",
     "public/functions/enforce_book_copy_inventory.sql",
+    "public/functions/enforce_visitor_email_domain.sql",
     "public/functions/fetch_my_community_book_requests.sql",
     "public/functions/fetch_owner_community_book_requests.sql",
     "public/functions/fetch_visitor_reading_list.sql",
@@ -86,6 +86,12 @@
     "public/functions/verify_password_reset_code.sql",
     "public/functions/verify_visitor_otp.sql",
     "public/functions/write_audit_log.sql",
+    "shelf_private/functions/cancel_community_book_request_unchecked.sql",
+    "shelf_private/functions/fetch_visitor_reading_list_unchecked.sql",
+    "shelf_private/functions/get_visitor_borrow_requests_unchecked.sql",
+    "shelf_private/functions/request_borrow_unchecked.sql",
+    "shelf_private/functions/set_personal_book_visibility_unchecked.sql",
+    "shelf_private/functions/toggle_reading_list_item_unchecked.sql",
     "_cluster/publications.sql",
     "_cluster/misc.sql"
   ],
@@ -118,9 +124,8 @@
     "public/functions/confirm_return.sql",
     "public/functions/consume_password_reset_code.sql",
     "public/functions/delete_personal_book.sql",
-    "public/functions/diag_list_community_rpcs.sql",
-    "public/functions/diag_visitor_row.sql",
     "public/functions/enforce_book_copy_inventory.sql",
+    "public/functions/enforce_visitor_email_domain.sql",
     "public/functions/fetch_my_community_book_requests.sql",
     "public/functions/fetch_owner_community_book_requests.sql",
     "public/functions/fetch_visitor_reading_list.sql",
@@ -176,6 +181,13 @@
     "public/tables/staff_profiles.sql",
     "public/tables/visitor_feedback.sql",
     "public/tables/visitor_reading_list.sql",
-    "public/tables/visitors.sql"
+    "public/tables/visitors.sql",
+    "shelf_private/functions/cancel_community_book_request_unchecked.sql",
+    "shelf_private/functions/fetch_visitor_reading_list_unchecked.sql",
+    "shelf_private/functions/get_visitor_borrow_requests_unchecked.sql",
+    "shelf_private/functions/request_borrow_unchecked.sql",
+    "shelf_private/functions/set_personal_book_visibility_unchecked.sql",
+    "shelf_private/functions/toggle_reading_list_item_unchecked.sql",
+    "shelf_private/schema.sql"
   ]
 }

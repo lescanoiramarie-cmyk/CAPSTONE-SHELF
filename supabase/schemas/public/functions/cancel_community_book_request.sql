@@ -1,18 +1,36 @@
 CREATE OR REPLACE FUNCTION public.cancel_community_book_request (
   p_request_id           uuid,
-  p_requester_visitor_id text
+  p_requester_visitor_id text,
+  p_reason               text DEFAULT 'cancelled'::text
 )
   RETURNS void
   LANGUAGE plpgsql
   SECURITY DEFINER
+  SET search_path TO 'public', 'pg_temp'
   AS $function$
-declare v_req community_book_requests%rowtype;
 begin
-  select cbr.* into v_req from public.community_book_requests cbr where cbr.id = p_request_id;
-  if v_req.id is null then raise exception 'Request not found.'; end if;
-  if v_req.requester_visitor_id <> trim(p_requester_visitor_id) then raise exception 'You can only cancel your own requests.'; end if;
-  if v_req.status <> 'pending' then raise exception 'Only pending requests can be cancelled.'; end if;
-  delete from public.community_book_requests where id = p_request_id;
-end; $function$;
+  if auth.uid() is null or not exists (
+    select 1
+    from public.visitors visitor
+    where visitor.id = trim(p_requester_visitor_id)
+      and visitor.auth_user_id = auth.uid()
+      and visitor.otp_verified
+      and visitor.is_active
+  ) then
+    raise exception 'The authenticated visitor account could not be verified.';
+  end if;
 
-GRANT EXECUTE ON FUNCTION "public"."cancel_community_book_request"(uuid, text) TO PUBLIC, "anon", "authenticated", "postgres", "service_role";
+  if p_reason <> 'cancelled' then
+    raise exception 'Unsupported cancellation reason.';
+  end if;
+
+  perform shelf_private.cancel_community_book_request_unchecked(
+    p_request_id,
+    p_requester_visitor_id
+  );
+end;
+$function$;
+
+GRANT EXECUTE ON FUNCTION "public"."cancel_community_book_request"(uuid, text, text) TO "authenticated", "postgres", "service_role";
+
+REVOKE ALL ON FUNCTION "public"."cancel_community_book_request"(uuid, text, text) FROM PUBLIC;

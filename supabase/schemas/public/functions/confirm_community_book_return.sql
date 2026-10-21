@@ -60,4 +60,6 @@ BEGIN
 END;
 $function$;
 
-GRANT EXECUTE ON FUNCTION "public"."confirm_community_book_return"(uuid, text) TO PUBLIC, "anon", "authenticated", "postgres", "service_role";
+GRANT EXECUTE ON FUNCTION "public"."confirm_community_book_return"(uuid, text) TO "authenticated", "postgres", "service_role";
+
+REVOKE ALL ON FUNCTION "public"."confirm_community_book_return"(uuid, text) FROM PUBLIC;

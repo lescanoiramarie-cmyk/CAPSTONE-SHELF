@@ -20,15 +20,19 @@ CREATE OR REPLACE FUNCTION public.get_visitor_borrow_requests (
   )
   LANGUAGE plpgsql
   SECURITY DEFINER
-  SET search_path TO 'public'
+  SET search_path TO 'public', 'pg_temp'
   AS $function$
 begin
-  return query
-    select br.id, br.book_id::text, br.book_title::text, br.visitor_id::text, br.visitor_name::text, br.status::text, br.request_date, br.pickup_deadline, br.queue_position, br.borrow_date, br.due_date, br.return_date, br.fine_amount::numeric, br.confirmed_by::text, br.return_confirmed_by::text
-    from borrow_requests br
-    join visitors v on v.id = br.visitor_id
-    where v.auth_user_id = p_visitor_id
-    order by br.request_date desc;
-end; $function$;
+  if auth.uid() is null or auth.uid() is distinct from p_visitor_id then
+    raise exception 'The authenticated visitor account could not be verified.';
+  end if;
 
-GRANT EXECUTE ON FUNCTION "public"."get_visitor_borrow_requests"(uuid) TO PUBLIC, "anon", "authenticated", "postgres", "service_role";
+  return query
+  select *
+  from shelf_private.get_visitor_borrow_requests_unchecked(p_visitor_id);
+end;
+$function$;
+
+GRANT EXECUTE ON FUNCTION "public"."get_visitor_borrow_requests"(uuid) TO "authenticated", "postgres", "service_role";
+
+REVOKE ALL ON FUNCTION "public"."get_visitor_borrow_requests"(uuid) FROM PUBLIC;

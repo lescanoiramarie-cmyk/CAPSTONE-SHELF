@@ -2,6 +2,7 @@ CREATE OR REPLACE FUNCTION public.auto_cancel_expired_borrow_requests()
   RETURNS integer
   LANGUAGE plpgsql
   SECURITY DEFINER
+  SET search_path TO ''
   AS $function$
 DECLARE
     v_count integer;
@@ -20,4 +21,6 @@ BEGIN
 END;
 $function$;
 
-GRANT EXECUTE ON FUNCTION "public"."auto_cancel_expired_borrow_requests"() TO PUBLIC, "anon", "authenticated", "postgres", "service_role";
+GRANT EXECUTE ON FUNCTION "public"."auto_cancel_expired_borrow_requests"() TO "postgres", "service_role";
+
+REVOKE ALL ON FUNCTION "public"."auto_cancel_expired_borrow_requests"() FROM PUBLIC;
