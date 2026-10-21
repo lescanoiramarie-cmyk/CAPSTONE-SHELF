@@ -57,6 +57,54 @@ export const AuthProvider = ({ children }) => {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (user?.role !== 'visitor' || !user.id) return undefined;
+
+    let cancelled = false;
+
+    const refreshVisitorProfile = async () => {
+      try {
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          throw sessionError;
+        }
+
+        if (!session?.user?.id) return;
+
+        const visitor = await store.getVisitor(session.user.id);
+        if (!visitor || cancelled) return;
+
+        setUser((current) => {
+          if (
+            current?.role !== 'visitor' ||
+            current.id !== visitor.id
+          ) {
+            return current;
+          }
+
+          return {
+            ...current,
+            name: visitor.fullName,
+            email: visitor.email,
+            qrCode: visitor.qrCode,
+          };
+        });
+      } catch (error) {
+        console.error('Refresh visitor profile error:', error);
+      }
+    };
+
+    void refreshVisitorProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.role, user?.id]);
+
   // =========================================================
   // SESSION STORAGE
   // =========================================================
