@@ -2276,12 +2276,18 @@ export async function loginVisitor({
         }
       );
 
+    const isLocalDevelopmentOrigin =
+      typeof window !== 'undefined' &&
+      window.location.protocol === 'http:' &&
+      ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
     let qrLoginResponse =
       await invokeQrLogin();
 
     if (
       qrLoginResponse.error?.name ===
-      'FunctionsFetchError'
+        'FunctionsFetchError' &&
+      !isLocalDevelopmentOrigin
     ) {
       await new Promise((resolve) =>
         setTimeout(resolve, 800)
@@ -2302,6 +2308,12 @@ export async function loginVisitor({
         qrLoginError.name ===
         'FunctionsFetchError'
       ) {
+        if (isLocalDevelopmentOrigin) {
+          throw new Error(
+            'QR sign-in is not accepting this local development address. Deploy the updated visitor-qr-login Edge Function, or sign in from the deployed site.'
+          );
+        }
+
         throw new Error(
           'Unable to connect to QR sign-in. Check your internet connection and try again.'
         );

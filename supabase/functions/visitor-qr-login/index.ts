@@ -16,6 +16,22 @@ const allowedOrigins = new Set([
   "http://127.0.0.1:5174",
 ]);
 
+function isAllowedOrigin(origin: string) {
+  if (allowedOrigins.has(origin)) {
+    return true;
+  }
+
+  try {
+    const parsedOrigin = new URL(origin);
+    return (
+      parsedOrigin.protocol === "http:" &&
+      ["localhost", "127.0.0.1"].includes(parsedOrigin.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 function responseHeaders(origin: string) {
   return {
     "Access-Control-Allow-Origin": origin,
@@ -51,11 +67,12 @@ async function hashClientAddress(address: string) {
 
 Deno.serve(async (request: Request) => {
   const requestOrigin = request.headers.get("origin") || "";
-  const origin = allowedOrigins.has(requestOrigin)
+  const requestOriginAllowed = isAllowedOrigin(requestOrigin);
+  const origin = requestOriginAllowed
     ? requestOrigin
     : configuredOrigins[0] || "http://localhost:5173";
 
-  if (requestOrigin && !allowedOrigins.has(requestOrigin)) {
+  if (requestOrigin && !requestOriginAllowed) {
     return respond(origin, 403, { error: "Origin is not allowed." });
   }
 

@@ -620,11 +620,7 @@ useEffect(() => {
           scannerRef.current = scanner;
 
           const startPromise = scanner.start(
-            {
-              facingMode: { ideal: 'environment' },
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-            },
+            { facingMode: 'environment' },
             {
               fps: 10,
               qrbox: (width, height) => {
