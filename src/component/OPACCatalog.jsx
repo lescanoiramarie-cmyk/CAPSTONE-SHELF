@@ -253,6 +253,7 @@ export default function OPACCatalog({
   const [notice, setNotice] = useState('');
   const [cancellingRequestId, setCancellingRequestId] = useState(null);
   const [submittingBorrow, setSubmittingBorrow] = useState(false);
+  const [submittingBorrowBookId, setSubmittingBorrowBookId] = useState(null);
   const [submittingCommunityRequest, setSubmittingCommunityRequest] = useState(false);
   const [updatingVisibilityBookId, setUpdatingVisibilityBookId] = useState(null);
 
@@ -1071,6 +1072,7 @@ export default function OPACCatalog({
     }
     if (submittingBorrow) return;
     setSubmittingBorrow(true);
+    setSubmittingBorrowBookId(String(bookEntry.id));
     setNotice('');
     try {
       const request = await requestBorrow(user.id, bookEntry.id);
@@ -1114,6 +1116,7 @@ export default function OPACCatalog({
       );
     } finally {
       setSubmittingBorrow(false);
+      setSubmittingBorrowBookId(null);
     }
   };
 
@@ -3351,7 +3354,7 @@ export default function OPACCatalog({
                             onClick={() => handleBorrowOrReserve(entry)}
                             className="px-3 py-1.5 bg-shelf-primary text-white rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            {submittingBorrow
+                            {submittingBorrowBookId === String(entry.id)
                               ? 'Processing...'
                               : Number(entry.availableCopies || 0) > 0
                                 ? 'Borrow'
