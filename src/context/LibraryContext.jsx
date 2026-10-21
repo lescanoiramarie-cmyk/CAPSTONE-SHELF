@@ -68,16 +68,38 @@ export function LibraryProvider({ children }) {
     // the RPC as anon, producing 401 / permission denied errors.
     try {
       const { data: authData, error: authError } =
-        await supabase.auth.getSession();
+        await supabase.auth.getUser();
 
-      if (authError) {
-        console.warn('SHELF Supabase session lookup failed:', authError);
-        return null;
-      }
+      let authUserId = authData?.user?.id || null;
 
-      const authUserId = authData?.session?.user?.id || null;
-      if (!authUserId) {
-        return null;
+      if (authError || !authUserId) {
+        if (authError?.name === 'AuthSessionMissingError') {
+          return null;
+        }
+
+        const {
+          data: refreshedAuth,
+          error: refreshError,
+        } = await supabase.auth.refreshSession();
+
+        authUserId =
+          refreshedAuth?.session?.user?.id || null;
+
+        if (refreshError || !authUserId) {
+          if (authError) {
+            console.warn(
+              'SHELF Supabase user verification failed:',
+              authError
+            );
+          }
+          if (refreshError) {
+            console.warn(
+              'SHELF Supabase session refresh failed:',
+              refreshError
+            );
+          }
+          return null;
+        }
       }
 
       const visitor = await store.getVisitor(authUserId);
