@@ -297,7 +297,10 @@ export const mapBook = (r) => ({
   totalCopies: r.total_copies,
   availableCopies: r.available_copies,
   summary: r.summary,
-  coverUrl: r.cover_url,
+  coverUrl:
+    r.cover_url === DEFAULT_COVER_URL
+      ? null
+      : r.cover_url,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 
@@ -3258,6 +3261,7 @@ export async function addPersonalBook({
   handoverDetails = null,
   lendingEnabled = true,
   isPublic = false,
+  coverUrl,
 }) {
   const normalizedVisitorId =
     normalizeText(visitorId);
@@ -3387,7 +3391,9 @@ export async function addPersonalBook({
     error,
   } =
     await supabase.rpc(
-      'add_personal_book',
+      coverUrl === undefined
+        ? 'add_personal_book'
+        : 'add_personal_book_with_cover',
       {
         p_visitor_id:
           normalizedVisitorId,
@@ -3427,6 +3433,12 @@ export async function addPersonalBook({
 
         p_is_public:
           Boolean(isPublic),
+        ...(coverUrl === undefined
+          ? {}
+          : {
+              p_cover_url:
+                normalizeText(coverUrl) || null,
+            }),
       }
     );
 
@@ -3509,6 +3521,7 @@ export async function updatePersonalBook({
   handoverDetails = null,
   lendingEnabled = true,
   isPublic = false,
+  coverUrl,
 }) {
   const normalizedVisitorId = normalizeText(visitorId);
   const normalizedBookId = normalizeText(bookId);
@@ -3556,7 +3569,11 @@ export async function updatePersonalBook({
     throw new Error('Handover details must not exceed 500 characters.');
   }
 
-  const { data, error } = await supabase.rpc('update_personal_book', {
+  const { data, error } = await supabase.rpc(
+    coverUrl === undefined
+      ? 'update_personal_book'
+      : 'update_personal_book_with_cover',
+    {
     p_visitor_id: normalizedVisitorId,
     p_book_id: normalizedBookId,
     p_title: normalizedTitle,
@@ -3571,7 +3588,14 @@ export async function updatePersonalBook({
     p_lending_enabled: lendingEnabled !== false,
     p_total_copies: normalizedTotalCopies,
     p_is_public: Boolean(isPublic),
-  });
+    ...(coverUrl === undefined
+      ? {}
+      : {
+          p_cover_url:
+            normalizeText(coverUrl) || null,
+        }),
+    }
+  );
 
   if (error) {
     console.error('UPDATE PERSONAL BOOK RPC ERROR:', error);

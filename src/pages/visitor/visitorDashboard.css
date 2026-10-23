@@ -109,7 +109,32 @@
 }
 
 .visitor-dashboard .visitor-header {
-  min-height: 3.25rem;
+  min-height: 3.5rem;
+}
+
+.visitor-dashboard .visitor-header button:focus-visible {
+  outline-color: #ffffff;
+}
+
+.visitor-dashboard .visitor-personal-book-dialog {
+  z-index: 110;
+}
+
+.visitor-dashboard .visitor-personal-book-dialog-card {
+  min-height: 0;
+}
+
+.visitor-dashboard .visitor-personal-book-dialog-footer {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+.visitor-dashboard .visitor-terms-review {
+  z-index: 110;
+}
+
+.visitor-dashboard .visitor-terms-accept-footer,
+.visitor-dashboard .visitor-terms-review-footer {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
 }
 
 .visitor-dashboard .visitor-portal-label {
@@ -146,7 +171,7 @@
 
 .visitor-dashboard [aria-label='Visitor dashboard'] {
   position: sticky;
-  top: 3.25rem;
+  top: 3.5rem;
   z-index: 30;
   border-radius: var(--visitor-radius-card);
   background-color: var(--visitor-page);

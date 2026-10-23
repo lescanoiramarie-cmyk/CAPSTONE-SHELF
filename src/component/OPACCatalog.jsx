@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth.js';
 import {
@@ -20,6 +20,9 @@ import {
   MapPin,
   Star,
   Lock,
+  Upload,
+  Link2,
+  ImagePlus,
 } from 'lucide-react';
 import BookCover from './BookCover.jsx';
 import {
@@ -46,6 +49,32 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('en-PH', {
     dateStyle: 'medium',
   });
+}
+
+const MAX_PERSONAL_COVER_SIZE = 2 * 1024 * 1024;
+const PERSONAL_COVER_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+]);
+
+function getPersonalCoverStoragePath(url, visitorId) {
+  const marker = '/storage/v1/object/public/book-covers/';
+  const pathStart = String(url || '').indexOf(marker);
+  if (pathStart < 0) return null;
+
+  const encodedPath = String(url).slice(pathStart + marker.length);
+  let path;
+  try {
+    path = decodeURIComponent(encodedPath);
+  } catch {
+    return null;
+  }
+  return path.split('/')[0] === String(visitorId) ? path : null;
+}
+
+function createPersonalCoverPath(visitorId, filename) {
+  return `${visitorId}/${Date.now()}-${filename}`;
 }
 
 // =========================================================
@@ -321,10 +350,29 @@ export default function OPACCatalog({
   const [showAddPersonalBook, setShowAddPersonalBook] = useState(false);
   const [editingPersonalBook, setEditingPersonalBook] = useState(null);
   const [savingPersonalBook, setSavingPersonalBook] = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [coverMode, setCoverMode] = useState('upload');
+  const [coverFile, setCoverFile] = useState(null);
+  const [coverFileValid, setCoverFileValid] = useState(false);
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState('');
+  const [coverUrl, setCoverUrl] = useState('');
+  const [coverUrlInput, setCoverUrlInput] = useState('');
+  const [coverUrlLoaded, setCoverUrlLoaded] = useState(false);
+  const [coverUrlError, setCoverUrlError] = useState(false);
+  const [coverError, setCoverError] = useState('');
+  const [coverDragActive, setCoverDragActive] = useState(false);
+  const coverFileInputRef = useRef(null);
   const [personalBookToRemove, setPersonalBookToRemove] = useState(null);
   const [personalBookRemovalError, setPersonalBookRemovalError] = useState('');
   const [removingPersonalBookId, setRemovingPersonalBookId] = useState(null);
   const readingListUserId = user?.id;
+  const personalCoverPreviewUrl =
+    coverMode === 'upload' && coverFile
+      ? coverPreviewUrl
+      : coverMode === 'url'
+        ? coverUrlInput
+        : coverUrl;
+  const isPersonalCoverUrlValid = /^https?:\/\//i.test(coverUrlInput);
 
   const refreshReadingList = useCallback(async () => {
     if (!readingListUserId) {
@@ -459,6 +507,18 @@ export default function OPACCatalog({
     }));
   };
   const resetPersonalBookForm = () => {
+    if (coverPreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(coverPreviewUrl);
+    }
+    setCoverMode('upload');
+    setCoverFile(null);
+    setCoverFileValid(false);
+    setCoverPreviewUrl('');
+    setCoverUrl('');
+    setCoverUrlInput('');
+    setCoverUrlLoaded(false);
+    setCoverUrlError(false);
+    setCoverError('');
     setPersonalBookForm({
       title: '',
       author: '',
@@ -495,9 +555,61 @@ export default function OPACCatalog({
       isPublic: Boolean(book.isPublic),
       totalCopies: getPersonalBookCopyAvailability(book).totalCopies,
     });
+    setCoverMode('upload');
+    setCoverFile(null);
+    setCoverFileValid(false);
+    setCoverPreviewUrl('');
+    setCoverUrl(book.coverUrl || '');
+    setCoverUrlInput(book.coverUrl || '');
+    setCoverUrlLoaded(Boolean(book.coverUrl));
+    setCoverUrlError(false);
+    setCoverError('');
     setNotice('');
     setShowAddPersonalBook(true);
   };
+  const selectPersonalCover = (file) => {
+    if (!file) return;
+    setCoverError('');
+    if (coverPreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(coverPreviewUrl);
+    }
+    setCoverPreviewUrl('');
+    if (!PERSONAL_COVER_TYPES.has(file.type)) {
+      setCoverFile(null);
+      setCoverFileValid(false);
+      setCoverError('Unsupported image type. Choose a PNG, JPG, or WEBP image.');
+      return;
+    }
+    if (file.size > MAX_PERSONAL_COVER_SIZE) {
+      setCoverFile(null);
+      setCoverFileValid(false);
+      setCoverError('This image is too large. Choose an image up to 2 MB.');
+      return;
+    }
+    setCoverPreviewUrl(URL.createObjectURL(file));
+    setCoverFile(file);
+    setCoverFileValid(false);
+    setCoverMode('upload');
+  };
+  const removePersonalCover = () => {
+    if (coverPreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(coverPreviewUrl);
+    }
+    setCoverFile(null);
+    setCoverFileValid(false);
+    setCoverPreviewUrl('');
+    setCoverUrl('');
+    setCoverUrlInput('');
+    setCoverUrlLoaded(false);
+    setCoverUrlError(false);
+    setCoverError('');
+  };
+  useEffect(() => () => {
+    if (coverPreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(coverPreviewUrl);
+    }
+  }, [coverPreviewUrl]);
+
   const openRemovePersonalBook = (book) => {
     if (!requireAuth('remove personal books')) return;
     setPersonalBookRemovalError('');
@@ -570,6 +682,30 @@ export default function OPACCatalog({
       setNotice('Handover details must not exceed 500 characters.');
       return;
     }
+    const selectedCoverUrl =
+      coverMode === 'url'
+        ? coverUrlInput.trim()
+        : coverUrl;
+    if (
+      coverMode === 'url' &&
+      selectedCoverUrl &&
+      (!isPersonalCoverUrlValid || !coverUrlLoaded)
+    ) {
+      setCoverError(
+        !isPersonalCoverUrlValid
+          ? 'Enter a valid image URL beginning with http:// or https://.'
+          : coverUrlError
+          ? 'This image URL could not be loaded. Check the URL or remove the cover.'
+          : 'Wait for the image preview to load, or remove the cover before saving.'
+      );
+      return;
+    }
+    if (coverMode === 'upload' && coverFile && !coverFileValid) {
+      setCoverError(
+        'This image could not be read. Choose another PNG, JPG, or WEBP image.'
+      );
+      return;
+    }
     if (savingPersonalBook) return;
     setSavingPersonalBook(true);
     setNotice('');
@@ -589,14 +725,105 @@ export default function OPACCatalog({
         lendingEnabled: Boolean(personalBookForm.lendingEnabled),
         isPublic: Boolean(personalBookForm.isPublic),
       };
-      const savedBook = editingPersonalBook
-        ? await updatePersonalBook({
-            ...bookDetails,
-            bookId: editingPersonalBook.id,
-          })
-        : await addPersonalBook(bookDetails);
+      let savedCoverUrl = selectedCoverUrl || null;
+      let uploadedCoverPath = null;
+      if (coverMode === 'upload' && coverFile) {
+        if (!supabase) {
+          throw new Error(
+            'Cover upload is unavailable right now. Try again later, or remove the cover and save.'
+          );
+        }
+        const safeFileName = coverFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        uploadedCoverPath = createPersonalCoverPath(user.id, safeFileName);
+        setCoverUploading(true);
+        let uploadError;
+        try {
+          ({ error: uploadError } = await supabase.storage
+            .from('book-covers')
+            .upload(uploadedCoverPath, coverFile, {
+              contentType: coverFile.type,
+              upsert: false,
+            }));
+        } catch (error) {
+          console.error('Personal book cover upload error:', error);
+          setCoverError(
+            'The cover could not be uploaded. Please retry, or remove the cover and save without it.'
+          );
+          throw new Error(
+            'The cover could not be uploaded. Please retry, or remove the cover and save without it.',
+            { cause: error }
+          );
+        }
+        if (uploadError) {
+          console.error('Personal book cover upload error:', uploadError);
+          setCoverError(
+            'The cover could not be uploaded. Please retry, or remove the cover and save without it.'
+          );
+          throw new Error(
+            'The cover could not be uploaded. Please retry, or remove the cover and save without it.'
+          );
+        }
+        setCoverUploading(false);
+        const { data: publicUrlData } = supabase.storage
+          .from('book-covers')
+          .getPublicUrl(uploadedCoverPath);
+        savedCoverUrl = publicUrlData?.publicUrl || null;
+        if (!savedCoverUrl) {
+          const { error: cleanupError } = await supabase.storage
+            .from('book-covers')
+            .remove([uploadedCoverPath]);
+          if (cleanupError) {
+            console.error('Unable to clean up an unaddressable personal book cover:', cleanupError);
+          }
+          setCoverError(
+            'The uploaded cover URL could not be created. Please retry, or remove the cover and save without it.'
+          );
+          throw new Error(
+            'The uploaded cover URL could not be created. Please retry, or remove the cover and save without it.'
+          );
+        }
+      }
+      let savedBook;
+      try {
+        savedBook = editingPersonalBook
+          ? await updatePersonalBook({
+              ...bookDetails,
+              bookId: editingPersonalBook.id,
+              coverUrl: savedCoverUrl,
+            })
+          : await addPersonalBook({
+              ...bookDetails,
+              coverUrl: savedCoverUrl,
+            });
+      } catch (error) {
+        if (uploadedCoverPath && supabase) {
+          const { error: cleanupError } = await supabase.storage
+            .from('book-covers')
+            .remove([uploadedCoverPath]);
+          if (cleanupError) {
+            console.error('Unable to clean up an unsaved personal book cover:', cleanupError);
+          }
+        }
+        throw error;
+      }
       if (!savedBook) {
         throw new Error(`The personal book was not ${editingPersonalBook ? 'updated' : 'created'}. Please try again.`);
+      }
+      const previousCoverPath = getPersonalCoverStoragePath(
+        editingPersonalBook?.coverUrl,
+        user.id
+      );
+      if (
+        previousCoverPath &&
+        previousCoverPath !== uploadedCoverPath &&
+        previousCoverPath !== getPersonalCoverStoragePath(savedCoverUrl, user.id)
+      ) {
+        const { error: removeError } = await supabase.storage
+          .from('book-covers')
+          .remove([previousCoverPath]);
+        if (removeError) {
+          console.error('Unable to remove the replaced personal book cover:', removeError);
+        }
       }
       setShowAddPersonalBook(false);
       setEditingPersonalBook(null);
@@ -608,8 +835,18 @@ export default function OPACCatalog({
       );
     } catch (error) {
       console.error('Save personal book error:', error);
+      if (
+        (coverFile || (coverMode === 'url' && selectedCoverUrl)) &&
+        !coverError
+      ) {
+        setCoverError(
+          (error?.message?.startsWith('The cover ') && error.message) ||
+            'The cover or book details could not be saved. Please retry, or remove the cover and save without it.'
+        );
+      }
       setNotice(error?.message || `Unable to ${editingPersonalBook ? 'update' : 'add'} the personal book. Please try again.`);
     } finally {
+      setCoverUploading(false);
       setSavingPersonalBook(false);
     }
   };
@@ -1466,7 +1703,13 @@ export default function OPACCatalog({
         className="visitor-personal-book-card flex h-full min-w-0 w-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800"
       >
         <div className="flex flex-1 flex-col p-5">
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <BookCover
+              key={`${book.id}-${book.coverUrl || book.title}`}
+              src={book.coverUrl}
+              title={book.title}
+              className="h-32 w-24"
+            />
             <div className="min-w-0 flex-1">
               <div className="visitor-status-badges mb-2 flex h-7 flex-nowrap items-center gap-2 overflow-hidden">
                 <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200 px-2 py-1 rounded">
@@ -1632,7 +1875,14 @@ export default function OPACCatalog({
       className="visitor-community-book-card flex h-full flex-col rounded-xl border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700 dark:bg-slate-800"
     >
       <div className="flex flex-1 flex-col p-5">
-        <div className="min-w-0">
+        <div className="flex items-start gap-3">
+          <BookCover
+            key={`${book.id}-${book.coverUrl || book.title}`}
+            src={book.coverUrl}
+            title={book.title}
+            className="h-32 w-24"
+          />
+          <div className="min-w-0 flex-1">
             <div className="visitor-status-badges mb-2 flex h-7 flex-nowrap items-center gap-2 overflow-hidden">
               <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">
                 Community Book
@@ -1653,6 +1903,7 @@ export default function OPACCatalog({
             <p title={book.author || 'Unknown Author'} className="mt-1 truncate text-xs text-slate-700 dark:text-slate-200">
               By {book.author || 'Unknown Author'}
             </p>
+          </div>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
           <div className="flex min-w-0 justify-between gap-2">
@@ -2845,7 +3096,7 @@ export default function OPACCatalog({
                     setCommunityRequestResponse('');
                   }
                 }}
-                className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white"
               >
                 <X size={20} aria-hidden="true" />
               </button>
@@ -2897,9 +3148,9 @@ export default function OPACCatalog({
           ADD PERSONAL BOOK MODAL
       ====================================================== */}
       {showAddPersonalBook && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-200">
-            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between z-10">
+        <div className="visitor-personal-book-dialog fixed inset-0 z-60 flex items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
+          <div className="visitor-personal-book-dialog-card flex h-full max-h-full w-full max-w-2xl flex-col overflow-hidden border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800 sm:max-h-[92vh] sm:rounded-2xl">
+            <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-4 dark:border-slate-700 dark:bg-slate-800 sm:px-6">
               <div>
                 <h2 className="text-lg font-bold text-slate-800">
                   {editingPersonalBook ? 'Edit Personal Book' : 'Add Personal Book'}
@@ -2924,11 +3175,175 @@ export default function OPACCatalog({
                 <X size={20} aria-hidden="true" />
               </button>
             </div>
-            <form onSubmit={handleSavePersonalBook} className="p-6 space-y-5 text-slate-700 dark:text-slate-200">
-              <div className="space-y-4">
+            <form onSubmit={handleSavePersonalBook} className="flex min-h-0 flex-1 flex-col overflow-hidden text-slate-700 dark:text-slate-200">
+              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-6">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
                   Book Information
                 </h3>
+                <section className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/50 sm:grid-cols-[96px_minmax(0,1fr)]">
+                  <div className="flex flex-col items-center gap-2">
+                    <BookCover
+                      key={personalCoverPreviewUrl || 'personal-cover-placeholder'}
+                      src={
+                        coverMode === 'url' && !isPersonalCoverUrlValid
+                          ? ''
+                          : personalCoverPreviewUrl
+                      }
+                      title={personalBookForm.title || 'Book cover preview'}
+                      className="h-32 w-24"
+                      onLoad={() => {
+                        if (coverMode === 'upload' && coverFile) {
+                          setCoverFileValid(true);
+                          setCoverError('');
+                        }
+                        if (coverMode === 'url' && coverUrlInput) {
+                          setCoverUrlLoaded(true);
+                          setCoverUrlError(false);
+                          setCoverError('');
+                        }
+                      }}
+                      onError={() => {
+                        if (coverMode === 'upload' && coverFile) {
+                          setCoverFileValid(false);
+                          setCoverError(
+                            'This image could not be read. Choose another PNG, JPG, or WEBP image.'
+                          );
+                        }
+                        if (coverMode === 'url' && coverUrlInput) {
+                          setCoverUrlLoaded(false);
+                          setCoverUrlError(true);
+                          setCoverError(
+                            'This image URL could not be loaded. Check the URL or choose another image.'
+                          );
+                        }
+                      }}
+                    />
+                    {(coverFile || coverUrl || coverUrlInput) && (
+                      <div className="flex w-full flex-col gap-1">
+                        <button
+                          type="button"
+                          onClick={() => coverFileInputRef.current?.click()}
+                          className="min-h-11 rounded-lg border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-800 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                        >
+                          Replace
+                        </button>
+                        <button
+                          type="button"
+                          onClick={removePersonalCover}
+                          className="min-h-11 rounded-lg px-2 text-xs font-semibold text-slate-700 hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary dark:text-slate-200 dark:hover:bg-slate-700"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 space-y-3">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                        Book Cover <span className="font-normal text-slate-500 dark:text-slate-400">(optional)</span>
+                      </h4>
+                      <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                        Add a cover image to help identify your book.
+                      </p>
+                    </div>
+                    <div className="inline-flex rounded-lg border border-slate-300 bg-white p-1 dark:border-slate-600 dark:bg-slate-800" role="tablist" aria-label="Book cover input method">
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={coverMode === 'upload'}
+                        onClick={() => {
+                          setCoverMode('upload');
+                          setCoverError('');
+                        }}
+                        className={`min-h-11 rounded-md px-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary ${coverMode === 'upload' ? 'bg-shelf-primary text-white' : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700'}`}
+                      >
+                        Upload image
+                      </button>
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={coverMode === 'url'}
+                        onClick={() => {
+                          setCoverMode('url');
+                          setCoverError('');
+                        }}
+                        className={`min-h-11 rounded-md px-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary ${coverMode === 'url' ? 'bg-shelf-primary text-white' : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700'}`}
+                      >
+                        Image URL
+                      </button>
+                    </div>
+                    {coverMode === 'upload' ? (
+                      <label
+                        className={`flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-3 py-3 text-center transition ${coverDragActive ? 'border-shelf-primary bg-blue-50 dark:bg-slate-800' : 'border-slate-300 bg-white hover:border-shelf-primary dark:border-slate-600 dark:bg-slate-800'}`}
+                        onDragOver={(event) => {
+                          event.preventDefault();
+                          setCoverDragActive(true);
+                        }}
+                        onDragLeave={() => setCoverDragActive(false)}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          setCoverDragActive(false);
+                          selectPersonalCover(event.dataTransfer.files?.[0]);
+                        }}
+                      >
+                        <input
+                          ref={coverFileInputRef}
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          className="sr-only"
+                          onChange={(event) => {
+                            selectPersonalCover(event.target.files?.[0]);
+                            event.target.value = '';
+                          }}
+                        />
+                        <span className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-100">
+                          {coverFile ? <ImagePlus size={16} aria-hidden="true" /> : <Upload size={16} aria-hidden="true" />}
+                          {coverFile ? coverFile.name : 'Click to upload or drag and drop'}
+                        </span>
+                        <span className="mt-1 text-[11px] text-slate-600 dark:text-slate-300">
+                          PNG, JPG or WEBP, up to 2 MB
+                        </span>
+                      </label>
+                    ) : (
+                      <div className="space-y-2">
+                        <label htmlFor="personal-book-cover-url" className="sr-only">
+                          Book cover image URL
+                        </label>
+                        <div className="relative">
+                          <Link2 size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+                          <input
+                            id="personal-book-cover-url"
+                            type="url"
+                            value={coverUrlInput}
+                            onChange={(event) => {
+                              setCoverUrlInput(event.target.value);
+                              setCoverUrlLoaded(false);
+                              setCoverUrlError(false);
+                              setCoverError('');
+                            }}
+                            placeholder="https://example.com/book-cover.jpg"
+                            className="min-h-11 w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                          />
+                        </div>
+                        {coverUrlInput && isPersonalCoverUrlValid && (
+                          <p className="text-xs text-slate-600 dark:text-slate-300" role="status">
+                            {coverUrlLoaded ? 'Image preview loaded.' : coverUrlError ? 'This image could not be loaded. Check the URL.' : 'Loading image preview...'}
+                          </p>
+                        )}
+                        {coverUrlInput && !isPersonalCoverUrlValid && (
+                          <p className="text-xs text-red-700 dark:text-red-300">
+                            Enter a valid image URL beginning with http:// or https://.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {coverError && (
+                      <p role="alert" className="text-xs font-medium text-red-700 dark:text-red-300">
+                        {coverError}
+                      </p>
+                    )}
+                  </div>
+                </section>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
@@ -3044,7 +3459,6 @@ export default function OPACCatalog({
                     />
                   </div>
                 </div>
-              </div>
               <div className="border-t border-slate-200 pt-5 space-y-3">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600">
                   Community Book Visibility
@@ -3168,7 +3582,8 @@ export default function OPACCatalog({
                   Your personal book will remain owned by you. If you enable lending, other visitors can see the book in Community Books. Every request requires owner approval.
                 </p>
               </div>
-              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
+              </div>
+              <div className="visitor-personal-book-dialog-footer sticky bottom-0 flex shrink-0 flex-col-reverse gap-2 border-t border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800 sm:flex-row sm:justify-end sm:px-6">
                 <button
                   type="button"
                   disabled={savingPersonalBook}
@@ -3177,19 +3592,19 @@ export default function OPACCatalog({
                     setEditingPersonalBook(null);
                     resetPersonalBookForm();
                   }}
-                  className="px-4 py-2.5 rounded-lg bg-slate-100 text-slate-600 text-sm font-bold hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600 disabled:opacity-50"
+                  className="min-h-11 px-4 py-2.5 rounded-lg bg-slate-100 text-slate-600 text-sm font-bold hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600 disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={savingPersonalBook}
-                  className="px-5 py-2.5 rounded-lg bg-shelf-primary text-white text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="min-h-11 px-5 py-2.5 rounded-lg bg-shelf-primary text-white text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {savingPersonalBook
                     ? editingPersonalBook
-                      ? 'Saving Changes...'
-                      : 'Adding Book...'
+                      ? coverUploading ? 'Uploading cover...' : 'Saving Changes...'
+                      : coverUploading ? 'Uploading cover...' : 'Adding Book...'
                     : editingPersonalBook
                       ? 'Save Changes'
                       : 'Add Personal Book'}

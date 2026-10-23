@@ -15,6 +15,9 @@ import {
   Clock3,
   ClipboardList,
   CircleDollarSign,
+  ChevronDown,
+  ChevronRight,
+  FileText,
   LogOut,
   Mail,
   MapPinned,
@@ -41,6 +44,7 @@ import FAQ from '../../component/FAQ.jsx';
 import VisitorServices from '../../component/VisitorServices.jsx';
 import AIRecommendations from '../../component/AIRecommendations.jsx';
 import DashboardWelcome from '../../component/DashboardWelcome.jsx';
+import VisitorTermsContent from '../../component/VisitorTermsContent.jsx';
 
 function formatDateTime(iso) {
   if (!iso) {
@@ -57,6 +61,16 @@ function formatDateTime(iso) {
     dateStyle: 'medium',
     timeStyle: 'short',
   });
+}
+
+function formatDate(iso) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime())
+    ? ''
+    : date.toLocaleDateString('en-PH', {
+        dateStyle: 'medium',
+      });
 }
 
 function formatStatus(status) {
@@ -146,7 +160,11 @@ function VisitorDashboardContent() {
   libraries = [],
   visitors = [],
   ownerCommunityBookRequests = [],
+  loading: libraryLoading = true,
 } = useLibraryData();
+  const visitorDetails = visitors.find(
+    (visitor) => visitor.id === user?.id
+  );
 
   const [tab, setTab] = useState('catalog');
   const [catalogResetKey, setCatalogResetKey] = useState(0);
@@ -165,14 +183,24 @@ function VisitorDashboardContent() {
 
   const [isNotificationsOpen, setIsNotificationsOpen] =
   useState(false);
+  const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
+  const [isTermsReviewOpen, setIsTermsReviewOpen] = useState(false);
   const [focusRequestId, setFocusRequestId] = useState(null);
   const [termsStatus, setTermsStatus] = useState('loading');
+  const [termsAcceptedAt, setTermsAcceptedAt] = useState(null);
   const [termsError, setTermsError] = useState('');
   const [isAcceptingTerms, setIsAcceptingTerms] = useState(false);
+  const avatarMenuRef = useRef(null);
+  const avatarButtonRef = useRef(null);
 
   const { isDarkAppearance, setIsDarkAppearance } = useTheme();
 
   const loadTermsAcceptance = useCallback(async () => {
+    if (libraryLoading) return;
+    if (String(user?.role || '').toLowerCase() !== 'visitor') {
+      setTermsStatus('accepted');
+      return;
+    }
     if (!user?.id) {
       setTermsStatus('accepted');
       return;
@@ -190,6 +218,7 @@ function VisitorDashboardContent() {
         const acceptedAt = globalThis.localStorage.getItem(
           `shelf_visitor_terms_accepted_${user.id}`
         );
+        setTermsAcceptedAt(acceptedAt || null);
         setTermsStatus(acceptedAt ? 'accepted' : 'required');
         return;
       }
@@ -198,6 +227,7 @@ function VisitorDashboardContent() {
         'get_visitor_terms_accepted_at'
       );
       if (error) throw error;
+      setTermsAcceptedAt(data || null);
       setTermsStatus(data ? 'accepted' : 'required');
     } catch (error) {
       console.error('Unable to load visitor terms acceptance:', error);
@@ -206,7 +236,7 @@ function VisitorDashboardContent() {
       );
       setTermsStatus('error');
     }
-  }, [user]);
+  }, [libraryLoading, user]);
 
   useEffect(() => {
     const termsTimer = setTimeout(() => {
@@ -215,6 +245,38 @@ function VisitorDashboardContent() {
 
     return () => clearTimeout(termsTimer);
   }, [loadTermsAcceptance]);
+
+  useEffect(() => {
+    if (!isAvatarMenuOpen && !isTermsReviewOpen) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsAvatarMenuOpen(false);
+        setIsTermsReviewOpen(false);
+        avatarButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isAvatarMenuOpen, isTermsReviewOpen]);
+
+  useEffect(() => {
+    if (!isAvatarMenuOpen) return undefined;
+    const handlePointerDown = (event) => {
+      if (!avatarMenuRef.current?.contains(event.target)) {
+        setIsAvatarMenuOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [isAvatarMenuOpen]);
+
+  useEffect(() => {
+    if (isAvatarMenuOpen) {
+      avatarMenuRef.current
+        ?.querySelector('[role="menuitem"]')
+        ?.focus();
+    }
+  }, [isAvatarMenuOpen]);
 
   const handleAcceptTerms = async () => {
     if (isAcceptingTerms) return;
@@ -227,13 +289,16 @@ function VisitorDashboardContent() {
       if (sessionError) throw sessionError;
 
       if (sessionData?.session) {
-        const { error } = await supabase.rpc('accept_visitor_terms');
+        const { data, error } = await supabase.rpc('accept_visitor_terms');
         if (error) throw error;
+        setTermsAcceptedAt(data || new Date().toISOString());
       } else {
+        const acceptedAt = new Date().toISOString();
         globalThis.localStorage.setItem(
           `shelf_visitor_terms_accepted_${user.id}`,
-          new Date().toISOString()
+          acceptedAt
         );
+        setTermsAcceptedAt(acceptedAt);
       }
       setTermsStatus('accepted');
     } catch (error) {
@@ -479,14 +544,6 @@ function VisitorDashboardContent() {
     .sort((a, b) => new Date(b.timeIn) - new Date(a.timeIn));
 
   // =========================================================
-  // VISITOR DETAILS
-  // =========================================================
-
-  const visitorDetails = visitors.find(
-    (visitor) => visitor.id === user?.id
-  );
-
-  // =========================================================
   // VISITOR TRANSACTION HISTORY
   // =========================================================
 
@@ -583,15 +640,15 @@ function VisitorDashboardContent() {
           : 'bg-shelf-bg text-slate-800'
       }`}
     >
-      {termsStatus !== 'accepted' && (
-        <div className="fixed inset-0 z-110 flex items-center justify-center bg-slate-950/70 p-4">
+      {termsStatus === 'required' && (
+        <div className="fixed inset-0 z-110 flex items-center justify-center bg-slate-950/70 p-0 sm:p-4">
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="visitor-terms-title"
-            className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800"
+            className="flex h-full max-h-full w-full max-w-2xl flex-col overflow-hidden border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800 sm:h-auto sm:max-h-[90vh] sm:rounded-2xl"
           >
-            <div className="bg-shelf-primary px-6 py-5 text-white">
+            <div className="shrink-0 bg-shelf-primary px-5 py-5 text-white sm:px-6">
               <h2 id="visitor-terms-title" className="text-lg font-extrabold">
                 Terms and Conditions
               </h2>
@@ -600,60 +657,57 @@ function VisitorDashboardContent() {
               </p>
             </div>
 
-            <div className="space-y-4 overflow-y-auto px-6 py-5 text-sm leading-6 text-slate-700 dark:text-slate-200">
-              <p>
-                By using SHELF ILMS, you agree to provide accurate account
-                information and keep your password and visitor QR pass secure.
-              </p>
-              <p>
-                Follow each library's borrowing instructions and return library
-                and community books by their due dates. You are responsible for
-                arranging community-book handovers and returns with the owner.
-              </p>
-              <p>
-                When you publish a personal book for lending, its listing is
-                visible to other visitors. If a request is approved, the contact
-                and handover information you provide may be shared with that
-                requester to arrange the exchange.
-              </p>
-              <p>
-                Use the service respectfully and do not submit misleading,
-                unlawful, or harmful content. SHELF may restrict access when
-                necessary to protect users, libraries, or the service.
-              </p>
-
-              {termsStatus === 'loading' && (
-                <p role="status" className="font-semibold text-slate-500">
-                  Checking your acceptance status...
-                </p>
-              )}
-
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5 text-sm leading-6 text-slate-700 dark:text-slate-200 sm:px-6">
+              <VisitorTermsContent />
               {termsError && (
                 <div role="alert" className="space-y-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                   <p>{termsError}</p>
-                  {termsStatus === 'error' && (
-                    <button
-                      type="button"
-                      onClick={loadTermsAcceptance}
-                      className="font-bold text-shelf-primary underline"
-                    >
-                      Try again
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={handleAcceptTerms}
+                    disabled={isAcceptingTerms}
+                    className="font-bold text-red-800 underline disabled:opacity-60"
+                  >
+                    Retry saving acceptance
+                  </button>
                 </div>
               )}
             </div>
 
             {termsStatus === 'required' && (
-              <div className="border-t border-slate-200 px-6 py-4 dark:border-slate-700">
+              <div className="visitor-terms-accept-footer shrink-0 border-t border-slate-200 px-5 py-4 dark:border-slate-700 sm:px-6">
                 <button
                   type="button"
                   onClick={handleAcceptTerms}
                   disabled={isAcceptingTerms}
-                  className="w-full rounded-lg bg-shelf-primary px-5 py-3 text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="min-h-11 w-full rounded-lg bg-shelf-primary px-5 py-3 text-sm font-bold text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isAcceptingTerms ? 'Saving...' : 'I Agree'}
                 </button>
+              </div>
+            )}
+            {termsStatus === 'error' && (
+              <div className="fixed inset-0 z-110 flex items-center justify-center bg-slate-950/70 p-4">
+                <section
+                  role="alertdialog"
+                  aria-modal="true"
+                  aria-labelledby="visitor-terms-check-title"
+                  className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-800 sm:p-6"
+                >
+                  <h2 id="visitor-terms-check-title" className="text-lg font-bold text-slate-900 dark:text-white">
+                    Terms and Conditions
+                  </h2>
+                  <p role="alert" className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-200">
+                    {termsError}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={loadTermsAcceptance}
+                    className="mt-5 min-h-11 w-full rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary focus-visible:ring-offset-2"
+                  >
+                    Try again
+                  </button>
+                </section>
               </div>
             )}
           </section>
@@ -758,7 +812,7 @@ function VisitorDashboardContent() {
       {/* =====================================================
           HEADER
       ====================================================== */}
-      <header className="visitor-header sticky top-0 z-40 border-b border-white/10 bg-shelf-primary px-3 py-3 text-white shadow-md sm:px-6">
+      <header className="visitor-header sticky top-0 z-40 border-b border-white/10 bg-shelf-primary px-3 py-2 text-white shadow-md sm:px-6">
         <div className="flex min-w-0 items-center justify-between gap-3">
 
           {/* LEFT: LOGO AND PORTAL LABEL */}
@@ -774,33 +828,6 @@ function VisitorDashboardContent() {
 
           {/* RIGHT: USER CONTROLS */}
           <div className="flex shrink-0 items-center justify-end gap-1.5 sm:ml-auto sm:gap-3">
-
-            {/* PROFILE */}
-            <button
-              type="button"
-              onClick={() => {
-                setMenuSection('profile');
-                setIsMenuOpen(true);
-              }}
-              className="visitor-profile-chip inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:px-3"
-              aria-label="Open profile"
-              title="Profile"
-            >
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/15 text-[11px] font-bold">
-                {(user?.name || visitorDetails?.fullName || 'Visitor')
-                  .trim()
-                  .split(/\s+/)
-                  .slice(0, 2)
-                  .map((part) => part[0])
-                  .join('')
-                  .toUpperCase()}
-              </span>
-              <span className="hidden max-w-24 truncate text-xs font-semibold md:inline">
-                {(user?.name || visitorDetails?.fullName || 'Visitor')
-                  .trim()
-                  .split(/\s+/)[0]}
-              </span>
-            </button>
 
             {/* DARK MODE */}
             <button
@@ -940,18 +967,96 @@ function VisitorDashboardContent() {
     </>
   )}
 </div>
-
-            {/* SIGN OUT */}
-            <button
-              type="button"
-              onClick={logout}
-              className="visitor-signout flex h-10 shrink-0 items-center gap-2 rounded-lg px-2 py-2 text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:px-3"
-              aria-label="Sign out"
-              title="Sign out"
-            >
-              <LogOut size={18} aria-hidden="true" />
-              <span className="hidden text-xs font-semibold sm:inline">Sign Out</span>
-            </button>
+            <div className="relative" ref={avatarMenuRef}>
+              <button
+                ref={avatarButtonRef}
+                type="button"
+                onClick={() => setIsAvatarMenuOpen((open) => !open)}
+                className="visitor-profile-chip inline-flex h-10 items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-2 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:px-3"
+                aria-label="Open account menu"
+                aria-haspopup="menu"
+                aria-expanded={isAvatarMenuOpen}
+                title="Account menu"
+              >
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/15 text-[11px] font-bold">
+                  {(user?.name || visitorDetails?.fullName || 'Visitor')
+                    .trim()
+                    .split(/\s+/)
+                    .slice(0, 2)
+                    .map((part) => part[0])
+                    .join('')
+                    .toUpperCase()}
+                </span>
+                <span className="hidden max-w-24 truncate text-xs font-semibold md:inline">
+                  {(user?.name || visitorDetails?.fullName || 'Visitor')
+                    .trim()
+                    .split(/\s+/)[0]}
+                </span>
+                <ChevronDown size={14} className="hidden md:block" aria-hidden="true" />
+              </button>
+              {isAvatarMenuOpen && (
+                <div
+                  role="menu"
+                  aria-label="Account menu"
+                  onKeyDown={(event) => {
+                    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+                    event.preventDefault();
+                    const items = Array.from(
+                      avatarMenuRef.current?.querySelectorAll('[role="menuitem"]') || []
+                    );
+                    if (!items.length) return;
+                    const currentIndex = items.indexOf(document.activeElement);
+                    const nextIndex =
+                      event.key === 'Home'
+                        ? 0
+                        : event.key === 'End'
+                          ? items.length - 1
+                          : (currentIndex + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+                    items[nextIndex]?.focus();
+                  }}
+                  className="visitor-account-menu absolute right-0 z-50 mt-2 w-[min(90vw,15rem)] overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 text-slate-900 shadow-2xl dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsAvatarMenuOpen(false);
+                      setMenuSection('profile');
+                      setIsMenuOpen(true);
+                    }}
+                    className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary dark:hover:bg-slate-700"
+                  >
+                    <UserRound size={17} aria-hidden="true" />
+                    View Profile
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsAvatarMenuOpen(false);
+                      setIsTermsReviewOpen(true);
+                    }}
+                    className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary dark:hover:bg-slate-700"
+                  >
+                    <FileText size={17} aria-hidden="true" />
+                    Terms and Conditions
+                  </button>
+                  <div role="separator" className="my-1 border-t border-slate-200 dark:border-slate-700" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsAvatarMenuOpen(false);
+                      logout();
+                    }}
+                    className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium text-slate-700 hover:bg-red-50 hover:text-red-700 focus-visible:bg-red-50 focus-visible:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-700 dark:text-slate-200 dark:hover:bg-red-950/40 dark:hover:text-red-300 dark:focus-visible:bg-red-950/40 dark:focus-visible:text-red-300"
+                  >
+                    <LogOut size={17} aria-hidden="true" />
+                    Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
 
           </div>
         </div>
@@ -1653,10 +1758,81 @@ function VisitorDashboardContent() {
                       </p>
                     )}
                   </section>
+                  <section>
+                    <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+                      <FileText size={16} aria-hidden="true" />
+                      Legal
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        setIsTermsReviewOpen(true);
+                      }}
+                      className="flex min-h-16 w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left transition hover:border-slate-300 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:border-slate-600 dark:hover:bg-slate-700"
+                    >
+                      <FileText size={18} className="shrink-0 text-slate-700 dark:text-slate-200" aria-hidden="true" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold text-slate-900 dark:text-white">
+                          Terms and Conditions
+                        </span>
+                        {termsAcceptedAt && (
+                          <span className="mt-1 block text-xs text-slate-600 dark:text-slate-300">
+                            Accepted on {formatDate(termsAcceptedAt)}
+                          </span>
+                        )}
+                      </span>
+                      <ChevronRight size={18} className="shrink-0 text-slate-500 dark:text-slate-300" aria-hidden="true" />
+                    </button>
+                  </section>
                 </div>
               )}
             </div>
           </aside>
+        </div>
+      )}
+
+      {isTermsReviewOpen && (
+        <div
+          className="visitor-terms-review fixed inset-0 z-90 flex items-end justify-center bg-slate-950/60 p-0 sm:items-center sm:p-4"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) {
+              setIsTermsReviewOpen(false);
+            }
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="visitor-terms-review-title"
+            className="flex h-[calc(100dvh-1rem)] w-full flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800 sm:h-auto sm:max-h-[85vh] sm:max-w-2xl sm:rounded-2xl"
+          >
+            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-700 sm:px-6">
+              <h2 id="visitor-terms-review-title" className="text-lg font-bold text-slate-900 dark:text-white">
+                Terms and Conditions
+              </h2>
+              <button
+                type="button"
+                onClick={() => setIsTermsReviewOpen(false)}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary dark:text-slate-200 dark:hover:bg-slate-700"
+                aria-label="Close Terms and Conditions"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </header>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5 text-sm leading-6 text-slate-700 dark:text-slate-200 sm:px-6">
+              <VisitorTermsContent />
+            </div>
+            <footer className="visitor-terms-review-footer shrink-0 border-t border-slate-200 px-5 py-4 dark:border-slate-700 sm:px-6">
+              <button
+                type="button"
+                onClick={() => setIsTermsReviewOpen(false)}
+                className="min-h-11 w-full rounded-lg bg-shelf-primary px-5 py-3 text-sm font-bold text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary focus-visible:ring-offset-2 sm:w-auto sm:min-w-28"
+              >
+                Close
+              </button>
+            </footer>
+          </section>
         </div>
       )}
 

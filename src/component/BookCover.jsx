@@ -6,6 +6,8 @@ export default function BookCover({
   title,
   className = '',
   imageFit = 'cover',
+  onLoad,
+  onError,
 }) {
   const [failed, setFailed] = useState(false);
 
@@ -22,7 +24,11 @@ export default function BookCover({
           className={`absolute inset-0 h-full w-full ${
             imageFit === 'contain' ? 'object-contain' : 'object-cover'
           }`}
-          onError={() => setFailed(true)}
+          onLoad={onLoad}
+          onError={(event) => {
+            setFailed(true);
+            onError?.(event);
+          }}
         />
       ) : (
         <BookOpen size={24} aria-hidden="true" />
