@@ -15,10 +15,13 @@ import {
   UserRound,
   Users,
   Clock3,
+  CheckCircle2,
+  CircleAlert,
   MapPin,
   Star,
   Lock,
 } from 'lucide-react';
+import BookCover from './BookCover.jsx';
 import {
   useLibrary,
   useLibraryData,
@@ -81,12 +84,12 @@ function calculateOverdueDays(dueDate) {
 // STATUS STYLES
 // =========================================================
 const STATUS_STYLES = {
-  queued: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200',
-  ready_for_pickup: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200',
-  borrowed: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200',
-  returned: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200',
-  cancelled: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200',
-  expired: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200',
+  queued: 'visitor-status visitor-status-neutral',
+  ready_for_pickup: 'visitor-status visitor-status-navy',
+  borrowed: 'visitor-status visitor-status-navy',
+  returned: 'visitor-status visitor-status-success',
+  cancelled: 'visitor-status visitor-status-neutral',
+  expired: 'visitor-status visitor-status-neutral',
 };
 const STATUS_LABELS = {
   queued: 'In Queue',
@@ -105,6 +108,7 @@ const OWNER_COMMUNITY_REQUEST_FILTERS = [
   { key: 'returned', label: 'Returned', status: 'returned' },
   { key: 'cancelled', label: 'Cancelled', status: 'cancelled' },
 ];
+
 function getOwnerCommunityRequestStatus(request) {
   return String(request?.status ?? '')
     .trim()
@@ -271,10 +275,24 @@ export default function OPACCatalog({
   const ownerCommunityRequests = ownerCommunityBookRequests;
   const [ownerCommunityRequestFilter, setOwnerCommunityRequestFilter] = useState('all');
   const [ownerCommunityRequestError, setOwnerCommunityRequestError] = useState('');
+  const [dismissedOwnerRequestError, setDismissedOwnerRequestError] = useState('');
   const [processingCommunityRequestId, setProcessingCommunityRequestId] = useState(null);
   const [showRejectCommunityRequest, setShowRejectCommunityRequest] = useState(null);
   const [communityRequestResponse, setCommunityRequestResponse] = useState('');
   const [communityRequestNotice, setCommunityRequestNotice] = useState('');
+
+  const setOwnerRequestError = (message) => {
+    setOwnerCommunityRequestError(message);
+    setDismissedOwnerRequestError('');
+  };
+  const ownerRequestErrorMessage =
+    ownerCommunityRequestError || ownerCommunityRequestLoadError;
+
+  useEffect(() => {
+    if (!communityRequestNotice) return undefined;
+    const timeoutId = setTimeout(() => setCommunityRequestNotice(''), 5000);
+    return () => clearTimeout(timeoutId);
+  }, [communityRequestNotice]);
   const ownerCommunityRequestCounts = useMemo(
     () =>
       ownerCommunityRequests.reduce((counts, request) => {
@@ -1196,7 +1214,7 @@ export default function OPACCatalog({
     }
     if (processingCommunityRequestId) return;
     setProcessingCommunityRequestId(request.id);
-    setOwnerCommunityRequestError('');
+    setOwnerRequestError('');
     setCommunityRequestNotice('');
     try {
       const result = await approveCommunityBookRequest(request.id, user.id, null);
@@ -1207,7 +1225,7 @@ export default function OPACCatalog({
       await reloadOwnerCommunityRequests();
     } catch (error) {
       console.error('Approve community request error:', error);
-      setOwnerCommunityRequestError(
+      setOwnerRequestError(
         error?.message || 'Unable to approve the community book request. Please try again.'
       );
     } finally {
@@ -1218,17 +1236,17 @@ export default function OPACCatalog({
     setShowRejectCommunityRequest(request);
     setCommunityRequestResponse('');
     setCommunityRequestNotice('');
-    setOwnerCommunityRequestError('');
+    setOwnerRequestError('');
   };
   const handleRejectCommunityRequest = async () => {
     const request = showRejectCommunityRequest;
     if (!request?.id || !user?.id) {
-      setOwnerCommunityRequestError('Unable to identify this community book request.');
+      setOwnerRequestError('Unable to identify this community book request.');
       return;
     }
     if (processingCommunityRequestId) return;
     setProcessingCommunityRequestId(request.id);
-    setOwnerCommunityRequestError('');
+    setOwnerRequestError('');
     setCommunityRequestNotice('');
     try {
       const result = await rejectCommunityBookRequest(
@@ -1245,7 +1263,7 @@ export default function OPACCatalog({
       await reloadOwnerCommunityRequests();
     } catch (error) {
       console.error('Reject community request error:', error);
-      setOwnerCommunityRequestError(
+      setOwnerRequestError(
         error?.message || 'Unable to reject the community book request. Please try again.'
       );
     } finally {
@@ -1259,7 +1277,7 @@ export default function OPACCatalog({
     }
     if (processingCommunityRequestId) return;
     setProcessingCommunityRequestId(request.id);
-    setOwnerCommunityRequestError('');
+    setOwnerRequestError('');
     setCommunityRequestNotice('');
     try {
       const result = await confirmCommunityBookPickup(request.id, user.id);
@@ -1278,7 +1296,7 @@ export default function OPACCatalog({
       setCommunityRequestNotice(`"${request.bookTitle}" has been marked as borrowed.`);
     } catch (error) {
       console.error('Confirm community book pickup error:', error);
-      setOwnerCommunityRequestError(
+      setOwnerRequestError(
         error?.message || 'Unable to confirm the community book handover. Please try again.'
       );
     } finally {
@@ -1292,7 +1310,7 @@ export default function OPACCatalog({
     }
     if (processingCommunityRequestId) return;
     setProcessingCommunityRequestId(request.id);
-    setOwnerCommunityRequestError('');
+    setOwnerRequestError('');
     setCommunityRequestNotice('');
     try {
       const result = await confirmCommunityBookReturn(request.id, user.id);
@@ -1303,7 +1321,7 @@ export default function OPACCatalog({
       await reloadOwnerCommunityRequests();
     } catch (error) {
       console.error('Confirm community book return error:', error);
-      setOwnerCommunityRequestError(
+      setOwnerRequestError(
         error?.message || 'Unable to confirm the community book return. Please try again.'
       );
     } finally {
@@ -1445,12 +1463,12 @@ export default function OPACCatalog({
     return (
       <div
         key={book.id}
-        className="min-w-0 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800"
+        className="visitor-personal-book-card flex h-full min-w-0 w-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800"
       >
-        <div className="p-5">
+        <div className="flex flex-1 flex-col p-5">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2 mb-2">
+            <div className="min-w-0 flex-1">
+              <div className="visitor-status-badges mb-2 flex h-7 flex-nowrap items-center gap-2 overflow-hidden">
                 <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200 px-2 py-1 rounded">
                   Personal Book
                 </span>
@@ -1473,134 +1491,59 @@ export default function OPACCatalog({
                   </span>
                 )}
               </div>
-              <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">
+              <h3 title={book.title || 'Untitled Book'} className="line-clamp-2 min-h-10 text-base font-bold text-slate-900 dark:text-white">
                 {book.title || 'Untitled Book'}
               </h3>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              <p title={book.author || 'Unknown Author'} className="mt-1 truncate text-xs text-slate-700 dark:text-slate-200">
                 By {book.author || 'Unknown Author'}
               </p>
             </div>
-            <div className="flex shrink-0 flex-col items-end gap-2">
-              {String(book.ownerVisitorId ?? '') === String(user?.id ?? '') && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (updatingVisibilityBookId) return;
-                    const nextVisibility = !book.isPublic;
-                    setUpdatingVisibilityBookId(book.id);
-                    setNotice('');
-                    try {
-                      await setPersonalBookVisibility(
-                        user.id,
-                        book.id,
-                        nextVisibility
-                      );
-                      setNotice(
-                        `"${book.title}" is now ${
-                          nextVisibility ? 'public' : 'visible only to you'
-                        }.`
-                      );
-                    } catch (error) {
-                      console.error('UPDATE PERSONAL BOOK VISIBILITY ERROR:', error);
-                      setNotice(error?.message || 'Unable to update book visibility.');
-                    } finally {
-                      setUpdatingVisibilityBookId(null);
-                    }
-                  }}
-                  disabled={updatingVisibilityBookId === book.id}
-                  aria-label={`Make ${book.title} ${book.isPublic ? 'private' : 'public'}`}
-                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
-                >
-                  {book.isPublic ? (
-                    <EyeOff size={13} aria-hidden="true" />
-                  ) : (
-                    <Eye size={13} aria-hidden="true" />
-                  )}
-                  {updatingVisibilityBookId === book.id
-                    ? 'Saving...'
-                    : book.isPublic
-                      ? 'Make Private'
-                      : 'Make Public'}
-                </button>
-              )}
-              {String(book.ownerVisitorId ?? '') === String(user?.id ?? '') && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => openEditPersonalBook(book)}
-                    disabled={hasActiveRequest || savingPersonalBook}
-                    title={
-                      hasActiveRequest
-                        ? 'Resolve active community requests before editing this book.'
-                        : 'Edit personal book'
-                    }
-                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openRemovePersonalBook(book)}
-                    disabled={!canRemove || removingPersonalBookId === book.id}
-                    title={
-                      canRemove
-                        ? 'Remove personal book'
-                        : 'Books with community request history or on-loan copies cannot be removed.'
-                    }
-                    className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1.5 text-[11px] font-bold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/40"
-                  >
-                    Remove
-                  </button>
-                </>
-              )}
-              <BookOpen size={22} className="text-slate-400" aria-hidden="true" />
-            </div>
           </div>
-          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-            <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-700/60">
-              <p className="text-slate-400">Category</p>
-              <p className="font-semibold text-slate-700 dark:text-slate-100">
+          <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+            <div className="min-w-0">
+              <p className="text-slate-700 dark:text-slate-200">Category</p>
+              <p title={book.category || 'Uncategorized'} className="truncate font-semibold text-slate-900 dark:text-white">
                 {book.category || 'Uncategorized'}
               </p>
             </div>
-            <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-700/60">
-              <p className="text-slate-400">Condition</p>
-              <p className="font-semibold text-slate-700 dark:text-slate-100">
+            <div className="min-w-0">
+              <p className="text-slate-700 dark:text-slate-200">Condition</p>
+              <p title={book.condition || 'Not specified'} className="truncate font-semibold text-slate-900 dark:text-white">
                 {book.condition || 'Not specified'}
               </p>
             </div>
-            <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-700/60">
-              <p className="text-slate-400">Lending Period</p>
-              <p className="font-semibold text-slate-700 dark:text-slate-100">
+            <div className="min-w-0">
+              <p className="text-slate-700 dark:text-slate-200">Lending Period</p>
+              <p className="truncate font-semibold text-slate-900 dark:text-white">
                 {book.lendingEnabled ? `${book.lendingPeriodDays || 7} days` : 'Not applicable'}
               </p>
             </div>
-            <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-700/60">
-              <p className="text-slate-400">ISBN</p>
-              <p className="font-mono font-semibold text-slate-700 dark:text-slate-100">
-                {book.isbn || 'N/A'}
+            <div className="min-w-0">
+              <p className="text-slate-700 dark:text-slate-200">ISBN</p>
+              <p className="truncate font-semibold tabular-nums text-slate-900 dark:text-white">
+                {book.isbn || '—'}
               </p>
             </div>
-            <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-900">
-              <p className="text-slate-400">Copies</p>
-              <p className="font-semibold text-slate-700 dark:text-slate-200">
+            <div className="min-w-0">
+              <p className="text-slate-700 dark:text-slate-200">Copies</p>
+              <p className="truncate font-semibold text-slate-900 dark:text-white">
                 {getPersonalBookAvailabilityLabel(book)}
               </p>
             </div>
           </div>
           {book.lendingEnabled && (
-            <div className="mt-3 rounded-lg border border-amber-100 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/40">
+            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/60">
               <div className="flex items-start gap-2">
-                <MapPin size={15} className="mt-0.5 shrink-0 text-amber-600" aria-hidden="true" />
+              <MapPin size={15} className="mt-0.5 shrink-0 text-slate-700 dark:text-slate-200" aria-hidden="true" />
                 <div className="min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100">
                     Handover Arrangement
                   </p>
-                  <p className="mt-0.5 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  <p className="mt-0.5 text-xs font-semibold text-slate-900 dark:text-white">
                     {getHandoverMethodLabel(book.handoverMethod)}
                   </p>
                   {book.handoverDetails && (
-                    <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{book.handoverDetails}</p>
+                    <p className="mt-1 text-xs text-slate-700 dark:text-slate-200">{book.handoverDetails}</p>
                   )}
                 </div>
               </div>
@@ -1608,7 +1551,73 @@ export default function OPACCatalog({
           )}
           {book.summary && (
             <div className="mt-3">
-              <p className="line-clamp-3 text-xs text-slate-500 dark:text-slate-300">{book.summary}</p>
+              <p className="line-clamp-3 text-xs text-slate-700 dark:text-slate-200">{book.summary}</p>
+            </div>
+          )}
+          {String(book.ownerVisitorId ?? '') === String(user?.id ?? '') && (
+            <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (updatingVisibilityBookId) return;
+                  const nextVisibility = !book.isPublic;
+                  setUpdatingVisibilityBookId(book.id);
+                  setNotice('');
+                  try {
+                    await setPersonalBookVisibility(
+                      user.id,
+                      book.id,
+                      nextVisibility
+                    );
+                    setNotice(
+                      `"${book.title}" is now ${
+                        nextVisibility ? 'public' : 'visible only to you'
+                      }.`
+                    );
+                  } catch (error) {
+                    console.error('UPDATE PERSONAL BOOK VISIBILITY ERROR:', error);
+                    setNotice(error?.message || 'Unable to update book visibility.');
+                  } finally {
+                    setUpdatingVisibilityBookId(null);
+                  }
+                }}
+                disabled={updatingVisibilityBookId === book.id}
+                aria-label={`Make ${book.title} ${book.isPublic ? 'private' : 'public'}`}
+                className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700"
+              >
+                {book.isPublic ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}
+                {updatingVisibilityBookId === book.id
+                  ? 'Saving...'
+                  : book.isPublic
+                    ? 'Make Private'
+                    : 'Make Public'}
+              </button>
+              <button
+                type="button"
+                onClick={() => openEditPersonalBook(book)}
+                disabled={hasActiveRequest || savingPersonalBook}
+                title={
+                  hasActiveRequest
+                    ? 'Resolve active community requests before editing this book.'
+                    : 'Edit personal book'
+                }
+                className="inline-flex min-h-9 items-center rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={() => openRemovePersonalBook(book)}
+                disabled={!canRemove || removingPersonalBookId === book.id}
+                title={
+                  canRemove
+                    ? 'Remove personal book'
+                    : 'Books with community request history or on-loan copies cannot be removed.'
+                }
+                className="inline-flex min-h-9 items-center rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-800 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40"
+              >
+                Remove
+              </button>
             </div>
           )}
         </div>
@@ -1620,70 +1629,67 @@ export default function OPACCatalog({
       key={book.id}
       type="button"
       onClick={() => setSelectedBook(book)}
-      className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden text-left transition hover:-translate-y-0.5 hover:shadow-md"
+      className="visitor-community-book-card flex h-full flex-col rounded-xl border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700 dark:bg-slate-800"
     >
-      <div className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap gap-2 mb-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider bg-violet-100 text-violet-700 px-2 py-1 rounded">
+      <div className="flex flex-1 flex-col p-5">
+        <div className="min-w-0">
+            <div className="visitor-status-badges mb-2 flex h-7 flex-nowrap items-center gap-2 overflow-hidden">
+              <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">
                 Community Book
               </span>
               <span
-                className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded ${
+                className={`visitor-status min-w-0 max-w-[60%] truncate ${
                   getPersonalBookCopyAvailability(book).availableCopies > 0
-                    ? 'bg-emerald-100 text-emerald-700'
-                    : 'bg-amber-100 text-amber-700'
+                    ? 'visitor-status-success'
+                    : 'visitor-status-warning'
                 }`}
               >
                 {getPersonalBookAvailabilityLabel(book)}
               </span>
             </div>
-            <h3 className="font-bold text-slate-800 text-sm line-clamp-2">
+            <h3 title={book.title || 'Untitled Book'} className="min-h-10 line-clamp-2 text-sm font-bold text-slate-900 dark:text-white">
               {book.title || 'Untitled Book'}
             </h3>
-            <p className="mt-1 text-xs text-slate-500">
+            <p title={book.author || 'Unknown Author'} className="mt-1 truncate text-xs text-slate-700 dark:text-slate-200">
               By {book.author || 'Unknown Author'}
             </p>
-          </div>
-          <Users size={22} className="shrink-0 text-violet-500" aria-hidden="true" />
         </div>
-        <div className="mt-4 space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-400">Category</span>
-            <span className="font-semibold text-slate-700">{book.category || 'Uncategorized'}</span>
+        <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+          <div className="flex min-w-0 justify-between gap-2">
+            <span className="text-slate-700 dark:text-slate-200">Category</span>
+            <span title={book.category || 'Uncategorized'} className="truncate text-right font-semibold text-slate-900 dark:text-white">{book.category || 'Uncategorized'}</span>
           </div>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-400">Condition</span>
-            <span className="font-semibold text-slate-700">{book.condition || 'Good'}</span>
+          <div className="flex min-w-0 justify-between gap-2">
+            <span className="text-slate-700 dark:text-slate-200">Condition</span>
+            <span title={book.condition || 'Good'} className="truncate text-right font-semibold text-slate-900 dark:text-white">{book.condition || 'Good'}</span>
           </div>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-400 flex items-center gap-1">
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <span className="flex items-center gap-1 text-slate-700 dark:text-slate-200">
               <Clock3 size={12} aria-hidden="true" />
               Lending period
             </span>
-            <span className="font-semibold text-slate-700">
+            <span className="truncate text-right font-semibold text-slate-900 dark:text-white">
               {book.lendingPeriodDays || 7} days
             </span>
           </div>
         </div>
         {book.handoverMethod && (
-          <div className="mt-4 rounded-lg bg-slate-50 p-3">
+          <div className="mt-4 rounded-lg bg-slate-50 p-3 dark:bg-slate-900/60">
             <div className="flex items-start gap-2">
               <MapPin size={14} className="mt-0.5 shrink-0 text-slate-400" aria-hidden="true" />
               <div>
-                <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">
                   Handover Arrangement
                 </p>
-                <p className="text-xs font-semibold text-slate-700 mt-0.5">
+                <p className="mt-0.5 text-xs font-semibold text-slate-900 dark:text-white">
                   {getHandoverMethodLabel(book.handoverMethod)}
                 </p>
               </div>
             </div>
           </div>
         )}
-        <div className="mt-4 rounded-lg bg-violet-50 border border-violet-100 px-3 py-2">
-          <p className="text-[11px] text-violet-700 font-semibold">
+        <div className="mt-auto rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900/60">
+          <p className="text-xs font-semibold text-slate-800 dark:text-slate-100">
             Borrowing requires owner approval.
           </p>
         </div>
@@ -1733,7 +1739,10 @@ export default function OPACCatalog({
       <main className="max-w-7xl mx-auto px-6 pt-6 pb-12 space-y-6">
         
         {notice && (
-          <div className="bg-blue-50 border border-blue-200 text-blue-800 text-xs px-4 py-3 rounded-lg flex justify-between items-start gap-3">
+          <div role="status" aria-live="polite" className="visitor-feedback visitor-feedback-info flex items-start justify-between gap-3 rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
+            <span className="visitor-feedback-icon" aria-hidden="true">
+              <CircleAlert size={16} />
+            </span>
             <span>{notice}</span>
             <button
               type="button"
@@ -1856,6 +1865,7 @@ export default function OPACCatalog({
                 <select
                   value={selectedLibrary}
                   onChange={(event) => setSelectedLibrary(event.target.value)}
+                  aria-label="Filter by library"
                   className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none cursor-pointer"
                 >
                   <option value="All">All Libraries</option>
@@ -1871,6 +1881,7 @@ export default function OPACCatalog({
               <select
                 value={selectedAvailability}
                 onChange={(event) => setSelectedAvailability(event.target.value)}
+                aria-label="Filter by availability status"
                 className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none cursor-pointer"
               >
                 <option value="All">All Statuses</option>
@@ -1910,7 +1921,7 @@ export default function OPACCatalog({
             )}
             {books.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center">
-                <span className="mx-auto grid size-14 place-items-center rounded-full bg-amber-50 text-amber-700">
+                <span className="mx-auto grid size-14 place-items-center rounded-full bg-slate-100 text-slate-700">
                   <BookOpen size={26} aria-hidden="true" />
                 </span>
                 <h3 className="mt-4 text-lg font-bold text-slate-800">
@@ -1958,36 +1969,29 @@ export default function OPACCatalog({
                     key={book.id}
                     onClick={() => setSelectedBook(book)}
                     aria-label={`View details for ${book.title || 'Untitled Book'}`}
-                    className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between text-left"
+                    className="visitor-catalog-book-card flex h-full flex-col rounded-xl border border-slate-200 bg-white text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700 dark:bg-slate-800"
                   >
-                    <div className="p-4 flex gap-4">
-                      <img
-                        src={book.coverUrl || 'https://placehold.co/96x128?text=No+Cover'}
-                        alt={book.title || 'Book cover'}
-                        className="w-20 h-28 object-cover rounded-md border border-slate-200 bg-slate-50"
-                        onError={(event) => {
-                          event.currentTarget.src = 'https://placehold.co/96x128?text=No+Cover';
-                        }}
-                      />
-                      <div className="space-y-1 min-w-0">
-                        <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                    <div className="flex flex-1 gap-4 p-4">
+                      <BookCover key={book.coverUrl || book.title} src={book.coverUrl} title={book.title} className="h-28 w-20" />
+                      <div className="flex min-w-0 flex-1 flex-col">
+                        <span className="w-fit rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">
                           {book.category || 'Uncategorized'}
                         </span>
-                        <h3 className="font-bold text-slate-800 text-sm line-clamp-2">
+                        <h3 title={book.title || 'Untitled Book'} className="mt-1 min-h-10 line-clamp-2 text-sm font-bold text-slate-900 dark:text-white">
                           {book.title || 'Untitled Book'}
                         </h3>
-                        <p className="text-xs text-slate-500">
+                        <p title={book.author || 'Unknown Author'} className="truncate text-xs text-slate-700 dark:text-slate-200">
                           {book.author || 'Unknown Author'}
                         </p>
-                        <p className="text-xs text-slate-400 font-mono">
-                          ISBN: {book.isbn || 'N/A'}
+                        <p className={`mt-1 truncate text-xs tabular-nums ${book.isbn ? 'text-slate-700 dark:text-slate-200' : 'text-slate-600 dark:text-slate-300'}`}>
+                          ISBN: {book.isbn || '—'}
                         </p>
-                        <div className="pt-2">
+                        <div className="mt-auto pt-3">
                           <span
-                            className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                            className={`visitor-status ${
                               Number(book.availableCopies || 0) > 0
-                                ? 'bg-emerald-100 text-emerald-700'
-                                : 'bg-amber-100 text-amber-700'
+                                ? 'visitor-status-success'
+                                : 'visitor-status-neutral'
                             }`}
                           >
                             {Number(book.availableCopies || 0) > 0
@@ -2026,9 +2030,10 @@ export default function OPACCatalog({
                       setSelectedAvailability('All');
                       onViewChange('catalog');
                     }}
-                    className="flex min-h-16 items-center justify-between gap-3 border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-shelf-primary hover:bg-blue-50"
+                    className="flex min-h-16 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-shelf-primary hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
                   >
-                    <span className="min-w-0 text-sm font-semibold text-slate-700">
+                    <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
+                      <Bookmark size={16} aria-hidden="true" />
                       {label}
                     </span>
                     <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
@@ -2048,7 +2053,7 @@ export default function OPACCatalog({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <ClipboardList size={20} className="text-amber-600" aria-hidden="true" />
+                  <ClipboardList size={20} className="text-shelf-primary" aria-hidden="true" />
                   <h2 className="text-lg font-bold text-slate-800">
                     My Reading List
                   </h2>
@@ -2075,22 +2080,22 @@ export default function OPACCatalog({
                 </p>
               </div>
             ) : (
-              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid auto-rows-fr gap-5 md:grid-cols-2 xl:grid-cols-3">
                 {readingListBooks.map((book) => (
                   <div
                     key={book.id}
-                    className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+                    className="flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800"
                   >
-                    <div className="p-4">
+                    <div className="flex flex-1 flex-col p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <span className="inline-block rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-600">
                             {book.category || 'Uncategorized'}
                           </span>
-                          <h3 className="mt-2 text-base font-bold text-slate-800 line-clamp-2">
+                          <h3 title={book.title || 'Untitled Book'} className="mt-2 min-h-12 line-clamp-2 text-base font-bold text-slate-900 dark:text-white">
                             {book.title || 'Untitled Book'}
                           </h3>
-                          <p className="mt-1 text-xs text-slate-500">
+                          <p title={book.author || 'Unknown Author'} className="mt-1 truncate text-xs text-slate-700 dark:text-slate-200">
                             By {book.author || 'Unknown Author'}
                           </p>
                         </div>
@@ -2099,10 +2104,10 @@ export default function OPACCatalog({
                       <div className="mt-4 space-y-2 text-xs text-slate-600">
                         <div className="flex items-center justify-between gap-2">
                           <span>Availability</span>
-                          <span className={`rounded-full px-2 py-0.5 font-bold ${
+                          <span className={`visitor-status ${
                             Number(book.availableCopies || 0) > 0
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : 'bg-amber-100 text-amber-700'
+                              ? 'visitor-status-success'
+                              : 'visitor-status-neutral'
                           }`}>
                             {Number(book.availableCopies || 0) > 0
                               ? `${book.availableCopies} available`
@@ -2111,12 +2116,12 @@ export default function OPACCatalog({
                         </div>
                         <div className="flex items-center justify-between gap-2">
                           <span>ISBN</span>
-                          <span className="font-mono text-slate-500">
-                            {book.isbn || 'N/A'}
+                          <span className="truncate text-right tabular-nums text-slate-700 dark:text-slate-200">
+                            {book.isbn || '—'}
                           </span>
                         </div>
                       </div>
-                      <div className="mt-4 flex gap-2">
+                      <div className="mt-auto flex gap-2 pt-4">
                         <button
                           type="button"
                           onClick={() => setSelectedBook(book)}
@@ -2144,7 +2149,7 @@ export default function OPACCatalog({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <Users size={20} className="text-violet-600" aria-hidden="true" />
+                  <Users size={20} className="text-slate-700 dark:text-slate-200" aria-hidden="true" />
                   <h2 className="text-lg font-bold text-slate-800">
                     Community Books
                   </h2>
@@ -2155,7 +2160,10 @@ export default function OPACCatalog({
               </div>
             </div>
             {communityBookError && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
+              <div role="alert" className="visitor-feedback visitor-feedback-error rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">
+                <span className="visitor-feedback-icon" aria-hidden="true">
+                  <CircleAlert size={16} />
+                </span>
                 {communityBookError}
               </div>
             )}
@@ -2186,7 +2194,7 @@ export default function OPACCatalog({
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
-                  <UserRound size={20} className="text-blue-600 dark:text-blue-400" aria-hidden="true" />
+                  <UserRound size={20} className="text-shelf-primary dark:text-slate-200" aria-hidden="true" />
                   <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
                     My Personal Books
                   </h2>
@@ -2209,32 +2217,55 @@ export default function OPACCatalog({
                 Add Personal Book
               </button>
             </div>
-            <div className="order-3 w-full min-w-0 overflow-hidden rounded-xl border border-violet-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
-              <div className="px-5 py-4 border-b border-violet-100 bg-violet-50 dark:border-slate-700 dark:bg-slate-800">
+            <div className="order-3 w-full min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <div className="border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-700 dark:bg-slate-900/60">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-sm font-bold text-violet-900 dark:text-violet-200">
+                    <h3 className="text-sm font-bold text-shelf-primary dark:text-white">
                       Community Book Requests
                     </h3>
-                    <p className="mt-1 text-xs text-violet-700 dark:text-violet-300">
+                    <p className="mt-1 text-xs text-slate-700 dark:text-slate-200">
                       Review requests from visitors who want to borrow your personal books.
                     </p>
                   </div>
                   {ownerCommunityRequests.length > 0 && (
-                    <span className="shrink-0 rounded-full bg-violet-600 px-2.5 py-1 text-[11px] font-bold text-white">
+                    <span className="shrink-0 rounded-full bg-shelf-primary px-2.5 py-1 text-xs font-bold text-white">
                       {ownerCommunityRequests.length}
                     </span>
                   )}
                 </div>
               </div>
-              {(ownerCommunityRequestError || ownerCommunityRequestLoadError) && (
-                <div className="mx-5 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
-                  {ownerCommunityRequestError || ownerCommunityRequestLoadError}
+              {ownerRequestErrorMessage &&
+                dismissedOwnerRequestError !== ownerRequestErrorMessage && (
+                <div role="alert" className="visitor-feedback visitor-feedback-error mx-5 mt-4 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">
+                  <span className="visitor-feedback-icon" aria-hidden="true">
+                    <CircleAlert size={16} />
+                  </span>
+                  {ownerRequestErrorMessage}
+                  <button
+                    type="button"
+                    onClick={() => setDismissedOwnerRequestError(ownerRequestErrorMessage)}
+                    className="rounded-lg p-1 text-red-900 hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-700 dark:text-red-200 dark:hover:bg-red-900/50"
+                    aria-label="Dismiss community request error"
+                  >
+                    <X size={16} aria-hidden="true" />
+                  </button>
                 </div>
               )}
               {communityRequestNotice && (
-                <div className="mx-5 mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+                <div role="status" aria-live="polite" className="visitor-feedback visitor-feedback-success mx-5 mt-4 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+                  <span className="visitor-feedback-icon" aria-hidden="true">
+                    <CheckCircle2 size={16} />
+                  </span>
                   {communityRequestNotice}
+                  <button
+                    type="button"
+                    onClick={() => setCommunityRequestNotice('')}
+                    className="rounded-lg p-1 text-emerald-900 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 dark:text-emerald-200 dark:hover:bg-emerald-900/50"
+                    aria-label="Dismiss community request update"
+                  >
+                    <X size={16} aria-hidden="true" />
+                  </button>
                 </div>
               )}
               {!loadingOwnerCommunityRequests && ownerCommunityRequests.length > 0 && (
@@ -2245,20 +2276,41 @@ export default function OPACCatalog({
                         ? ownerCommunityRequests.length
                         : ownerCommunityRequestCounts[filter.status] || 0;
                     const isSelected = ownerCommunityRequestFilter === filter.key;
+                    const filterStatusClass =
+                      filter.key === 'pending'
+                        ? 'visitor-status-warning'
+                        : filter.key === 'to-confirm'
+                          ? 'visitor-status-warning'
+                          : filter.key === 'borrowed'
+                            ? 'visitor-status-navy'
+                            : filter.key === 'rejected'
+                              ? 'visitor-status-danger'
+                              : filter.key === 'returned'
+                                ? 'visitor-status-success'
+                                : 'visitor-status-neutral';
+                    const FilterIcon =
+                      filter.key === 'pending' || filter.key === 'to-confirm'
+                        ? Clock3
+                        : filter.key === 'returned'
+                          ? CheckCircle2
+                          : filter.key === 'rejected'
+                            ? X
+                            : Users;
                     return (
                       <button
                         key={filter.key}
                         type="button"
                         aria-pressed={isSelected}
                         onClick={() => setOwnerCommunityRequestFilter(filter.key)}
-                        className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                        className={`visitor-request-filter shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                           isSelected
-                            ? 'border-shelf-primary bg-shelf-primary text-white'
-                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400 hover:text-shelf-primary dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:border-slate-400 dark:hover:text-white'
+                            ? `border-shelf-primary ${filterStatusClass}`
+                            : `border-slate-200 bg-white text-slate-800 hover:border-slate-400 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 ${count === 0 ? 'is-empty' : ''}`
                         }`}
                       >
+                        <FilterIcon size={13} aria-hidden="true" />
                         {filter.label}
-                        <span className={`ml-1.5 ${isSelected ? 'text-violet-100' : 'text-slate-400'}`}>
+                        <span className={`ml-1.5 ${count === 0 ? 'text-slate-600 dark:text-slate-300' : ''}`}>
                           {count}
                         </span>
                       </button>
@@ -2299,22 +2351,24 @@ export default function OPACCatalog({
                       >
                         <div className="space-y-3">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded bg-violet-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">
+                              <Users size={12} aria-hidden="true" />
                               Community Request
                             </span>
-                            <span
-                              className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
-                                status === 'approved'
-                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
-                                  : status === 'borrowed'
-                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300'
-                                    : status === 'returned'
-                                      ? 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
-                                      : status === 'rejected'
-                                        ? 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300'
-                                        : 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
-                              }`}
-                            >
+                            <span className={`visitor-status ${
+                              status === 'approved'
+                                ? 'visitor-status-warning'
+                                : status === 'borrowed'
+                                  ? 'visitor-status-navy'
+                                  : status === 'returned'
+                                    ? 'visitor-status-success'
+                                    : status === 'rejected'
+                                      ? 'visitor-status-danger'
+                                      : status === 'cancelled'
+                                        ? 'visitor-status-neutral'
+                                        : 'visitor-status-warning'
+                            }`}>
+                              {status === 'returned' ? <CheckCircle2 size={12} aria-hidden="true" /> : <Clock3 size={12} aria-hidden="true" />}
                               {status === 'approved'
                                 ? 'Approved'
                                 : status === 'borrowed'
@@ -2335,7 +2389,7 @@ export default function OPACCatalog({
                               {request.requesterName || 'SHELF Visitor'}
                             </span>
                           </p>
-                          <p className="text-[11px] text-slate-400 dark:text-slate-400">
+                          <p className="text-xs text-slate-700 dark:text-slate-200">
                             Requested: {formatDateTime(request.requestDate)}
                           </p>
                           {request.ownerResponse && (
@@ -2370,14 +2424,14 @@ export default function OPACCatalog({
                           </div>
                         )}
                         {status === 'approved' && (
-                          <div className="mt-4 w-full rounded-xl border-2 border-blue-300 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/40">
+                          <div className="mt-4 w-full rounded-xl border border-slate-300 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-900/60">
                             <div className="flex items-center gap-2">
-                              <span className="inline-flex h-2.5 w-2.5 rounded-full bg-blue-600" />
-                              <p className="text-xs font-black uppercase tracking-wider text-blue-800 dark:text-blue-200">
+                              <span className="inline-flex h-2.5 w-2.5 rounded-full bg-slate-500" />
+                              <p className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
                                 Approved — Awaiting Handover
                               </p>
                             </div>
-                            <p className="mt-2 text-xs text-blue-700 dark:text-blue-300">
+                            <p className="mt-2 text-xs text-slate-700 dark:text-slate-200">
                               This request has been approved. After you physically hand the book to the requester, click the button below.
                             </p>
                             <button
@@ -2391,11 +2445,11 @@ export default function OPACCatalog({
                           </div>
                         )}
                         {status === 'borrowed' && (
-                          <div className="mt-4 w-full rounded-xl border-2 border-violet-300 bg-violet-50 p-4 dark:border-violet-800 dark:bg-violet-950/40">
-                            <p className="text-xs font-black uppercase tracking-wider text-violet-800 dark:text-violet-200">
+                          <div className="mt-4 w-full rounded-xl border border-slate-300 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-900/60">
+                            <p className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
                               Book Currently Borrowed
                             </p>
-                            <p className="mt-2 text-xs text-violet-700 dark:text-violet-300">
+                            <p className="mt-2 text-xs text-slate-700 dark:text-slate-200">
                               Confirm the return after the requester gives the book back to you.
                             </p>
                             <button
@@ -2410,7 +2464,8 @@ export default function OPACCatalog({
                         )}
                         {status === 'returned' && (
                           <div className="mt-4 w-full rounded-lg border border-slate-200 bg-slate-100 px-4 py-3 dark:border-slate-700 dark:bg-slate-700/60">
-                            <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                            <p className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-100">
+                              <CheckCircle2 size={15} className="text-green-700 dark:text-green-300" aria-hidden="true" />
                               Book Returned
                             </p>
                             <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
@@ -2465,13 +2520,13 @@ export default function OPACCatalog({
             )}
           </section>
         ) : (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+          <div className="visitor-requests-table rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
             {myRequests.length === 0 ? (
               <p className="p-6 text-sm text-slate-500">
                 You have no borrow requests yet. Browse the catalog to get started.
               </p>
             ) : (
-              <table className="w-full text-left text-sm">
+              <table className="visitor-requests-table-content w-full text-left text-sm">
                 <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase tracking-wider">
                   <tr>
                     <th className="p-4">Book Title</th>
@@ -2503,43 +2558,57 @@ export default function OPACCatalog({
                       request.queuePosition ??
                       request.queue_position ??
                       request.position;
+                    const statusClass = isOverdue
+                      ? 'visitor-status visitor-status-danger'
+                      : isCommunityRequest
+                        ? request.status === 'pending' ||
+                          request.status === 'approved'
+                          ? 'visitor-status visitor-status-warning'
+                          : request.status === 'borrowed'
+                            ? 'visitor-status visitor-status-navy'
+                            : request.status === 'returned'
+                              ? 'visitor-status visitor-status-success'
+                              : request.status === 'rejected'
+                                ? 'visitor-status visitor-status-danger'
+                                : 'visitor-status visitor-status-neutral'
+                        : STATUS_STYLES[request.status] ||
+                          'visitor-status visitor-status-neutral';
+                    const StatusIcon =
+                      isOverdue || request.status === 'rejected'
+                        ? CircleAlert
+                        : request.status === 'returned'
+                          ? CheckCircle2
+                          : request.status === 'pending' ||
+                              request.status === 'ready_for_pickup' ||
+                              request.status === 'queued' ||
+                              request.status === 'approved'
+                            ? Clock3
+                            : BookOpen;
                     return (
                       <tr
                         key={request.id}
                         id={`borrow-request-${request.id}`}
                         className={`hover:bg-slate-50 ${
                           String(focusRequestId) === String(request.id)
-                            ? 'bg-amber-50 ring-2 ring-inset ring-amber-400'
+                            ? 'bg-slate-100 ring-2 ring-inset ring-slate-500 dark:bg-slate-700'
                             : ''
                         }`}
                       >
-                        <td className="p-4 font-bold text-slate-800">
+                        <td data-label="Book Title" className="p-4 font-bold text-slate-900 dark:text-white">
                           <div className="flex flex-col gap-1">
-                            <span>{request.bookTitle || 'Untitled Book'}</span>
+                            <span className="break-words">{request.bookTitle || 'Untitled Book'}</span>
                             {isCommunityRequest && (
-                              <span className="w-fit text-[10px] px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-bold uppercase tracking-wide">
+                              <span className="w-fit rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">
                                 Community Book
                               </span>
                             )}
                           </div>
                         </td>
-                        <td className="p-4">
+                        <td data-label="Status" className="p-4">
                           <span
-                            className={`text-xs px-2.5 py-1 rounded-full font-bold ${
-                              isOverdue
-                                ? 'bg-red-100 text-red-700'
-                                : STATUS_STYLES[request.status] ||
-                                  (isCommunityRequest && request.status === 'pending')
-                                  ? 'bg-amber-100 text-amber-700'
-                                  : (isCommunityRequest && request.status === 'approved')
-                                    ? 'bg-green-100 text-green-700'
-                                    : (isCommunityRequest && request.status === 'rejected')
-                                      ? 'bg-red-100 text-red-700'
-                                      : (isCommunityRequest && request.status === 'cancelled')
-                                        ? 'bg-slate-100 text-slate-600'
-                                        : 'bg-slate-100 text-slate-600'
-                            }`}
+                            className={statusClass}
                           >
+                            <StatusIcon size={12} aria-hidden="true" />
                             {isOverdue
                               ? 'Overdue'
                               : isCommunityRequest
@@ -2557,12 +2626,9 @@ export default function OPACCatalog({
                                 : STATUS_LABELS[request.status] || request.status}
                           </span>
                         </td>
-                        <td className="p-4 text-xs text-slate-500 space-y-1">
+                        <td data-label="Details" className="p-4 space-y-1 text-xs text-slate-700 dark:text-slate-200">
                           {isCommunityRequest && (
                             <>
-                              <p className="font-semibold text-violet-700">
-                                Community Book Request
-                              </p>
                               <p>
                                 Requested:{' '}
                                 {request.requestDate
@@ -2574,12 +2640,13 @@ export default function OPACCatalog({
                               )}
                               {request.status === 'pending' && (
                                 <div className="space-y-1">
-                                  <p className="font-semibold text-amber-600">
+                                  <p className="flex items-start gap-1 font-medium text-slate-700 dark:text-slate-200">
+                                    <Clock3 size={13} className="mt-0.5 shrink-0" aria-hidden="true" />
                                     Waiting for the book owner to approve your request.
                                   </p>
                                   {request.queuePosition != null && (
-                                    <p className="font-semibold text-violet-700">
-                                      Queue position: #{request.queuePosition}
+                                    <p className="visitor-status visitor-status-neutral w-fit">
+                                      Queue #{request.queuePosition}
                                     </p>
                                   )}
                                 </div>
@@ -2636,7 +2703,8 @@ export default function OPACCatalog({
                                 </div>
                               )}
                               {request.status === 'rejected' && (
-                                <p className="font-semibold text-red-600">
+                                <p className="flex items-center gap-1 font-semibold text-red-800 dark:text-red-300">
+                                  <CircleAlert size={13} aria-hidden="true" />
                                   Your request was rejected by the book owner.
                                 </p>
                               )}
@@ -2658,11 +2726,10 @@ export default function OPACCatalog({
                             </>
                           )}
                           {!isCommunityRequest && request.status === 'queued' && (
-                            <p>
-                              Queue position:{' '}
+                            <p className="visitor-status visitor-status-neutral w-fit">
                               {queuePosition !== undefined && queuePosition !== null
-                                ? `#${queuePosition}`
-                                : 'Pending'}
+                                ? `Queue #${queuePosition}`
+                                : 'Queue pending'}
                             </p>
                           )}
                           {!isCommunityRequest && request.status === 'ready_for_pickup' && (
@@ -2687,15 +2754,17 @@ export default function OPACCatalog({
                           {!isCommunityRequest && request.status === 'returned' && (
                             <p>Returned: {formatDate(request.returnDate)}</p>
                           )}
+                          {request.status === 'expired' && <span>—</span>}
                         </td>
                         <td
-                          className={`p-4 font-mono font-bold text-xs ${
+                          data-label="Fine (PHP)"
+                          className={`p-4 text-right font-bold tabular-nums text-xs ${
                             currentFine > 0 ? 'text-red-600' : 'text-slate-500'
                           }`}
                         >
                           {"\u20B1"}{currentFine.toFixed(2)}
                         </td>
-                        <td className="p-4 text-right">
+                        <td data-label="Action" className="p-4 text-right">
                           {canCancel && (
                             <button
                               type="button"
@@ -3181,60 +3250,54 @@ export default function OPACCatalog({
       ====================================================== */}
       {selectedBook && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 space-y-5 border border-slate-200 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+          <div className="visitor-book-modal relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800">
             <button
               type="button"
               onClick={() => setSelectedBook(null)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 font-bold"
+              className="absolute right-4 top-4 z-10 rounded-lg bg-white/90 p-2 text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary dark:bg-slate-800/90 dark:text-slate-100 dark:hover:bg-slate-700"
               aria-label="Close book information"
             >
               <X size={18} aria-hidden="true" />
             </button>
+            <div className="visitor-book-modal-body min-h-0 flex-1 space-y-5 overflow-y-auto p-5 sm:p-6">
             <div className="flex gap-4 pr-8">
-              <img
-                src={selectedBook.coverUrl || 'https://placehold.co/96x128?text=No+Cover'}
-                alt={selectedBook.title || 'Book cover'}
-                className="w-24 h-32 object-cover rounded-lg border border-slate-200 bg-slate-50"
-                onError={(event) => {
-                  event.currentTarget.src = 'https://placehold.co/96x128?text=No+Cover';
-                }}
-              />
-              <div className="space-y-1">
+              <BookCover key={`${selectedBook.id}-${selectedBook.coverUrl || selectedBook.title}`} src={selectedBook.coverUrl} title={selectedBook.title} className="h-32 w-24" />
+              <div className="min-w-0 space-y-1">
                 <div className="flex flex-wrap gap-2">
                   {selectedBook.bookType === 'personal' ? (
-                    <span className="text-[10px] font-bold uppercase tracking-wider bg-violet-100 text-violet-700 px-2 py-0.5 rounded">
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">
                       Community Book
                     </span>
                   ) : (
-                    <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">
                       Library Book
                     </span>
                   )}
                   {selectedBook.condition && (
-                    <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">
                       {selectedBook.condition}
                     </span>
                   )}
                 </div>
-                <h3 className="text-lg font-bold text-slate-800">
+                <h3 title={selectedBook.title || 'Untitled Book'} className="line-clamp-2 text-lg font-bold text-slate-900 dark:text-white">
                   {selectedBook.title || 'Untitled Book'}
                 </h3>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-700 dark:text-slate-200">
                   By {selectedBook.author || 'Unknown Author'}
                 </p>
-                <p className="text-xs text-slate-400 font-mono">
-                  ISBN: {selectedBook.isbn || 'N/A'}
+                <p className="text-xs tabular-nums text-slate-700 dark:text-slate-200">
+                  ISBN: {selectedBook.isbn || '—'}
                 </p>
               </div>
             </div>
             {selectedBook.bookType === 'personal' && (
-              <div className="rounded-lg border border-violet-100 bg-violet-50 p-4 space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-violet-800">
+              <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/60">
+                <h4 className="text-sm font-bold text-shelf-primary dark:text-white">
                   Community Lending
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <p className="text-[10px] text-violet-500 uppercase font-bold">
+                    <p className="text-xs font-semibold text-shelf-primary dark:text-slate-200">
                       Condition
                     </p>
                     <p className="text-xs font-semibold text-slate-700">
@@ -3242,7 +3305,7 @@ export default function OPACCatalog({
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-violet-500 uppercase font-bold">
+                    <p className="text-xs font-semibold text-shelf-primary dark:text-slate-200">
                       Lending Period
                     </p>
                     <p className="text-xs font-semibold text-slate-700">
@@ -3250,7 +3313,7 @@ export default function OPACCatalog({
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-violet-500 uppercase font-bold">
+                    <p className="text-xs font-semibold text-shelf-primary dark:text-slate-200">
                       Copies
                     </p>
                     <p className="text-xs font-semibold text-slate-700">
@@ -3258,7 +3321,7 @@ export default function OPACCatalog({
                     </p>
                   </div>
                   <div className="sm:col-span-2">
-                    <p className="text-[10px] text-violet-500 uppercase font-bold">
+                    <p className="text-xs font-semibold text-shelf-primary dark:text-slate-200">
                       Handover Arrangement
                     </p>
                     <p className="text-xs font-semibold text-slate-700">
@@ -3266,15 +3329,15 @@ export default function OPACCatalog({
                     </p>
                   </div>
                 </div>
-                <div className="rounded-lg bg-white border border-violet-100 px-3 py-2">
-                  <p className="text-[11px] font-semibold text-violet-700">
+                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+                  <p className="text-xs font-semibold text-slate-800 dark:text-slate-100">
                     Owner approval is required before borrowing. Contact details are shared with the requester after approval.
                   </p>
                 </div>
               </div>
             )}
-            <div className="space-y-1 bg-slate-50 p-3 rounded-lg border border-slate-100">
-              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+            <div className="space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/60">
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white">
                 Book Summary
               </h4>
               <p className="text-xs text-slate-600 leading-relaxed">
@@ -3303,8 +3366,8 @@ export default function OPACCatalog({
             )}
             {selectedBook.bookType !== 'personal' && !selectedBook.isExternalCatalog && (
               <div className="space-y-3 pt-2">
-                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Available Library Locations:
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Available Library Locations
                 </h4>
                 <div className="space-y-2">
                   {getPartnerLibraryEntries(selectedBook).length === 0 ? (
@@ -3368,7 +3431,7 @@ export default function OPACCatalog({
               </div>
             )}
             {selectedBook?.bookType === 'personal' && (
-              <div className="border-t border-slate-200 pt-4 space-y-3">
+              <div className="visitor-modal-community-action border-t border-slate-200 pt-4 space-y-3 dark:border-slate-700">
                 <button
                   type="button"
                   onClick={() => handleRequestCommunityBook(selectedBook)}
@@ -3398,8 +3461,8 @@ export default function OPACCatalog({
                 )}
               </div>
             )}
-            <div className="pt-4 border-t border-slate-200 space-y-4">
-              <h4 className="flex items-center justify-between text-sm font-bold uppercase tracking-wide text-slate-800">
+            <div className="space-y-4 border-t border-slate-200 pt-4 dark:border-slate-700">
+              <h4 className="flex items-center justify-between text-sm font-bold text-slate-900 dark:text-white">
                 <span>Ratings &amp; Reviews</span>
                 <span className="text-xs font-normal normal-case tracking-normal text-slate-500">
                   ({reviews.length} {reviews.length === 1 ? 'review' : 'reviews'})
@@ -3435,14 +3498,14 @@ export default function OPACCatalog({
                               size={18}
                               className={rating <= displayedRating
                                 ? 'fill-amber-400 text-amber-500'
-                                : 'text-slate-300'}
+                                : 'text-slate-500 dark:text-slate-300'}
                               aria-hidden="true"
                             />
                           </button>
                         );
                       })}
                     </div>
-                    <span className="min-w-8 text-xs font-bold text-amber-600">
+                    <span className="min-w-8 text-xs font-bold text-amber-800 dark:text-amber-300">
                       {hoverRating || userRating}/5
                     </span>
                   </div>
@@ -3465,7 +3528,7 @@ export default function OPACCatalog({
                   </button>
                 </div>
               </form>
-              <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
+              <div className="visitor-modal-reviews max-h-48 space-y-3 overflow-y-auto pr-1">
                 {loadingReviews ? (
                   <p className="text-xs text-slate-400 italic">
                     Loading reviews...
@@ -3510,6 +3573,7 @@ export default function OPACCatalog({
                 </>
               )}
             </p>
+            </div>
           </div>
         </div>
       )}

@@ -3,6 +3,7 @@ import Draggable from 'react-draggable';
 import { QRCodeSVG } from 'qrcode.react';
 import { ThemeProvider } from '../../context/ThemeContext.jsx';
 import { useTheme } from '../../context/useTheme.js';
+import './visitorDashboard.css';
 import {
   Bell,
   BookMarked,
@@ -10,13 +11,18 @@ import {
   CalendarDays,
   AlertTriangle,
   Bookmark,
+  CheckCircle2,
+  Clock3,
   ClipboardList,
   CircleDollarSign,
   LogOut,
+  Mail,
   MapPinned,
   Megaphone,
   MessageCircle,
   Moon,
+  MapPin,
+  Phone,
   QrCode,
   Search,
   Sun,
@@ -38,13 +44,13 @@ import DashboardWelcome from '../../component/DashboardWelcome.jsx';
 
 function formatDateTime(iso) {
   if (!iso) {
-    return '';
+    return '—';
   }
 
   const date = new Date(iso);
 
   if (Number.isNaN(date.getTime())) {
-    return '';
+    return '—';
   }
 
   return date.toLocaleString('en-PH', {
@@ -64,22 +70,34 @@ function getStatusClass(status) {
 
   switch (normalizedStatus) {
     case 'returned':
-      return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+      return 'visitor-status visitor-status-success';
 
     case 'borrowed':
-      return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
+      return 'visitor-status visitor-status-navy';
 
     case 'ready_for_pickup':
-      return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
+      return 'visitor-status visitor-status-navy';
 
     case 'queued':
-      return 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300';
-
+    case 'expired':
     case 'cancelled':
-      return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+      return 'visitor-status visitor-status-neutral';
+
+    case 'rejected':
+    case 'overdue':
+      return 'visitor-status visitor-status-danger';
+
+    case 'pending':
+    case 'pending_approval':
+    case 'to_confirm':
+      return 'visitor-status visitor-status-warning';
+
+    case 'available':
+    case 'success':
+      return 'visitor-status visitor-status-success';
 
     default:
-      return 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
+      return 'visitor-status visitor-status-neutral';
   }
 }
 
@@ -136,6 +154,8 @@ function VisitorDashboardContent() {
   const [isSavingQr, setIsSavingQr] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [menuSection, setMenuSection] = useState('profile');
+  const [showAllTransactions, setShowAllTransactions] = useState(false);
+  const [dismissedReminderIds, setDismissedReminderIds] = useState(() => new Set());
   const [isFaqOpen, setIsFaqOpen] = useState(false);
   const faqDragRef = useRef(null);
 
@@ -478,6 +498,37 @@ function VisitorDashboardContent() {
         new Date(a.requestDate || 0)
     );
 
+  const pastTransactionStatuses = new Set([
+    'returned',
+    'cancelled',
+    'expired',
+    'rejected',
+  ]);
+  const transactionGroups = [
+    {
+      label: 'Active',
+      entries: myTransactions.filter(
+        (transaction) =>
+          !pastTransactionStatuses.has(
+            String(transaction.status || '').toLowerCase()
+          )
+      ),
+    },
+    {
+      label: 'Past',
+      entries: myTransactions.filter((transaction) =>
+        pastTransactionStatuses.has(
+          String(transaction.status || '').toLowerCase()
+        )
+      ),
+    },
+  ];
+  const visibleTransactionIds = new Set(
+    myTransactions
+      .slice(0, showAllTransactions ? myTransactions.length : 5)
+      .map((transaction) => String(transaction.id))
+  );
+
   const communityReturnReminders = myTransactions
     .filter(
       (transaction) =>
@@ -494,6 +545,10 @@ function VisitorDashboardContent() {
       ),
     }))
     .filter((transaction) => transaction.reminder);
+
+  const visibleCommunityReturnReminders = communityReturnReminders.filter(
+    (transaction) => !dismissedReminderIds.has(String(transaction.id))
+  );
 
   // =========================================================
   // LIBRARY NAME
@@ -703,27 +758,22 @@ function VisitorDashboardContent() {
       {/* =====================================================
           HEADER
       ====================================================== */}
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-shelf-primary px-4 py-3 text-white shadow-md sm:px-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <header className="visitor-header sticky top-0 z-40 border-b border-white/10 bg-shelf-primary px-3 py-3 text-white shadow-md sm:px-6">
+        <div className="flex min-w-0 items-center justify-between gap-3">
 
           {/* LEFT: LOGO AND PORTAL LABEL */}
-            <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
-            <span className="text-lg font-extrabold tracking-wider">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <span className="shrink-0 text-base font-extrabold tracking-wider sm:text-lg">
               SHELF ILMS
             </span>
 
-            <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-sm font-medium">
+            <span className="visitor-portal-label hidden text-xs font-medium sm:inline">
               Library Visitor
             </span>
           </div>
 
-          {/* RIGHT: WELCOME AND USER CONTROLS */}
-          <div className="grid w-full grid-cols-4 items-center gap-2 sm:ml-auto sm:flex sm:w-auto sm:justify-end sm:gap-3">
-
-            {/* WELCOME */}
-            <span className="col-span-4 text-sm text-slate-200 sm:col-span-1 sm:mr-1">
-              Welcome, <b>{user?.name || 'Visitor'}</b>
-            </span>
+          {/* RIGHT: USER CONTROLS */}
+          <div className="flex shrink-0 items-center justify-end gap-1.5 sm:ml-auto sm:gap-3">
 
             {/* PROFILE */}
             <button
@@ -732,19 +782,31 @@ function VisitorDashboardContent() {
                 setMenuSection('profile');
                 setIsMenuOpen(true);
               }}
-              className="flex items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-white transition hover:bg-white/20"
+              className="visitor-profile-chip inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:px-3"
               aria-label="Open profile"
               title="Profile"
             >
-              <UserRound size={18} aria-hidden="true" />
-              <span className="hidden text-xs font-semibold sm:inline">Profile</span>
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/15 text-[11px] font-bold">
+                {(user?.name || visitorDetails?.fullName || 'Visitor')
+                  .trim()
+                  .split(/\s+/)
+                  .slice(0, 2)
+                  .map((part) => part[0])
+                  .join('')
+                  .toUpperCase()}
+              </span>
+              <span className="hidden max-w-24 truncate text-xs font-semibold md:inline">
+                {(user?.name || visitorDetails?.fullName || 'Visitor')
+                  .trim()
+                  .split(/\s+/)[0]}
+              </span>
             </button>
 
             {/* DARK MODE */}
             <button
               type="button"
               onClick={() => setIsDarkAppearance((prev) => !prev)}
-              className="col-span-1 inline-flex min-h-10 w-full items-center justify-center gap-1 rounded-xl border border-white/20 bg-white/10 px-2 py-2 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 sm:w-auto sm:gap-2 sm:px-3"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/20 bg-transparent text-white transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
               aria-label={
                 isDarkAppearance
                   ? 'Switch to light mode'
@@ -757,28 +819,7 @@ function VisitorDashboardContent() {
                   : 'Switch to dark mode'
               }
             >
-              {isDarkAppearance ? (
-                <Sun size={18} aria-hidden="true" />
-              ) : (
-                <Moon size={18} aria-hidden="true" />
-              )}
-
-              <span className="hidden text-xs font-semibold sm:inline">
-                {isDarkAppearance ? 'Light Mode' : 'Dark Mode'}
-              </span>
-
-              <span
-                aria-hidden="true"
-                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
-                  isDarkAppearance ? 'bg-blue-500' : 'bg-slate-400'
-                }`}
-              >
-                <span
-                  className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
-                    isDarkAppearance ? 'translate-x-4' : 'translate-x-1'
-                  }`}
-                />
-              </span>
+              {isDarkAppearance ? <Sun size={18} aria-hidden="true" /> : <Moon size={18} aria-hidden="true" />}
             </button>
 
 {/* COMMUNITY BOOK REQUEST NOTIFICATIONS */}
@@ -786,7 +827,7 @@ function VisitorDashboardContent() {
   <button
     type="button"
     onClick={() => setIsNotificationsOpen((open) => !open)}
-    className="relative col-span-1 flex h-10 w-full items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white transition hover:bg-white/20 sm:h-10 sm:w-10"
+    className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/20 bg-transparent text-white transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
     aria-label={`Book request notifications: ${ownerNotificationCount} pending`}
     aria-expanded={isNotificationsOpen}
     title="Book request notifications"
@@ -904,12 +945,12 @@ function VisitorDashboardContent() {
             <button
               type="button"
               onClick={logout}
-              className="flex items-center gap-2 rounded-lg border border-red-300/40 bg-red-500/10 px-3 py-2 text-red-200 transition hover:bg-red-500/20"
+              className="visitor-signout flex h-10 shrink-0 items-center gap-2 rounded-lg px-2 py-2 text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:px-3"
               aria-label="Sign out"
               title="Sign out"
             >
               <LogOut size={18} aria-hidden="true" />
-              <span className="text-xs font-semibold">Sign Out</span>
+              <span className="hidden text-xs font-semibold sm:inline">Sign Out</span>
             </button>
 
           </div>
@@ -927,6 +968,7 @@ function VisitorDashboardContent() {
 
         <DashboardWelcome
           name={user?.name?.split(' ')[0]}
+          visitorAppearance
           description="Search books, check availability, manage requests, and keep track of your library visits."
           showNotifications={false}
           actions={[
@@ -967,11 +1009,15 @@ function VisitorDashboardContent() {
           ]}
         />
 
-        {communityReturnReminders.length > 0 && (
+        {visibleCommunityReturnReminders.length > 0 && (
           <section
+            role="alert"
             aria-label="Community book return reminders"
-            className="rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-sm dark:border-amber-700 dark:bg-amber-950/40"
+            className="visitor-feedback visitor-feedback-warning rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-sm dark:border-amber-700 dark:bg-amber-950/40"
           >
+            <span className="visitor-feedback-icon" aria-hidden="true">
+              <AlertTriangle size={16} />
+            </span>
             <div className="flex items-start gap-3">
               <AlertTriangle
                 size={20}
@@ -983,7 +1029,7 @@ function VisitorDashboardContent() {
                   Community book return reminder
                 </h2>
                 <ul className="mt-2 space-y-2">
-                  {communityReturnReminders.map((transaction) => (
+                  {visibleCommunityReturnReminders.map((transaction) => (
                     <li
                       key={transaction.id}
                       className="text-xs text-amber-900 dark:text-amber-100"
@@ -1013,6 +1059,24 @@ function VisitorDashboardContent() {
                   View my requests and borrows
                 </button>
               </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setDismissedReminderIds(
+                    (current) =>
+                      new Set([
+                        ...current,
+                        ...visibleCommunityReturnReminders.map(
+                          (transaction) => String(transaction.id)
+                        ),
+                      ])
+                  )
+                }
+                className="rounded-lg p-2 text-slate-700 transition hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary dark:text-slate-100 dark:hover:bg-slate-700"
+                aria-label="Dismiss community book return reminder"
+              >
+                <X size={17} aria-hidden="true" />
+              </button>
             </div>
           </section>
         )}
@@ -1046,7 +1110,7 @@ function VisitorDashboardContent() {
               }}
               className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition sm:px-4 sm:text-sm ${
                 tab === id
-                  ? 'bg-shelf-primary text-white shadow-sm dark:bg-blue-600'
+                  ? 'bg-shelf-primary text-white shadow-sm dark:bg-shelf-primary'
                   : 'border border-transparent text-slate-600 hover:border-slate-200 hover:bg-white hover:text-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-white'
               }`}
               aria-current={tab === id ? 'page' : undefined}
@@ -1164,7 +1228,7 @@ function VisitorDashboardContent() {
 
           {/* SIDE MENU */}
 
-          <aside className="relative flex h-full w-full max-w-md flex-col bg-white dark:bg-slate-800 shadow-2xl">
+          <aside className="visitor-profile-drawer relative flex h-full w-full max-w-md flex-col bg-white dark:bg-slate-800 shadow-2xl">
             {/* MENU HEADER */}
 
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-5 py-4">
@@ -1188,46 +1252,35 @@ function VisitorDashboardContent() {
               </button>
             </div>
 
-            {/* MENU SECTIONS */}
-
-            {/* MENU SECTIONS */}
-<nav
-  className="grid grid-cols-1 border-b border-slate-200 dark:border-slate-700"
-  aria-label="Visitor menu sections"
->
-  {[
-    {
-      id: 'profile',
-      label: 'Profile',
-      Icon: UserRound,
-    },
-  ].map(({ id, label, Icon }) => (
-    <button
-      key={id}
-      type="button"
-      onClick={() => setMenuSection(id)}
-      aria-current={menuSection === id ? 'page' : undefined}
-      className={`flex items-center justify-center gap-2 border-b-2 px-2 py-3 text-xs font-semibold ${
-        menuSection === id
-          ? 'border-shelf-primary text-shelf-primary dark:border-blue-400 dark:text-blue-400'
-          : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-      }`}
-    >
-      <Icon size={18} aria-hidden="true" />
-      {label}
-    </button>
-  ))}
-</nav>
-
             {/* MENU CONTENT */}
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+            <div className="visitor-profile-content min-h-0 flex-1 overflow-y-auto px-5 py-5">
               {/* =================================================
                   PROFILE
               ================================================== */}
 
               {menuSection === 'profile' && (
                 <div className="space-y-6">
+                  <section className="visitor-profile-summary flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/60">
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-shelf-primary text-sm font-bold text-white">
+                      {(visitorDetails?.fullName || user?.name || 'Visitor')
+                        .trim()
+                        .split(/\s+/)
+                        .slice(0, 2)
+                        .map((part) => part[0])
+                        .join('')
+                        .toUpperCase()}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-slate-900 dark:text-white">
+                        {visitorDetails?.fullName || user?.name || 'Visitor'}
+                      </p>
+                      <p className="truncate text-xs text-slate-600 dark:text-slate-300">
+                        {visitorDetails?.email || user?.email || '—'}
+                      </p>
+                    </div>
+                  </section>
+
                   {/* PERSONAL INFORMATION */}
 
                   <section>
@@ -1238,32 +1291,37 @@ function VisitorDashboardContent() {
                     <dl className="divide-y divide-slate-100 dark:divide-slate-700 border-y border-slate-100 dark:border-slate-700 text-sm">
                       {[
                         [
+                          UserRound,
                           'Full name',
                           visitorDetails?.fullName || user?.name,
                         ],
                         [
+                          Mail,
                           'Email',
                           visitorDetails?.email || user?.email,
                         ],
                         [
+                          Phone,
                           'Contact number',
                           visitorDetails?.contactNumber,
                         ],
                         [
+                          MapPin,
                           'Address',
                           visitorDetails?.address,
                         ],
-                      ].map(([label, value]) => (
+                      ].map(([Icon, label, value]) => (
                         <div
                           key={label}
                           className="grid grid-cols-[7rem_1fr] gap-3 py-2.5"
                         >
-                          <dt className="text-slate-500 dark:text-slate-400">
+                          <dt className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                            <Icon size={14} aria-hidden="true" />
                             {label}
                           </dt>
 
                           <dd className="wrap-break-word font-medium text-slate-800 dark:text-slate-200">
-                            {value || 'Not provided'}
+                            {value || '—'}
                           </dd>
                         </div>
                       ))}
@@ -1281,11 +1339,11 @@ function VisitorDashboardContent() {
 
                     {visitorQrCode ? (
                       <>
-                        <div className="mx-auto w-fit rounded-md border border-slate-200 bg-white p-3">
+                        <div className="visitor-qr-frame mx-auto w-fit rounded-lg border border-slate-200 bg-white p-2">
                           <div ref={qrCodeRef}>
                             <QRCodeSVG
                               value={visitorQrCode}
-                              size={200}
+                              size={176}
                               level="H"
                               includeMargin
                               fgColor="#000000"
@@ -1294,15 +1352,15 @@ function VisitorDashboardContent() {
                           </div>
                         </div>
 
-                        <p className="mt-2 break-all font-mono text-xs font-bold text-shelf-primary dark:text-blue-400">
-                          {visitorQrCode}
+                        <p className="mt-2 text-xs text-slate-700 dark:text-slate-200">
+                          Show this at the library desk
                         </p>
 
                         <button
                           type="button"
                           onClick={handleSaveQrAsImage}
                           disabled={isSavingQr}
-                          className="mt-3 w-full rounded-md bg-shelf-primary dark:bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:opacity-90 disabled:opacity-50"
+                          className="mt-3 w-full rounded-lg bg-shelf-primary px-3 py-2.5 text-xs font-bold text-white hover:opacity-90 disabled:opacity-50"
                         >
                           {isSavingQr
                             ? 'Saving QR image...'
@@ -1348,9 +1406,12 @@ function VisitorDashboardContent() {
                         ))}
                       </ul>
                     ) : (
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        No attendance history yet.
-                      </p>
+                      <div className="rounded-lg border border-dashed border-slate-300 px-4 py-5 text-center dark:border-slate-600">
+                        <CalendarDays size={20} className="mx-auto text-slate-600 dark:text-slate-300" aria-hidden="true" />
+                        <p className="mt-2 text-xs text-slate-700 dark:text-slate-200">
+                          No attendance history yet.
+                        </p>
+                      </div>
                     )}
                   </section>
 
@@ -1359,15 +1420,31 @@ function VisitorDashboardContent() {
                   ================================================== */}
 
                   <section>
-                    <h3 className="mb-3 text-sm font-bold text-slate-900 dark:text-white">
+                    <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+                      <ClipboardList size={16} aria-hidden="true" />
                       Transaction History
                     </h3>
 
                     {myTransactions.length ? (
-                      <div className="space-y-3">
-                        {myTransactions
-                          .slice(0, 10)
-                          .map((transaction) => {
+                      <div className="space-y-4">
+                        {transactionGroups.map((group) => {
+                          const visibleEntries = group.entries.filter(
+                            (transaction) =>
+                              visibleTransactionIds.has(
+                                String(transaction.id)
+                              )
+                          );
+                          if (!visibleEntries.length) return null;
+
+                          return (
+                            <section key={group.label} className="space-y-2">
+                              <h4 className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-200">
+                                <span>{group.label}</span>
+                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                                  {group.entries.length}
+                                </span>
+                              </h4>
+                              {visibleEntries.map((transaction) => {
                             const status = String(
                               transaction.status || ''
                             ).toLowerCase();
@@ -1383,34 +1460,57 @@ function VisitorDashboardContent() {
                             const fineAmount = Number(
                               transaction.fineAmount
                             );
+                            const StatusIcon =
+                              status === 'returned'
+                                ? CheckCircle2
+                                : status === 'rejected' || status === 'overdue'
+                                  ? AlertTriangle
+                                  : status === 'pending' ||
+                                      status === 'queued' ||
+                                      status === 'ready_for_pickup'
+                                    ? Clock3
+                                    : BookOpen;
+                            const transactionType =
+                              transaction.isCommunityBook === true ||
+                              transaction.requestType === 'community'
+                                ? 'Community book'
+                                : 'Library book';
 
                             return (
                               <article
                                 key={transaction.id}
-                                className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 p-3"
+                                className="visitor-transaction-row rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-700/50"
                               >
                                 {/* BOOK + STATUS */}
 
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="min-w-0">
-                                    <h4 className="wrap-break-word text-xs font-bold text-slate-800 dark:text-slate-200">
+                                    <h4
+                                      title={transaction.bookTitle || 'Book transaction'}
+                                      className="truncate text-xs font-bold text-slate-900 dark:text-white"
+                                    >
                                       {transaction.bookTitle ||
                                         'Book transaction'}
                                     </h4>
 
-                                    {transaction.requestDate && (
-                                      <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                                        Requested:{' '}
-                                        {formatDateTime(
-                                          transaction.requestDate
-                                        )}
-                                      </p>
-                                    )}
+                                    <p className="mt-1 text-xs text-slate-700 dark:text-slate-200">
+                                      {transactionType}
+                                      {transaction.requestDate
+                                        ? ` · ${new Date(
+                                            transaction.requestDate
+                                          ).toLocaleDateString('en-PH', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            year: 'numeric',
+                                          })}`
+                                        : ''}
+                                    </p>
                                   </div>
 
                                   <span
-                                    className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${statusClass}`}
+                                    className={`shrink-0 ${statusClass}`}
                                   >
+                                    <StatusIcon size={12} aria-hidden="true" />
                                     {statusLabel || 'Unknown'}
                                   </span>
                                 </div>
@@ -1476,7 +1576,7 @@ function VisitorDashboardContent() {
                                         </span>
 
                                         <span className="font-bold text-red-600 dark:text-red-400">
-                                          ₱{fineAmount.toFixed(2)}
+                                          ₱<span className="tabular-nums">{fineAmount.toFixed(2)}</span>
                                         </span>
                                       </div>
                                     )}
@@ -1486,10 +1586,9 @@ function VisitorDashboardContent() {
 
                                 {transaction.pickupDeadline &&
                                   status !== 'cancelled' && (
-                                    <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-400">
-                                      <span className="font-semibold">
-                                        Pickup deadline:{' '}
-                                      </span>
+                                    <p className="mt-2 flex items-center gap-1 text-xs text-slate-700 dark:text-slate-200">
+                                      <Clock3 size={13} aria-hidden="true" />
+                                      <span className="font-semibold">Pickup deadline:</span>
 
                                       {formatDateTime(
                                         transaction.pickupDeadline
@@ -1503,8 +1602,8 @@ function VisitorDashboardContent() {
                                   transaction.queuePosition !== null &&
                                   transaction.queuePosition !==
                                     undefined && (
-                                    <p className="mt-2 text-[11px] font-semibold text-purple-700 dark:text-purple-400">
-                                      Queue position: #
+                                    <p className="visitor-status visitor-status-neutral mt-2 w-fit">
+                                      Queue #
                                       {transaction.queuePosition}
                                     </p>
                                   )}
@@ -1532,7 +1631,21 @@ function VisitorDashboardContent() {
                                 )}
                               </article>
                             );
-                          })}
+                              })}
+                            </section>
+                          );
+                        })}
+                        {myTransactions.length > 5 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setShowAllTransactions((show) => !show)
+                            }
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-800 transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700"
+                          >
+                            {showAllTransactions ? 'Show less' : 'Show more'}
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <p className="text-xs text-slate-500 dark:text-slate-400">

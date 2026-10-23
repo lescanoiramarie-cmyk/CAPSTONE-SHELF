@@ -20,6 +20,7 @@ export default function DashboardWelcome({
   onNotificationClick,
   onNotificationFollowUp,
   showNotifications = true,
+  visitorAppearance = false,
 }) {
 
   const [isOnline, setIsOnline] = useState(() =>
@@ -101,7 +102,7 @@ const markAllNotificationsRead = () => {
   return (
     <section
       aria-labelledby="visitor-welcome-title"
-      className="relative isolate overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-800"
+      className={`visitor-welcome relative isolate overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-800 ${visitorAppearance ? 'visitor-welcome-compact' : ''}`}
     >
       {/* Decorative background */}
       <div
@@ -136,17 +137,19 @@ const markAllNotificationsRead = () => {
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           {/* Welcome information */}
           <div className="min-w-0">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-amber-800 dark:bg-amber-400/10 dark:text-amber-300">
-              <Sparkles size={14} aria-hidden="true" />
-              SHELF ILMS
-            </div>
+            {!visitorAppearance && (
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-amber-800 dark:bg-amber-400/10 dark:text-amber-300">
+                <Sparkles size={14} aria-hidden="true" />
+                SHELF ILMS
+              </div>
+            )}
 
             <h1
               id="visitor-welcome-title"
               className="text-2xl font-extrabold leading-tight tracking-tight text-slate-900 dark:text-white sm:text-3xl lg:text-4xl"
             >
               {greeting},{' '}
-              <span className="text-[#174477] dark:text-blue-300">
+              <span className={visitorAppearance ? '' : 'text-[#174477] dark:text-blue-300'}>
                 {name || 'there'}
               </span>
               !
@@ -157,7 +160,7 @@ const markAllNotificationsRead = () => {
               <div className="flex items-center gap-2">
                 <CalendarDays
                   size={17}
-                  className="shrink-0 text-amber-600 dark:text-amber-400"
+                  className={`shrink-0 ${visitorAppearance ? 'text-slate-600 dark:text-slate-300' : 'text-amber-600 dark:text-amber-400'}`}
                   aria-hidden="true"
                 />
                 <time dateTime={currentTime.toISOString()}>
@@ -168,16 +171,18 @@ const markAllNotificationsRead = () => {
               <div className="flex items-center gap-2">
                 <Clock3
                   size={17}
-                  className="shrink-0 text-amber-600 dark:text-amber-400"
+                  className={`shrink-0 ${visitorAppearance ? 'text-slate-600 dark:text-slate-300' : 'text-amber-600 dark:text-amber-400'}`}
                   aria-hidden="true"
                 />
                 <time dateTime={currentTime.toISOString()}>
                   {formattedTime}
                 </time>
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                </span>
+                {!visitorAppearance && (
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                  </span>
+                )}
               </div>
             </div>
 

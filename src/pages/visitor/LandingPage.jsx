@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLibraryData } from '../../context/useLibrary.js';
 import { fetchPopularBorrowedBookCounts } from '../../data/store.js';
+import BookCover from '../../component/BookCover.jsx';
 import { 
   Megaphone, 
   Sparkles, 
@@ -458,16 +459,12 @@ const featuredBooks = books
               >
                 <div>
                   <div className="mb-4 flex aspect-3/4 w-full items-center justify-center overflow-hidden rounded-lg border border-slate-100 bg-slate-50 p-2">
-                    <img
-                      src={
-                        book.coverUrl ||
-                        "https://placehold.co/160x220?text=No+Cover"
-                      }
-                      alt={book.title}
-                      className="h-full max-w-full rounded object-contain shadow-sm transition-transform duration-300 group-hover:scale-105"
-                      onError={(e) => {
-                        e.currentTarget.src = "https://placehold.co/96x128?text=No+Cover";
-                      }}
+                    <BookCover
+                      key={book.coverUrl || book.title}
+                      src={book.coverUrl}
+                      title={book.title}
+                      imageFit="contain"
+                      className="h-full w-full border-0 bg-transparent shadow-sm transition-transform duration-300 group-hover:scale-105"
                     />
                   </div>
                  
