@@ -6,6 +6,9 @@ update storage.buckets
 set allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp']::text[]
 where id = 'book-covers';
 
+drop policy if exists "Visitors can upload personal book covers"
+on storage.objects;
+
 create policy "Visitors can upload personal book covers"
 on storage.objects
 for insert
@@ -28,6 +31,9 @@ with check (
     else false
   end
 );
+
+drop policy if exists "Visitors can update personal book covers"
+on storage.objects;
 
 create policy "Visitors can update personal book covers"
 on storage.objects
@@ -63,6 +69,9 @@ with check (
     else false
   end
 );
+
+drop policy if exists "Visitors can delete personal book covers"
+on storage.objects;
 
 create policy "Visitors can delete personal book covers"
 on storage.objects

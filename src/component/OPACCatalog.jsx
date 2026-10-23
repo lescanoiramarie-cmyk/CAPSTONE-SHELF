@@ -1698,171 +1698,123 @@ export default function OPACCatalog({
       bookRequests.length === 0 &&
       getPersonalBookCopyAvailability(book).borrowedCopies === 0;
     return (
-      <div
-        key={book.id}
-        className="visitor-personal-book-card flex h-full min-w-0 w-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800"
-      >
-        <div className="flex flex-1 flex-col p-5">
-          <div className="flex items-start gap-3">
+      <div key={book.id} className="visitor-book-card visitor-personal-book-card">
+        <div className="visitor-book-card-inner">
+          <div className="visitor-book-card-badge-row">
+            <span className="visitor-book-card-badge visitor-book-card-badge-primary">Personal Book</span>
+            <span className="visitor-book-card-badge visitor-book-card-badge-neutral">
+              {book.isPublic ? 'Public' : 'Private'}
+            </span>
+            {!book.lendingEnabled && (
+              <span className="visitor-book-card-badge visitor-book-card-badge-neutral">Not for Lending</span>
+            )}
+          </div>
+
+          <div className="visitor-book-card-header">
             <BookCover
               key={`${book.id}-${book.coverUrl || book.title}`}
               src={book.coverUrl}
               title={book.title}
-              className="h-32 w-24"
+              className="visitor-book-cover"
             />
-            <div className="min-w-0 flex-1">
-              <div className="visitor-status-badges mb-2 flex h-7 flex-nowrap items-center gap-2 overflow-hidden">
-                <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200 px-2 py-1 rounded">
-                  Personal Book
-                </span>
-                <span className="text-[10px] font-bold tracking-wider bg-slate-100 text-slate-700 dark:bg-slate-600 dark:text-slate-100 px-2 py-1 rounded">
-                  {book.isPublic ? 'Public' : 'Only Me'}
-                </span>
-                {book.lendingEnabled ? (
-                  <span
-                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded ${
-                      getPersonalBookCopyAvailability(book).availableCopies > 0
-                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
-                          : 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
-                    }`}
-                  >
-                    {getPersonalBookAvailabilityLabel(book)}
-                  </span>
-                ) : (
-                  <span className="rounded bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:bg-slate-700 dark:text-slate-200">
-                    Not for Lending
-                  </span>
-                )}
-              </div>
-              <h3 title={book.title || 'Untitled Book'} className="line-clamp-2 min-h-10 text-base font-bold text-slate-900 dark:text-white">
-                {book.title || 'Untitled Book'}
-              </h3>
-              <p title={book.author || 'Unknown Author'} className="mt-1 truncate text-xs text-slate-700 dark:text-slate-200">
-                By {book.author || 'Unknown Author'}
-              </p>
+            <div className="visitor-book-card-text">
+              <h3 title={book.title || 'Untitled Book'}>{book.title || 'Untitled Book'}</h3>
+              <p title={book.author || 'Unknown Author'}>By {book.author || 'Unknown Author'}</p>
             </div>
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-            <div className="min-w-0">
-              <p className="text-slate-700 dark:text-slate-200">Category</p>
-              <p title={book.category || 'Uncategorized'} className="truncate font-semibold text-slate-900 dark:text-white">
-                {book.category || 'Uncategorized'}
-              </p>
+
+          <div className="visitor-book-card-meta">
+            <div className="visitor-book-card-meta-item">
+              <span className="visitor-book-card-meta-label">Category</span>
+              <span className="visitor-book-card-meta-value" title={book.category || '—'}>{book.category || '—'}</span>
             </div>
-            <div className="min-w-0">
-              <p className="text-slate-700 dark:text-slate-200">Condition</p>
-              <p title={book.condition || 'Not specified'} className="truncate font-semibold text-slate-900 dark:text-white">
-                {book.condition || 'Not specified'}
-              </p>
+            <div className="visitor-book-card-meta-item">
+              <span className="visitor-book-card-meta-label">Condition</span>
+              <span className="visitor-book-card-meta-value" title={book.condition || '—'}>{book.condition || '—'}</span>
             </div>
-            <div className="min-w-0">
-              <p className="text-slate-700 dark:text-slate-200">Lending Period</p>
-              <p className="truncate font-semibold text-slate-900 dark:text-white">
+            <div className="visitor-book-card-meta-item">
+              <span className="visitor-book-card-meta-label">Lending period</span>
+              <span className="visitor-book-card-meta-value">
                 {book.lendingEnabled ? `${book.lendingPeriodDays || 7} days` : 'Not applicable'}
-              </p>
+              </span>
             </div>
-            <div className="min-w-0">
-              <p className="text-slate-700 dark:text-slate-200">ISBN</p>
-              <p className="truncate font-semibold tabular-nums text-slate-900 dark:text-white">
-                {book.isbn || '—'}
-              </p>
+            <div className="visitor-book-card-meta-item">
+              <span className="visitor-book-card-meta-label">Copies</span>
+              <span className="visitor-book-card-meta-value">{getPersonalBookAvailabilityLabel(book)}</span>
             </div>
-            <div className="min-w-0">
-              <p className="text-slate-700 dark:text-slate-200">Copies</p>
-              <p className="truncate font-semibold text-slate-900 dark:text-white">
-                {getPersonalBookAvailabilityLabel(book)}
-              </p>
+            <div className="visitor-book-card-meta-item visitor-book-card-meta-item-full">
+              <span className="visitor-book-card-meta-label">ISBN</span>
+              <span className="visitor-book-card-meta-value" title={book.isbn || '—'}>{book.isbn || '—'}</span>
             </div>
           </div>
-          {book.lendingEnabled && (
-            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/60">
-              <div className="flex items-start gap-2">
-              <MapPin size={15} className="mt-0.5 shrink-0 text-slate-700 dark:text-slate-200" aria-hidden="true" />
-                <div className="min-w-0">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-100">
-                    Handover Arrangement
-                  </p>
-                  <p className="mt-0.5 text-xs font-semibold text-slate-900 dark:text-white">
-                    {getHandoverMethodLabel(book.handoverMethod)}
-                  </p>
-                  {book.handoverDetails && (
-                    <p className="mt-1 text-xs text-slate-700 dark:text-slate-200">{book.handoverDetails}</p>
-                  )}
-                </div>
-              </div>
+
+          <div className="visitor-book-card-footer">
+            <div className="visitor-book-card-handover">
+              <MapPin size={14} aria-hidden="true" />
+              <span>Handover: Arrange with Owner</span>
             </div>
-          )}
-          {book.summary && (
-            <div className="mt-3">
-              <p className="line-clamp-3 text-xs text-slate-700 dark:text-slate-200">{book.summary}</p>
-            </div>
-          )}
-          {String(book.ownerVisitorId ?? '') === String(user?.id ?? '') && (
-            <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4 dark:border-slate-700">
-              <button
-                type="button"
-                onClick={async () => {
-                  if (updatingVisibilityBookId) return;
-                  const nextVisibility = !book.isPublic;
-                  setUpdatingVisibilityBookId(book.id);
-                  setNotice('');
-                  try {
-                    await setPersonalBookVisibility(
-                      user.id,
-                      book.id,
-                      nextVisibility
-                    );
-                    setNotice(
-                      `"${book.title}" is now ${
-                        nextVisibility ? 'public' : 'visible only to you'
-                      }.`
-                    );
-                  } catch (error) {
-                    console.error('UPDATE PERSONAL BOOK VISIBILITY ERROR:', error);
-                    setNotice(error?.message || 'Unable to update book visibility.');
-                  } finally {
-                    setUpdatingVisibilityBookId(null);
+            {String(book.ownerVisitorId ?? '') === String(user?.id ?? '') && (
+              <div className="visitor-book-card-action-row">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (updatingVisibilityBookId) return;
+                    const nextVisibility = !book.isPublic;
+                    setUpdatingVisibilityBookId(book.id);
+                    setNotice('');
+                    try {
+                      await setPersonalBookVisibility(user.id, book.id, nextVisibility);
+                      setNotice(`"${book.title}" is now ${nextVisibility ? 'public' : 'visible only to you'}.`);
+                    } catch (error) {
+                      console.error('UPDATE PERSONAL BOOK VISIBILITY ERROR:', error);
+                      setNotice(error?.message || 'Unable to update book visibility.');
+                    } finally {
+                      setUpdatingVisibilityBookId(null);
+                    }
+                  }}
+                  disabled={updatingVisibilityBookId === book.id}
+                  aria-label={`Make ${book.title} ${book.isPublic ? 'private' : 'public'}`}
+                  title={book.isPublic ? 'Make Private' : 'Make Public'}
+                  className="visitor-book-card-action-button"
+                >
+                  {book.isPublic ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}
+                  <span className="visitor-book-card-action-label">
+                    {updatingVisibilityBookId === book.id ? 'Saving...' : book.isPublic ? 'Make Private' : 'Make Public'}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openEditPersonalBook(book)}
+                  disabled={hasActiveRequest || savingPersonalBook}
+                  title={
+                    hasActiveRequest
+                      ? 'Resolve active community requests before editing this book.'
+                      : 'Edit personal book'
                   }
-                }}
-                disabled={updatingVisibilityBookId === book.id}
-                aria-label={`Make ${book.title} ${book.isPublic ? 'private' : 'public'}`}
-                className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700"
-              >
-                {book.isPublic ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}
-                {updatingVisibilityBookId === book.id
-                  ? 'Saving...'
-                  : book.isPublic
-                    ? 'Make Private'
-                    : 'Make Public'}
-              </button>
-              <button
-                type="button"
-                onClick={() => openEditPersonalBook(book)}
-                disabled={hasActiveRequest || savingPersonalBook}
-                title={
-                  hasActiveRequest
-                    ? 'Resolve active community requests before editing this book.'
-                    : 'Edit personal book'
-                }
-                className="inline-flex min-h-9 items-center rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700"
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                onClick={() => openRemovePersonalBook(book)}
-                disabled={!canRemove || removingPersonalBookId === book.id}
-                title={
-                  canRemove
-                    ? 'Remove personal book'
-                    : 'Books with community request history or on-loan copies cannot be removed.'
-                }
-                className="inline-flex min-h-9 items-center rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-800 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40"
-              >
-                Remove
-              </button>
-            </div>
-          )}
+                  aria-label={`Edit ${book.title || 'personal book'}`}
+                  className="visitor-book-card-action-button visitor-book-card-action-button-outline"
+                >
+                  <Eye size={14} aria-hidden="true" />
+                  <span className="visitor-book-card-action-label visitor-book-card-action-label-secondary">Edit</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openRemovePersonalBook(book)}
+                  disabled={!canRemove || removingPersonalBookId === book.id}
+                  title={
+                    canRemove
+                      ? 'Remove personal book'
+                      : 'Books with community request history or on-loan copies cannot be removed.'
+                  }
+                  aria-label={`Remove ${book.title || 'personal book'}`}
+                  className="visitor-book-card-action-button visitor-book-card-action-button-danger"
+                >
+                  <X size={14} aria-hidden="true" />
+                  <span className="visitor-book-card-action-label visitor-book-card-action-label-secondary">Remove</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -1872,77 +1824,66 @@ export default function OPACCatalog({
       key={book.id}
       type="button"
       onClick={() => setSelectedBook(book)}
-      className="visitor-community-book-card flex h-full flex-col rounded-xl border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700 dark:bg-slate-800"
+      className="visitor-book-card visitor-community-book-card"
     >
-      <div className="flex flex-1 flex-col p-5">
-        <div className="flex items-start gap-3">
+      <div className="visitor-book-card-inner">
+        <div className="visitor-book-card-badge-row">
+          <span className="visitor-book-card-badge visitor-book-card-badge-primary">Community Book</span>
+          <span
+            className={`visitor-book-card-badge ${
+              getPersonalBookCopyAvailability(book).availableCopies > 0
+                ? 'visitor-book-card-badge-success'
+                : 'visitor-book-card-badge-warning'
+            }`}
+          >
+            {getPersonalBookAvailabilityLabel(book)}
+          </span>
+        </div>
+
+        <div className="visitor-book-card-header">
           <BookCover
             key={`${book.id}-${book.coverUrl || book.title}`}
             src={book.coverUrl}
             title={book.title}
-            className="h-32 w-24"
+            className="visitor-book-cover"
           />
-          <div className="min-w-0 flex-1">
-            <div className="visitor-status-badges mb-2 flex h-7 flex-nowrap items-center gap-2 overflow-hidden">
-              <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">
-                Community Book
-              </span>
-              <span
-                className={`visitor-status min-w-0 max-w-[60%] truncate ${
-                  getPersonalBookCopyAvailability(book).availableCopies > 0
-                    ? 'visitor-status-success'
-                    : 'visitor-status-warning'
-                }`}
-              >
-                {getPersonalBookAvailabilityLabel(book)}
-              </span>
-            </div>
-            <h3 title={book.title || 'Untitled Book'} className="min-h-10 line-clamp-2 text-sm font-bold text-slate-900 dark:text-white">
-              {book.title || 'Untitled Book'}
-            </h3>
-            <p title={book.author || 'Unknown Author'} className="mt-1 truncate text-xs text-slate-700 dark:text-slate-200">
-              By {book.author || 'Unknown Author'}
-            </p>
+          <div className="visitor-book-card-text">
+            <h3 title={book.title || 'Untitled Book'}>{book.title || 'Untitled Book'}</h3>
+            <p title={book.author || 'Unknown Author'}>By {book.author || 'Unknown Author'}</p>
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-          <div className="flex min-w-0 justify-between gap-2">
-            <span className="text-slate-700 dark:text-slate-200">Category</span>
-            <span title={book.category || 'Uncategorized'} className="truncate text-right font-semibold text-slate-900 dark:text-white">{book.category || 'Uncategorized'}</span>
+
+        <div className="visitor-book-card-meta">
+          <div className="visitor-book-card-meta-item">
+            <span className="visitor-book-card-meta-label">Category</span>
+            <span className="visitor-book-card-meta-value" title={book.category || '—'}>{book.category || '—'}</span>
           </div>
-          <div className="flex min-w-0 justify-between gap-2">
-            <span className="text-slate-700 dark:text-slate-200">Condition</span>
-            <span title={book.condition || 'Good'} className="truncate text-right font-semibold text-slate-900 dark:text-white">{book.condition || 'Good'}</span>
+          <div className="visitor-book-card-meta-item">
+            <span className="visitor-book-card-meta-label">Condition</span>
+            <span className="visitor-book-card-meta-value" title={book.condition || '—'}>{book.condition || '—'}</span>
           </div>
-          <div className="flex min-w-0 items-center justify-between gap-2">
-            <span className="flex items-center gap-1 text-slate-700 dark:text-slate-200">
-              <Clock3 size={12} aria-hidden="true" />
-              Lending period
-            </span>
-            <span className="truncate text-right font-semibold text-slate-900 dark:text-white">
-              {book.lendingPeriodDays || 7} days
-            </span>
+          <div className="visitor-book-card-meta-item">
+            <span className="visitor-book-card-meta-label">Lending period</span>
+            <span className="visitor-book-card-meta-value">{book.lendingPeriodDays || 7} days</span>
+          </div>
+          <div className="visitor-book-card-meta-item">
+            <span className="visitor-book-card-meta-label">ISBN</span>
+            <span className="visitor-book-card-meta-value" title={book.isbn || '—'}>{book.isbn || '—'}</span>
+          </div>
+          <div className="visitor-book-card-meta-item">
+            <span className="visitor-book-card-meta-label">Copies</span>
+            <span className="visitor-book-card-meta-value">{getPersonalBookAvailabilityLabel(book)}</span>
           </div>
         </div>
-        {book.handoverMethod && (
-          <div className="mt-4 rounded-lg bg-slate-50 p-3 dark:bg-slate-900/60">
-            <div className="flex items-start gap-2">
-              <MapPin size={14} className="mt-0.5 shrink-0 text-slate-400" aria-hidden="true" />
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">
-                  Handover Arrangement
-                </p>
-                <p className="mt-0.5 text-xs font-semibold text-slate-900 dark:text-white">
-                  {getHandoverMethodLabel(book.handoverMethod)}
-                </p>
-              </div>
-            </div>
+
+        <div className="visitor-book-card-footer">
+          <div className="visitor-book-card-handover">
+            <MapPin size={14} aria-hidden="true" />
+            <span>Handover: Arrange with Owner</span>
           </div>
-        )}
-        <div className="mt-auto rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900/60">
-          <p className="text-xs font-semibold text-slate-800 dark:text-slate-100">
-            Borrowing requires owner approval.
-          </p>
+          <div className="visitor-book-card-approval-note">
+            <span>Borrowing requires owner approval.</span>
+          </div>
         </div>
       </div>
     </button>
