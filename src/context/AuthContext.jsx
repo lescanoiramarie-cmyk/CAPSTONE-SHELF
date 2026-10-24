@@ -103,6 +103,7 @@ export const AuthProvider = ({ children }) => {
             name: visitor.fullName,
             email: visitor.email,
             qrCode: visitor.qrCode,
+            libraryId: visitor.libraryId,
           };
         });
       } catch (error) {
@@ -317,6 +318,7 @@ export const AuthProvider = ({ children }) => {
       name: visitor.fullName,
       email: visitor.email,
       qrCode: visitor.qrCode,
+      libraryId: visitor.libraryId,
     };
   };
 

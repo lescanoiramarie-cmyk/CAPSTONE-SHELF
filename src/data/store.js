@@ -1,9 +1,8 @@
 // ============================================================================
 // SHELF ILMS â€” data & business-logic layer (Supabase-backed)
 // ----------------------------------------------------------------------------
-// This module is the only place in the app that talks to Supabase directly.
-// Components/contexts call these functions and never import `supabase`
-// themselves.
+// Data modules in this directory own Supabase access. Components and contexts
+// call the data layer and never import the Supabase client directly.
 //
 // Authentication:
 //   Visitors      â†’ Supabase Auth + visitors.auth_user_id
@@ -14,6 +13,8 @@
 
 import { supabase } from '../lib/supabaseClient.js';
 import { normalizeBookCategory } from '../lib/bookCategory.js';
+import { invalidateVisitorAccountsCache } from './visitorAccounts.js';
+export { fetchVisitorAccounts } from './visitorAccounts.js';
 
 // ============================================================================
 // COMPATIBILITY CREDENTIAL LISTS
@@ -114,6 +115,17 @@ export const FINE_PER_DAY = 10;
 
 export const DEFAULT_COVER_URL =
   'https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&q=80&w=400';
+
+const LIBRARIES_CACHE_TTL_MS = 60_000;
+let librariesCache = null;
+let librariesCacheExpiresAt = 0;
+let librariesRequest = null;
+
+function invalidateLibrariesCache() {
+  librariesCache = null;
+  librariesCacheExpiresAt = 0;
+  librariesRequest = null;
+}
 
 // ============================================================================
 // PERSONAL BOOK RULES
@@ -338,6 +350,7 @@ const mapVisitor = (r) => ({
   contactNumber: r.contact_number,
   email: r.email,
   address: r.address,
+  libraryId: r.library_id ?? null,
   otpVerified: r.otp_verified,
   qrCode: r.qr_code,
   registeredAt: r.registered_at,
@@ -371,26 +384,118 @@ const mapAttendance = (r) => ({
   checkedOutAt: r.checked_out_at,
 });
 
+const FETCH_PAGE_SIZE = 1000;
+const FETCH_PAGE_BATCH_SIZE = 2;
+
+async function getAuthenticatedDataScope() {
+  const {
+    data: sessionData,
+    error: sessionError,
+  } = await supabase.auth.getSession();
+
+  if (sessionError) {
+    throw cleanErr(sessionError, 'Unable to check the current authentication session.');
+  }
+
+  const authUserId = sessionData?.session?.user?.id;
+  if (!authUserId) return { type: 'anonymous' };
+
+  const { data: staff, error: staffError } = await supabase
+    .from('staff_profiles')
+    .select('id, role, library_id, is_active')
+    .eq('id', authUserId)
+    .maybeSingle();
+
+  if (staffError) throw cleanErr(staffError, 'Unable to resolve the staff data scope.');
+  if (staff?.is_active) {
+    return {
+      type: staff.role === 'superadmin' ? 'superadmin' : 'subadmin',
+      libraryId: staff.library_id,
+    };
+  }
+
+  const { data: visitor, error: visitorError } = await supabase
+    .from('visitors')
+    .select('id, otp_verified, is_active')
+    .eq('auth_user_id', authUserId)
+    .maybeSingle();
+
+  if (visitorError) throw cleanErr(visitorError, 'Unable to resolve the visitor data scope.');
+  if (visitor?.otp_verified && visitor.is_active) {
+    return { type: 'visitor', visitorId: visitor.id };
+  }
+
+  return { type: 'anonymous' };
+}
+
+async function fetchAllRowsInPages(buildQuery, resourceName) {
+  const rows = [];
+
+  for (
+    let batchOffset = 0;
+    ;
+    batchOffset += FETCH_PAGE_SIZE * FETCH_PAGE_BATCH_SIZE
+  ) {
+    const pages = await Promise.all(
+      Array.from({ length: FETCH_PAGE_BATCH_SIZE }, (_, pageIndex) => {
+        const from = batchOffset + pageIndex * FETCH_PAGE_SIZE;
+        return buildQuery().range(from, from + FETCH_PAGE_SIZE - 1);
+      })
+    );
+
+    for (const page of pages) {
+      if (page.error) {
+        throw cleanErr(
+          page.error,
+          `Unable to fetch all ${resourceName}.`
+        );
+      }
+      rows.push(...(page.data || []));
+    }
+
+    if (pages.some((page) => (page.data || []).length < FETCH_PAGE_SIZE)) {
+      return rows;
+    }
+  }
+}
+
 // ============================================================================
 // FETCH LIBRARIES
 // ============================================================================
 
 export async function fetchLibraries() {
-  const {
-    data,
-    error,
-  } = await supabase
-    .from('libraries')
-    .select('*')
-    .order('name', {
-      ascending: true,
-    });
-
-  if (error) {
-    throw cleanErr(error);
+  if (librariesCache && librariesCacheExpiresAt > Date.now()) {
+    return librariesCache.map((library) => ({ ...library }));
   }
 
-  return (data || []).map(mapLibrary);
+  if (!librariesRequest) {
+    librariesRequest = (async () => {
+      const {
+        data,
+        error,
+      } = await supabase
+        .from('libraries')
+        .select('*')
+        .order('name', {
+          ascending: true,
+        });
+
+      if (error) {
+        throw cleanErr(error);
+      }
+
+      librariesCache = (data || []).map(mapLibrary);
+      librariesCacheExpiresAt = Date.now() + LIBRARIES_CACHE_TTL_MS;
+      return librariesCache;
+    })();
+  }
+
+  try {
+    const libraryList = await librariesRequest;
+    return libraryList.map((library) => ({ ...library }));
+  } finally {
+    librariesRequest = null;
+  }
 }
 
 // ============================================================================
@@ -458,6 +563,7 @@ export async function addLibrary(library) {
     throw cleanErr(error);
   }
 
+  invalidateLibrariesCache();
   return mapLibrary(data);
 }
 
@@ -508,6 +614,7 @@ export async function updateLibrary(libraryId, library) {
     throw cleanErr(error);
   }
 
+  invalidateLibrariesCache();
   return mapLibrary(data);
 }
 
@@ -538,6 +645,7 @@ export async function deleteLibrary(libraryId) {
     );
   }
 
+  invalidateLibrariesCache();
   return data.id;
 }
 
@@ -668,39 +776,31 @@ export async function fetchCommunityBooks() {
 // ============================================================================
 
 export async function fetchVisitors() {
-  const {
-    data: sessionData,
-    error: sessionError,
-  } = await supabase.auth.getSession();
+  const scope = await getAuthenticatedDataScope();
+  if (scope.type === 'anonymous') return [];
 
-  if (sessionError) {
-    throw cleanErr(
-      sessionError,
-      'Unable to check the current authentication session.'
-    );
-  }
+  const data = await fetchAllRowsInPages(
+    () => {
+      let query = supabase
+        .from('visitors')
+        .select(
+          'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at, library_id'
+        )
+        .order('registered_at', { ascending: false })
+        .order('id', { ascending: true });
 
-  if (!sessionData?.session) {
-    return [];
-  }
+      if (scope.type === 'subadmin') {
+        query = query.eq('library_id', scope.libraryId);
+      } else if (scope.type === 'visitor') {
+        query = query.eq('id', scope.visitorId);
+      }
 
-  const {
-    data,
-    error,
-  } = await supabase
-    .from('visitors')
-    .select(
-      'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at'
-    )
-    .order('registered_at', {
-      ascending: false,
-    });
+      return query;
+    },
+    'visitor profiles'
+  );
 
-  if (error) {
-    throw cleanErr(error);
-  }
-
-  return (data || []).map(mapVisitor);
+  return data.map(mapVisitor);
 }
 
 // ============================================================================
@@ -1298,37 +1398,50 @@ export async function fetchBorrowRequests() {
 // ============================================================================
 
 export async function fetchAttendanceLogs() {
-  const {
-    data: sessionData,
-    error: sessionError,
-  } = await supabase.auth.getSession();
+  const scope = await getAuthenticatedDataScope();
+  if (scope.type === 'anonymous') return [];
+  if (scope.type === 'subadmin' && !scope.libraryId) return [];
 
-  if (sessionError) {
-    throw cleanErr(
-      sessionError,
-      'Unable to check the current authentication session.'
+  const buildAttendanceQuery = (libraryId) => {
+    let query = supabase
+        .from('attendance_logs')
+        .select('id, visitor_id, visitor_name, library_id, time_in, checked_out_at')
+        .order('time_in', { ascending: false })
+        .order('id', { ascending: true });
+
+    if (scope.type === 'visitor') {
+      query = query.eq('visitor_id', scope.visitorId);
+    } else if (libraryId) {
+      query = query.eq('library_id', libraryId);
+    }
+
+    return query;
+  };
+
+  let data;
+  if (scope.type === 'superadmin') {
+    const libraries = await fetchLibraries();
+    data = [];
+    for (let offset = 0; offset < libraries.length; offset += 3) {
+      const libraryBatch = libraries.slice(offset, offset + 3);
+      const attendanceBatches = await Promise.all(
+        libraryBatch.map((library) =>
+          fetchAllRowsInPages(
+            () => buildAttendanceQuery(library.id),
+            `attendance records for ${library.name}`
+          )
+        )
+      );
+      data.push(...attendanceBatches.flat());
+    }
+  } else {
+    data = await fetchAllRowsInPages(
+      () => buildAttendanceQuery(scope.libraryId),
+      'attendance records'
     );
   }
 
-  if (!sessionData?.session) {
-    return [];
-  }
-
-  const {
-    data,
-    error,
-  } = await supabase
-    .from('attendance_logs')
-    .select('*')
-    .order('time_in', {
-      ascending: false,
-    });
-
-  if (error) {
-    throw cleanErr(error);
-  }
-
-  return (data || []).map(mapAttendance);
+  return data.map(mapAttendance);
 }
 
 // ============================================================================
@@ -1354,7 +1467,7 @@ export async function getVisitor(
   let visitorQuery = supabase
     .from('visitors')
     .select(
-      'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at'
+      'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at, library_id'
     );
 
   visitorQuery = isValidUuid(normalizedVisitorId)
@@ -1426,6 +1539,7 @@ export async function registerVisitor({
   email,
   address,
   password,
+  libraryId = null,
 }) {
   const normalizedFullName =
     normalizeText(fullName);
@@ -1482,6 +1596,11 @@ export async function registerVisitor({
 
   if (!isPasswordValid(normalizedPassword)) {
     throw new Error(PASSWORD_REQUIREMENT_MESSAGE);
+  }
+
+  const normalizedLibraryId = normalizeText(libraryId) || null;
+  if (normalizedLibraryId && !isValidUuid(normalizedLibraryId)) {
+    throw new Error('Select a valid library branch or Outside Visitor.');
   }
 
   const registrationNonce =
@@ -1593,6 +1712,9 @@ export async function registerVisitor({
 
         p_registration_nonce:
           registrationNonce,
+
+        p_library_id:
+          normalizedLibraryId,
       }
     );
 
@@ -1634,6 +1756,7 @@ export async function registerVisitor({
     );
   }
 
+  invalidateVisitorAccountsCache();
   await safeSignOut();
 
   const {

@@ -218,6 +218,9 @@ export default function AdminWorkspace({
         detail: 'Library visit',
         branch: getLibraryName(libraries, item.libraryId),
         status: item.checkedOutAt ? 'Checked out' : 'Checked in',
+        dataClassification: String(item.visitorName || '').startsWith('[TEST] ')
+          ? 'Synthetic test data'
+          : 'Operational data',
       }));
 
     const transactionRows = scopedBorrows
@@ -229,6 +232,7 @@ export default function AdminWorkspace({
         detail: item.bookTitle || 'Book transaction',
         branch: getLibraryName(libraries, booksById.get(item.bookId)?.libraryId),
         status: formatStatus(item.status),
+        dataClassification: 'Operational data',
       }));
 
     const returnRows = scopedBorrows
@@ -240,6 +244,7 @@ export default function AdminWorkspace({
         detail: item.bookTitle || 'Book return',
         branch: getLibraryName(libraries, booksById.get(item.bookId)?.libraryId),
         status: `Returned${Number(item.fineAmount) > 0 ? `; Fine ₱${item.fineAmount}` : ''}`,
+        dataClassification: 'Operational data',
       }));
 
     return [...attendanceRows, ...transactionRows, ...returnRows].sort((a, b) => {
@@ -469,11 +474,12 @@ export default function AdminWorkspace({
 
       autoTable(document, {
         startY: 29,
-        head: [['Time', 'Activity', 'Visitor', 'Details', 'Branch', 'Status']],
+        head: [['Time', 'Activity', 'Visitor', 'Data classification', 'Details', 'Branch', 'Status']],
         body: rows.map((row) => [
           new Date(row.time).toLocaleString(),
           row.type,
           row.person,
+          row.dataClassification,
           row.detail,
           row.branch,
           row.status,
@@ -874,6 +880,13 @@ export default function AdminWorkspace({
                   {analyticsWindow.error}
                 </p>
               )}
+              {analyticsAttendance.some((item) =>
+                String(item.visitorName || '').startsWith('[TEST] ')
+              ) && (
+                <p role="note" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
+                  This report includes synthetic attendance test records. They are included in the totals and charts, and are marked as synthetic in the activity table and exported reports. Do not interpret them as real visitor activity.
+                </p>
+              )}
             </div>
           </div>
 
@@ -963,6 +976,7 @@ export default function AdminWorkspace({
                     <th className="px-5 py-4 font-semibold">Time</th>
                     <th className="px-5 py-4 font-semibold">Activity</th>
                     <th className="px-5 py-4 font-semibold">Visitor</th>
+                    <th className="px-5 py-4 font-semibold">Data source</th>
                     <th className="px-5 py-4 font-semibold">Details</th>
                     <th className="px-5 py-4 font-semibold">Branch</th>
                     <th className="px-5 py-4 font-semibold text-center">Status</th>
@@ -986,6 +1000,15 @@ export default function AdminWorkspace({
                         </span>
                       </td>
                       <td className="px-5 py-4 font-bold text-slate-800">{row.person}</td>
+                      <td className="px-5 py-4">
+                        <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                          row.dataClassification === 'Synthetic test data'
+                            ? 'border border-amber-200 bg-amber-50 text-amber-900'
+                            : 'border border-slate-200 bg-slate-50 text-slate-600'
+                        }`}>
+                          {row.dataClassification}
+                        </span>
+                      </td>
                       <td className="max-w-xs px-5 py-4 text-slate-600">
                         <span className="line-clamp-2">{row.detail}</span>
                       </td>

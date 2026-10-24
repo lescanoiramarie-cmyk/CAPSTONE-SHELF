@@ -4,7 +4,8 @@ CREATE OR REPLACE FUNCTION public.register_visitor (
   p_contact_number     text,
   p_email              text,
   p_address            text,
-  p_registration_nonce text
+  p_registration_nonce text,
+  p_library_id         uuid
 )
   RETURNS TABLE (
     visitor_id text
@@ -38,21 +39,34 @@ BEGIN
     RAISE EXCEPTION 'A matching visitor registration proof is required.';
   END IF;
 
+  IF p_library_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1
+    FROM public.libraries AS library
+    WHERE library.id = p_library_id
+  ) THEN
+    RAISE EXCEPTION 'Select a valid library branch or Outside Visitor.';
+  END IF;
+
   SELECT visitor.id
   INTO visitor_id_value
   FROM public.visitors AS visitor
   WHERE visitor.auth_user_id = p_auth_user_id
-    AND lower(visitor.email) = auth_email;
+    AND lower(visitor.email) = auth_email
+  FOR UPDATE;
 
   IF visitor_id_value IS NULL THEN
     RAISE EXCEPTION 'The visitor profile was not created by the Auth trigger.';
   END IF;
+
+  UPDATE public.visitors
+  SET library_id = p_library_id
+  WHERE auth_user_id = p_auth_user_id;
 
   RETURN QUERY
   SELECT visitor_id_value;
 END;
 $function$;
 
-GRANT EXECUTE ON FUNCTION "public"."register_visitor"(uuid, text, text, text, text, text) TO "anon", "authenticated", "postgres", "service_role";
+GRANT EXECUTE ON FUNCTION "public"."register_visitor"(uuid, text, text, text, text, text, uuid) TO "anon", "authenticated", "postgres", "service_role";
 
-REVOKE ALL ON FUNCTION "public"."register_visitor"(uuid, text, text, text, text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION "public"."register_visitor"(uuid, text, text, text, text, text, uuid) FROM PUBLIC;

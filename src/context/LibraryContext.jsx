@@ -50,6 +50,7 @@ export function LibraryProvider({ children }) {
   const [data, setData] = useState(emptyData);
   const [loading, setLoading] = useState(true);
   const [connectionError, setConnectionError] = useState('');
+  const [attendanceLoadError, setAttendanceLoadError] = useState('');
   const refreshSequenceRef = useRef(0);
 
   // ==========================================================================
@@ -139,7 +140,7 @@ export function LibraryProvider({ children }) {
         libraries,
         visitors,
         normalBorrowRequests,
-        attendanceLogs,
+        attendanceResult,
         communityBooks,
       ] = await Promise.all([
         store.fetchBooks(),
@@ -147,9 +148,20 @@ export function LibraryProvider({ children }) {
         store.fetchLibraries(),
         store.fetchVisitors(),
         store.fetchBorrowRequests(),
-        store.fetchAttendanceLogs(),
+        store.fetchAttendanceLogs().then(
+          (attendanceLogs) => ({ attendanceLogs, error: '' }),
+          (error) => ({
+            attendanceLogs: [],
+            error: error?.message || 'Unable to load attendance records.',
+          })
+        ),
         store.fetchCommunityBooks(),
       ]);
+      const { attendanceLogs, error: attendanceError } = attendanceResult;
+
+      if (attendanceError) {
+        console.error('SHELF attendance loading failed:', attendanceError);
+      }
 
       // ----------------------------------------------------------------------
       // Load books owned by the current visitor.
@@ -532,6 +544,7 @@ export function LibraryProvider({ children }) {
         ownerCommunityRequestLoadError,
       });
 
+      setAttendanceLoadError(attendanceError);
       setConnectionError('');
 
       return {
@@ -1215,6 +1228,7 @@ export function LibraryProvider({ children }) {
       loading,
 
       connectionError,
+      attendanceLoadError,
 
       refreshAll,
 
@@ -1310,6 +1324,7 @@ export function LibraryProvider({ children }) {
       loading,
 
       connectionError,
+      attendanceLoadError,
 
       refreshAll,
 
@@ -1375,6 +1390,11 @@ export function LibraryProvider({ children }) {
         <div className="bg-red-600 text-white text-xs font-semibold px-4 py-2 text-center">
           Could not reach the database:{' '}
           {connectionError}
+        </div>
+      )}
+      {attendanceLoadError && (
+        <div role="status" className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-center text-xs font-semibold text-amber-950">
+          Attendance data is temporarily unavailable. Other library data may still load.
         </div>
       )}
 

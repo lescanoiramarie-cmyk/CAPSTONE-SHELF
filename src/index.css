@@ -171,3 +171,47 @@ select:focus-visible {
   background: rgb(148 163 184 / 80%);
   background-clip: padding-box;
 }
+
+@media (max-width: 767px) {
+  .superadmin-dashboard,
+  .subadmin-dashboard {
+    display: flex;
+    min-height: 100vh;
+    height: auto;
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .superadmin-dashboard > aside,
+  .subadmin-dashboard > aside {
+    position: static;
+    inset: auto;
+    width: 100%;
+    height: auto;
+    max-height: none;
+    flex: none;
+    overflow: visible;
+  }
+
+  .superadmin-dashboard > aside nav,
+  .subadmin-dashboard > aside nav {
+    max-height: 15rem;
+    overflow-y: auto;
+  }
+
+  .superadmin-dashboard > main,
+  .subadmin-dashboard > main {
+    width: 100%;
+    min-height: 0;
+    height: auto;
+    margin-left: 0;
+    overflow: visible;
+    padding: 1rem;
+  }
+
+  .visitor-dashboard,
+  .landing-page {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+}

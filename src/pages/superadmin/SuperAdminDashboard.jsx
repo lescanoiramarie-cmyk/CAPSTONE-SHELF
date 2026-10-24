@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useEffect,
   useMemo,
   useRef,
@@ -51,6 +53,10 @@ import {
   exportToCSV,
   parseImportFile,
 } from '../../lib/excelUtils.js';
+
+const VisitorAccountManagement = lazy(
+  () => import('../../component/VisitorAccountManagement.jsx')
+);
 
 ChartJS.register(
   CategoryScale,
@@ -1012,7 +1018,7 @@ const handleEditStaff = (staff) => {
   // UI
   // ============================================================
   return (
-    <div className="flex h-screen overflow-hidden bg-shelf-bg text-slate-800">
+    <div className="superadmin-dashboard flex h-screen overflow-hidden bg-shelf-bg text-slate-800">
       {/* SIDEBAR */}
       <aside className="fixed inset-y-0 left-0 z-40 flex h-screen w-60 shrink-0 flex-col overflow-y-auto bg-shelf-primary text-white">
         <div className="border-b border-white/10 p-5">
@@ -1096,6 +1102,23 @@ const handleEditStaff = (staff) => {
           >
             <ShieldCheck size={18} className="mr-3 inline-block align-[-3px]" />
             Staff Accounts
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSection('visitor-accounts');
+              setStaffError('');
+              setStaffMessage('');
+            }}
+            className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
+              section === 'visitor-accounts'
+                ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
+                : 'text-slate-300 hover:bg-white/5'
+            }`}
+          >
+            <UsersRound size={18} className="mr-3 inline-block align-[-3px]" />
+            Visitor Accounts
           </button>
 
           {/* REPORTS & SERVICES COLLAPSIBLE */}
@@ -1683,6 +1706,21 @@ const handleEditStaff = (staff) => {
         )}
 
         {/* STAFF ACCOUNTS */}
+        {section === 'visitor-accounts' && (
+          <Suspense
+            fallback={
+              <div role="status" className="rounded-lg bg-white p-5 text-sm text-slate-500">
+                Loading visitor accounts…
+              </div>
+            }
+          >
+            <VisitorAccountManagement
+              mode="superadmin"
+              libraries={libraries}
+            />
+          </Suspense>
+        )}
+
         {section === 'accounts' && (
           <div className="space-y-6">
             <div>

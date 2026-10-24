@@ -165,6 +165,13 @@ function VisitorDashboardContent() {
   const visitorDetails = visitors.find(
     (visitor) => visitor.id === user?.id
   );
+  const assignedLibraryId =
+    visitorDetails?.libraryId ?? user?.libraryId ?? null;
+  const registeredLibraryName = assignedLibraryId
+    ? libraries.find(
+        (library) => String(library.id) === String(assignedLibraryId)
+      )?.name || 'Assigned library'
+    : 'Outside Visitor';
 
   const [tab, setTab] = useState('catalog');
   const [catalogResetKey, setCatalogResetKey] = useState(0);
@@ -1071,7 +1078,13 @@ function VisitorDashboardContent() {
             PAGE HEADER
         ================================================== */}
 
-        <DashboardWelcome
+        <div className="space-y-3">
+          <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+            <MapPin size={14} className="shrink-0 text-blue-600 dark:text-blue-300" aria-hidden="true" />
+            <span className="shrink-0">Your library:</span>
+            <span className="truncate">{registeredLibraryName}</span>
+          </div>
+          <DashboardWelcome
           name={user?.name?.split(' ')[0]}
           visitorAppearance
           description="Search books, check availability, manage requests, and keep track of your library visits."
@@ -1112,7 +1125,8 @@ function VisitorDashboardContent() {
               },
             },
           ]}
-        />
+          />
+        </div>
 
         {visibleCommunityReturnReminders.length > 0 && (
           <section

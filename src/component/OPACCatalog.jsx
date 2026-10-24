@@ -23,6 +23,7 @@ import {
   Upload,
   Link2,
   ImagePlus,
+  Pencil,
 } from 'lucide-react';
 import BookCover from './BookCover.jsx';
 import {
@@ -1794,7 +1795,7 @@ export default function OPACCatalog({
                   aria-label={`Edit ${book.title || 'personal book'}`}
                   className="visitor-book-card-action-button visitor-book-card-action-button-outline"
                 >
-                  <Eye size={14} aria-hidden="true" />
+                  <Pencil size={14} aria-hidden="true" />
                   <span className="visitor-book-card-action-label visitor-book-card-action-label-secondary">Edit</span>
                 </button>
                 <button
@@ -2531,7 +2532,7 @@ export default function OPACCatalog({
                   No requests in this category.
                 </div>
               ) : (
-                <div className="divide-y divide-slate-100 dark:divide-slate-700">
+                <div className="grid gap-3 p-4 sm:p-5">
                   {filteredOwnerCommunityRequests.map((request) => {
                     const status = getOwnerCommunityRequestStatus(request);
                     const isProcessing = processingCommunityRequestId === request.id;
@@ -2539,15 +2540,20 @@ export default function OPACCatalog({
                       <div
                         key={request.id}
                         id={`community-owner-request-${request.id}`}
-                        className="p-5"
+                        className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40 sm:p-5"
                       >
                         <div className="space-y-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">
-                              <Users size={12} aria-hidden="true" />
-                              Community Request
-                            </span>
-                            <span className={`visitor-status ${
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0">
+                              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                <Users size={13} aria-hidden="true" />
+                                Community book request
+                              </span>
+                              <h4 className="mt-1 break-words text-base font-bold text-slate-900 dark:text-slate-100">
+                                {request.bookTitle || 'Untitled Book'}
+                              </h4>
+                            </div>
+                            <span className={`visitor-status shrink-0 ${
                               status === 'approved'
                                 ? 'visitor-status-warning'
                                 : status === 'borrowed'
@@ -2560,7 +2566,11 @@ export default function OPACCatalog({
                                         ? 'visitor-status-neutral'
                                         : 'visitor-status-warning'
                             }`}>
-                              {status === 'returned' ? <CheckCircle2 size={12} aria-hidden="true" /> : <Clock3 size={12} aria-hidden="true" />}
+                              {status === 'returned'
+                                ? <CheckCircle2 size={12} aria-hidden="true" />
+                                : status === 'rejected' || status === 'cancelled'
+                                  ? <X size={12} aria-hidden="true" />
+                                  : <Clock3 size={12} aria-hidden="true" />}
                               {status === 'approved'
                                 ? 'Approved'
                                 : status === 'borrowed'
@@ -2569,86 +2579,84 @@ export default function OPACCatalog({
                                     ? 'Returned'
                                     : status === 'rejected'
                                       ? 'Rejected'
-                                      : 'Pending'}
+                                      : status === 'cancelled'
+                                        ? 'Cancelled'
+                                        : 'Pending'}
                             </span>
                           </div>
-                          <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                            {request.bookTitle || 'Untitled Book'}
-                          </h4>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            Requested by{' '}
-                            <span className="font-semibold text-slate-700 dark:text-slate-200">
-                              {request.requesterName || 'SHELF Visitor'}
-                            </span>
-                          </p>
-                          <p className="text-xs text-slate-700 dark:text-slate-200">
-                            Requested: {formatDateTime(request.requestDate)}
-                          </p>
+                          <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-slate-200 pt-3 text-xs dark:border-slate-700">
+                            <p className="text-slate-500 dark:text-slate-400">
+                              Requested by <span className="font-semibold text-slate-800 dark:text-slate-200">{request.requesterName || 'SHELF Visitor'}</span>
+                            </p>
+                            <p className="text-slate-500 dark:text-slate-400">
+                              {formatDateTime(request.requestDate)}
+                            </p>
+                          </div>
                           {request.ownerResponse && (
-                            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900/60">
+                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800">
                               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                                 Owner response
                               </p>
-                              <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                              <p className="mt-1 break-words text-xs leading-5 text-slate-600 dark:text-slate-300">
                                 {request.ownerResponse}
                               </p>
                             </div>
                           )}
                         </div>
                         {status === 'pending' && (
-                          <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                          <div className="mt-4 flex flex-col gap-2 border-t border-slate-200 pt-4 sm:flex-row sm:justify-end dark:border-slate-700">
                             <button
                               type="button"
                               disabled={Boolean(processingCommunityRequestId)}
                               onClick={() => handleApproveCommunityRequest(request)}
-                              className="rounded-lg bg-shelf-primary px-4 py-2.5 text-xs font-bold text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="min-h-10 rounded-lg bg-shelf-primary px-5 py-2.5 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              {isProcessing ? 'Processing...' : 'Confirm'}
+                              {isProcessing ? 'Processing...' : 'Approve request'}
                             </button>
                             <button
                               type="button"
                               disabled={Boolean(processingCommunityRequestId)}
                               onClick={() => openRejectCommunityRequest(request)}
-                              className="rounded-lg bg-red-50 px-4 py-2.5 text-xs font-bold text-red-600 hover:bg-red-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="min-h-10 rounded-lg border border-red-200 bg-white px-5 py-2.5 text-sm font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-red-900 dark:bg-slate-800 dark:text-red-300 dark:hover:bg-red-950/40"
                             >
                               Reject Request
                             </button>
                           </div>
                         )}
                         {status === 'approved' && (
-                          <div className="mt-4 w-full rounded-xl border border-slate-300 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-900/60">
+                          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/70 p-4 dark:border-amber-900 dark:bg-amber-950/20">
                             <div className="flex items-center gap-2">
-                              <span className="inline-flex h-2.5 w-2.5 rounded-full bg-slate-500" />
-                              <p className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+                              <Clock3 size={15} className="text-amber-700 dark:text-amber-300" aria-hidden="true" />
+                              <p className="text-xs font-bold uppercase tracking-wider text-amber-950 dark:text-amber-100">
                                 Approved — Awaiting Handover
                               </p>
                             </div>
-                            <p className="mt-2 text-xs text-slate-700 dark:text-slate-200">
+                            <p className="mt-2 text-sm leading-6 text-amber-950 dark:text-amber-100">
                               This request has been approved. After you physically hand the book to the requester, click the button below.
                             </p>
                             <button
                               type="button"
                               disabled={Boolean(processingCommunityRequestId)}
                               onClick={() => handleConfirmCommunityBookPickup(request)}
-                              className="mt-4 w-full rounded-lg bg-shelf-primary px-5 py-3 text-sm font-black text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="mt-4 min-h-11 w-full rounded-lg bg-shelf-primary px-5 py-3 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {isProcessing ? 'Processing...' : 'Confirm'}
                             </button>
                           </div>
                         )}
                         {status === 'borrowed' && (
-                          <div className="mt-4 w-full rounded-xl border border-slate-300 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-900/60">
-                            <p className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+                          <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50/70 p-4 dark:border-blue-900 dark:bg-blue-950/20">
+                            <p className="text-xs font-bold uppercase tracking-wider text-blue-950 dark:text-blue-100">
                               Book Currently Borrowed
                             </p>
-                            <p className="mt-2 text-xs text-slate-700 dark:text-slate-200">
+                            <p className="mt-2 text-sm leading-6 text-blue-950 dark:text-blue-100">
                               Confirm the return after the requester gives the book back to you.
                             </p>
                             <button
                               type="button"
                               disabled={Boolean(processingCommunityRequestId)}
                               onClick={() => handleConfirmCommunityBookReturn(request)}
-                              className="mt-4 w-full rounded-lg bg-shelf-primary px-5 py-3 text-sm font-black text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="mt-4 min-h-11 w-full rounded-lg bg-shelf-primary px-5 py-3 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {isProcessing ? 'Processing...' : 'Confirm'}
                             </button>
@@ -3787,32 +3795,55 @@ export default function OPACCatalog({
               </div>
             )}
             {selectedBook?.bookType === 'personal' && (
-              <div className="visitor-modal-community-action border-t border-slate-200 pt-4 space-y-3 dark:border-slate-700">
+              <div className="visitor-modal-community-action space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
+                <div>
+                  <h4 className="text-sm font-bold text-emerald-950 dark:text-emerald-100">
+                    Request to borrow
+                  </h4>
+                  <p className="mt-1 text-xs leading-5 text-emerald-900/80 dark:text-emerald-200/80">
+                    {getPersonalBookCopyAvailability(selectedBook).availableCopies === 0
+                      ? 'Join the queue. The owner must approve your request before arranging a handover.'
+                      : 'Send a request to the owner. You can coordinate the handover after approval.'}
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={() => handleRequestCommunityBook(selectedBook)}
-                  disabled={submittingCommunityRequest}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-shelf-primary py-2.5 text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={
+                    submittingCommunityRequest ||
+                    (selectedBook.ownerVisitorId &&
+                      String(selectedBook.ownerVisitorId) === String(user?.id)) ||
+                    selectedBook.lendingEnabled === false
+                  }
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <HandHeart size={16} strokeWidth={2} aria-hidden="true" />
                   {submittingCommunityRequest
                     ? 'Submitting Request...'
-                    : getPersonalBookCopyAvailability(selectedBook).availableCopies === 0
+                    : selectedBook.ownerVisitorId &&
+                      String(selectedBook.ownerVisitorId) === String(user?.id)
+                      ? 'This is your book'
+                      : selectedBook.lendingEnabled === false
+                        ? 'Lending unavailable'
+                        : getPersonalBookCopyAvailability(selectedBook).availableCopies === 0
                       ? 'Join Community Book Queue'
                       : 'Request Community Book'}
                 </button>
                 {selectedBook.ownerVisitorId &&
                 String(selectedBook.ownerVisitorId) === String(user?.id) ? (
-                  <p className="text-xs text-amber-600 text-center">
+                  <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
                     You own this book. You cannot request your own personal book.
                   </p>
                 ) : selectedBook.lendingEnabled === false ? (
-                  <p className="text-xs text-slate-500 text-center">
+                  <p role="status" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                     This book is not currently available for community lending.
                   </p>
                 ) : (
-                  <p className="text-[10px] text-slate-400 text-center">
-                    Requests are handled in order and always require owner approval.
+                  <p className="flex items-start gap-2 text-xs leading-5 text-slate-600 dark:text-slate-300">
+                    <MapPin size={14} className="mt-0.5 shrink-0 text-shelf-primary dark:text-slate-200" aria-hidden="true" />
+                    <span>
+                      Handover: {getHandoverMethodLabel(selectedBook.handoverMethod)}. Requests are handled in order and require owner approval.
+                    </span>
                   </p>
                 )}
               </div>

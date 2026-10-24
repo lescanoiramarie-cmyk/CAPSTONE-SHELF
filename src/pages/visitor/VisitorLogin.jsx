@@ -18,6 +18,7 @@ import {
 import { useAuth } from '../../context/useAuth.js';
 
 import { validateVisitorFullName } from '../../lib/visitorValidation.js';
+import { fetchLibraries } from '../../data/store.js';
 
 const OTP_CODE_TTL_SECONDS = 10 * 60;
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
@@ -112,6 +113,10 @@ export default function VisitorLogin({ initialView = 'login' }) {
 
   const [view, setView] = useState(initialView);
   const [error, setError] = useState('');
+  const [libraries, setLibraries] = useState([]);
+  const [librariesLoading, setLibrariesLoading] = useState(true);
+  const [libraryLoadError, setLibraryLoadError] = useState('');
+  const [selectedLibraryId, setSelectedLibraryId] = useState('');
   const [canResendVisitorOtp, setCanResendVisitorOtp] =
     useState(false);
   const [otpExpiresAt, setOtpExpiresAt] = useState(null);
@@ -262,12 +267,36 @@ useEffect(() => {
     fullName: '',
     contactNumber: '',
     email: '',
+    libraryId: '',
     province: '',
     city: '',
     barangay: '',
     password: '',
     confirmPassword: '',
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchLibraries()
+      .then((libraryList) => {
+        if (!cancelled) setLibraries(libraryList);
+      })
+      .catch((loadError) => {
+        console.error('Failed to load registration library list:', loadError);
+        if (!cancelled) {
+          setLibraryLoadError(
+            'Unable to load library branches. Please refresh and try again.'
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLibrariesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [showScanner, setShowScanner] = useState(false);
 
@@ -1161,6 +1190,17 @@ useEffect(() => {
         'Please enter a valid email address.';
     }
 
+    if (!selectedLibraryId) {
+      errors.libraryId =
+        'Please select your library branch or Outside Visitor.';
+    } else if (
+      selectedLibraryId !== 'outside' &&
+      !libraries.some((library) => library.id === selectedLibraryId)
+    ) {
+      errors.libraryId =
+        'Select a valid library branch or Outside Visitor.';
+    }
+
     // -------------------------------------------------------
     // LOCATION
     // -------------------------------------------------------
@@ -1255,6 +1295,9 @@ useEffect(() => {
 
           address:
             completeAddress,
+
+          libraryId:
+            selectedLibraryId === 'outside' ? null : selectedLibraryId,
 
           password:
             formData.password,
@@ -1773,6 +1816,7 @@ setOtpResendRemaining(
       fullName: '',
       contactNumber: '',
       email: '',
+      libraryId: '',
       province: '',
       city: '',
       barangay: '',
@@ -1792,6 +1836,7 @@ setOtpResendRemaining(
     setSelectedProvince('');
     setSelectedCity('');
     setBarangay('');
+    setSelectedLibraryId('');
 
     setLoginData({
       identifier: '',
@@ -1883,14 +1928,16 @@ setOtpResendRemaining(
       <div className="relative w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-8 lg:p-12 overflow-y-auto">
         <div className="w-full max-w-md bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-slate-200 space-y-6 my-auto">
           <div className="sticky top-0 z-20 -mt-1 flex items-center justify-between gap-2 bg-white pb-1">
-            <button
-              type="button"
-              onClick={() => navigate('/')}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-shelf-primary"
-            >
-              <ArrowLeft size={16} aria-hidden="true" />
-              Back to landing page
-            </button>
+            {view !== 'register' && view !== 'forgot' && (
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-shelf-primary"
+              >
+                <ArrowLeft size={16} aria-hidden="true" />
+                Back to Home
+              </button>
+            )}
             {(view === 'register' || view === 'forgot') && (
               <button
                 type="button"
@@ -1905,11 +1952,11 @@ setOtpResendRemaining(
                   }
                 }}
                 className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-shelf-primary"
-                aria-label="Go back"
-                title="Go back"
+                aria-label={view === 'register' ? 'Back to Login' : 'Go back'}
+                title={view === 'register' ? 'Back to Login' : 'Go back'}
               >
                 <ArrowLeft size={16} aria-hidden="true" />
-                Back
+                {view === 'register' ? 'Back to Login' : 'Back'}
               </button>
             )}
           </div>
@@ -2326,6 +2373,53 @@ setOtpResendRemaining(
                 {fieldErrors.email && (
                   <p className="mt-1 text-[11px] font-medium text-red-600">
                     {fieldErrors.email}
+                  </p>
+                )}
+              </div>
+
+              {/* LIBRARY BRANCH */}
+              <div>
+                <label
+                  htmlFor="visitor-library-branch"
+                  className="mb-1 block text-xs font-semibold text-slate-700"
+                >
+                  Library Branch
+                </label>
+                <select
+                  id="visitor-library-branch"
+                  value={selectedLibraryId}
+                  onChange={(event) => {
+                    setSelectedLibraryId(event.target.value);
+                    setFieldErrors((previous) => ({ ...previous, libraryId: '' }));
+                  }}
+                  disabled={librariesLoading || Boolean(libraryLoadError)}
+                  aria-invalid={Boolean(fieldErrors.libraryId)}
+                  className={`w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 disabled:bg-slate-100 ${
+                    fieldErrors.libraryId ? 'border-red-400' : 'border-slate-300'
+                  }`}
+                >
+                  <option value="">
+                    {librariesLoading ? 'Loading library branches…' : 'Select your library branch'}
+                  </option>
+                  {libraries.map((library) => (
+                    <option key={library.id} value={library.id}>
+                      {library.name}
+                    </option>
+                  ))}
+                  <option value="outside">Outside Visitor</option>
+                </select>
+                {libraryLoadError ? (
+                  <p role="alert" className="mt-1 text-[11px] font-medium text-red-600">
+                    {libraryLoadError}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    Choose a branch from the official list or select Outside Visitor.
+                  </p>
+                )}
+                {fieldErrors.libraryId && (
+                  <p className="mt-1 text-[11px] font-medium text-red-600">
+                    {fieldErrors.libraryId}
                   </p>
                 )}
               </div>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import {
   Activity,
@@ -33,8 +33,13 @@ import Papa from 'papaparse';
 import { findVisitorByQr } from '../../data/store.js';
 import { sendDueDateFollowUp } from '../../lib/dueDateFollowUp.js';
 
+const VisitorAccountManagement = lazy(
+  () => import('../../component/VisitorAccountManagement.jsx')
+);
+
 const NAV = [
   { id: 'overview', label: 'Overview', Icon: Activity },
+  { id: 'visitors', label: 'Visitor Accounts', Icon: UsersRound },
   { id: 'attendance', label: 'Attendance', Icon: QrCode },
   { id: 'transactions', label: 'Book Transactions', Icon: BookOpen },
   { id: 'inventory', label: 'Inventory', Icon: ClipboardList },
@@ -1561,6 +1566,21 @@ export default function SubAdminDashboard() {
         {section === 'inventory' && <BookInventory />}
         {section === 'queue' && (
           <ReservationQueue user={user} focusRequestId={focusRequestId} />
+        )}
+        {section === 'visitors' && (
+          <Suspense
+            fallback={
+              <div role="status" className="rounded-lg bg-white p-5 text-sm text-slate-500">
+                Loading visitor accounts…
+              </div>
+            }
+          >
+            <VisitorAccountManagement
+              mode="subadmin"
+              libraryId={currentLibraryId}
+              libraryName={currentBranchName}
+            />
+          </Suspense>
         )}
         {section === 'map' && (
           <LibraryMap

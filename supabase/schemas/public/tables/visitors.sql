@@ -4,6 +4,7 @@ CREATE TABLE "public"."visitors" (
   "contact_number"    character varying(50),
   "email"             character varying(255)   NOT NULL,
   "address"           text,
+  "library_id"        uuid,
   "otp"               character varying(10),
   "otp_verified"      boolean                  DEFAULT false,
   "qr_code"           character varying(100),
@@ -15,6 +16,7 @@ CREATE TABLE "public"."visitors" (
   "otp_last_sent_at"  timestamp with time zone,
   "terms_accepted_at" timestamp with time zone,
   CONSTRAINT "visitors_auth_user_id_fkey" FOREIGN KEY (auth_user_id) REFERENCES auth.users(id) ON DELETE CASCADE,
+  CONSTRAINT "visitors_library_id_fkey" FOREIGN KEY (library_id) REFERENCES public.libraries(id) ON DELETE SET NULL,
   CONSTRAINT "visitors_auth_user_id_key" UNIQUE (auth_user_id),
   CONSTRAINT "visitors_email_key" UNIQUE (email),
   CONSTRAINT "visitors_pkey" PRIMARY KEY (id),
@@ -56,7 +58,7 @@ CREATE POLICY "staff manage visitors" ON "public"."visitors"
 CREATE POLICY "visitor and staff read scoped visitor profiles" ON "public"."visitors"
   FOR SELECT
   TO "authenticated"
-  USING (((auth_user_id = auth.uid()) OR public.is_active_staff_for_branch(NULL::text)));
+  USING ((auth_user_id = auth.uid()) OR public.is_active_staff_for_branch(library_id::text));
 
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."visitors" TO "postgres", "service_role";
 
