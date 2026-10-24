@@ -87,7 +87,7 @@ function getDateKey(value, timeframe) {
     return '';
   }
   const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-  if (timeframe === 'year') {
+  if (timeframe === 'year' || timeframe === 'last_12_months') {
     return monthKey;
   }
   return `${monthKey}-${String(date.getDate()).padStart(2, '0')}`;
@@ -128,7 +128,7 @@ export default function AdminWorkspace({
   }, [mode]);
 
   const [analyticsLibraryId, setAnalyticsLibraryId] = useState('');
-  const [timeframe, setTimeframe] = useState('7d');
+  const [timeframe, setTimeframe] = useState('last_12_months');
   const [activityTypeFilter, setActivityTypeFilter] = useState('all');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
@@ -704,7 +704,16 @@ export default function AdminWorkspace({
       setForecast(await response.json());
     } catch (forecastError) {
       const errorMessage = forecastError instanceof Error ? forecastError.message : '';
-      setError(errorMessage || 'Forecast request failed.');
+      if (
+        forecastError instanceof TypeError &&
+        /failed to fetch/i.test(errorMessage)
+      ) {
+        setError(
+          `Cannot reach the analytics service at ${endpoint}. Start the local service or configure its deployed HTTPS URL, and verify its CORS allowed origins.`
+        );
+      } else {
+        setError(errorMessage || 'Forecast request failed.');
+      }
     } finally {
       setForecastLoading(false);
     }

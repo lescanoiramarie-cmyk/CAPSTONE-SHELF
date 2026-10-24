@@ -6,6 +6,7 @@ export const TIMEFRAME_OPTIONS = [
   { id: 'this_month', label: 'This month' },
   { id: 'last_month', label: 'Last month' },
   { id: 'year', label: 'This year' },
+  { id: 'last_12_months', label: 'Last 12 months' },
   { id: 'custom', label: 'Custom range' },
 ];
 
@@ -81,6 +82,14 @@ export function getTimeframeRange(
     );
   }
 
+  if (timeframe === 'last_12_months') {
+    return range(
+      new Date(today.getFullYear(), today.getMonth() - 11, 1),
+      tomorrow,
+      'Last 12 months'
+    );
+  }
+
   if (timeframe === 'custom') {
     if (!customStart || !customEnd) {
       return {
@@ -126,7 +135,7 @@ export function getTimeframeBuckets(timeframe, timeframeRange) {
     return buckets;
   }
 
-  if (timeframe === 'year') {
+  if (timeframe === 'year' || timeframe === 'last_12_months') {
     const cursor = new Date(
       timeframeRange.start.getFullYear(),
       timeframeRange.start.getMonth(),

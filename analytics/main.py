@@ -334,6 +334,7 @@ def forecast(
         "this_month",
         "last_month",
         "year",
+        "last_12_months",
         "custom",
     ] = Query(default="7d"),
 ):
