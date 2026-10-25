@@ -13,6 +13,7 @@
     "@ianlabicani/geoph-lite": "^2.0.0",
     "@supabase/supabase-js": "^2.115.0",
     "chart.js": "^4.5.1",
+    "exceljs": "^4.4.0",
     "html5-qrcode": "^2.3.8",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",

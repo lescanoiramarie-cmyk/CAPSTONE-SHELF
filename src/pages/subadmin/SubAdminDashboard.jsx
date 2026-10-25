@@ -28,7 +28,7 @@ import ReservationQueue from '../../component/ReservationQueue.jsx';
 import AdminWorkspace from '../../component/AdminWorkspace.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
 import { supabase } from '../../lib/supabaseClient.js';
-import { exportToExcel, exportToCSV } from '../../lib/excelUtils.js';
+import { exportReport } from '../../lib/excelUtils.js';
 import Papa from 'papaparse';
 import { findVisitorByQr } from '../../data/store.js';
 import { sendDueDateFollowUp } from '../../lib/dueDateFollowUp.js';
@@ -1164,6 +1164,41 @@ export default function SubAdminDashboard() {
   const [importError, setImportError] = useState('');
   const [importMessage, setImportMessage] = useState('');
   const [importingBooks, setImportingBooks] = useState(false);
+  const [exportingReport, setExportingReport] = useState('');
+  const [exportMessage, setExportMessage] = useState('');
+  const [exportError, setExportError] = useState('');
+
+  const exportBranchReport = async (report, format) => {
+    const reportKey = `${report}-${format}`;
+    setExportingReport(reportKey);
+    setExportMessage('');
+    setExportError('');
+    try {
+      const reportOptions = {
+        reportType: report === 'books' ? 'Inventory' : 'Attendance',
+        title: report === 'books' ? 'Book Inventory' : 'Attendance Report',
+        libraryName: currentBranchName || 'Assigned Branch',
+        libraries,
+        generatedBy: `${user?.name || 'Admin'} (Sub-Admin)`,
+        startDate: new Date(),
+        endDate: new Date(),
+        asOf: report === 'books',
+        ...(report === 'attendance' ? { dateRange: 'All available dates' } : {}),
+        summary: [[report === 'books' ? 'Total Books' : 'Total Visits',
+          report === 'books' ? branchBooks.length : branchAttendance.length]],
+      };
+      await exportReport(
+        report === 'books' ? branchBooks : branchAttendance,
+        format,
+        reportOptions
+      );
+      setExportMessage('Report exported successfully.');
+    } catch {
+      setExportError('The report could not be exported. Please try again.');
+    } finally {
+      setExportingReport('');
+    }
+  };
 
   const handleFileUpload = (event) => {
     const file = event.target.files?.[0];
@@ -1477,17 +1512,27 @@ export default function SubAdminDashboard() {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => exportToExcel(branchBooks, `Branch_Books_${currentLibraryId || 'data'}.xlsx`)}
+                      onClick={() => exportBranchReport('books', 'xlsx')}
+                      disabled={Boolean(exportingReport)}
                       className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded transition"
                     >
-                      Excel
+                      {exportingReport === 'books-xlsx' ? 'Exporting…' : 'Excel'}
                     </button>
                     <button
                       type="button"
-                      onClick={() => exportToCSV(branchBooks, `Branch_Books_${currentLibraryId || 'data'}.csv`)}
+                      onClick={() => exportBranchReport('books', 'csv')}
+                      disabled={Boolean(exportingReport)}
                       className="bg-slate-700 hover:bg-slate-800 text-white text-[11px] font-bold px-3 py-1.5 rounded transition"
                     >
-                      CSV
+                      {exportingReport === 'books-csv' ? 'Exporting…' : 'CSV'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => exportBranchReport('books', 'pdf')}
+                      disabled={Boolean(exportingReport)}
+                      className="bg-rose-700 hover:bg-rose-800 text-white text-[11px] font-bold px-3 py-1.5 rounded transition"
+                    >
+                      {exportingReport === 'books-pdf' ? 'Exporting…' : 'PDF'}
                     </button>
                   </div>
                 </div>
@@ -1501,21 +1546,33 @@ export default function SubAdminDashboard() {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => exportToExcel(branchAttendance, `Branch_Attendance_${currentLibraryId || 'data'}.xlsx`)}
+                      onClick={() => exportBranchReport('attendance', 'xlsx')}
+                      disabled={Boolean(exportingReport)}
                       className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded transition"
                     >
-                      Excel
+                      {exportingReport === 'attendance-xlsx' ? 'Exporting…' : 'Excel'}
                     </button>
                     <button
                       type="button"
-                      onClick={() => exportToCSV(branchAttendance, `Branch_Attendance_${currentLibraryId || 'data'}.csv`)}
+                      onClick={() => exportBranchReport('attendance', 'csv')}
+                      disabled={Boolean(exportingReport)}
                       className="bg-slate-700 hover:bg-slate-800 text-white text-[11px] font-bold px-3 py-1.5 rounded transition"
                     >
-                      CSV
+                      {exportingReport === 'attendance-csv' ? 'Exporting…' : 'CSV'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => exportBranchReport('attendance', 'pdf')}
+                      disabled={Boolean(exportingReport)}
+                      className="bg-rose-700 hover:bg-rose-800 text-white text-[11px] font-bold px-3 py-1.5 rounded transition"
+                    >
+                      {exportingReport === 'attendance-pdf' ? 'Exporting…' : 'PDF'}
                     </button>
                   </div>
                 </div>
               </div>
+              {exportMessage && <p role="status" className="mt-3 text-sm text-emerald-700">{exportMessage}</p>}
+              {exportError && <p role="alert" className="mt-3 text-sm text-rose-700">{exportError}</p>}
             </div>
           </div>
         )}

@@ -10,10 +10,7 @@ import {
 } from 'chart.js';
 import { FileSpreadsheet, FileCode, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient.js';
-import {
-  exportToCSV,
-  exportToExcel,
-} from '../lib/excelUtils.js';
+import { exportReport } from '../lib/excelUtils.js';
 import AnalyticsDateFilter from './AnalyticsDateFilter.jsx';
 import AuditLogViewer from './AuditLogViewer.jsx';
 import {
@@ -136,6 +133,7 @@ export default function AdminWorkspace({
   const [feedback, setFeedback] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [announcementForm, setAnnouncementForm] = useState({
@@ -451,50 +449,107 @@ export default function AdminWorkspace({
       setError(analyticsWindow.error);
       return;
     }
-    const rows = filteredReportRows.map((row) => ({
-      ...row,
-      time: new Date(row.time).toISOString(),
-    }));
-    const suffix = `${timeframe}_${isSubAdmin ? currentLibraryId : 'all-libraries'}`;
-
-    if (format === 'pdf') {
-      const [{ jsPDF }, { default: autoTable }] = await Promise.all([
-        import('jspdf'),
-        import('jspdf-autotable'),
-      ]);
-      const document = new jsPDF({ orientation: 'landscape' });
+    setExporting(true);
+    setError('');
+    setMessage('');
+    try {
       const branchLabel = isSubAdmin
         ? getLibraryName(libraries, currentLibraryId)
-        : 'All libraries';
-
-      document.setFontSize(16);
-      document.text('SHELF ILMS Circulation Report', 14, 16);
-      document.setFontSize(10);
-      document.text(`${branchLabel} | ${analyticsWindow.label}`, 14, 23);
-
-      autoTable(document, {
-        startY: 29,
-        head: [['Time', 'Activity', 'Visitor', 'Data classification', 'Details', 'Branch', 'Status']],
-        body: rows.map((row) => [
-          new Date(row.time).toLocaleString(),
-          row.type,
-          row.person,
-          row.dataClassification,
-          row.detail,
-          row.branch,
-          row.status,
-        ]),
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [15, 74, 82] },
+        : analyticsLibraryId
+          ? getLibraryName(libraries, analyticsLibraryId)
+          : 'All Libraries';
+      await exportReport(filteredReportRows, format, {
+        reportType: 'Circulation',
+        title: 'Circulation Report',
+        libraryName: branchLabel,
+        libraries,
+        startDate: analyticsWindow.start,
+        endDate: new Date(analyticsWindow.endExclusive.getTime() - 1),
+        generatedBy: `${user?.name || 'Admin'} (${isSubAdmin ? 'Sub-Admin' : 'Super Admin'})`,
+        columns: [
+          { key: 'person', label: 'Visitor' },
+          { key: 'time', label: 'Date and Time', type: 'date' },
+          { key: 'type', label: 'Activity' },
+          { key: 'status', label: 'Status' },
+          { key: 'detail', label: 'Details' },
+          { key: 'branch', label: 'Library' },
+          { key: 'dataClassification', label: 'Data Classification' },
+        ],
+        summary: [
+          ['Total Visits', analyticsAttendance.length],
+          ['Total Borrows', analyticsBorrows.length],
+        ],
       });
-      document.save(`SHELF_Report_${suffix}.pdf`);
+      setMessage('Report exported successfully.');
+    } catch {
+      setError('The report could not be exported. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleAnalyticsExport = async (format) => {
+    if (!analyticsWindow.valid) {
+      setError(analyticsWindow.error);
       return;
     }
-
-    if (format === 'xlsx') {
-      exportToExcel(rows, `SHELF_Report_${suffix}.xlsx`);
-    } else {
-      exportToCSV(rows, `SHELF_Report_${suffix}.csv`);
+    setExporting(true);
+    setError('');
+    setMessage('');
+    try {
+      const rows = periodCounts.labels.map((period, index) => ({
+        period,
+        visitors: periodCounts.visits[index],
+        bookTransactions: periodCounts.transactions[index],
+      }));
+      const chartImages = format === 'pdf'
+        ? [...document.querySelectorAll('canvas')]
+          .map((canvas) => {
+            try {
+              return canvas.toDataURL('image/png');
+            } catch {
+              return null;
+            }
+          })
+          .filter(Boolean)
+        : [];
+      const branchLabel = isSubAdmin
+        ? getLibraryName(libraries, currentLibraryId)
+        : analyticsLibraryId
+          ? getLibraryName(libraries, analyticsLibraryId)
+          : 'All Libraries';
+      await exportReport(rows, format, {
+        reportType: 'Analytics',
+        title: 'Analytics Summary',
+        libraryName: branchLabel,
+        libraries,
+        startDate: analyticsWindow.start,
+        endDate: new Date(analyticsWindow.endExclusive.getTime() - 1),
+        generatedBy: `${user?.name || 'Admin'} (${isSubAdmin ? 'Sub-Admin' : 'Super Admin'})`,
+        columns: [
+          { key: 'period', label: 'Period' },
+          { key: 'visitors', label: 'Visitors', type: 'number' },
+          { key: 'bookTransactions', label: 'Book Transactions', type: 'number' },
+        ],
+        totalRow: {
+          period: 'Total',
+          visitors: analyticsAttendance.length,
+          bookTransactions: analyticsBorrows.length,
+        },
+        totalColumns: ['visitors', 'bookTransactions'],
+        summary: [
+          ['Visitors', analyticsAttendance.length],
+          ['Book Transactions', analyticsBorrows.length],
+          ['Active Loans', analyticsBorrows.filter((item) => item.status === 'borrowed').length],
+        ],
+        chartImages,
+        chartTitles: ['Branch demand'],
+      });
+      setMessage('Report exported successfully.');
+    } catch {
+      setError('The report could not be exported. Please try again.');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -852,29 +907,34 @@ export default function AdminWorkspace({
                 <button
                   type="button"
                   onClick={() => handleExport('xlsx')}
+                  disabled={exporting}
                   className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold shadow-sm transition hover:-translate-y-0.5 cursor-pointer"
                 >
                   <FileSpreadsheet size={15} className="text-emerald-400" />
-                  <span>Export Excel</span>
+                  <span>{exporting ? 'Exporting…' : 'Export Excel'}</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleExport('csv')}
+                  disabled={exporting}
                   className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold shadow-sm transition hover:-translate-y-0.5 hover:border-slate-400 cursor-pointer"
                 >
                   <FileCode size={15} className="text-blue-600" />
-                  <span>Export CSV</span>
+                  <span>{exporting ? 'Exporting…' : 'Export CSV'}</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleExport('pdf')}
+                  disabled={exporting}
                   className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-rose-50/50 text-rose-700 border border-rose-200 hover:border-rose-300 rounded-lg text-xs font-bold shadow-sm transition hover:-translate-y-0.5 cursor-pointer"
                 >
                   <FileText size={15} className="text-rose-600" />
-                  <span>Export PDF</span>
+                  <span>{exporting ? 'Exporting…' : 'Export PDF'}</span>
                 </button>
               </div>
 
+              {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
+              {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
               {!analyticsWindow.valid && (
                 <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                   {analyticsWindow.error}
@@ -1248,6 +1308,40 @@ export default function AdminWorkspace({
               </section>
             </aside>
           </section>
+          <div className="flex flex-wrap items-center gap-2.5 border-t border-slate-200 pt-4">
+            <span className="mr-1 text-xs font-bold uppercase tracking-wider text-slate-500">
+              Export analytics:
+            </span>
+            <button
+              type="button"
+              onClick={() => handleAnalyticsExport('xlsx')}
+              disabled={exporting}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <FileSpreadsheet size={15} className="text-emerald-400" />
+              <span>{exporting ? 'Exporting…' : 'Export Excel'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAnalyticsExport('csv')}
+              disabled={exporting}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <FileCode size={15} className="text-blue-600" />
+              <span>{exporting ? 'Exporting…' : 'Export CSV'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAnalyticsExport('pdf')}
+              disabled={exporting}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-4 py-2 text-xs font-bold text-rose-700 shadow-sm transition hover:bg-rose-50/50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <FileText size={15} className="text-rose-600" />
+              <span>{exporting ? 'Exporting…' : 'Export PDF'}</span>
+            </button>
+          </div>
+          {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
+          {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
         </section>
       )}
 

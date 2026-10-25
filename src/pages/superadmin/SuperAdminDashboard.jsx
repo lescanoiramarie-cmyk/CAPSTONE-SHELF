@@ -49,8 +49,7 @@ import DashboardWelcome from '../../component/DashboardWelcome.jsx';
 import { supabase } from '../../lib/supabaseClient.js';
 import { sendDueDateFollowUp } from '../../lib/dueDateFollowUp.js';
 import {
-  exportToExcel,
-  exportToCSV,
+  exportReport,
   parseImportFile,
 } from '../../lib/excelUtils.js';
 
@@ -203,6 +202,37 @@ export default function SuperAdminDashboard() {
   const [focusedNotificationRequestId, setFocusedNotificationRequestId] = useState(null);
   const [focusedNotificationType, setFocusedNotificationType] = useState(null);
   const [notificationFocusVersion, setNotificationFocusVersion] = useState(0);
+  const [exportingReport, setExportingReport] = useState('');
+  const [exportMessage, setExportMessage] = useState('');
+  const [exportError, setExportError] = useState('');
+
+  const exportSystemReport = async (report, format) => {
+    const reportKey = `${report}-${format}`;
+    setExportingReport(reportKey);
+    setExportMessage('');
+    setExportError('');
+    try {
+      const data = report === 'books' ? books : attendanceLogs;
+      const reportOptions = {
+        reportType: report === 'books' ? 'Inventory' : 'Attendance',
+        title: report === 'books' ? 'Book Inventory' : 'Attendance Report',
+        libraryName: 'All Libraries',
+        libraries,
+        generatedBy: `${user?.name || superAdminName} (Super Admin)`,
+        startDate: new Date(),
+        endDate: new Date(),
+        asOf: report === 'books',
+        ...(report === 'attendance' ? { dateRange: 'All available dates' } : {}),
+        summary: [[report === 'books' ? 'Total Books' : 'Total Visits', data.length]],
+      };
+      await exportReport(data, format, reportOptions);
+      setExportMessage('Report exported successfully.');
+    } catch {
+      setExportError('The report could not be exported. Please try again.');
+    } finally {
+      setExportingReport('');
+    }
+  };
 
   // Sidebar Collapsible States
   const [workspaceOpen, setWorkspaceOpen] = useState(true);
@@ -1316,8 +1346,9 @@ const handleEditStaff = (staff) => {
                     <p className="text-[11px] text-slate-500">Total Titles: {books.length}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button type="button" onClick={() => exportToExcel(books, 'All_Libraries_Books.xlsx')} className="rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-emerald-700">Excel</button>
-                    <button type="button" onClick={() => exportToCSV(books, 'All_Libraries_Books.csv')} className="rounded bg-slate-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-slate-800">CSV</button>
+                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('books', 'xlsx')} className="rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-emerald-700">{exportingReport === 'books-xlsx' ? 'Exporting…' : 'Excel'}</button>
+                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('books', 'csv')} className="rounded bg-slate-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-slate-800">{exportingReport === 'books-csv' ? 'Exporting…' : 'CSV'}</button>
+                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('books', 'pdf')} className="rounded bg-rose-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-rose-800">{exportingReport === 'books-pdf' ? 'Exporting…' : 'PDF'}</button>
                   </div>
                 </div>
                 <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/50 p-3.5">
@@ -1329,11 +1360,14 @@ const handleEditStaff = (staff) => {
                     <p className="text-[11px] text-slate-500">Total Visits: {attendanceLogs.length}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button type="button" onClick={() => exportToExcel(attendanceLogs, 'Total_Attendance_All_Libraries.xlsx')} className="rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-emerald-700">Excel</button>
-                    <button type="button" onClick={() => exportToCSV(attendanceLogs, 'Total_Attendance_All_Libraries.csv')} className="rounded bg-slate-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-slate-800">CSV</button>
+                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('attendance', 'xlsx')} className="rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-emerald-700">{exportingReport === 'attendance-xlsx' ? 'Exporting…' : 'Excel'}</button>
+                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('attendance', 'csv')} className="rounded bg-slate-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-slate-800">{exportingReport === 'attendance-csv' ? 'Exporting…' : 'CSV'}</button>
+                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('attendance', 'pdf')} className="rounded bg-rose-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-rose-800">{exportingReport === 'attendance-pdf' ? 'Exporting…' : 'PDF'}</button>
                   </div>
                 </div>
               </div>
+              {exportMessage && <p role="status" className="mt-3 text-sm text-emerald-700">{exportMessage}</p>}
+              {exportError && <p role="alert" className="mt-3 text-sm text-rose-700">{exportError}</p>}
             </div>
 
             {/* CHARTS */}
