@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/useAuth.js';
 import libraryBg from '../../assets/library.jpg';
+import ParticleConstellation from '../../component/ParticleConstellation.jsx';
 import { philippines } from '@ianlabicani/geoph-lite';
 import { validateVisitorFullName } from '../../lib/visitorValidation.js';
 
@@ -930,7 +931,7 @@ useEffect(() => {
       : '';
 
   return (
-    <div className="flex min-h-screen w-full bg-shelf-bg">
+    <div className="auth-shell flex min-h-screen w-full bg-shelf-bg">
       <style>
         {`
           input[type="password"]::-ms-reveal,
@@ -942,7 +943,7 @@ useEffect(() => {
 
       {/* Branding panel */}
       <div
-        className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-cover bg-center p-12 text-white lg:flex"
+        className="auth-visual-panel relative hidden w-1/2 flex-col justify-between overflow-hidden bg-cover bg-center p-12 text-white lg:flex"
         style={{
           backgroundImage: `
             linear-gradient(
@@ -953,6 +954,7 @@ useEffect(() => {
           `,
         }}
       >
+        <ParticleConstellation />
         <div className="relative z-10 flex items-center gap-3">
           <span className="text-xl font-bold tracking-wider">
             SHELF ILMS
@@ -980,8 +982,8 @@ useEffect(() => {
       </div>
 
       {/* Main panel */}
-      <div className="flex w-full items-center justify-center overflow-y-auto p-4 sm:p-8 lg:w-1/2 lg:p-12">
-        <div className="my-auto w-full max-w-md space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-xl sm:p-8">
+      <div className="auth-form-panel flex w-full items-center justify-center overflow-y-auto p-4 sm:p-8 lg:w-1/2 lg:p-12">
+        <div className="auth-form-card my-auto w-full max-w-md space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-xl sm:p-8">
           {/* Header */}
           <div className="space-y-1 text-center lg:text-left">
             <h2 className="text-2xl font-bold text-shelf-text">

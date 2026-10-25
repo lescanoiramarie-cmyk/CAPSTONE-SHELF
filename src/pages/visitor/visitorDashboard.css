@@ -178,6 +178,8 @@
   box-shadow: 0 3px 8px rgb(15 23 42 / 8%);
   scrollbar-color: #64748b transparent;
   scrollbar-width: thin;
+  max-width: 100%;
+  overscroll-behavior-inline: contain;
 }
 
 .visitor-dashboard [aria-label='Visitor dashboard']::-webkit-scrollbar,
@@ -771,6 +773,7 @@
 .visitor-dashboard .faq-floating-button {
   margin-bottom: env(safe-area-inset-bottom);
   margin-right: env(safe-area-inset-right);
+  max-width: calc(100vw - 2rem);
 }
 
 .visitor-dashboard :where(.text-violet-900, .text-violet-800, .text-violet-700, .text-violet-600) {

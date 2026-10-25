@@ -22,9 +22,9 @@ export default function SuperAdminLogin() {
   };
 
   return (
-    <div className="min-h-screen flex w-full bg-shelf-bg">
+    <div className="auth-shell min-h-screen flex w-full bg-shelf-bg">
       <div
-        className="hidden lg:flex lg:w-1/2 bg-shelf-primary text-white p-12 flex-col justify-between relative overflow-hidden bg-cover bg-center"
+        className="auth-visual-panel hidden lg:flex lg:w-1/2 bg-shelf-primary text-white p-12 flex-col justify-between relative overflow-hidden bg-cover bg-center"
         style={{ backgroundImage: `linear-gradient(rgba(0, 32, 70, 0.88), rgba(0, 32, 70, 0.88)), url(${libraryBg})` }}
       >
         <div className="relative z-10 flex items-center gap-3">
@@ -44,8 +44,8 @@ export default function SuperAdminLogin() {
         <div className="relative z-10 text-xs text-slate-400">© SHELF System. All rights reserved.</div>
       </div>
 
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12">
-        <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl border-2 border-shelf-primary space-y-6">
+      <div className="auth-form-panel w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 overflow-y-auto">
+        <div className="auth-form-card w-full max-w-md bg-white p-8 rounded-2xl shadow-xl border-2 border-shelf-primary space-y-6 my-auto">
           <div className="text-center lg:text-left space-y-1">
             <h2 className="text-2xl font-bold text-shelf-text">Super-Admin Console</h2>
             <p className="text-xs text-slate-500">Provide root security credentials to authenticate.</p>

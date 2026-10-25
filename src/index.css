@@ -9,6 +9,48 @@ html {
   overflow-x: clip;
 }
 
+/* Shared presentation shell for the authentication screens. The desktop
+   visual panel stays in the viewport while only the form column scrolls. */
+.auth-shell {
+  min-height: 100dvh;
+}
+
+@media (min-width: 1024px) {
+  .auth-shell {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .auth-visual-panel {
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    min-height: 0;
+  }
+
+  .auth-form-panel {
+    height: 100dvh;
+    min-height: 0;
+    overscroll-behavior: contain;
+  }
+}
+
+@media (max-width: 1023px) {
+  .auth-visual-panel {
+    min-height: 11rem;
+  }
+
+  .auth-form-panel {
+    min-height: calc(100dvh - 11rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
 .shelf-landing-backdrop {
   background-color: #0f172a;
   background-image:
@@ -147,6 +189,28 @@ select:focus-visible {
   box-shadow: 0 1px 3px rgb(15 23 42 / 8%);
 }
 
+/* Align admin main-content surfaces with the visitor dashboard without
+   changing the existing side-panel navigation. */
+.subadmin-dashboard > main,
+.superadmin-dashboard > main {
+  background-color: #f8fafc;
+}
+
+.subadmin-dashboard > main input,
+.subadmin-dashboard > main select,
+.subadmin-dashboard > main textarea,
+.superadmin-dashboard > main input,
+.superadmin-dashboard > main select,
+.superadmin-dashboard > main textarea {
+  min-height: 2.5rem;
+  border-radius: 0.625rem;
+}
+
+.subadmin-dashboard > main button,
+.superadmin-dashboard > main button {
+  min-height: 2.5rem;
+}
+
 .subadmin-sidebar nav,
 .subadmin-dashboard main {
   scrollbar-width: thin;
@@ -207,6 +271,11 @@ select:focus-visible {
     margin-left: 0;
     overflow: visible;
     padding: 1rem;
+  }
+
+  .subadmin-dashboard > main,
+  .superadmin-dashboard > main {
+    background-color: #f8fafc;
   }
 
   .visitor-dashboard,

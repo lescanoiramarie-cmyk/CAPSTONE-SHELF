@@ -17,6 +17,7 @@ import {
   Mail,
   Send,
   X,
+  Menu,
   CircleCheck,
   MapPin
 } from 'lucide-react';
@@ -60,6 +61,8 @@ function ParticleConstellation() {
       });
     }
 
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
     const render = () => {
       ctx.clearRect(0, 0, width, height);
 
@@ -98,7 +101,9 @@ function ParticleConstellation() {
         }
       }
 
-      animationFrameId = requestAnimationFrame(render);
+      if (!reduceMotion) {
+        animationFrameId = requestAnimationFrame(render);
+      }
     };
 
     render();
@@ -171,6 +176,7 @@ const featuredBooks = books
   .slice(0, 4);
   const [feedback, setFeedback] = useState({ name: '', email: '', message: '' });
   const [submitted, setSubmitted] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // STATE PARA SA SELECTED ANNOUNCEMENT MODAL
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
@@ -213,7 +219,7 @@ const featuredBooks = books
      
       {/* NAVBAR WITH ICONS & HOVER STYLES */}
       <header className="bg-slate-900/95 backdrop-blur-md text-white shadow-lg sticky top-0 z-40 border-b border-slate-800">
-        <div className="max-w-7xl mx-auto px-6 py-3.5 flex items-center justify-between">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-3.5 sm:px-6 lg:grid lg:grid-cols-[auto_1fr_auto] lg:gap-6">
          
           {/* BRAND LOGO WITH ICON */}
           <div
@@ -234,7 +240,7 @@ const featuredBooks = books
           </div>
 
           {/* NAVIGATION LINKS */}
-          <nav className="hidden md:flex items-center gap-1 text-xs font-semibold text-slate-300 bg-slate-800/50 p-1.5 rounded-xl border border-slate-700/60">
+          <nav className="hidden items-center justify-self-center gap-1 rounded-xl border border-slate-700/60 bg-slate-800/50 p-1.5 text-xs font-semibold text-slate-300 lg:flex">
             <a
               href="#libraries"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:text-white hover:bg-slate-700/80 transition-all duration-200"
@@ -266,7 +272,7 @@ const featuredBooks = books
           </nav>
 
           {/* ACTION BUTTONS */}
-          <div className="flex items-center gap-2.5">
+          <div className="hidden items-center justify-self-end gap-2.5 lg:flex">
             <button
               onClick={() => navigate('/catalog')}
               className="px-3.5 py-2 border border-slate-700 bg-slate-800/80 text-slate-200 hover:text-white hover:bg-slate-700 hover:border-slate-600 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 shadow-sm"
@@ -282,7 +288,59 @@ const featuredBooks = books
               <span>Sign In</span>
             </button>
           </div>
+
+          <button
+            type="button"
+            className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-slate-700 bg-slate-800/80 text-slate-200 transition hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 lg:hidden"
+            aria-label={mobileNavOpen ? 'Close public navigation' : 'Open public navigation'}
+            aria-expanded={mobileNavOpen}
+            aria-controls="landing-mobile-nav"
+            onClick={() => setMobileNavOpen((open) => !open)}
+          >
+            {mobileNavOpen ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
+          </button>
         </div>
+
+        {mobileNavOpen && (
+          <div id="landing-mobile-nav" className="border-t border-slate-800 bg-slate-900/98 px-4 py-4 lg:hidden">
+            <nav className="mx-auto grid max-w-7xl gap-2 text-sm font-semibold text-slate-200" aria-label="Public navigation">
+              {[
+                ['#libraries', 'Libraries', Building2],
+                ['#featured', 'Featured Books', Sparkles],
+                ['#announcements', 'Announcements', Megaphone],
+                ['#feedback', 'Feedback', MessageSquare],
+              ].map(([href, label, Icon]) => (
+                <a
+                  key={href}
+                  href={href}
+                  onClick={() => setMobileNavOpen(false)}
+                  className="flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 transition hover:bg-slate-800 hover:text-white"
+                >
+                  <Icon size={16} className="text-blue-400" aria-hidden="true" />
+                  <span>{label}</span>
+                </a>
+              ))}
+              <div className="mt-2 grid gap-2 border-t border-slate-800 pt-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => { setMobileNavOpen(false); navigate('/catalog'); }}
+                  className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-bold text-slate-200 transition hover:bg-slate-700"
+                >
+                  <Search size={15} className="text-blue-400" aria-hidden="true" />
+                  Browse Catalog
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setMobileNavOpen(false); navigate('/visitor-login'); }}
+                  className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-blue-500"
+                >
+                  <LogIn size={15} aria-hidden="true" />
+                  Sign In
+                </button>
+              </div>
+            </nav>
+          </div>
+        )}
       </header>
 
       {/* HERO SECTION WITH ANIMATED INTERCONNECTED DOTS */}

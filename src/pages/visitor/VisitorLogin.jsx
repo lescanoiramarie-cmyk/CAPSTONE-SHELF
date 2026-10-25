@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ParticleConstellation from '../../component/ParticleConstellation.jsx';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   Html5Qrcode,
@@ -1877,7 +1878,7 @@ setOtpResendRemaining(
   // =========================================================
 
   return (
-    <div className="min-h-screen flex w-full bg-shelf-bg">
+    <div className="auth-shell min-h-screen flex w-full bg-shelf-bg">
       <style>{`
         input[type="password"]::-ms-reveal,
         input[type="password"]::-ms-clear {
@@ -1890,8 +1891,9 @@ setOtpResendRemaining(
       ===================================================== */}
 
       <div
-        className="shelf-landing-backdrop hidden lg:flex lg:w-1/2 text-white p-12 flex-col justify-between relative overflow-hidden"
+        className="auth-visual-panel shelf-landing-backdrop hidden lg:flex lg:w-1/2 text-white p-12 flex-col justify-between relative overflow-hidden"
       >
+        <ParticleConstellation />
         <div className="relative z-10 flex items-center gap-3">
           <span className="text-xl font-bold tracking-wider">
             SHELF ILMS
@@ -1925,8 +1927,8 @@ setOtpResendRemaining(
           RIGHT PANEL
       ===================================================== */}
 
-      <div className="relative w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-8 lg:p-12 overflow-y-auto">
-        <div className="w-full max-w-md bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-slate-200 space-y-6 my-auto">
+      <div className="auth-form-panel relative w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-8 lg:p-12 overflow-y-auto">
+        <div className="auth-form-card w-full max-w-md bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-slate-200 space-y-6 my-auto">
           <div className="sticky top-0 z-20 -mt-1 flex items-center justify-between gap-2 bg-white pb-1">
             {view !== 'register' && view !== 'forgot' && (
               <button
