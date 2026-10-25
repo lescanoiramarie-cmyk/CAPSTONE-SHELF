@@ -118,6 +118,21 @@ const formatDate = (value, includeTime = false) => {
   }).format(date);
 };
 
+const formatAttendanceDate = (value, includeDate = true) => {
+  const date = toDate(value);
+  if (!date) return MISSING;
+  const dateValues = dateParts(date);
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Manila',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).formatToParts(date);
+  const timeValues = Object.fromEntries(parts.map(({ type, value: partValue }) => [type, partValue]));
+  const time = `${timeValues.hour}:${timeValues.minute} ${timeValues.dayPeriod}`;
+  return includeDate ? `${dateValues.year}-${dateValues.month}-${dateValues.day} ${time}` : time;
+};
+
 const formatDateRange = (options) => {
   if (options.dateRange) return options.dateRange;
   const start = toDate(options.startDate);
@@ -147,6 +162,9 @@ export const buildReportFilename = (options = {}, extension = 'xlsx') => {
   const start = options.startDate || end;
   const reportType = safePart(options.reportType || options.title || 'Report');
   const library = safePart(options.libraryName || 'All-Libraries');
+  if (extension === 'csv' && options.csvReportType && options.csvRole) {
+    return `${safePart(options.csvReportType)}_${safePart(options.csvRole)}_${ymd(start)}.csv`;
+  }
   return `SHELF_${reportType}_${library}_${ymd(start)}_to_${ymd(end)}.${extension}`;
 };
 
@@ -217,6 +235,9 @@ const fieldType = (column) => {
   return 'auto';
 };
 
+const isLongTextColumn = (column) =>
+  /summary|description/i.test(`${column.key} ${column.label}`);
+
 const isMissing = (value) =>
   value == null ||
   (typeof value === 'number' && !Number.isFinite(value)) ||
@@ -227,8 +248,8 @@ const libraryKey = (key) => ['libraryId', 'library_id'].includes(key);
 
 const valueFor = (row, column, options, target) => {
   let value = row?.[column.key];
-  if (libraryKey(column.key)) value = resolveLibrary(value, options.libraries);
-  if (isMissing(value)) return target === 'csv' ? '' : MISSING;
+  if (libraryKey(column.key) && !options.preserveLibraryIds) value = resolveLibrary(value, options.libraries);
+  if (isMissing(value)) return column.missingValue || (target === 'csv' ? '' : MISSING);
 
   const type = fieldType(column);
   if (type === 'date') {
@@ -238,6 +259,9 @@ const valueFor = (row, column, options, target) => {
       return excelDate(date, typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value));
     }
     if (target === 'csv') {
+      if (column.dateFormat === 'attendance') {
+        return formatAttendanceDate(date, column.includeDate !== false);
+      }
       const parts = dateParts(date);
       const time = timeParts(date);
       const dateText = `${parts.year}-${parts.month}-${parts.day}`;
@@ -245,7 +269,11 @@ const valueFor = (row, column, options, target) => {
         ? `${dateText} ${time.hour}:${time.minute}`
         : dateText;
     }
-    return formatDate(date, /time|timeIn/i.test(column.key));
+    return column.dateFormat === 'attendance'
+      ? formatAttendanceDate(date, column.includeDate !== false)
+      : column.dateFormat === 'iso'
+      ? `${dateParts(date).year}-${dateParts(date).month}-${dateParts(date).day}`
+      : formatDate(date, /time|timeIn/i.test(column.key));
   }
 
   if (typeof value === 'string' && /status/i.test(column.key)) {
@@ -275,6 +303,48 @@ const outputRows = (data, columns, options, target) =>
       ])
     )
   );
+
+const pdfTextValue = (value, column) => {
+  if (!isLongTextColumn(column)) return value;
+  const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+  // Keep PDF rows compact while leaving the complete value untouched in CSV/Excel.
+  return text.length > 360 ? `${text.slice(0, 357).trimEnd()}…` : text;
+};
+
+const getPdfColumnStyles = (columns, body, pageWidth) => {
+  const availableWidth = pageWidth - 30;
+  const minimumWidth = columns.length > 7 ? 16 : 20;
+  const maximumWidth = 44;
+  const widths = columns.map((column, index) => {
+    if (isLongTextColumn(column)) return 48;
+    const longest = Math.max(
+      column.label.length,
+      ...body.map((row) => String(row[index] ?? '').split(/\r?\n/)[0].length)
+    );
+    return Math.min(maximumWidth, Math.max(minimumWidth, 8 + longest * 1.45));
+  });
+  const total = widths.reduce((sum, width) => sum + width, 0);
+  if (total <= availableWidth) {
+    return Object.fromEntries(widths.map((width, index) => [index, { cellWidth: width }]));
+  }
+
+  const fixed = widths.reduce(
+    (sum, width, index) => sum + (isLongTextColumn(columns[index]) ? width : 0),
+    0
+  );
+  const flexibleIndexes = columns
+    .map((column, index) => (isLongTextColumn(column) ? -1 : index))
+    .filter((index) => index >= 0);
+  const flexibleSpace = Math.max(0, availableWidth - fixed);
+  const flexibleTotal = flexibleIndexes.reduce((sum, index) => sum + widths[index], 0);
+  flexibleIndexes.forEach((index) => {
+    widths[index] = Math.max(
+      minimumWidth,
+      flexibleTotal ? (widths[index] / flexibleTotal) * flexibleSpace : minimumWidth
+    );
+  });
+  return Object.fromEntries(widths.map((width, index) => [index, { cellWidth: width }]));
+};
 
 const generatedAt = () => new Date();
 const yieldToUI = () => new Promise((resolve) => window.requestAnimationFrame(resolve));
@@ -306,7 +376,11 @@ const setWorksheetTitle = (sheet, columnCount, title) => {
 const setExcelCellFormat = (cell, column) => {
    const type = fieldType(column);
    if (type === 'date') {
-     cell.numFmt = /time|timeIn/i.test(column.key) ? 'mmm d, yyyy, h:mm AM/PM' : 'mmm d, yyyy';
+     cell.numFmt = column.dateFormat === 'attendance'
+       ? (column.includeDate === false ? 'hh:mm AM/PM' : 'yyyy-mm-dd hh:mm AM/PM')
+       : column.dateFormat === 'iso'
+       ? 'yyyy-mm-dd'
+       : /time|timeIn/i.test(column.key) ? 'mmm d, yyyy, h:mm AM/PM' : 'mmm d, yyyy';
    } else if (type === 'currency') {
      cell.numFmt = '₱#,##0.00';
    } else if (type === 'number') {
@@ -390,6 +464,90 @@ const drawPdfCurrencyText = (pdf, cell) => {
    pdf.addImage(canvas, 'PNG', cell.x, cell.y, cell.width, cell.height);
 };
 
+const createChartImage = async (chartSpec) => {
+  const { Chart } = await import('chart.js/auto');
+  const canvas = document.createElement('canvas');
+  canvas.width = 900;
+  canvas.height = 430;
+  canvas.style.position = 'fixed';
+  canvas.style.left = '-10000px';
+  document.body.appendChild(canvas);
+  const chart = new Chart(canvas.getContext('2d'), {
+    type: chartSpec.type,
+    data: {
+      labels: chartSpec.labels,
+      datasets: [{
+        label: chartSpec.datasetLabel || '',
+        data: chartSpec.data,
+        backgroundColor: chartSpec.colors,
+        borderColor: chartSpec.borderColor || '#0F172A',
+        borderWidth: chartSpec.type === 'line' ? 3 : 1,
+        fill: false,
+        tension: 0.3,
+      }],
+    },
+    options: {
+      responsive: false,
+      animation: false,
+      maintainAspectRatio: false,
+      indexAxis: chartSpec.horizontal ? 'y' : 'x',
+      plugins: {
+        legend: { display: chartSpec.type === 'doughnut', position: 'bottom' },
+        title: { display: true, text: chartSpec.title, color: '#0F172A', font: { size: 22, weight: '700' } },
+      },
+      scales: chartSpec.type === 'doughnut' ? {} : {
+        x: { beginAtZero: true, ticks: { color: '#334155' }, grid: { color: '#E2E8F0' } },
+        y: { beginAtZero: true, ticks: { color: '#334155' }, grid: { color: '#E2E8F0' } },
+      },
+    },
+  });
+  const image = canvas.toDataURL('image/png');
+  chart.destroy();
+  canvas.remove();
+  return image;
+};
+
+const createPdfAnalytics = async (analytics) => {
+  if (!analytics?.charts?.length) return [];
+  return Promise.all(analytics.charts.map(createChartImage));
+};
+
+const addAttendanceSummaryWorksheet = (workbook, options) => {
+  const sheet = workbook.addWorksheet('Attendance Summary');
+  setWorksheetTitle(sheet, 2, 'Visitor Attendance Summary');
+  sheet.getColumn(1).width = 34;
+  sheet.getColumn(2).width = 24;
+  const summary = options.attendanceSummary || {};
+  const sections = [
+    ['Metric', 'Value'],
+    ['Total Visits', options.attendanceTotal ?? 0],
+    ['Completed Visits', options.attendanceCompleted ?? 0],
+    ['Currently Inside', options.attendanceActive ?? 0],
+    [],
+    ['Hourly Visitor Counts', 'Visits'],
+    ...(summary.hourly || []),
+    [],
+    ['Daily Attendance Volume', 'Visits'],
+    ...(summary.daily || []),
+    [],
+    ['Foot Traffic by Branch', 'Visits'],
+    ...(summary.branches || []),
+  ];
+  sections.forEach((values, index) => {
+    const row = sheet.addRow(values);
+    row.height = 22;
+    row.eachCell((cell) => {
+      cell.alignment = { vertical: 'middle', wrapText: true };
+      cell.border = { bottom: { style: 'thin', color: { argb: toArgb('E2E8F0') } } };
+      if (index === 0 || /Counts|Volume|Traffic/.test(String(values[0] || ''))) {
+        cell.font = { bold: true, color: { argb: toArgb(NAVY) } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: toArgb('F1F5F9') } };
+      }
+    });
+  });
+  sheet.views = [{ state: 'frozen', ySplit: 1 }];
+};
+
 export const exportToExcel = async (data = [], fileName, options = {}) => {
    const { default: ExcelJS } = await import('exceljs');
    const rows = Array.isArray(data) ? data : [];
@@ -401,14 +559,14 @@ export const exportToExcel = async (data = [], fileName, options = {}) => {
    workbook.subject = options.title || options.reportType || 'Report';
    const title = options.title || options.reportType || 'Report';
 
-   if (options.summary?.length) {
+   if (options.summary?.length && !options.attendanceReport) {
      const summarySheet = workbook.addWorksheet('Summary');
      setWorksheetTitle(summarySheet, 2, title);
      summarySheet.getColumn(1).width = 28;
-     summarySheet.getColumn(2).width = 52;
+     summarySheet.getColumn(2).width = 72;
      makeSummaryRows(options).forEach(([label, value], index) => {
        const row = summarySheet.addRow([label, value]);
-       row.height = 22;
+       row.height = Math.min(54, Math.max(22, Math.ceil(String(value ?? '').length / 70) * 18));
        row.getCell(1).font = { bold: true, color: { argb: toArgb('1E293B') } };
        row.getCell(2).alignment = { vertical: 'middle', wrapText: true };
        row.eachCell((cell) => {
@@ -420,7 +578,9 @@ export const exportToExcel = async (data = [], fileName, options = {}) => {
      });
    }
 
-   const worksheet = workbook.addWorksheet(safeSheetName(options.sheetName || title));
+   const worksheet = workbook.addWorksheet(
+     safeSheetName(options.sheetName || options.detailSheetName || (options.attendanceReport ? 'Attendance Raw Data' : title))
+   );
    setWorksheetTitle(worksheet, Math.max(2, columns.length), title);
    const metadataRows = [
      ['Library / Branch', options.libraryName || 'All Libraries'],
@@ -430,7 +590,7 @@ export const exportToExcel = async (data = [], fileName, options = {}) => {
    ];
    metadataRows.forEach((values, index) => {
      const row = worksheet.addRow(values);
-     row.height = 20;
+     row.height = Math.min(42, Math.max(20, Math.ceil(String(values[1] ?? '').length / 70) * 18));
      row.getCell(1).font = { bold: true };
      row.getCell(2).alignment = { wrapText: true, vertical: 'middle' };
      if (index % 2 === 1) {
@@ -444,8 +604,8 @@ export const exportToExcel = async (data = [], fileName, options = {}) => {
    const header = worksheet.addRow(columns.map((column) => column.label));
    header.height = 26;
    header.eachCell((cell) => {
-     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: toArgb(NAVY) } };
-     cell.font = { bold: true, color: { argb: toArgb('FFFFFF') } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: toArgb('F1F5F9') } };
+      cell.font = { bold: true, color: { argb: toArgb(NAVY) } };
      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
      cell.border = {
        bottom: { style: 'thin', color: { argb: toArgb('0F172A') } },
@@ -460,7 +620,12 @@ export const exportToExcel = async (data = [], fileName, options = {}) => {
      tableRows.slice(offset, offset + 500).forEach((item, batchIndex) => {
        const index = offset + batchIndex;
        const row = worksheet.addRow(columns.map((column) => item[column.label] ?? null));
-       row.height = 22;
+       const wrappedLines = columns.reduce((maxLines, column) => {
+         if (!isLongTextColumn(column)) return maxLines;
+         const text = String(item[column.label] ?? '');
+         return Math.max(maxLines, Math.ceil(text.length / 58));
+       }, 1);
+       row.height = Math.min(90, Math.max(22, wrappedLines * 15));
        row.eachCell((cell, columnIndex) => {
          setExcelCellFormat(cell, columns[columnIndex - 1]);
          cell.border = {
@@ -476,6 +641,10 @@ export const exportToExcel = async (data = [], fileName, options = {}) => {
    }
 
    columns.forEach((column, index) => {
+     if (isLongTextColumn(column)) {
+       worksheet.getColumn(index + 1).width = 42;
+       return;
+     }
      const values = [column.label, ...tableRows.map((row) => String(row[column.label] ?? ''))];
      const longest = Math.max(
        ...values.map((value) =>
@@ -521,6 +690,7 @@ export const exportToExcel = async (data = [], fileName, options = {}) => {
        cell.border = { top: { style: 'thin', color: { argb: toArgb(NAVY) } } };
      });
    }
+   if (options.attendanceReport) addAttendanceSummaryWorksheet(workbook, options);
    const buffer = await workbook.xlsx.writeBuffer();
    const blob = new Blob([buffer], {
      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -581,10 +751,10 @@ export const exportToPDF = async (data = [], fileName, options = {}) => {
   const rows = Array.isArray(data) ? data : [];
   const columns = getColumns(rows, options);
   const formattedRows = outputRows(rows, columns, options, 'pdf');
-  const orientation = columns.length > 6 ? 'landscape' : 'portrait';
+  const orientation = options.orientation || (options.pdfAnalytics || columns.length > 6 ? 'landscape' : 'portrait');
   const document = new jsPDF({ orientation, format: 'a4', unit: 'mm' });
   const pageWidth = document.internal.pageSize.getWidth();
-  const metadata = makeSummaryRows(options);
+  const metadata = makeSummaryRows(options).slice(0, 6);
   const heading = options.title || options.reportType || 'Report';
   const generatedOn = formatDate(generatedAt());
 
@@ -594,6 +764,13 @@ export const exportToPDF = async (data = [], fileName, options = {}) => {
   document.text('SHELF ILMS', 15, 17);
   document.setFontSize(14);
   document.text(heading, 15, 25);
+  if (options.pdfRoleBadge) {
+    document.setFontSize(8);
+    document.setTextColor(255, 255, 255);
+    document.setFillColor(15, 23, 42);
+    document.roundedRect(pageWidth - 55, 12, 40, 9, 2, 2, 'F');
+    document.text(options.pdfRoleBadge, pageWidth - 35, 18, { align: 'center' });
+  }
   document.setDrawColor(0, 32, 70);
   document.setLineWidth(0.7);
   document.line(15, 29, pageWidth - 15, 29);
@@ -603,12 +780,12 @@ export const exportToPDF = async (data = [], fileName, options = {}) => {
     body: metadata.map(([label, value]) => [label, String(value)]),
     theme: 'plain',
     margin: { left: 15, right: 15 },
-    styles: { font: 'helvetica', fontSize: 8, cellPadding: 1.4, textColor: [51, 65, 85] },
+     styles: { font: 'helvetica', fontSize: options.pdfFontSize || 10, cellPadding: 1.4, textColor: [51, 65, 85] },
     columnStyles: { 0: { fontStyle: 'bold', cellWidth: 38 }, 1: { cellWidth: 'auto' } },
   });
 
   let tableStartY = document.lastAutoTable.finalY + 5;
-  if (options.summary?.length) {
+  if (options.summary?.length && !options.pdfAnalytics) {
     document.setFont('helvetica', 'bold');
     document.setFontSize(10);
     document.setTextColor(15, 23, 42);
@@ -619,14 +796,44 @@ export const exportToPDF = async (data = [], fileName, options = {}) => {
       body: options.summary.map(([label, value]) => [label, String(value)]),
       theme: 'grid',
       margin: { left: 15, right: 15 },
-      styles: { font: 'helvetica', fontSize: 8, cellPadding: 2, lineColor: [203, 213, 225] },
+       styles: { font: 'helvetica', fontSize: options.pdfFontSize || 10, cellPadding: 2, lineColor: [203, 213, 225] },
       columnStyles: { 0: { fontStyle: 'bold' } },
     });
     tableStartY = document.lastAutoTable.finalY + 5;
   }
 
   const chartImages = options.chartImages || [];
-  chartImages.forEach((image, index) => {
+  const analyticsImages = options.pdfAnalytics
+    ? await createPdfAnalytics(options.pdfAnalytics)
+    : [];
+  if (options.pdfAnalytics) {
+    const kpis = options.pdfAnalytics.kpis || [];
+    const cardWidth = (pageWidth - 30 - (kpis.length - 1) * 4) / Math.max(1, kpis.length);
+    const cardY = tableStartY + 2;
+    kpis.forEach((kpi, index) => {
+      const cardX = 15 + index * (cardWidth + 4);
+      document.setFillColor(241, 245, 249);
+      document.setDrawColor(203, 213, 225);
+      document.roundedRect(cardX, cardY, cardWidth, 17, 2, 2, 'FD');
+      document.setFont('helvetica', 'bold');
+      document.setFontSize(8);
+      document.setTextColor(71, 85, 105);
+      document.text(String(kpi.label), cardX + 4, cardY + 6);
+      document.setFontSize(13);
+      document.setTextColor(15, 23, 42);
+      document.text(String(kpi.value), cardX + 4, cardY + 13);
+    });
+    const chartY = cardY + 21;
+    const chartGap = 6;
+    const chartWidth = (pageWidth - 30 - chartGap) / 2;
+    const chartHeight = 78;
+    analyticsImages.slice(0, 2).forEach((image, index) => {
+      document.addImage(image, 'PNG', 15 + index * (chartWidth + chartGap), chartY, chartWidth, chartHeight);
+    });
+    document.addPage();
+    tableStartY = 15;
+  } else {
+   chartImages.forEach((image, index) => {
     const availableWidth = pageWidth - 30;
     const width = Math.min(availableWidth, 150);
     const height = Math.min(width * 0.48, 70);
@@ -640,22 +847,32 @@ export const exportToPDF = async (data = [], fileName, options = {}) => {
     document.text(options.chartTitles?.[index] || `Chart ${index + 1}`, 15, tableStartY + 4);
     document.addImage(image, 'PNG', 15, tableStartY + 7, width, height);
     tableStartY += height + 12;
-  });
+   });
+  }
 
-  const body = formattedRows.length
-    ? formattedRows.map((row) => columns.map((column) => String(row[column.label] ?? MISSING)))
+   const body = formattedRows.length
+     ? formattedRows.map((row) => columns.map((column) =>
+       String(pdfTextValue(row[column.label] ?? MISSING, column))
+     ))
     : [['No records found for the selected filters']];
   const headers = columns.length
     ? columns.map((column) => column.label)
     : ['Result'];
-  const columnStyles = Object.fromEntries(
-    columns.flatMap((column, index) => {
-      const numeric =
-        ['currency', 'number'].includes(fieldType(column)) ||
-        formattedRows.some((row) => typeof row[column.label] === 'number');
-      return numeric ? [[index, { halign: 'right' }]] : [];
-    })
-  );
+   const numericColumnStyles = Object.fromEntries(
+     columns.flatMap((column, index) => {
+       const numeric =
+         ['currency', 'number'].includes(fieldType(column)) ||
+         formattedRows.some((row) => typeof row[column.label] === 'number');
+       return numeric ? [[index, { halign: 'right' }]] : [];
+     })
+   );
+   const fittedColumnStyles = getPdfColumnStyles(columns, body, pageWidth);
+   const columnStyles = Object.fromEntries(
+     columns.map((column, index) => [index, {
+       ...fittedColumnStyles[index],
+       ...numericColumnStyles[index],
+     }])
+   );
   for (let offset = 0; offset < body.length; offset += 500) {
     autoTable(document, {
       startY: tableStartY,
@@ -664,7 +881,7 @@ export const exportToPDF = async (data = [], fileName, options = {}) => {
       margin: { top: 15, right: 15, bottom: 17, left: 15 },
       styles: {
         font: 'helvetica',
-        fontSize: columns.length > 7 ? 7 : 8,
+         fontSize: options.pdfFontSize || 10,
         cellPadding: 2,
         overflow: 'linebreak',
         lineColor: [203, 213, 225],
@@ -672,7 +889,7 @@ export const exportToPDF = async (data = [], fileName, options = {}) => {
         valign: 'middle',
         textColor: [30, 41, 59],
       },
-      headStyles: { fillColor: [0, 32, 70], textColor: [255, 255, 255], fontStyle: 'bold' },
+       headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: options.pdfFontSize || 10 },
       columnStyles,
       alternateRowStyles: { fillColor: [241, 245, 249] },
       rowPageBreak: 'avoid',

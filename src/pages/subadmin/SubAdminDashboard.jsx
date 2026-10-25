@@ -32,6 +32,15 @@ import { exportReport } from '../../lib/excelUtils.js';
 import Papa from 'papaparse';
 import { findVisitorByQr } from '../../data/store.js';
 import { sendDueDateFollowUp } from '../../lib/dueDateFollowUp.js';
+import {
+  buildBranchAuditAnalytics,
+  buildBranchAuditRows,
+} from '../../lib/inventoryReportUtils.js';
+import {
+  buildAttendanceRows,
+  buildAttendanceSummary,
+  buildSubAdminAttendanceAnalytics,
+} from '../../lib/attendanceReportUtils.js';
 
 const VisitorAccountManagement = lazy(
   () => import('../../component/VisitorAccountManagement.jsx')
@@ -1174,21 +1183,62 @@ export default function SubAdminDashboard() {
     setExportMessage('');
     setExportError('');
     try {
+      const isBooksReport = report === 'books';
+      const reportRows = isBooksReport ? buildBranchAuditRows(branchBooks) : buildAttendanceRows(branchAttendance);
       const reportOptions = {
-        reportType: report === 'books' ? 'Inventory' : 'Attendance',
-        title: report === 'books' ? 'Book Inventory' : 'Attendance Report',
+        reportType: isBooksReport ? 'Branch-Physical-Shelf-Audit' : 'Branch-Visitor-Traffic-Attendance-Log',
+        title: isBooksReport ? 'Branch Physical Shelf Audit Report' : 'SHELF Visitor Attendance Summary',
+        detailSheetName: isBooksReport ? 'Books' : 'Attendance Raw Data',
         libraryName: currentBranchName || 'Assigned Branch',
         libraries,
         generatedBy: `${user?.name || 'Admin'} (Sub-Admin)`,
         startDate: new Date(),
         endDate: new Date(),
-        asOf: report === 'books',
+        asOf: isBooksReport,
         ...(report === 'attendance' ? { dateRange: 'All available dates' } : {}),
-        summary: [[report === 'books' ? 'Total Books' : 'Total Visits',
-          report === 'books' ? branchBooks.length : branchAttendance.length]],
+        summary: [[isBooksReport ? 'Total Titles' : 'Total Visits', reportRows.length]],
+        ...(isBooksReport ? {
+          columns: [
+            { key: 'id', label: 'Book ID' },
+            { key: 'title', label: 'Title' },
+            { key: 'author', label: 'Author' },
+            { key: 'category', label: 'Category' },
+            { key: 'isbn', label: 'ISBN' },
+            { key: 'shelfLocation', label: 'Shelf Location' },
+            { key: 'totalCopies', label: 'Total Copies', type: 'number' },
+            { key: 'availableCopies', label: 'Available Copies', type: 'number' },
+            { key: 'borrowedCopies', label: 'Borrowed Copies', type: 'number' },
+            { key: 'condition', label: 'Condition' },
+          ],
+          orientation: 'landscape',
+          pdfFontSize: 10,
+          pdfAnalytics: buildBranchAuditAnalytics(reportRows),
+          csvReportType: 'Branch-Physical-Shelf-Audit-Report',
+          csvRole: 'Sub-Admin',
+        } : {
+          attendanceReport: true,
+          attendanceSummary: buildAttendanceSummary(reportRows),
+          attendanceTotal: reportRows.length,
+          attendanceCompleted: reportRows.filter((row) => row.sessionStatus === 'Completed').length,
+          attendanceActive: reportRows.filter((row) => row.sessionStatus !== 'Completed').length,
+          pdfAnalytics: buildSubAdminAttendanceAnalytics(reportRows),
+          pdfRoleBadge: 'SUB-ADMIN',
+          pdfFontSize: 10,
+          csvReportType: 'Visitor-Attendance',
+          csvRole: 'Sub-Admin',
+          columns: [
+            { key: 'id', label: 'Session ID' },
+            { key: 'visitorId', label: 'Visitor ID' },
+            { key: 'visitorName', label: 'Visitor Name' },
+            { key: 'timeIn', label: 'Time In', type: 'date', dateFormat: 'attendance' },
+            { key: 'checkedOutAt', label: 'Time Out', type: 'date', dateFormat: 'attendance', includeDate: false, missingValue: 'Still Inside' },
+            { key: 'duration', label: 'Visit Duration' },
+            { key: 'sessionStatus', label: 'Status' },
+          ],
+        }),
       };
       await exportReport(
-        report === 'books' ? branchBooks : branchAttendance,
+        reportRows,
         format,
         reportOptions
       );
@@ -1506,7 +1556,7 @@ export default function SubAdminDashboard() {
                 {/* EXPORT BRANCH BOOKS */}
                 <div className="p-3.5 border border-slate-100 bg-slate-50/50 rounded-lg flex items-center justify-between">
                   <div>
-                    <p className="flex items-center gap-1.5 text-xs font-bold text-slate-700"><BookOpen size={14} aria-hidden="true" /> Branch Books Inventory</p>
+                    <p className="flex items-center gap-1.5 text-xs font-bold text-slate-700"><BookOpen size={14} aria-hidden="true" /> Branch Physical Shelf Audit</p>
                     <p className="text-[11px] text-slate-500">Total Books: {branchBooks.length}</p>
                   </div>
                   <div className="flex gap-2">

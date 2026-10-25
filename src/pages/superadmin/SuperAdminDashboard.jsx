@@ -52,6 +52,17 @@ import {
   exportReport,
   parseImportFile,
 } from '../../lib/excelUtils.js';
+import {
+  buildAssetAllocationAnalytics,
+  buildAssetAllocationRows,
+  buildMasterCatalogAnalytics,
+  buildMasterCatalogRows,
+} from '../../lib/inventoryReportUtils.js';
+import {
+  buildAttendanceRows,
+  buildAttendanceSummary,
+  buildSystemAttendanceAnalytics,
+} from '../../lib/attendanceReportUtils.js';
 
 const VisitorAccountManagement = lazy(
   () => import('../../component/VisitorAccountManagement.jsx')
@@ -212,18 +223,83 @@ export default function SuperAdminDashboard() {
     setExportMessage('');
     setExportError('');
     try {
-      const data = report === 'books' ? books : attendanceLogs;
+      const isCatalog = report === 'books' || report === 'catalog';
+      const isAllocation = report === 'allocation';
+      const isInventory = isCatalog || isAllocation;
+      const isAttendance = report === 'attendance';
+      const data = isCatalog
+        ? buildMasterCatalogRows(books)
+        : isAllocation
+          ? buildAssetAllocationRows(books)
+          : buildAttendanceRows(attendanceLogs);
       const reportOptions = {
-        reportType: report === 'books' ? 'Inventory' : 'Attendance',
-        title: report === 'books' ? 'Book Inventory' : 'Attendance Report',
+        reportType: isCatalog ? 'Master-Library-Catalog' : isAllocation ? 'Multi-Branch-Asset-Allocation' : 'System-Wide-Multi-Branch-Attendance-Audit',
+        title: isCatalog ? 'Master Library Catalog Report' : isAllocation ? 'Multi-Branch Asset Allocation Report' : 'SHELF Visitor Attendance Summary',
+        detailSheetName: isCatalog ? 'Books' : isAllocation ? 'Allocation' : 'Attendance',
         libraryName: 'All Libraries',
         libraries,
         generatedBy: `${user?.name || superAdminName} (Super Admin)`,
         startDate: new Date(),
         endDate: new Date(),
-        asOf: report === 'books',
-        ...(report === 'attendance' ? { dateRange: 'All available dates' } : {}),
-        summary: [[report === 'books' ? 'Total Books' : 'Total Visits', data.length]],
+        asOf: isInventory,
+        ...(isAttendance ? { dateRange: 'All available dates' } : {}),
+        summary: [[isInventory ? 'Total Titles' : 'Total Visits', data.length]],
+        ...(isInventory ? {
+          orientation: 'landscape',
+          pdfFontSize: 10,
+          preserveLibraryIds: true,
+          pdfAnalytics: isCatalog
+            ? buildMasterCatalogAnalytics(data)
+            : buildAssetAllocationAnalytics(data, libraries),
+          csvReportType: isCatalog ? 'Master-Library-Catalog-Report' : 'Multi-Branch-Asset-Allocation-Report',
+          csvRole: 'Super-Admin',
+          columns: isCatalog ? [
+            { key: 'id', label: 'Book ID' },
+            { key: 'title', label: 'Title' },
+            { key: 'author', label: 'Author' },
+            { key: 'isbn', label: 'ISBN' },
+            { key: 'category', label: 'Category' },
+            { key: 'libraryId', label: 'Library Branch ID' },
+            { key: 'totalCopies', label: 'Total Copies', type: 'number' },
+            { key: 'availableCopies', label: 'Available Copies', type: 'number' },
+            { key: 'createdAt', label: 'Created Date', type: 'date', dateFormat: 'iso' },
+            { key: 'updatedAt', label: 'Last Updated', type: 'date', dateFormat: 'iso' },
+          ] : [
+            { key: 'id', label: 'Book ID' },
+            { key: 'title', label: 'Title' },
+            { key: 'author', label: 'Author' },
+            { key: 'libraryId', label: 'Library Branch ID' },
+            { key: 'totalCopies', label: 'Total Copies', type: 'number' },
+            { key: 'availableCopies', label: 'Available Copies', type: 'number' },
+            { key: 'borrowedCopies', label: 'Borrowed Copies', type: 'number' },
+            { key: 'utilizationRate', label: 'Utilization Rate %', type: 'number' },
+            { key: 'createdAt', label: 'Acquisition Date', type: 'date', dateFormat: 'iso' },
+          ],
+        } : isAttendance ? {
+          detailSheetName: 'Attendance Raw Data',
+          attendanceReport: true,
+          attendanceSummary: buildAttendanceSummary(data),
+          attendanceTotal: data.length,
+          attendanceCompleted: data.filter((row) => row.sessionStatus === 'Completed').length,
+          attendanceActive: data.filter((row) => row.sessionStatus !== 'Completed').length,
+          orientation: 'landscape',
+          pdfFontSize: 10,
+          pdfAnalytics: buildSystemAttendanceAnalytics(data),
+          pdfRoleBadge: 'SUPER-ADMIN',
+          csvReportType: 'Visitor-Attendance',
+          csvRole: 'Super-Admin',
+          preserveLibraryIds: true,
+          columns: [
+            { key: 'id', label: 'Session ID' },
+            { key: 'visitorId', label: 'Visitor ID' },
+            { key: 'visitorName', label: 'Visitor Name' },
+            { key: 'libraryId', label: 'Library Branch ID' },
+            { key: 'timeIn', label: 'Time In', type: 'date', dateFormat: 'attendance' },
+            { key: 'checkedOutAt', label: 'Time Out', type: 'date', dateFormat: 'attendance', missingValue: 'Still Inside' },
+            { key: 'duration', label: 'Visit Duration' },
+            { key: 'sessionStatus', label: 'Status' },
+          ],
+        } : {}),
       };
       await exportReport(data, format, reportOptions);
       setExportMessage('Report exported successfully.');
@@ -1341,7 +1417,7 @@ const handleEditStaff = (staff) => {
                   <div>
                     <p className="text-xs font-bold text-slate-700">
                       <BookOpen size={14} className="mr-1.5 inline-block align-[-2px]" aria-hidden="true" />
-                      All Books Catalog
+                       Master Library Catalog
                     </p>
                     <p className="text-[11px] text-slate-500">Total Titles: {books.length}</p>
                   </div>
@@ -1349,6 +1425,17 @@ const handleEditStaff = (staff) => {
                     <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('books', 'xlsx')} className="rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-emerald-700">{exportingReport === 'books-xlsx' ? 'Exporting…' : 'Excel'}</button>
                     <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('books', 'csv')} className="rounded bg-slate-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-slate-800">{exportingReport === 'books-csv' ? 'Exporting…' : 'CSV'}</button>
                     <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('books', 'pdf')} className="rounded bg-rose-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-rose-800">{exportingReport === 'books-pdf' ? 'Exporting…' : 'PDF'}</button>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/50 p-3.5">
+                  <div>
+                    <p className="text-xs font-bold text-slate-700"><Building2 size={14} className="mr-1.5 inline-block align-[-2px]" aria-hidden="true" />Multi-Branch Asset Allocation</p>
+                    <p className="text-[11px] text-slate-500">Institutional stock by branch</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('allocation', 'xlsx')} className="rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-emerald-700">Excel</button>
+                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('allocation', 'csv')} className="rounded bg-slate-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-slate-800">CSV</button>
+                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('allocation', 'pdf')} className="rounded bg-rose-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-rose-800">PDF</button>
                   </div>
                 </div>
                 <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/50 p-3.5">
