@@ -1858,11 +1858,11 @@ function VisitorDashboardContent() {
       >
         <div
           ref={faqDragRef}
-          className="fixed bottom-5 right-5 z-100 w-fit"
+          className="faq-chat-shell fixed bottom-5 right-5 z-100 w-fit"
         >
           {/* FAQ Chatbot Window */}
           {isFaqOpen && (
-            <div className="mb-4 w-[min(92vw,400px)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800">
+            <div className="faq-chat-panel mb-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800">
               {/* Draggable Header */}
               <div className="faq-drag-handle flex cursor-move items-center justify-between gap-3 bg-shelf-primary px-4 py-3 text-white">
                 <div className="min-w-0">
@@ -1887,7 +1887,7 @@ function VisitorDashboardContent() {
               </div>
 
               {/* FAQ Content */}
-              <div className="max-h-[70vh] overflow-y-auto bg-white p-3 dark:bg-slate-800">
+              <div className="faq-chat-content max-h-[70vh] overflow-y-auto bg-white p-3 dark:bg-slate-800">
                 <FAQ />
               </div>
             </div>

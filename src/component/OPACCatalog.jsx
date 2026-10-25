@@ -26,6 +26,7 @@ import {
   Pencil,
 } from 'lucide-react';
 import BookCover from './BookCover.jsx';
+import OPACBookCard from './OPACBookCard.jsx';
 import {
   useLibrary,
   useLibraryData,
@@ -144,6 +145,23 @@ function getOwnerCommunityRequestStatus(request) {
     .trim()
     .toLowerCase();
 }
+
+function getCatalogPaginationItems(currentPage, totalPages) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+  const pages = new Set([1, totalPages, currentPage, currentPage - 1, currentPage + 1]);
+  const ordered = [...pages]
+    .filter((page) => page > 0 && page <= totalPages)
+    .sort((a, b) => a - b);
+  return ordered.reduce((items, page, index) => {
+    if (index > 0 && page - ordered[index - 1] > 1) {
+      items.push(`ellipsis-${page}`);
+    }
+    items.push(page);
+    return items;
+  }, []);
+}
 function getPersonalBookCopyAvailability(book) {
   const totalCopiesValue = Number(book?.totalCopies);
   const totalCopies =
@@ -259,6 +277,8 @@ export default function OPACCatalog({
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('title-asc');
+  const [catalogPage, setCatalogPage] = useState(1);
+  const catalogPageSize = 20;
   const [categorySelection, setCategorySelection] = useState({
     resetKey: catalogResetKey,
     value: 'All',
@@ -268,6 +288,7 @@ export default function OPACCatalog({
       ? categorySelection.value
       : 'All';
   const setSelectedCategory = (value) => {
+    setCatalogPage(1);
     setCategorySelection({
       resetKey: catalogResetKey,
       value,
@@ -930,6 +951,7 @@ export default function OPACCatalog({
   const handleSearch = (event) => {
     if (event) event.preventDefault();
     const query = searchInput.trim();
+    setCatalogPage(1);
     setSearchTerm(query);
     if (activeView === 'catalog' && query) {
       recordVisitorSearch(user?.id, query);
@@ -939,10 +961,12 @@ export default function OPACCatalog({
     const value = event.target.value;
     setSearchInput(value);
     if (value.trim() === '') {
+      setCatalogPage(1);
       setSearchTerm('');
     }
   };
   const handleClearSearch = () => {
+    setCatalogPage(1);
     setSearchInput('');
     setSearchTerm('');
   };
@@ -1167,6 +1191,17 @@ export default function OPACCatalog({
           return 0;
       }
     });
+
+  const catalogTotalPages = Math.max(1, Math.ceil(filteredBooks.length / catalogPageSize));
+  const visibleCatalogPage = Math.min(catalogPage, catalogTotalPages);
+  const visibleCatalogBooks = filteredBooks.slice(
+    (visibleCatalogPage - 1) * catalogPageSize,
+    visibleCatalogPage * catalogPageSize
+  );
+  const catalogPaginationItems = getCatalogPaginationItems(
+    visibleCatalogPage,
+    catalogTotalPages
+  );
 
   // =========================================================
   // MY REQUESTS
@@ -1949,8 +1984,8 @@ export default function OPACCatalog({
         )}
 
         {(activeView === 'communityBooks' || activeView === 'personalBooks') && (
-          <div className="flex flex-col sm:flex-row gap-3">
-            <form onSubmit={handleSearch} className="flex flex-1 gap-2">
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row">
+            <form onSubmit={handleSearch} className="flex min-w-0 flex-1 gap-2">
               <input
                 type="text"
                 placeholder={
@@ -2013,8 +2048,8 @@ export default function OPACCatalog({
             )}
             
             {/* SEARCH AND FILTER CONTAINER */}
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-3 flex-wrap">
-              <form onSubmit={handleSearch} className="flex flex-1 min-w-70 gap-2">
+            <div className="public-opac-filter-bar visitor-catalog-filter-bar min-w-0 bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-3 flex-wrap">
+              <form onSubmit={handleSearch} className="flex w-full min-w-0 flex-1 gap-2 md:w-auto md:min-w-[18rem]">
                 <input
                   type="text"
                   placeholder="Search by Title, Author, ISBN, or Category..."
@@ -2041,9 +2076,12 @@ export default function OPACCatalog({
               )}
               <select
                 value={sortBy}
-                onChange={(event) => setSortBy(event.target.value)}
+                onChange={(event) => {
+                  setCatalogPage(1);
+                  setSortBy(event.target.value);
+                }}
                 aria-label="Sort catalog books"
-                className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none cursor-pointer"
+                className="w-full min-w-0 px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none cursor-pointer md:w-auto md:min-w-40"
               >
                 <option value="title-asc">Title (A–Z)</option>
                 <option value="title-desc">Title (Z–A)</option>
@@ -2057,9 +2095,12 @@ export default function OPACCatalog({
               {!libraryFilter && (
                 <select
                   value={selectedLibrary}
-                  onChange={(event) => setSelectedLibrary(event.target.value)}
+                  onChange={(event) => {
+                    setCatalogPage(1);
+                    setSelectedLibrary(event.target.value);
+                  }}
                   aria-label="Filter by library"
-                  className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none cursor-pointer"
+                  className="w-full min-w-0 px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none cursor-pointer md:w-auto md:min-w-40"
                 >
                   <option value="All">All Libraries</option>
                   {libraryOptions
@@ -2073,9 +2114,12 @@ export default function OPACCatalog({
               )}
               <select
                 value={selectedAvailability}
-                onChange={(event) => setSelectedAvailability(event.target.value)}
+                onChange={(event) => {
+                  setCatalogPage(1);
+                  setSelectedAvailability(event.target.value);
+                }}
                 aria-label="Filter by availability status"
-                className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none cursor-pointer"
+                className="w-full min-w-0 px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none cursor-pointer md:w-auto md:min-w-40"
               >
                 <option value="All">All Statuses</option>
                 <option value="Available">Available Only</option>
@@ -2155,49 +2199,48 @@ export default function OPACCatalog({
                 </button>
               </div>
             ) : (
-              <div className="book-card-grid grid gap-6">
-                {filteredBooks.map((book) => (
-                  <button
-                    type="button"
-                    key={book.id}
-                    onClick={() => setSelectedBook(book)}
-                    aria-label={`View details for ${book.title || 'Untitled Book'}`}
-                    className="visitor-catalog-book-card flex h-full flex-col rounded-xl border border-slate-200 bg-white text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700 dark:bg-slate-800"
-                  >
-                    <div className="flex flex-1 gap-4 p-4">
-                      <BookCover key={book.coverUrl || book.title} src={book.coverUrl} title={book.title} className="h-28 w-20" />
-                      <div className="flex min-w-0 flex-1 flex-col">
-                        <span className="w-fit rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">
-                          {book.category || 'Uncategorized'}
-                        </span>
-                        <h3 title={book.title || 'Untitled Book'} className="mt-1 min-h-10 line-clamp-2 text-sm font-bold text-slate-900 dark:text-white">
-                          {book.title || 'Untitled Book'}
-                        </h3>
-                        <p title={book.author || 'Unknown Author'} className="truncate text-xs text-slate-700 dark:text-slate-200">
-                          {book.author || 'Unknown Author'}
-                        </p>
-                        <p className={`mt-1 truncate text-xs tabular-nums ${book.isbn ? 'text-slate-700 dark:text-slate-200' : 'text-slate-600 dark:text-slate-300'}`}>
-                          ISBN: {book.isbn || '—'}
-                        </p>
-                        <div className="mt-auto pt-3">
-                          <span
-                            className={`visitor-status ${
-                              Number(book.availableCopies || 0) > 0
-                                ? 'visitor-status-success'
-                                : 'visitor-status-neutral'
-                            }`}
-                          >
-                            {Number(book.availableCopies || 0) > 0
-                              ? `${book.availableCopies} Copies Available`
-                              : 'Unavailable'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </button>
+              <div className="opac-book-grid book-card-grid grid min-w-0 gap-6">
+                {visibleCatalogBooks.map((book) => (
+                  <OPACBookCard key={book.id} book={book} onSelect={setSelectedBook} />
                 ))}
               </div>
             )}
+            <nav className="visitor-catalog-pagination flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800" aria-label="Catalog pagination">
+              <p className="text-xs text-slate-500 dark:text-slate-300">
+                Showing {filteredBooks.length === 0 ? 0 : (visibleCatalogPage - 1) * catalogPageSize + 1}–{Math.min(visibleCatalogPage * catalogPageSize, filteredBooks.length)} of {filteredBooks.length} books
+              </p>
+              <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1">
+                <button
+                  type="button"
+                  onClick={() => setCatalogPage((page) => Math.max(1, page - 1))}
+                  disabled={visibleCatalogPage === 1}
+                  className="min-h-9 rounded-lg border border-slate-300 px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+                >
+                  Previous
+                </button>
+                {catalogPaginationItems.map((item) => item.toString().startsWith('ellipsis-') ? (
+                  <span key={item} className="px-1 text-xs text-slate-400" aria-hidden="true">…</span>
+                ) : (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => setCatalogPage(item)}
+                    aria-current={visibleCatalogPage === item ? 'page' : undefined}
+                    className={`min-h-9 min-w-9 rounded-lg px-2 text-xs font-bold transition ${visibleCatalogPage === item ? 'bg-shelf-primary text-white' : 'border border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700'}`}
+                  >
+                    {item}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setCatalogPage((page) => Math.min(catalogTotalPages, page + 1))}
+                  disabled={visibleCatalogPage === catalogTotalPages}
+                  className="min-h-9 rounded-lg border border-slate-300 px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+                >
+                  Next
+                </button>
+              </div>
+            </nav>
           </div>
         ) : activeView === 'categories' ? (
           <section aria-labelledby="opac-category-heading" className="space-y-5">
@@ -2377,7 +2420,7 @@ export default function OPACCatalog({
                 </p>
               </div>
             ) : (
-              <div className="book-card-grid grid gap-5">
+              <div className="opac-book-grid book-card-grid grid min-w-0 gap-5">
                 {filteredCommunityBooks.map(renderCommunityBookCard)}
               </div>
             )}
@@ -3624,7 +3667,7 @@ export default function OPACCatalog({
               <X size={18} aria-hidden="true" />
             </button>
             <div className="visitor-book-modal-body min-h-0 flex-1 space-y-5 overflow-y-auto p-5 sm:p-6">
-            <div className="flex gap-4 pr-8">
+            <div className="visitor-book-modal-heading flex flex-col gap-4 pr-8 sm:flex-row">
               <BookCover key={`${selectedBook.id}-${selectedBook.coverUrl || selectedBook.title}`} src={selectedBook.coverUrl} title={selectedBook.title} className="h-32 w-24" />
               <div className="min-w-0 space-y-1">
                 <div className="flex flex-wrap gap-2">
@@ -3742,7 +3785,7 @@ export default function OPACCatalog({
                     getPartnerLibraryEntries(selectedBook).map((entry) => (
                       <div
                         key={entry.id}
-                        className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs gap-3"
+                        className="visitor-library-entry flex flex-wrap items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs gap-3"
                       >
                         <div>
                           <p className="font-bold text-slate-800 text-sm">
@@ -3754,7 +3797,7 @@ export default function OPACCatalog({
                               : 'Out of stock (Queue available)'}
                           </p>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="visitor-library-actions flex max-w-full flex-wrap items-center justify-end gap-2 shrink-0">
                           <button
                             type="button"
                             onClick={() => handleViewMap(entry.libraryId, entry)}
@@ -3856,7 +3899,7 @@ export default function OPACCatalog({
                 </span>
               </h4>
               <form onSubmit={handleSubmitReview} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <label className="text-xs font-bold text-slate-700">
                     Leave a Review:
                   </label>

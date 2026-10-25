@@ -119,7 +119,7 @@ export default function FAQ() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <div className="faq-widget mx-auto max-w-4xl min-w-0 space-y-5">
       {/* HEADER */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex items-center gap-3">

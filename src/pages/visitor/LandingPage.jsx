@@ -167,6 +167,7 @@ const featuredLibraries = libraries
 const featuredBooks = books
   .filter((book) => book.bookType === 'library')
   .filter((book) => Number(book.availableCopies ?? 0) > 0)
+  .filter((book) => /^https?:\/\//i.test(String(book.coverUrl || '').trim()))
   .sort((left, right) =>
     (popularityByBookId.get(String(right.id)) || 0) -
       (popularityByBookId.get(String(left.id)) || 0) ||
@@ -177,6 +178,28 @@ const featuredBooks = books
   const [feedback, setFeedback] = useState({ name: '', email: '', message: '' });
   const [submitted, setSubmitted] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const landingHeaderRef = useRef(null);
+  const libraryCarouselRef = useRef(null);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return undefined;
+
+    const closeOnOutsidePointer = (event) => {
+      if (!landingHeaderRef.current?.contains(event.target)) {
+        setMobileNavOpen(false);
+      }
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setMobileNavOpen(false);
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [mobileNavOpen]);
 
   // STATE PARA SA SELECTED ANNOUNCEMENT MODAL
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
@@ -218,7 +241,7 @@ const featuredBooks = books
     <div className="landing-page min-h-screen bg-slate-50 text-slate-800 font-sans relative">
      
       {/* NAVBAR WITH ICONS & HOVER STYLES */}
-      <header className="bg-slate-900/95 backdrop-blur-md text-white shadow-lg sticky top-0 z-40 border-b border-slate-800">
+      <header ref={landingHeaderRef} className="bg-slate-900/95 backdrop-blur-md text-white shadow-lg sticky top-0 z-40 border-b border-slate-800">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-3.5 sm:px-6 lg:grid lg:grid-cols-[auto_1fr_auto] lg:gap-6">
          
           {/* BRAND LOGO WITH ICON */}
@@ -344,12 +367,12 @@ const featuredBooks = books
       </header>
 
       {/* HERO SECTION WITH ANIMATED INTERCONNECTED DOTS */}
-      <section className="shelf-landing-backdrop relative text-white py-24 px-6 overflow-hidden border-b border-slate-800">
+      <section className="shelf-landing-backdrop relative overflow-hidden border-b border-slate-800 px-4 py-20 text-white sm:px-6 sm:py-24">
         
         {/* ANIMATED CONSTELLATION CANVAS */}
         <ParticleConstellation />
 
-        <div className="max-w-4xl mx-auto text-center space-y-8 relative z-10">
+        <div className="relative z-10 mx-auto max-w-5xl space-y-8 text-center">
           {/* BADGE LABEL */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold tracking-wide backdrop-blur-sm">
             <Sparkles size={14} className="text-blue-400" />
@@ -357,7 +380,7 @@ const featuredBooks = books
           </div>
 
           {/* MAIN HEADLINE */}
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight leading-tight text-white">
+          <h1 className="text-[clamp(2.25rem,6vw,4.5rem)] font-black leading-[1.05] tracking-tight text-white">
             Discover & Borrow Books Across <br className="hidden sm:inline" />
             <span className="text-transparent bg-clip-text bg-linear-to-r from-blue-300 to-blue-500">
               Campus Libraries
@@ -365,7 +388,7 @@ const featuredBooks = books
           </h1>
 
           {/* SUB-TEXT */}
-          <p className="text-sm sm:text-base md:text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed">
+          <p className="mx-auto max-w-2xl text-sm leading-relaxed text-slate-300 sm:text-base md:text-lg">
             Welcome to SHELF ILMS — your gateway to physical and digital library collections, announcements, and campus learning resources.
           </p>
 
@@ -389,7 +412,7 @@ const featuredBooks = books
           </div>
 
           {/* QUICK STATS COUNTER */}          
-          <div className="pt-6 flex items-center justify-center gap-6 sm:gap-10 text-xs font-semibold text-slate-400 border-t border-slate-800/80 max-w-lg mx-auto">
+          <div className="mx-auto flex max-w-2xl flex-wrap items-center justify-center gap-x-6 gap-y-3 border-t border-slate-800/80 pt-6 text-xs font-semibold text-slate-400 sm:gap-x-10">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-blue-300"></span>
               <span>
@@ -413,12 +436,25 @@ const featuredBooks = books
       </section>
 
       {/* 1. PARTICIPATING LIBRARIES SECTION */}
-      <section id="libraries" className="py-16 px-6 max-w-7xl mx-auto">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-slate-900">Participating Campus Libraries</h2>
-          <p className="text-slate-600 mt-2">Explore member libraries offering integrated borrowing and resources.</p>
-        </div>
+      <section id="libraries" className="landing-section bg-slate-50 px-4 py-16 sm:px-6 lg:py-20">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-8 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-blue-700">SHELF network</p>
+              <h2 className="text-2xl font-bold text-slate-900 sm:text-3xl">Participating Libraries</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Explore libraries connected to SHELF ILMS and their available collections.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/catalog')}
+              className="inline-flex min-h-10 w-fit items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-shelf-primary shadow-sm transition hover:border-shelf-primary hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary focus-visible:ring-offset-2"
+            >
+              Browse library catalog
+              <ArrowRight size={14} aria-hidden="true" />
+            </button>
+          </div>
         <div
+          ref={libraryCarouselRef}
           className="landing-library-scroller"
           role="region"
           aria-label="Participating libraries"
@@ -426,11 +462,9 @@ const featuredBooks = books
           onWheel={(event) => {
             const scroller = event.currentTarget;
             const maxScrollLeft = scroller.scrollWidth - scroller.clientWidth;
-            const canScroll =
-              event.deltaY < 0
-                ? scroller.scrollLeft > 0
-                : event.deltaY !== 0 && scroller.scrollLeft < maxScrollLeft;
-
+            const canScroll = event.deltaY < 0
+              ? scroller.scrollLeft > 0
+              : scroller.scrollLeft < maxScrollLeft;
             if (maxScrollLeft > 0 && canScroll && Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
               event.preventDefault();
               scroller.scrollLeft += event.deltaY;
@@ -444,7 +478,7 @@ const featuredBooks = books
               key={lib.id}
               type="button"
               onClick={() => navigate('/catalog')}
-              className="landing-library-card group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:border-blue-300 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+              className="landing-library-card group flex h-full min-w-0 flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 sm:p-6"
             >
               <div>
                 <div className="flex items-center justify-between mb-4">
@@ -461,7 +495,7 @@ const featuredBooks = books
                     <Building2 size={20} aria-hidden="true" />
                   </div>
                 </div>
-                <h3 className="text-lg font-bold text-slate-800 group-hover:text-blue-600 transition-colors leading-snug">
+                <h3 className="break-words text-lg font-bold leading-snug text-slate-800 transition-colors group-hover:text-blue-600">
                   {lib.name}
                 </h3>
                 {lib.campus && (
@@ -490,6 +524,7 @@ const featuredBooks = books
             );
           })}
         </div>
+        </div>
       </section>
 
       {/* 2. FEATURED RESOURCES SECTION */}
@@ -508,15 +543,18 @@ const featuredBooks = books
               View All Books <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" aria-hidden="true" />
             </button>
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 xl:grid-cols-4 xl:gap-6">
+          {featuredBooks.length > 0 ? (
+            <div className="landing-featured-grid">
             {featuredBooks.map((book, i) => (
-              <div
-                key={i}
+              <button
+                key={book.id || i}
+                type="button"
                 onClick={() => navigate('/catalog')}
-                className="flex min-w-0 cursor-pointer flex-col justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-xl group"
+                aria-label={`View ${book.title || 'featured book'} in the public catalog`}
+                className="landing-featured-card group flex min-w-0 flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary focus-visible:ring-offset-2"
               >
                 <div>
-                  <div className="mb-4 flex aspect-3/4 w-full items-center justify-center overflow-hidden rounded-lg border border-slate-100 bg-slate-50 p-2">
+                  <div className="landing-book-cover mb-4 flex h-40 w-full items-center justify-center overflow-hidden rounded-xl border border-slate-100 bg-slate-50 p-2 sm:h-48 lg:h-52">
                     <BookCover
                       key={book.coverUrl || book.title}
                       src={book.coverUrl}
@@ -529,23 +567,34 @@ const featuredBooks = books
                   <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded uppercase tracking-wider">
                     {book.category || 'Library Collection'}
                   </span>
-                  <h4 className="text-base font-bold text-slate-800 mt-2 line-clamp-1 group-hover:text-blue-600 transition-colors">
+                  <h4 title={book.title || 'Untitled Book'} className="mt-2 line-clamp-2 min-h-10 text-base font-bold text-slate-800 transition-colors group-hover:text-blue-600">
                     {book.title}
                   </h4>
-                  <p className="mt-0.5 line-clamp-2 wrap-break-word text-xs text-slate-500">By {book.author}</p>
+                  <p title={book.author || 'Unknown Author'} className="mt-1 line-clamp-2 min-h-8 wrap-break-word text-xs text-slate-500">By {book.author || 'Unknown Author'}</p>
+                  <span className="landing-availability-badge mt-4 inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] font-bold text-green-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-green-600" aria-hidden="true" />
+                    {book.availableCopies} {Number(book.availableCopies) === 1 ? 'copy' : 'copies'} available
+                  </span>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate('/catalog');
-                  }}
-                  className="mt-5 w-full py-2 bg-slate-900 group-hover:bg-blue-600 text-white text-xs font-bold rounded-lg transition-colors shadow-sm"
-                >
+                <span className="mt-5 inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-shelf-primary py-2 text-xs font-bold text-white shadow-sm transition-colors group-hover:bg-blue-700">
                   View in OPAC
-                </button>
-              </div>
+                </span>
+              </button>
             ))}
-          </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center shadow-sm">
+              <BookOpen className="mx-auto text-slate-400" size={32} aria-hidden="true" />
+              <p className="mt-3 text-sm font-semibold text-slate-700">No featured books with cover images are available right now.</p>
+              <button
+                type="button"
+                onClick={() => navigate('/catalog')}
+                className="mt-4 rounded-lg bg-shelf-primary px-4 py-2 text-xs font-bold text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary focus-visible:ring-offset-2"
+              >
+                Browse Catalog
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
