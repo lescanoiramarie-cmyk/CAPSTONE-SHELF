@@ -6,6 +6,14 @@ create extension if not exists pgcrypto;
 create schema if not exists extensions;
 create extension if not exists postgis with schema extensions;
 
+create table if not exists public.book_rating_aggregates (
+  book_id text primary key,
+  rating_sum bigint not null default 0,
+  rating_count bigint not null default 0
+);
+
+alter table public.book_rating_aggregates enable row level security;
+
 -- ---------------------------------------------------------------------------
 -- Tables
 -- ---------------------------------------------------------------------------
@@ -189,10 +197,14 @@ create table if not exists announcements (
   title text not null,
   message text not null,
   published boolean not null default true,
+  expires_at timestamptz,
   created_by text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table announcements
+  add column if not exists expires_at timestamptz;
 
 create table if not exists due_date_notifications (
   id uuid primary key default gen_random_uuid(),
@@ -207,6 +219,26 @@ create table if not exists due_date_notifications (
 );
 
 alter table due_date_notifications enable row level security;
+
+create table if not exists public.external_catalog_books (
+  openlibrary_key text primary key,
+  title text not null,
+  author text,
+  category text,
+  isbn text,
+  summary text,
+  cover_url text,
+  source_url text,
+  last_synced_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.external_catalog_books enable row level security;
+drop policy if exists "External catalog readable by visitors" on public.external_catalog_books;
+create policy "External catalog readable by visitors" on public.external_catalog_books
+  for select to anon, authenticated using (true);
+grant select on public.external_catalog_books to anon, authenticated;
 
 create table if not exists visitor_feedback (
   id uuid primary key default gen_random_uuid(),
@@ -315,6 +347,8 @@ create index if not exists visitor_feedback_branch_created_idx
   on visitor_feedback (library_id, created_at desc);
 create index if not exists announcements_published_created_idx
   on announcements (published, created_at desc);
+create index if not exists announcements_published_expiration_created_idx
+  on announcements (published, expires_at, created_at desc);
 
 create table if not exists staff_profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -397,6 +431,7 @@ alter table books enable row level security;
 alter table visitors enable row level security;
 alter table borrow_requests enable row level security;
 alter table attendance_logs enable row level security;
+alter table public.community_book_requests enable row level security;
 alter table announcements enable row level security;
 alter table visitor_feedback enable row level security;
 alter table staff_profiles enable row level security;
@@ -437,7 +472,9 @@ drop policy if exists "public write attendance_logs" on attendance_logs;
 create policy "public write attendance_logs" on attendance_logs for all using (true) with check (true);
 
 drop policy if exists "public read announcements" on announcements;
-create policy "public read announcements" on announcements for select using (published = true);
+drop policy if exists "published announcements are public" on announcements;
+create policy "published announcements are public" on announcements
+  for select using (published = true and (expires_at is null or expires_at > now()));
 drop policy if exists "admin manage announcements" on announcements;
 create policy "admin manage announcements" on announcements for all to authenticated
   using (
@@ -476,7 +513,37 @@ create policy "admin manage announcements" on announcements for all to authentic
   );
 
 drop policy if exists "public submit feedback" on visitor_feedback;
-create policy "public submit feedback" on visitor_feedback for insert with check (true);
+drop policy if exists "anonymous landing feedback submit" on visitor_feedback;
+create policy "anonymous landing feedback submit" on visitor_feedback
+  for insert to anon
+  with check (
+    visitor_id is null
+    and library_id is null
+    and category = 'General'
+    and status = 'new'
+    and admin_reply is null
+    and replied_by is null
+    and replied_at is null
+    and char_length(trim(visitor_name)) between 1 and 120
+    and visitor_email is not null
+    and char_length(trim(visitor_email)) between 3 and 254
+    and char_length(trim(subject)) between 1 and 160
+    and char_length(trim(message)) between 1 and 5000
+  );
+drop policy if exists "authenticated visitors submit feedback" on visitor_feedback;
+create policy "authenticated visitors submit feedback" on visitor_feedback
+  for insert to authenticated
+  with check (exists (
+    select 1 from visitors visitor
+    where visitor.id::text = visitor_feedback.visitor_id::text
+      and visitor.auth_user_id = auth.uid()
+      and visitor.otp_verified
+      and visitor.is_active
+      and (visitor_feedback.library_id is null or exists (
+        select 1 from libraries library
+        where library.id::text = visitor_feedback.library_id::text
+      ))
+  ));
 drop policy if exists "admin read feedback" on visitor_feedback;
 create policy "admin read feedback" on visitor_feedback for select
   using (
@@ -505,6 +572,9 @@ create policy "admin manage feedback" on visitor_feedback for update
         and staff.is_active and staff.library_id = visitor_feedback.library_id
     )
   );
+
+revoke all on public.visitor_feedback from anon, public;
+grant insert on public.visitor_feedback to anon;
 
 drop policy if exists "staff read own profile" on staff_profiles;
 create policy "staff read own profile" on staff_profiles for select
@@ -606,6 +676,108 @@ $$;
 -- (queue promotion, pickup expiry, OTP/login checks) so it can't race between
 -- two concurrent requests.
 -- ============================================================================
+
+create or replace function public.is_active_staff_for_branch(p_branch_id text default null)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.staff_profiles staff
+    where staff.id = auth.uid()
+      and staff.is_active
+      and (
+        staff.role = 'superadmin'
+        or (staff.role = 'subadmin' and p_branch_id is not null
+          and staff.library_id::text = p_branch_id)
+      )
+      and coalesce(auth.jwt() -> 'app_metadata' ->> 'role', staff.role) = staff.role
+  );
+$$;
+revoke all on function public.is_active_staff_for_branch(text) from public;
+grant execute on function public.is_active_staff_for_branch(text)
+  to anon, authenticated, service_role;
+
+drop policy if exists "community request participants read"
+  on public.community_book_requests;
+create policy "community request participants read"
+  on public.community_book_requests
+  for select to authenticated
+  using (
+    exists (
+      select 1 from public.visitors visitor
+      where visitor.id::text = community_book_requests.owner_visitor_id::text
+        and visitor.auth_user_id = auth.uid()
+    )
+    or exists (
+      select 1 from public.visitors visitor
+      where visitor.id::text = community_book_requests.requester_visitor_id::text
+        and visitor.auth_user_id = auth.uid()
+    )
+    or exists (
+      select 1 from public.books book
+      where book.id::text = community_book_requests.book_id::text
+        and public.is_active_staff_for_branch(book.library_id::text)
+    )
+  );
+
+create or replace function public.upsert_external_catalog_books(p_library_id uuid, p_books jsonb)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_count integer := 0;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required';
+  end if;
+  if p_library_id is null or not public.is_active_staff_for_branch(p_library_id::text) then
+    raise exception 'Active staff access to this library is required';
+  end if;
+  if p_books is null or jsonb_typeof(p_books) <> 'array' then
+    raise exception 'p_books must be a JSON array';
+  end if;
+
+  insert into public.external_catalog_books (
+    openlibrary_key, title, author, category, isbn, summary, cover_url, source_url,
+    last_synced_at, updated_at
+  )
+  select
+    left(trim(item->>'openlibrary_key'), 200),
+    left(trim(item->>'title'), 1000),
+    nullif(trim(item->>'author'), ''),
+    nullif(trim(item->>'category'), ''),
+    nullif(trim(item->>'isbn'), ''),
+    nullif(trim(item->>'summary'), ''),
+    nullif(trim(item->>'cover_url'), ''),
+    nullif(trim(item->>'source_url'), ''),
+    now(), now()
+  from jsonb_array_elements(p_books) as item
+  where nullif(trim(item->>'openlibrary_key'), '') is not null
+    and nullif(trim(item->>'title'), '') is not null
+  on conflict (openlibrary_key) do update set
+    title = excluded.title,
+    author = excluded.author,
+    category = excluded.category,
+    isbn = excluded.isbn,
+    summary = excluded.summary,
+    cover_url = excluded.cover_url,
+    source_url = excluded.source_url,
+    last_synced_at = now(),
+    updated_at = now();
+
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$$;
+revoke all on function public.upsert_external_catalog_books(uuid, jsonb) from public;
+grant execute on function public.upsert_external_catalog_books(uuid, jsonb)
+  to authenticated, service_role;
 
 drop function if exists public.verify_visitor_otp(text, text);
 drop function if exists public.find_visitor_by_qr(text);
@@ -787,9 +959,9 @@ begin
         where book_id::text = p_book_id and status = 'queued'
       ) sub
       where br.id = sub.id;
-  end if;
+    end if;
 end;
-$$ language plpgsql security definer;
+$$;
 
 create or replace function request_borrow(p_visitor_id text, p_book_id text)
 returns borrow_requests as $$
@@ -934,4 +1106,26 @@ $$;
 revoke all on function public.get_popular_borrowed_book_counts(integer)
   from public, anon, authenticated;
 grant execute on function public.get_popular_borrowed_book_counts(integer)
+  to anon, authenticated;
+
+create or replace function public.get_book_rating_summaries(
+  p_book_ids text[]
+)
+returns table(book_id text, average_rating numeric, rating_count bigint)
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select aggregate.book_id,
+         round(aggregate.rating_sum::numeric / aggregate.rating_count, 2),
+         aggregate.rating_count
+  from public.book_rating_aggregates as aggregate
+  where aggregate.book_id = any(coalesce(p_book_ids, array[]::text[]))
+    and aggregate.rating_count > 0;
+$$;
+
+revoke all on function public.get_book_rating_summaries(text[])
+  from public, anon, authenticated;
+grant execute on function public.get_book_rating_summaries(text[])
   to anon, authenticated;

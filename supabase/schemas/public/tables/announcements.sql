@@ -3,6 +3,7 @@ CREATE TABLE "public"."announcements" (
   "title"      text                     NOT NULL,
   "message"    text                     NOT NULL,
   "published"  boolean                  NOT NULL DEFAULT true,
+  "expires_at" timestamp with time zone,
   "created_by" text,
   "created_at" timestamp with time zone NOT NULL DEFAULT now(),
   "updated_at" timestamp with time zone NOT NULL DEFAULT now(),
@@ -15,6 +16,7 @@ ALTER TABLE "public"."announcements"
   ENABLE ROW LEVEL SECURITY;
 
 CREATE INDEX announcements_published_created_idx ON public.announcements USING btree (published, created_at DESC);
+CREATE INDEX announcements_published_expiration_created_idx ON public.announcements USING btree (published, expires_at, created_at DESC);
 
 CREATE TRIGGER audit_announcement_changes
   AFTER INSERT OR DELETE OR UPDATE ON public.announcements
@@ -24,7 +26,7 @@ CREATE TRIGGER audit_announcement_changes
 CREATE POLICY "published announcements are public" ON "public"."announcements"
   FOR SELECT
   TO "anon", "authenticated"
-  USING (published);
+  USING ((published AND ((expires_at IS NULL) OR (expires_at > now()))));
 
 CREATE POLICY "staff manage announcements" ON "public"."announcements"
   FOR ALL

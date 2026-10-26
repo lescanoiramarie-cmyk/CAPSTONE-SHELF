@@ -46,6 +46,7 @@ import BookInventory from '../../component/BookInventory.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
 import AdminWorkspace from '../../component/AdminWorkspace.jsx';
 import DashboardWelcome from '../../component/DashboardWelcome.jsx';
+import BookRatingsChart from '../../component/BookRatingsChart.jsx';
 import { supabase } from '../../lib/supabaseClient.js';
 import { sendDueDateFollowUp } from '../../lib/dueDateFollowUp.js';
 import {
@@ -108,26 +109,6 @@ function StatCard({
         </span>
       </div>
     </div>
-  );
-}
-
-function lastNDaysLabels(n) {
-  return Array.from(
-    { length: n },
-    (_, index) => {
-      const date = new Date();
-      date.setDate(
-        date.getDate() -
-          (n - 1 - index)
-      );
-      return date.toLocaleDateString(
-        'en-PH',
-        {
-          month: 'short',
-          day: 'numeric',
-        }
-      );
-    }
   );
 }
 
@@ -412,6 +393,12 @@ export default function SuperAdminDashboard() {
     staffAccounts,
     setStaffAccounts,
   ] = useState([]);
+  const [staffSearch, setStaffSearch] = useState('');
+  const [staffBranchFilter, setStaffBranchFilter] = useState('all');
+  const [staffRoleFilter, setStaffRoleFilter] = useState('all');
+  const [staffStatusFilter, setStaffStatusFilter] = useState('all');
+  const [staffPage, setStaffPage] = useState(1);
+  const staffPageSize = 10;
   const [
     staffLoading,
     setStaffLoading,
@@ -435,6 +422,76 @@ export default function SuperAdminDashboard() {
   });
 
   const [editingStaffId, setEditingStaffId] = useState(null);
+
+  const staffBranchCounts = useMemo(() => {
+    const counts = new Map(
+      libraries.map((library) => [String(library.id), {
+        id: String(library.id),
+        name: library.name,
+        count: 0,
+      }])
+    );
+    let unassignedCount = 0;
+
+    staffAccounts
+      .filter((staff) => staff.role === 'subadmin')
+      .forEach((staff) => {
+        const branchId = String(staff.library_id || '');
+        const branch = counts.get(branchId);
+        if (branch) {
+          branch.count += 1;
+        } else if (branchId) {
+          const existing = counts.get(`unknown:${branchId}`);
+          if (existing) existing.count += 1;
+          else counts.set(`unknown:${branchId}`, {
+            id: `unknown:${branchId}`,
+            name: getLibraryName(libraries, branchId),
+            count: 1,
+          });
+        } else {
+          unassignedCount += 1;
+        }
+      });
+
+    const branches = [...counts.values()];
+    if (unassignedCount > 0) {
+      branches.push({ id: 'unassigned', name: 'Unassigned', count: unassignedCount });
+    }
+    return branches.sort((a, b) => a.name.localeCompare(b.name));
+  }, [libraries, staffAccounts]);
+
+  const staffRoles = useMemo(
+    () => [...new Set(staffAccounts.map((staff) => staff.role).filter(Boolean))]
+      .sort((a, b) => formatStaffRole(a).localeCompare(formatStaffRole(b))),
+    [staffAccounts]
+  );
+
+  const filteredStaffAccounts = useMemo(() => {
+    const search = staffSearch.trim().toLocaleLowerCase();
+    const knownBranchIds = new Set(libraries.map((library) => String(library.id)));
+
+    return staffAccounts.filter((staff) => {
+      const matchesSearch = !search ||
+        `${staff.full_name || ''} ${staff.email || ''}`.toLocaleLowerCase().includes(search);
+      const branchId = String(staff.library_id || '');
+      const matchesBranch = staffBranchFilter === 'all' ||
+        (staffBranchFilter === 'unassigned'
+          ? !branchId || !knownBranchIds.has(branchId)
+          : branchId === staffBranchFilter);
+      const matchesRole = staffRoleFilter === 'all' || staff.role === staffRoleFilter;
+      const matchesStatus = staffStatusFilter === 'all' ||
+        (staffStatusFilter === 'active' ? staff.is_active : !staff.is_active);
+
+      return matchesSearch && matchesBranch && matchesRole && matchesStatus;
+    });
+  }, [libraries, staffAccounts, staffBranchFilter, staffRoleFilter, staffSearch, staffStatusFilter]);
+
+  const staffPageCount = Math.max(1, Math.ceil(filteredStaffAccounts.length / staffPageSize));
+  const visibleStaffPage = Math.min(staffPage, staffPageCount);
+  const visibleStaffAccounts = filteredStaffAccounts.slice(
+    (visibleStaffPage - 1) * staffPageSize,
+    visibleStaffPage * staffPageSize
+  );
 
   // ============================================================
   // LOAD STAFF ACCOUNTS
@@ -564,6 +621,7 @@ const handleCreateStaff = async (event) => {
     });
 
     setEditingStaffId(null);
+    setStaffPage(1);
 
     await loadStaffAccounts();
 
@@ -1043,54 +1101,99 @@ const handleEditStaff = (staff) => {
   // TREND DATA
   // ============================================================
   const trendData = useMemo(() => {
-    const days = 7;
-    const labels =
-      lastNDaysLabels(days);
-    const dayKey = (value) =>
-      new Date(
-        value
-      ).toDateString();
-    const keys = Array.from(
-      { length: days },
-      (_, index) => {
-        const date =
-          new Date();
-        date.setDate(
-          date.getDate() -
-            (days - 1 - index)
-        );
-        return date.toDateString();
-      }
-    );
-    const visitCounts =
-      keys.map((key) =>
-        attendanceLogs.filter(
-          (attendance) =>
-            attendance.timeIn &&
-            dayKey(
-              attendance.timeIn
-            ) === key
-        ).length
-      );
-    const borrowCounts =
-      keys.map((key) =>
-        borrowRequests.filter(
-          (request) =>
-            request.borrowDate &&
-            dayKey(
-              request.borrowDate
-            ) === key
-        ).length
-      );
+    const today = new Date();
+    const firstDayOfThisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const firstDayOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const lastMonthDays = new Date(today.getFullYear(), today.getMonth(), 0).getDate();
+    const monthLabel = firstDayOfLastMonth.toLocaleDateString('en-US', {
+      month: 'long',
+      year: 'numeric',
+    });
+    const firstWeekday = firstDayOfLastMonth.getDay();
+    const weekCount = Math.ceil((firstWeekday + lastMonthDays) / 7);
+    const weeks = Array.from({ length: weekCount }, (_, index) => {
+      const firstDate = Math.max(1, index * 7 - firstWeekday + 1);
+      const lastDate = Math.min(lastMonthDays, (index + 1) * 7 - firstWeekday);
+      return {
+        label: `${firstDayOfLastMonth.toLocaleDateString('en-US', { month: 'short' })} ${firstDate}–${lastDate}`,
+        visitCount: 0,
+        borrowCount: 0,
+      };
+    });
+    const addToWeek = (value, field) => {
+      if (!value) return;
+      const date = new Date(value);
+      if (
+        Number.isNaN(date.getTime()) ||
+        date < firstDayOfLastMonth ||
+        date >= firstDayOfThisMonth
+      ) return;
+      const weekIndex = Math.floor((date.getDate() - 1 + firstWeekday) / 7);
+      weeks[weekIndex][field] += 1;
+    };
+
+    attendanceLogs.forEach((attendance) => addToWeek(attendance.timeIn, 'visitCount'));
+    borrowRequests.forEach((request) => addToWeek(request.borrowDate, 'borrowCount'));
     return {
-      labels,
-      visitCounts,
-      borrowCounts,
+      monthLabel,
+      labels: weeks.map((week) => week.label),
+      visitCounts: weeks.map((week) => week.visitCount),
+      borrowCounts: weeks.map((week) => week.borrowCount),
     };
   }, [
     attendanceLogs,
     borrowRequests,
   ]);
+
+  const branchActivityData = useMemo(() => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - 6);
+    const end = new Date();
+    end.setHours(0, 0, 0, 0);
+    end.setDate(end.getDate() + 1);
+    const isInRange = (value) => {
+      const timestamp = new Date(value).getTime();
+      return Number.isFinite(timestamp) && timestamp >= start.getTime() && timestamp < end.getTime();
+    };
+
+    const counts = new Map(
+      libraries.map((library) => [String(library.id), {
+        id: String(library.id),
+        name: library.name || 'Unnamed branch',
+        checkIns: 0,
+        transactions: 0,
+      }])
+    );
+
+    attendanceLogs.forEach((attendance) => {
+      const branch = counts.get(String(attendance.libraryId || attendance.library_id || ''));
+      if (branch && isInRange(attendance.timeIn || attendance.time_in)) branch.checkIns += 1;
+    });
+
+    const bookLibraryById = new Map(
+      books.map((book) => [String(book.id), String(book.libraryId || book.library_id || '')])
+    );
+    borrowRequests.forEach((request) => {
+      const transactionDate = request.requestDate || request.request_date || request.borrowDate || request.borrow_date;
+      if (!isInRange(transactionDate)) return;
+      const bookLibraryId = bookLibraryById.get(String(request.bookId || request.book_id || ''));
+      const branchId = String(request.libraryId || request.library_id || bookLibraryId || '');
+      const branch = counts.get(branchId);
+      if (branch) branch.transactions += 1;
+    });
+
+    const topBranches = [...counts.values()]
+      .filter((branch) => branch.checkIns > 0 || branch.transactions > 0)
+      .sort((a, b) => (b.checkIns + b.transactions) - (a.checkIns + a.transactions) || a.name.localeCompare(b.name))
+      .slice(0, 5);
+
+    return {
+      labels: topBranches.map((branch) => branch.name),
+      checkIns: topBranches.map((branch) => branch.checkIns),
+      transactions: topBranches.map((branch) => branch.transactions),
+    };
+  }, [libraries, attendanceLogs, borrowRequests, books]);
 
   // ============================================================
   // CATEGORY DATA
@@ -1386,9 +1489,117 @@ const handleEditStaff = (staff) => {
               <StatCard label="Titles in Catalog" value={books.length} />
               <StatCard label="Active Borrows" value={activeBorrows} />
               <StatCard label="Overdue Items" value={overdue} tone="red" />
-              <StatCard label="Branches Open" value={`${openLibraries}/${libraries.length}`} tone="amber" />
+              <StatCard label="Branches Open" value={openLibraries} tone="amber" />
             </div>
 
+            {/* CHARTS */}
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h3 className="mb-3 text-sm font-bold text-slate-800">Visits & Borrows — Last Month · {trendData.monthLabel}</h3>
+                <div className="h-[330px]">
+                  <Line
+                    data={{
+                      labels: trendData.labels,
+                      datasets: [
+                        { label: 'Attendance', data: trendData.visitCounts, borderColor: '#2563eb', backgroundColor: '#2563eb', tension: 0.3 },
+                        { label: 'Books Borrowed', data: trendData.borrowCounts, borderColor: '#002046', backgroundColor: '#002046', tension: 0.3 },
+                      ],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      scales: {
+                        x: { ticks: { autoSkip: true, maxTicksLimit: 10, maxRotation: 0 } },
+                        y: { beginAtZero: true, ticks: { precision: 0 } },
+                      },
+                      plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${context.raw}` } },
+                      },
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h3 className="mb-3 text-sm font-bold text-slate-800">Catalog by Category</h3>
+                {categoryData.labels.length === 0 ? (
+                  <p className="text-xs text-slate-500">No books in the catalog yet.</p>
+                ) : (
+                  <div className="h-[330px]">
+                    <Bar
+                      data={{
+                        labels: categoryData.labels,
+                        datasets: [{ label: 'Titles', data: categoryData.values, backgroundColor: '#2563eb' }],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                          y: { beginAtZero: true, ticks: { precision: 0 } },
+                          x: {
+                            ticks: {
+                              autoSkip: false,
+                              maxRotation: 50,
+                              minRotation: 50,
+                              font: { size: 9 },
+                              callback(value) {
+                                const label = this.getLabelForValue(value);
+                                return label.length > 12 ? `${label.slice(0, 11)}…` : label;
+                              },
+                            },
+                          },
+                        },
+                        plugins: {
+                          legend: { display: false },
+                          tooltip: {
+                            callbacks: {
+                              title: (items) => categoryData.labels[items[0]?.dataIndex] || '',
+                              label: (context) => `${context.parsed.y} titles`,
+                            },
+                          },
+                        },
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-3">
+              <div className="h-full lg:col-span-1 [&>section]:h-full">
+                <BookRatingsChart books={books} fillHeight />
+              </div>
+              <div className="h-full rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
+                <div className="mb-3">
+                  <h3 className="text-sm font-bold text-slate-800">Top 5 Branches — Check-ins & Book Transactions</h3>
+                  <p className="mt-1 text-xs text-slate-500">Branch comparison for the last 7 days. Transactions are counted by the branch that owns the requested book.</p>
+                </div>
+                {branchActivityData.labels.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-slate-500">No branch check-ins or book transactions were recorded in the last 7 days.</p>
+                ) : (
+                  <div className="h-[320px]">
+                    <Bar
+                      data={{
+                        labels: branchActivityData.labels,
+                        datasets: [
+                          { label: 'Visitor check-ins', data: branchActivityData.checkIns, backgroundColor: '#2563eb', borderRadius: 5 },
+                          { label: 'Book transactions', data: branchActivityData.transactions, backgroundColor: '#f59e0b', borderRadius: 5 },
+                        ],
+                      }}
+                      options={{
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+                        plugins: {
+                          legend: { position: 'bottom' },
+                          tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${context.raw} records` } },
+                        },
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
             {/* DATA MANAGEMENT */}
             <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-col justify-between gap-2 border-b border-slate-100 pb-3 md:flex-row md:items-center">
@@ -1457,36 +1668,6 @@ const handleEditStaff = (staff) => {
               {exportError && <p role="alert" className="mt-3 text-sm text-rose-700">{exportError}</p>}
             </div>
 
-            {/* CHARTS */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h3 className="mb-3 text-sm font-bold text-slate-800">Visits & Borrows — Last 7 Days</h3>
-                <Line
-                  data={{
-                    labels: trendData.labels,
-                    datasets: [
-                      { label: 'Attendance', data: trendData.visitCounts, borderColor: '#2563eb', backgroundColor: '#2563eb', tension: 0.3 },
-                      { label: 'Books Borrowed', data: trendData.borrowCounts, borderColor: '#002046', backgroundColor: '#002046', tension: 0.3 },
-                    ],
-                  }}
-                  options={{ responsive: true, plugins: { legend: { position: 'bottom' } } }}
-                />
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h3 className="mb-3 text-sm font-bold text-slate-800">Catalog by Category</h3>
-                {categoryData.labels.length === 0 ? (
-                  <p className="text-xs text-slate-500">No books in the catalog yet.</p>
-                ) : (
-                  <Bar
-                    data={{
-                      labels: categoryData.labels,
-                      datasets: [{ label: 'Titles', data: categoryData.values, backgroundColor: '#2563eb' }],
-                    }}
-                    options={{ responsive: true, plugins: { legend: { display: false } } }}
-                  />
-                )}
-              </div>
-            </div>
           </div>
         )}
 
@@ -1947,11 +2128,72 @@ const handleEditStaff = (staff) => {
               <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
                 <div>
                   <h3 className="text-sm font-bold text-slate-800">Registered Staff Accounts</h3>
-                  <p className="mt-1 text-xs text-slate-500">Records are loaded directly from staff_profiles.</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Showing {filteredStaffAccounts.length} of {staffAccounts.length} accounts.
+                  </p>
                 </div>
                 <button type="button" onClick={loadStaffAccounts} disabled={staffLoading} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                   {staffLoading ? 'Loading...' : 'Refresh'}
                 </button>
+              </div>
+              <div className="grid gap-3 border-b border-slate-100 bg-slate-50/70 p-4 sm:grid-cols-2 xl:grid-cols-4">
+                <input
+                  type="search"
+                  value={staffSearch}
+                  onChange={(event) => {
+                    setStaffSearch(event.target.value);
+                    setStaffPage(1);
+                  }}
+                  placeholder="Search name or email"
+                  aria-label="Search staff accounts by name or email"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20 xl:col-span-2"
+                />
+                <select
+                  value={staffBranchFilter}
+                  onChange={(event) => {
+                    setStaffBranchFilter(event.target.value);
+                    setStaffPage(1);
+                  }}
+                  aria-label="Filter staff accounts by branch"
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20"
+                >
+                  <option value="all">All branches</option>
+                  {staffBranchCounts
+                    .filter((branch) => branch.count > 0 && !branch.id.startsWith('unknown:') && branch.id !== 'unassigned')
+                    .map((branch) => (
+                    <option key={branch.id} value={branch.id}>{branch.name}</option>
+                  ))}
+                  {staffBranchCounts.some((branch) => branch.id === 'unassigned' || branch.id.startsWith('unknown:')) && (
+                    <option value="unassigned">Unassigned / unmatched branch</option>
+                  )}
+                </select>
+                <select
+                  value={staffRoleFilter}
+                  onChange={(event) => {
+                    setStaffRoleFilter(event.target.value);
+                    setStaffPage(1);
+                  }}
+                  aria-label="Filter staff accounts by role"
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20"
+                >
+                  <option value="all">All roles</option>
+                  {staffRoles.map((role) => (
+                    <option key={role} value={role}>{formatStaffRole(role)}</option>
+                  ))}
+                </select>
+                <select
+                  value={staffStatusFilter}
+                  onChange={(event) => {
+                    setStaffStatusFilter(event.target.value);
+                    setStaffPage(1);
+                  }}
+                  aria-label="Filter staff accounts by status"
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20"
+                >
+                  <option value="all">All statuses</option>
+                  <option value="active">Active</option>
+                  <option value="disabled">Disabled</option>
+                </select>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-225 text-left text-sm">
@@ -1966,7 +2208,7 @@ const handleEditStaff = (staff) => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {staffAccounts.map((staff) => (
+                    {visibleStaffAccounts.map((staff) => (
                       <tr key={staff.id} className="hover:bg-slate-50">
                         <td className="p-3 font-semibold text-slate-700">{staff.full_name}</td>
                         <td className="p-3 text-xs font-mono text-slate-500">{staff.email}</td>
@@ -2026,11 +2268,39 @@ const handleEditStaff = (staff) => {
                   </tbody>
                 </table>
               </div>
-              {!staffLoading && staffAccounts.length === 0 && (
+              {!staffLoading && filteredStaffAccounts.length === 0 && (
                 <div className="p-8 text-center text-sm text-slate-500">
-                  No staff accounts were found in staff_profiles.
+                  {staffAccounts.length === 0
+                    ? 'No staff accounts were found in staff_profiles.'
+                    : 'No staff accounts match these filters.'}
                 </div>
               )}
+              <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-slate-500">
+                  Showing {filteredStaffAccounts.length === 0 ? 0 : (visibleStaffPage - 1) * staffPageSize + 1} to {Math.min(visibleStaffPage * staffPageSize, filteredStaffAccounts.length)} of {filteredStaffAccounts.length} staff accounts
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStaffPage((page) => Math.max(1, page - 1))}
+                    disabled={visibleStaffPage <= 1 || staffLoading}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  <span className="min-w-20 text-center text-xs font-semibold text-slate-600">
+                    Page {visibleStaffPage} of {staffPageCount}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setStaffPage((page) => Math.min(staffPageCount, page + 1))}
+                    disabled={visibleStaffPage >= staffPageCount || staffLoading}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

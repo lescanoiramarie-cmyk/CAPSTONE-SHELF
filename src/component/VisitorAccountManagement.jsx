@@ -128,7 +128,7 @@ export default function VisitorAccountManagement({
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search name, email, or contact number"
+            placeholder="Search visitor name or email"
             className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm"
           />
         </label>
@@ -176,21 +176,21 @@ export default function VisitorAccountManagement({
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] divide-y divide-slate-200 text-left text-sm">
+          <table className="w-full min-w-[640px] divide-y divide-slate-200 text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3 font-semibold">Visitor</th>
-                <th className="px-4 py-3 font-semibold">Contact</th>
-                {isSuperAdmin && <th className="px-4 py-3 font-semibold">Library</th>}
-                <th className="px-4 py-3 font-semibold">Registered</th>
-                <th className="px-4 py-3 font-semibold">Verification</th>
+                <th className="px-4 py-3 font-semibold">Email</th>
+                <th className="px-4 py-3 font-semibold">Library</th>
+                <th className="px-4 py-3 font-semibold">Registration Date</th>
+                <th className="px-4 py-3 font-semibold">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading && !missingBranch ? (
                 <tr>
                   <td
-                    colSpan={isSuperAdmin ? 5 : 4}
+                    colSpan={5}
                     className="px-4 py-10 text-center text-slate-500"
                   >
                     Loading visitor accounts…
@@ -199,7 +199,7 @@ export default function VisitorAccountManagement({
               ) : visibleVisitors.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={isSuperAdmin ? 5 : 4}
+                    colSpan={5}
                     className="px-4 py-10 text-center text-slate-500"
                   >
                     <UsersRound size={22} className="mx-auto mb-2 text-slate-400" />
@@ -209,34 +209,25 @@ export default function VisitorAccountManagement({
               ) : (
                 visibleVisitors.map((visitor) => (
                   <tr key={visitor.id} className="align-top">
-                    <td className="px-4 py-3">
-                      <p className="font-semibold text-slate-800">{visitor.fullName || '—'}</p>
-                      <p className="mt-0.5 text-xs text-slate-500">{visitor.id}</p>
-                    </td>
+                    <td className="px-4 py-3 font-semibold text-slate-800">{visitor.fullName || '—'}</td>
+                    <td className="px-4 py-3 text-slate-600">{visitor.email || '—'}</td>
                     <td className="px-4 py-3 text-slate-600">
-                      <p>{visitor.email || '—'}</p>
-                      <p className="mt-0.5 text-xs">{visitor.contactNumber || '—'}</p>
+                      {visitor.libraryId
+                        ? libraries.find((library) => String(library.id) === String(visitor.libraryId))?.name ||
+                          (isSuperAdmin ? 'Library branch' : libraryName || 'Assigned library')
+                        : isSuperAdmin ? 'Outside Visitor' : libraryName || 'No library assigned'}
                     </td>
-                    {isSuperAdmin && (
-                      <td className="px-4 py-3 text-slate-600">
-                        {visitor.libraryId
-                          ? libraries.find((library) => library.id === visitor.libraryId)?.name ||
-                            'Library branch'
-                          : 'Outside Visitor'}
-                      </td>
-                    )}
                     <td className="px-4 py-3 text-slate-600">{formatDate(visitor.registeredAt)}</td>
                     <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                          visitor.otpVerified
-                            ? 'bg-emerald-50 text-emerald-700'
-                            : 'bg-amber-50 text-amber-700'
-                        }`}
-                      >
-                        {visitor.otpVerified ? 'Verified' : 'Pending'}
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        visitor.isActive
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {visitor.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
+
                   </tr>
                 ))
               )}

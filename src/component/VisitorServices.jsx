@@ -50,6 +50,7 @@ export default function VisitorServices({ user, libraries = [] }) {
           .from('announcements')
           .select('id, title, message, created_at')
           .eq('published', true)
+          .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
           .order('created_at', { ascending: false });
         const replyRequest = user?.id && user?.email
           ? supabase.rpc('get_visitor_feedback_replies', {

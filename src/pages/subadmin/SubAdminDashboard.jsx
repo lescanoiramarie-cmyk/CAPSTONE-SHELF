@@ -1,5 +1,15 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  LineElement,
+  PointElement,
+  Tooltip,
+  Legend,
+} from 'chart.js';
 import {
   Activity,
   AlertTriangle,
@@ -14,6 +24,7 @@ import {
   UsersRound,
   Info,
   Bell,
+  MessageSquare,
   Sparkles,
   Calendar,
   Clock
@@ -26,6 +37,7 @@ import BookTransactions from '../../component/BookTransactions.jsx';
 import BookInventory from '../../component/BookInventory.jsx';
 import ReservationQueue from '../../component/ReservationQueue.jsx';
 import AdminWorkspace from '../../component/AdminWorkspace.jsx';
+import BookRatingsChart from '../../component/BookRatingsChart.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
 import { supabase } from '../../lib/supabaseClient.js';
 import { exportReport } from '../../lib/excelUtils.js';
@@ -45,6 +57,8 @@ import {
 const VisitorAccountManagement = lazy(
   () => import('../../component/VisitorAccountManagement.jsx')
 );
+
+ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Tooltip, Legend);
 
 const NAV = [
   { id: 'overview', label: 'Overview', Icon: Activity },
@@ -89,160 +103,172 @@ function StatCard({ label, value, tone = 'default' }) {
 }
 
 function AttendanceTrendChart({ attendance = [] }) {
-  const dailyCounts = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date();
-    date.setHours(0, 0, 0, 0);
-    date.setDate(date.getDate() - (6 - index));
-    const count = attendance.filter((record) => {
-      const timestamp = record.timeIn || record.time_in;
-      if (!timestamp) return false;
-      const recordDate = new Date(timestamp);
-      return (
-        !Number.isNaN(recordDate.getTime()) &&
-        recordDate.toDateString() === date.toDateString()
-      );
-    }).length;
-    return {
-      label: date.toLocaleDateString('en-US', { weekday: 'short' }),
-      count,
-    };
+  const today = new Date();
+  const firstDayOfThisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const firstDayOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const lastMonthDays = new Date(today.getFullYear(), today.getMonth(), 0).getDate();
+  const monthLabel = firstDayOfLastMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const dailyCounts = Array.from({ length: lastMonthDays }, (_, index) => ({
+    day: index + 1,
+    count: 0,
+  }));
+
+  attendance.forEach((record) => {
+    const timestamp = record.timeIn || record.time_in;
+    if (!timestamp) return;
+    const recordDate = new Date(timestamp);
+    if (
+      Number.isNaN(recordDate.getTime()) ||
+      recordDate < firstDayOfLastMonth ||
+      recordDate >= firstDayOfThisMonth
+    ) return;
+    dailyCounts[recordDate.getDate() - 1].count += 1;
   });
+  const attendanceTotal = dailyCounts.reduce((total, day) => total + day.count, 0);
   const maxCount = Math.max(1, ...dailyCounts.map((day) => day.count));
+  const calendarCells = [
+    ...Array(firstDayOfLastMonth.getDay()).fill(null),
+    ...dailyCounts,
+  ];
+  const getIntensityClass = (count) => {
+    if (count === 0) return 'border-slate-100 bg-slate-50 text-slate-400';
+    const ratio = count / maxCount;
+    if (ratio >= 0.75) return 'border-blue-500 bg-blue-500 text-white';
+    if (ratio >= 0.5) return 'border-blue-300 bg-blue-200 text-blue-900';
+    if (ratio >= 0.25) return 'border-blue-200 bg-blue-100 text-blue-800';
+    return 'border-blue-100 bg-blue-50 text-blue-700';
+  };
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="text-sm font-bold text-slate-800">
-        Visitor Attendance
-      </h3>
-      <p className="mt-1 text-xs text-slate-500">
-        Daily attendance for the last seven days
-      </p>
-      {attendance.length === 0 ? (
-        <p className="py-10 text-center text-sm text-slate-500">
-          No attendance records available for this branch.
-        </p>
-      ) : (
-        <div className="mt-6 flex h-44 items-end justify-around gap-2">
-          {dailyCounts.map((day) => (
-            <div
-              key={day.label}
-              className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2"
-            >
-              <span className="text-xs font-semibold text-slate-600">
-                {day.count}
-              </span>
-              <div className="flex h-28 w-full items-end justify-center">
-                <div
-                  title={`${day.label}: ${day.count} visitors`}
-                  aria-label={`${day.label}: ${day.count} visitors`}
-                  className="w-full max-w-10 rounded-t-md bg-blue-500 transition-all duration-200 hover:scale-x-110 hover:bg-blue-600 hover:shadow-md"
-                  style={{
-                    height:
-                      day.count === 0
-                        ? '0%'
-                        : `${Math.max(6, (day.count / maxCount) * 100)}%`,
-                  }}
-                />
-              </div>
-              <span className="text-xs text-slate-500">
-                {day.label}
-              </span>
-            </div>
-          ))}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-bold text-slate-800">Visitor Attendance</h3>
+          <p className="mt-1 text-xs text-slate-500">Daily check-ins · {monthLabel}</p>
         </div>
+        <div className="rounded-lg bg-slate-50 px-3 py-2 text-right">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Monthly total</p>
+          <p className="text-lg font-bold leading-tight tabular-nums text-slate-800">{attendanceTotal.toLocaleString()}</p>
+        </div>
+      </div>
+      <div className="mt-4 grid grid-cols-7 gap-1.5" role="grid" aria-label={`Daily visitor check-ins for ${monthLabel}`}>
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((weekday) => (
+          <div key={weekday} role="columnheader" className="pb-1 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-400 sm:text-[11px]">
+            {weekday}
+          </div>
+        ))}
+        {calendarCells.map((day, index) => day ? (
+          <div
+            key={day.day}
+            role="gridcell"
+            title={`${monthLabel} ${day.day}: ${day.count} check-ins`}
+            aria-label={`${monthLabel} ${day.day}: ${day.count} check-ins`}
+            className={`flex min-h-9 flex-col justify-between rounded-md border p-1 transition-colors sm:min-h-10 sm:p-1.5 ${getIntensityClass(day.count)}`}
+          >
+            <span className="text-[10px] font-medium leading-none opacity-80">{day.day}</span>
+            <span className="text-xs font-bold leading-none tabular-nums sm:text-sm">{day.count}</span>
+          </div>
+        ) : (
+          <div key={`empty-${index}`} aria-hidden="true" />
+        ))}
+      </div>
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-[10px] text-slate-500" aria-label="Attendance intensity legend">
+        <span className="mr-auto font-medium">Check-ins per day</span>
+        <span className="flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm border border-slate-100 bg-slate-50" />0</span>
+        <span className="flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm border border-blue-100 bg-blue-50" />Low</span>
+        <span className="flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm border border-blue-300 bg-blue-200" />Medium</span>
+        <span className="flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm border border-blue-500 bg-blue-500" />High</span>
+      </div>
+      {attendanceTotal === 0 && (
+        <p className="mt-2 text-center text-xs text-slate-500">No attendance records for this month.</p>
       )}
     </div>
   );
 }
 
-function BorrowingStatusChart({ requests = [] }) {
-  const getStatus = (request) =>
-    String(request.status || '')
-      .toLowerCase()
-      .trim()
-      .replace(/[\s-]+/g, '_');
-  const isOverdue = (request) => {
-    const status = getStatus(request);
-    const dueDate = request.dueDate || request.due_date;
-    return (
-      status === 'borrowed' &&
-      dueDate &&
-      !Number.isNaN(new Date(dueDate).getTime()) &&
-      new Date(dueDate) < new Date()
-    );
+function BorrowingActivityTrendChart({ requests = [] }) {
+  const today = new Date();
+  const firstDayOfThisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const firstDayOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const lastMonthDays = new Date(today.getFullYear(), today.getMonth(), 0).getDate();
+  const firstWeekday = firstDayOfLastMonth.getDay();
+  const weekCount = Math.ceil((firstWeekday + lastMonthDays) / 7);
+  const monthLabel = firstDayOfLastMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const weeks = Array.from({ length: weekCount }, (_, index) => {
+    const firstDate = Math.max(1, index * 7 - firstWeekday + 1);
+    const lastDate = Math.min(lastMonthDays, (index + 1) * 7 - firstWeekday);
+    return {
+      label: `${firstDayOfLastMonth.toLocaleDateString('en-US', { month: 'short' })} ${firstDate}–${lastDate}`,
+      requests: 0,
+      borrows: 0,
+      returns: 0,
+    };
+  });
+
+  const addEventsForDate = (dateValue, eventType) => {
+    if (!dateValue) return;
+    const date = new Date(dateValue);
+    if (
+      Number.isNaN(date.getTime()) ||
+      date < firstDayOfLastMonth ||
+      date >= firstDayOfThisMonth
+    ) return;
+    const weekIndex = Math.floor((date.getDate() - 1 + firstWeekday) / 7);
+    weeks[weekIndex][eventType] += 1;
   };
-  const statuses = [
-    {
-      key: 'pending',
-      label: 'Pending',
-      color: 'bg-amber-500',
-      count: requests.filter((r) => getStatus(r) === 'pending').length,
-    },
-    {
-      key: 'ready',
-      label: 'Ready for Pickup',
-      color: 'bg-blue-500',
-      count: requests.filter(
-        (r) => getStatus(r) === 'ready_for_pickup'
-      ).length,
-    },
-    {
-      key: 'borrowed',
-      label: 'Active Borrows',
-      color: 'bg-violet-500',
-      count: requests.filter(
-        (r) => getStatus(r) === 'borrowed' && !isOverdue(r)
-      ).length,
-    },
-    {
-      key: 'overdue',
-      label: 'Overdue',
-      color: 'bg-red-500',
-      count: requests.filter(isOverdue).length,
-    },
-    {
-      key: 'returned',
-      label: 'Returned',
-      color: 'bg-emerald-500',
-      count: requests.filter((r) => getStatus(r) === 'returned').length,
-    },
-  ];
-  const maxCount = Math.max(1, ...statuses.map((item) => item.count));
+
+  requests.forEach((request) => {
+    addEventsForDate(request.requestDate || request.request_date, 'requests');
+    addEventsForDate(request.borrowDate || request.borrow_date, 'borrows');
+    addEventsForDate(request.returnDate || request.return_date, 'returns');
+  });
+
+  const totals = weeks.reduce((sum, week) => ({
+    requests: sum.requests + week.requests,
+    borrows: sum.borrows + week.borrows,
+    returns: sum.returns + week.returns,
+  }), { requests: 0, borrows: 0, returns: 0 });
+  const hasActivity = totals.requests + totals.borrows + totals.returns > 0;
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="text-sm font-bold text-slate-800">
-        Borrowing Status
-      </h3>
-      <p className="mt-1 text-xs text-slate-500">
-        Book requests and transactions for your assigned branch
-      </p>
-      {requests.length === 0 ? (
+    <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-bold text-slate-800">Borrowing Activity Trend</h3>
+          <p className="mt-1 text-xs text-slate-500">Requests, borrows, and returns by week · {monthLabel}</p>
+        </div>
+        <div className="hidden shrink-0 gap-3 text-right sm:flex">
+          <div><p className="text-sm font-bold tabular-nums text-blue-700">{totals.requests}</p><p className="text-[10px] text-slate-500">Requests</p></div>
+          <div><p className="text-sm font-bold tabular-nums text-amber-600">{totals.borrows}</p><p className="text-[10px] text-slate-500">Borrows</p></div>
+          <div><p className="text-sm font-bold tabular-nums text-emerald-600">{totals.returns}</p><p className="text-[10px] text-slate-500">Returns</p></div>
+        </div>
+      </div>
+      {!hasActivity ? (
         <p className="py-10 text-center text-sm text-slate-500">
-          No borrowing records available for this branch.
+          No borrowing activity recorded for {monthLabel}.
         </p>
       ) : (
-        <div className="mt-6 space-y-4">
-          {statuses.map((item) => (
-            <div key={item.key}>
-              <div className="mb-1 flex items-center justify-between gap-3">
-                <span className="text-xs text-slate-600">
-                  {item.label}
-                </span>
-                <span className="text-xs font-bold text-slate-800">
-                  {item.count}
-                </span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                <div
-                  title={`${item.label}: ${item.count} requests`}
-                  aria-label={`${item.label}: ${item.count} requests`}
-                  className={`h-full rounded-full ${item.color} transition-all duration-200 hover:brightness-110`}
-                  style={{
-                    width: `${(item.count / maxCount) * 100}%`,
-                  }}
-                />
-              </div>
-            </div>
-          ))}
+        <div className="mt-4 flex min-h-[220px] flex-1 flex-col">
+          <div className="relative min-h-0 flex-1">
+            <Line
+            data={{
+              labels: weeks.map((week) => week.label),
+              datasets: [
+                { label: 'Requests', data: weeks.map((week) => week.requests), borderColor: '#2563eb', backgroundColor: '#2563eb', tension: 0.3, pointRadius: 3 },
+                { label: 'Borrows', data: weeks.map((week) => week.borrows), borderColor: '#d97706', backgroundColor: '#d97706', tension: 0.3, pointRadius: 3 },
+                { label: 'Returns', data: weeks.map((week) => week.returns), borderColor: '#059669', backgroundColor: '#059669', tension: 0.3, pointRadius: 3 },
+              ],
+            }}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+              plugins: {
+                legend: { position: 'bottom' },
+                tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${context.raw} records` } },
+              },
+            }}
+            />
+          </div>
+          <p className="mt-1 text-right text-[10px] text-slate-400">Weekly activity for {monthLabel}</p>
         </div>
       )}
     </div>
@@ -282,7 +308,7 @@ function CustomDashboardWelcome({
     <div className="relative bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-sm space-y-6">
       
       {/* TOP RIGHT ACTION BAR (NOTIFICATION BELL & ONLINE BADGE) */}
-      <div className="absolute top-6 right-6 flex items-center gap-3 z-20">
+      <div className="absolute top-6 right-6 z-20 flex items-center gap-3">
         
         {/* NOTIFICATION BELL BUTTON WITH DROPDOWN */}
         <div className="relative">
@@ -302,7 +328,7 @@ function CustomDashboardWelcome({
 
           {/* NOTIFICATION DROPDOWN MENU */}
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-2xl p-3 z-50 text-xs">
+            <div className="absolute right-0 top-full z-50 mt-2 flex max-h-[min(70vh,32rem)] w-[min(20rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-2xl">
               <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 font-bold text-slate-800">
                 <span>Branch Notifications</span>
                 <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full text-[10px]">
@@ -323,7 +349,7 @@ function CustomDashboardWelcome({
                 </button>
               )}
               
-              <div className="max-h-60 overflow-y-auto space-y-2">
+              <div className="min-h-0 max-h-[min(20rem,60vh)] flex-1 space-y-2 overflow-y-auto overscroll-contain">
                 {notifications.length === 0 ? (
                   <p className="text-slate-400 py-3 text-center">No new notifications</p>
                 ) : (
@@ -1003,7 +1029,7 @@ function QRBookBorrowing({
 
 export default function SubAdminDashboard() {
   const { user, logout } = useAuth();
-  const { books, borrowRequests, attendanceLogs, libraries } = useLibraryData();
+  const { books, borrowRequests, attendanceLogs, libraries, visitors } = useLibraryData();
   const [section, setSection] = useState('overview');
   const [focusRequestId, setFocusRequestId] = useState(null);
   const [focusNotificationType, setFocusNotificationType] = useState(null);
@@ -1011,6 +1037,8 @@ export default function SubAdminDashboard() {
   const [expandedGroups, setExpandedGroups] = useState({ reports: true, communication: false });
   const [workspaceTab, setWorkspaceTab] = useState('reports');
   const [showImportGuide, setShowImportGuide] = useState(false);
+  const [feedbackPreview, setFeedbackPreview] = useState({ items: [], total: 0, newCount: 0, loading: false, error: '' });
+  const [feedbackPreviewLibraryId, setFeedbackPreviewLibraryId] = useState('');
   const { addBooksBulk, confirmPickup, confirmReturn } = useLibrary();
 
   useEffect(() => {
@@ -1063,6 +1091,13 @@ export default function SubAdminDashboard() {
     );
   }, [attendanceLogs, currentLibraryId]);
 
+  const branchVisitors = useMemo(() => {
+    if (!currentLibraryId) return [];
+    return visitors.filter(
+      (visitor) => visitor.libraryId === currentLibraryId || visitor.library_id === currentLibraryId
+    );
+  }, [visitors, currentLibraryId]);
+
   const branchBookIds = useMemo(
     () => new Set(branchBooks.map((book) => String(book.id))),
     [branchBooks]
@@ -1075,6 +1110,58 @@ export default function SubAdminDashboard() {
       ),
     [borrowRequests, branchBookIds]
   );
+
+  useEffect(() => {
+    if (section !== 'overview') return undefined;
+    if (!supabase || !currentLibraryId) return undefined;
+
+    let active = true;
+    Promise.all([
+      supabase
+        .from('visitor_feedback')
+        .select('id, visitor_name, subject, message, status, created_at', { count: 'exact' })
+        .eq('library_id', currentLibraryId)
+        .order('created_at', { ascending: false })
+        .limit(3),
+      supabase
+        .from('visitor_feedback')
+        .select('id', { count: 'exact', head: true })
+        .eq('library_id', currentLibraryId)
+        .eq('status', 'new'),
+    ])
+      .then(([recentResult, newResult]) => {
+        if (!active) return;
+        if (recentResult.error) {
+          console.error('Sub-admin overview feedback query failed:', recentResult.error);
+        }
+        if (newResult.error) {
+          console.error('Sub-admin overview new-feedback count failed:', newResult.error);
+        }
+        setFeedbackPreviewLibraryId(currentLibraryId);
+        setFeedbackPreview({
+          items: recentResult.data || [],
+          total: recentResult.count || 0,
+          newCount: newResult.error
+            ? (recentResult.data || []).filter((item) => item.status === 'new').length
+            : newResult.count || 0,
+          loading: false,
+          error: recentResult.error?.message || '',
+        });
+      })
+      .catch((error) => {
+        if (!active) return;
+        setFeedbackPreviewLibraryId(currentLibraryId);
+        setFeedbackPreview((current) => ({ ...current, loading: false, error: error.message || 'Unable to load feedback.' }));
+      });
+
+    return () => { active = false; };
+  }, [section, currentLibraryId]);
+
+  const visibleFeedbackPreview = !supabase || !currentLibraryId
+    ? { items: [], total: 0, newCount: 0, loading: false, error: '' }
+    : feedbackPreviewLibraryId === currentLibraryId
+      ? feedbackPreview
+      : { items: [], total: 0, newCount: 0, loading: true, error: '' };
 
   const [notificationNow, setNotificationNow] = useState(() => Date.now());
   useEffect(() => {
@@ -1311,10 +1398,7 @@ export default function SubAdminDashboard() {
   };
 
   const [locallyConfirmedPickups, setLocallyConfirmedPickups] = useState([]);
-  const today = new Date().toDateString();
-  const todaysVisits = branchAttendance.filter(
-    (a) => new Date(a.timeIn).toDateString() === today
-  ).length;
+  const registeredVisitors = branchVisitors.length;
   const pendingPickups = branchBorrowRequests.filter(
     (r) => r.status === 'ready_for_pickup' && !locallyConfirmedPickups.includes(r.id)
   ).length;
@@ -1471,7 +1555,7 @@ export default function SubAdminDashboard() {
         {section === 'overview' && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-              <StatCard label="Visits Today" value={todaysVisits} tone="blue" />
+              <StatCard label="Registered Visitors" value={registeredVisitors} tone="blue" />
               <StatCard label="Pending Pickups" value={pendingPickups} tone="amber" />
               <StatCard label="Active Borrows" value={activeBorrows} />
               <StatCard label="Overdue Items" value={overdue} tone="red" />
@@ -1481,7 +1565,69 @@ export default function SubAdminDashboard() {
             {/* OVERVIEW CHARTS */}
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
               <AttendanceTrendChart attendance={branchAttendance} />
-              <BorrowingStatusChart requests={branchBorrowRequests} />
+              <BorrowingActivityTrendChart requests={branchBorrowRequests} />
+            </div>
+            <div className="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-3">
+              <div className="h-full lg:col-span-1 [&>section]:h-full">
+                <BookRatingsChart books={branchBooks} fillHeight />
+              </div>
+
+              <section className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2" aria-labelledby="feedback-highlight-title">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
+                <div className="flex items-start gap-3">
+                  <span className="rounded-lg bg-blue-50 p-2 text-blue-700"><MessageSquare size={18} /></span>
+                  <div>
+                    <h3 id="feedback-highlight-title" className="text-sm font-bold text-slate-800">Feedback highlight</h3>
+                    <p className="mt-1 text-xs text-slate-500">Recent visitor feedback for {currentBranchName || 'your branch'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                    {visibleFeedbackPreview.newCount} new
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWorkspaceTab('feedback');
+                      setExpandedGroups((current) => ({ ...current, communication: true }));
+                      navigateToSection('workspace');
+                    }}
+                    className="text-xs font-semibold text-blue-700 hover:text-blue-900"
+                  >
+                    View all{visibleFeedbackPreview.total ? ` (${visibleFeedbackPreview.total})` : ''}
+                  </button>
+                </div>
+              </div>
+              {visibleFeedbackPreview.loading ? (
+                <p className="py-5 text-center text-sm text-slate-500">Loading feedback…</p>
+              ) : visibleFeedbackPreview.error ? (
+                <p role="status" className="py-5 text-center text-sm text-amber-700">Feedback is temporarily unavailable.</p>
+              ) : visibleFeedbackPreview.items.length === 0 ? (
+                <p className="py-5 text-center text-sm text-slate-500">No visitor feedback for this branch yet.</p>
+              ) : (
+                <ul className="flex flex-1 flex-col justify-between divide-y divide-slate-100">
+                  {visibleFeedbackPreview.items.map((item) => {
+                    const status = String(item.status || 'new').replaceAll('_', ' ');
+                    return (
+                      <li key={item.id} className="flex flex-col gap-2 py-3 first:pt-4 last:pb-0 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <p className="truncate text-sm font-semibold text-slate-800">{item.subject || 'Visitor feedback'}</p>
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize ${item.status === 'new' ? 'bg-amber-50 text-amber-800' : item.status === 'answered' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                              {status}
+                            </span>
+                          </div>
+                          <p className="mt-1 line-clamp-2 break-words text-xs text-slate-500">{item.visitor_name || 'Visitor'} · {item.message || ''}</p>
+                        </div>
+                        <time className="shrink-0 text-[11px] text-slate-400" dateTime={item.created_at}>
+                          {item.created_at ? new Date(item.created_at).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : 'Date unavailable'}
+                        </time>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              </section>
             </div>
 
             {/* BRANCH DATA MANAGEMENT CARD */}

@@ -41,6 +41,24 @@ CREATE POLICY "authenticated visitors submit feedback" ON "public"."visitor_feed
    FROM public.visitors visitor
   WHERE ((visitor.id = visitor_feedback.visitor_id) AND (visitor.auth_user_id = auth.uid()) AND visitor.otp_verified AND visitor.is_active))));
 
+CREATE POLICY "anonymous landing feedback submit" ON "public"."visitor_feedback"
+  FOR INSERT
+  TO "anon"
+  WITH CHECK (
+    visitor_id IS NULL
+    AND library_id IS NULL
+    AND category = 'General'
+    AND status = 'new'
+    AND admin_reply IS NULL
+    AND replied_by IS NULL
+    AND replied_at IS NULL
+    AND char_length(trim(visitor_name)) BETWEEN 1 AND 120
+    AND visitor_email IS NOT NULL
+    AND char_length(trim(visitor_email)) BETWEEN 3 AND 254
+    AND char_length(trim(subject)) BETWEEN 1 AND 160
+    AND char_length(trim(message)) BETWEEN 1 AND 5000
+  );
+
 CREATE POLICY "visitors and branch staff read feedback" ON "public"."visitor_feedback"
   FOR SELECT
   TO "authenticated"
@@ -49,4 +67,14 @@ CREATE POLICY "visitors and branch staff read feedback" ON "public"."visitor_fee
   WHERE ((visitor.id = visitor_feedback.visitor_id) AND (visitor.auth_user_id = auth.uid()) AND visitor.otp_verified AND visitor.is_active))) OR
     public.is_active_staff_for_branch((library_id)::text)));
 
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."visitor_feedback" TO "anon", "authenticated", "postgres", "service_role";
+REVOKE ALL ON TABLE "public"."visitor_feedback" FROM "anon", PUBLIC;
+GRANT INSERT (
+  "visitor_id",
+  "library_id",
+  "visitor_name",
+  "visitor_email",
+  "category",
+  "subject",
+  "message"
+) ON TABLE "public"."visitor_feedback" TO "anon";
+GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE "public"."visitor_feedback" TO "authenticated", "postgres", "service_role";

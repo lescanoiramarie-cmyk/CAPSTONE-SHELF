@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bar } from 'react-chartjs-2';
+import { Bar, Line } from 'react-chartjs-2';
 import {
   BarElement,
   CategoryScale,
   Chart as ChartJS,
   Legend,
+  LineElement,
   LinearScale,
+  PointElement,
   Tooltip,
 } from 'chart.js';
 import { FileSpreadsheet, FileCode, FileText } from 'lucide-react';
@@ -22,9 +24,13 @@ ChartJS.register(
   CategoryScale,
   LinearScale,
   BarElement,
+  LineElement,
+  PointElement,
   Tooltip,
   Legend
 );
+
+const CATEGORY_CHART_COLORS = ['#0f766e', '#d97706', '#2563eb', '#9333ea', '#e11d48', '#64748b'];
 
 function getLibraryName(libraries, id) {
   if (!id) {
@@ -90,6 +96,18 @@ function getDateKey(value, timeframe) {
   return `${monthKey}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
+function formatLocalDateInput(value) {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+}
+
+function getDaysUntilExpiration(expiryDate) {
+  return Math.max(1, Math.ceil((expiryDate.getTime() - Date.now()) / 86400000));
+}
+
+function isAnnouncementExpired(expiresAt) {
+  return new Date(expiresAt).getTime() <= Date.now();
+}
+
 export default function AdminWorkspace({
   initialTab = 'reports',
   mode = 'reports',
@@ -125,13 +143,23 @@ export default function AdminWorkspace({
   }, [mode]);
 
   const [analyticsLibraryId, setAnalyticsLibraryId] = useState('');
-  const [timeframe, setTimeframe] = useState('7d');
+  const [timeframe, setTimeframe] = useState('this_month');
   const [activityTypeFilter, setActivityTypeFilter] = useState('all');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   const [reportSort, setReportSort] = useState('time');
+  const [activityHistoryPage, setActivityHistoryPage] = useState(1);
   const [feedback, setFeedback] = useState([]);
+  const [feedbackTotal, setFeedbackTotal] = useState(0);
+  const [feedbackPage, setFeedbackPage] = useState(1);
+  const [feedbackSearch, setFeedbackSearch] = useState('');
+  const [feedbackStatusFilter, setFeedbackStatusFilter] = useState('all');
   const [announcements, setAnnouncements] = useState([]);
+  const [announcementsTotal, setAnnouncementsTotal] = useState(0);
+  const [announcementsPage, setAnnouncementsPage] = useState(1);
+  const [announcementsSearch, setAnnouncementsSearch] = useState('');
+  const [announcementsStatusFilter, setAnnouncementsStatusFilter] = useState('all');
+  const [sectionRefreshTick, setSectionRefreshTick] = useState(0);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
@@ -139,7 +167,12 @@ export default function AdminWorkspace({
   const [announcementForm, setAnnouncementForm] = useState({
     title: '',
     message: '',
+    expirationMode: 'permanent',
+    duration: '7',
+    durationUnit: 'days',
+    expiresAt: null,
   });
+  const [announcementExpirationChanged, setAnnouncementExpirationChanged] = useState(false);
   const [editingAnnouncementId, setEditingAnnouncementId] = useState(null);
   const [feedbackReply, setFeedbackReply] = useState({});
   const [forecast, setForecast] = useState(null);
@@ -212,12 +245,14 @@ export default function AdminWorkspace({
       .map((item) => ({
         type: 'Visitor',
         time: item.timeIn,
-        person: item.visitorName || 'Unknown visitor',
+        person: isSubAdmin
+          ? item.visitorName || 'Unknown visitor'
+          : (item.visitorName || 'Unknown visitor').replace(/^\[TEST\]\s*/i, ''),
         detail: 'Library visit',
         branch: getLibraryName(libraries, item.libraryId),
         status: item.checkedOutAt ? 'Checked out' : 'Checked in',
         dataClassification: String(item.visitorName || '').startsWith('[TEST] ')
-          ? 'Synthetic test data'
+          ? 'Test data'
           : 'Operational data',
       }));
 
@@ -258,6 +293,7 @@ export default function AdminWorkspace({
     reportSort,
     scopedAttendance,
     scopedBorrows,
+    isSubAdmin,
   ]);
 
   const filteredReportRows = useMemo(
@@ -266,6 +302,28 @@ export default function AdminWorkspace({
       : reportRows.filter((row) => row.type === activityTypeFilter),
     [activityTypeFilter, reportRows]
   );
+  const activityHistoryPageSize = 20;
+  const activityHistoryPageCount = Math.max(1, Math.ceil(filteredReportRows.length / activityHistoryPageSize));
+  const visibleActivityHistoryPage = Math.min(activityHistoryPage, activityHistoryPageCount);
+  const visibleFeedbackPage = Math.min(feedbackPage, Math.max(1, Math.ceil(feedbackTotal / 10)));
+  const visibleAnnouncementsPage = Math.min(announcementsPage, Math.max(1, Math.ceil(announcementsTotal / 10)));
+  const activityHistoryStart = (visibleActivityHistoryPage - 1) * activityHistoryPageSize;
+  const paginatedReportRows = filteredReportRows.slice(
+    activityHistoryStart,
+    activityHistoryStart + activityHistoryPageSize
+  );
+  const activityHistoryPages = activityHistoryPageCount <= 5
+    ? Array.from({ length: activityHistoryPageCount }, (_, index) => index + 1)
+    : [
+        1,
+        ...(visibleActivityHistoryPage > 3 ? ['ellipsis-left'] : []),
+        ...Array.from(
+          { length: Math.max(0, Math.min(activityHistoryPageCount - 1, visibleActivityHistoryPage + 1) - Math.max(2, visibleActivityHistoryPage - 1) + 1) },
+          (_, index) => Math.max(2, visibleActivityHistoryPage - 1) + index
+        ),
+        ...(visibleActivityHistoryPage < activityHistoryPageCount - 2 ? ['ellipsis-right'] : []),
+        activityHistoryPageCount,
+      ];
 
   useEffect(() => {
     if (!supabase || !['feedback', 'announcements'].includes(tab)) {
@@ -279,20 +337,44 @@ export default function AdminWorkspace({
       if (tab === 'feedback') {
         let query = supabase
           .from('visitor_feedback')
-          .select('*')
+          .select('*', { count: 'exact' })
           .order('created_at', { ascending: false });
         if (isSubAdmin) {
           query = query.eq('library_id', currentLibraryId);
         }
+        if (feedbackStatusFilter !== 'all') {
+          query = feedbackStatusFilter === 'new'
+            ? query.in('status', ['new', 'in_review'])
+            : query.eq('status', feedbackStatusFilter);
+        }
+        const search = feedbackSearch.trim().replace(/[(),]/g, ' ');
+        if (search) {
+          query = query.or(`subject.ilike.%${search}%,visitor_name.ilike.%${search}%,visitor_email.ilike.%${search}%`);
+        }
+        query = query.range((visibleFeedbackPage - 1) * 10, visibleFeedbackPage * 10 - 1);
         result = await query;
       } else if (tab === 'announcements') {
         let query = supabase
           .from('announcements')
-          .select('*')
+          .select('*', { count: 'exact' })
           .order('created_at', { ascending: false });
         if (isSubAdmin) {
           query = query.eq('library_id', currentLibraryId);
         }
+        query = query.eq('published', true);
+        if (announcementsStatusFilter !== 'all') {
+          if (announcementsStatusFilter === 'expired') {
+            query = query
+              .not('expires_at', 'is', null)
+              .lte('expires_at', new Date().toISOString());
+          } else if (announcementsStatusFilter === 'published') {
+            query = query.or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
+          }
+        }
+        if (announcementsSearch.trim()) {
+          query = query.ilike('title', `%${announcementsSearch.trim()}%`);
+        }
+        query = query.range((visibleAnnouncementsPage - 1) * 10, visibleAnnouncementsPage * 10 - 1);
         result = await query;
       }
       if (!active) return;
@@ -300,8 +382,10 @@ export default function AdminWorkspace({
         setError(result.error.message);
       } else if (tab === 'feedback') {
         setFeedback(result.data || []);
+        setFeedbackTotal(result.count || 0);
       } else if (tab === 'announcements') {
         setAnnouncements(result.data || []);
+        setAnnouncementsTotal(result.count || 0);
       }
       setLoading(false);
     }
@@ -314,7 +398,20 @@ export default function AdminWorkspace({
     return () => {
       active = false;
     };
-  }, [currentLibraryId, isSubAdmin, tab]);
+  }, [
+    announcementsPage,
+    announcementsSearch,
+    announcementsStatusFilter,
+    currentLibraryId,
+    feedbackPage,
+    feedbackSearch,
+    feedbackStatusFilter,
+    isSubAdmin,
+    sectionRefreshTick,
+    tab,
+    visibleAnnouncementsPage,
+    visibleFeedbackPage,
+  ]);
 
   const effectiveAnalyticsLibraryId = isSubAdmin ? currentLibraryId : analyticsLibraryId;
 
@@ -383,25 +480,74 @@ export default function AdminWorkspace({
     };
   }, [analyticsAttendance, analyticsBorrows, analyticsWindow, timeframe]);
 
-  const forecastDailyVisitorCounts = useMemo(() => {
+  const forecastHistoryBuckets = useMemo(() => {
     if (!analyticsWindow.valid) return [];
-    const buckets = getTimeframeBuckets('custom', analyticsWindow).slice(-366);
+    return getTimeframeBuckets('custom', analyticsWindow).slice(-366);
+  }, [analyticsWindow]);
+
+  const forecastHistoryDays = forecastHistoryBuckets.length;
+  const forecastDailyVisitorCounts = useMemo(() => {
+    if (!forecastHistoryDays) return [];
     const counts = new Map();
     analyticsAttendance.forEach((item) => {
       const key = getDateKey(item.timeIn, 'custom');
       counts.set(key, (counts.get(key) || 0) + 1);
     });
-    return buckets.map((bucket) => counts.get(bucket.key) || 0);
-  }, [analyticsAttendance, analyticsWindow]);
+    return forecastHistoryBuckets.map((bucket) => counts.get(bucket.key) || 0);
+  }, [analyticsAttendance, forecastHistoryBuckets, forecastHistoryDays]);
 
-  const topCategories = useMemo(() => {
+  const forecastChartData = useMemo(() => {
+    if (!forecast?.forecasts?.length || !forecastDailyVisitorCounts.length) return null;
+    const labels = [
+      ...forecastHistoryBuckets.map((bucket) => bucket.label),
+      ...forecast.forecasts.map((item) => new Date(`${item.date}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })),
+    ];
+    const anchor = forecastDailyVisitorCounts.at(-1) ?? 0;
+    return {
+      labels,
+      datasets: [
+        {
+          label: 'Actual visitors',
+          data: [...forecastDailyVisitorCounts, ...forecast.forecasts.map(() => null)],
+          borderColor: '#0f766e',
+          backgroundColor: '#0f766e',
+          tension: 0.25,
+          pointRadius: 2,
+        },
+        {
+          label: 'Forecast visitors',
+          data: [
+            ...forecastDailyVisitorCounts.slice(0, -1).map(() => null),
+            anchor,
+            ...forecast.forecasts.map((item) => item.visitorCount),
+          ],
+          borderColor: '#d97706',
+          backgroundColor: '#d97706',
+          borderDash: [6, 4],
+          tension: 0.25,
+          pointRadius: 3,
+        },
+      ],
+    };
+  }, [forecast, forecastDailyVisitorCounts, forecastHistoryBuckets]);
+
+  const categoryDemand = useMemo(() => {
     const counts = new Map();
     analyticsBorrows.forEach((request) => {
       const category = booksById.get(request.bookId)?.category || 'Uncategorized';
       counts.set(category, (counts.get(category) || 0) + 1);
     });
-    return [...counts].sort((a, b) => b[1] - a[1]).slice(0, 5);
+    return [...counts].sort((a, b) => b[1] - a[1]);
   }, [booksById, analyticsBorrows]);
+
+  const topCategories = categoryDemand.slice(0, 5);
+  const otherCategoryRequestCount = categoryDemand
+    .slice(5)
+    .reduce((sum, [, count]) => sum + count, 0);
+  const categoryChartRows = otherCategoryRequestCount > 0
+    ? [...topCategories, ['Other categories', otherCategoryRequestCount]]
+    : topCategories;
+  const totalCategoryRequests = categoryDemand.reduce((sum, [, count]) => sum + count, 0);
 
   const demandRecommendations = useMemo(() => {
     if (!analyticsWindow.valid) {
@@ -556,10 +702,18 @@ export default function AdminWorkspace({
   const handleAnnouncementEdit = (item) => {
     setError('');
     setMessage('');
+    const expiryDate = item.expires_at ? new Date(item.expires_at) : null;
     setAnnouncementForm({
       title: item.title || '',
       message: item.message || '',
+      expirationMode: expiryDate ? 'temporary' : 'permanent',
+      duration: expiryDate
+        ? String(getDaysUntilExpiration(expiryDate))
+        : '7',
+      durationUnit: 'days',
+      expiresAt: item.expires_at || null,
     });
+    setAnnouncementExpirationChanged(false);
     setEditingAnnouncementId(item.id);
   };
 
@@ -581,13 +735,27 @@ export default function AdminWorkspace({
       setError('Your account is not assigned to a library branch.');
       return;
     }
+    const duration = Number(announcementForm.duration);
+    if (
+      announcementForm.expirationMode === 'temporary' &&
+      (!Number.isInteger(duration) || duration < 1 || duration > (announcementForm.durationUnit === 'months' ? 120 : 3650))
+    ) {
+      setError(`Enter a duration from 1 to ${announcementForm.durationUnit === 'months' ? '120 months' : '3650 days'}.`);
+      return;
+    }
     try {
+      const expiresAt = announcementForm.expirationMode === 'permanent'
+        ? null
+        : editingAnnouncementId && !announcementExpirationChanged
+          ? announcementForm.expiresAt
+          : getAnnouncementExpirationDate(duration, announcementForm.durationUnit);
       const values = {
         title,
         message: messageText,
         library_id: isSubAdmin ? currentLibraryId : null,
         created_by: user?.name || user?.email || 'Admin',
         published: true,
+        expires_at: expiresAt,
       };
       const result = editingAnnouncementId
         ? await supabase
@@ -601,22 +769,17 @@ export default function AdminWorkspace({
         return;
       }
 
-      let query = supabase
-        .from('announcements')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (isSubAdmin) {
-        query = query.eq('library_id', currentLibraryId);
-      }
-      const { data, error: fetchError } = await query;
-
-      if (fetchError) {
-        setError(`Saved, but list could not refresh: ${fetchError.message}`);
-        return;
-      }
-
-      setAnnouncements(data || []);
-      setAnnouncementForm({ title: '', message: '' });
+      setAnnouncementsPage(1);
+      setSectionRefreshTick((tick) => tick + 1);
+      setAnnouncementForm({
+        title: '',
+        message: '',
+        expirationMode: 'permanent',
+        duration: '7',
+        durationUnit: 'days',
+        expiresAt: null,
+      });
+      setAnnouncementExpirationChanged(false);
       setEditingAnnouncementId(null);
       setMessage(
         editingAnnouncementId
@@ -649,6 +812,7 @@ export default function AdminWorkspace({
         return;
       }
       setAnnouncements((current) => current.filter((item) => item.id !== id));
+      setAnnouncementsTotal((current) => Math.max(0, current - 1));
       setMessage('Announcement deleted successfully.');
     } catch (err) {
       setError(err?.message || 'An unexpected error occurred while deleting.');
@@ -692,6 +856,7 @@ export default function AdminWorkspace({
         )
       );
       setFeedbackReply((current) => ({ ...current, [item.id]: '' }));
+      setSectionRefreshTick((tick) => tick + 1);
       setMessage('Reply saved successfully.');
     }
   };
@@ -706,9 +871,14 @@ export default function AdminWorkspace({
       setError(analyticsWindow.error || 'Please select a valid date range.');
       return;
     }
+    if (forecastHistoryDays < 14) {
+      setError('Select at least 14 days of history to generate a visitor forecast.');
+      return;
+    }
 
     setForecastLoading(true);
     setError('');
+    setForecast(null);
     try {
       const categorySeries = topCategories.map(([category]) => {
         const weekCount = Math.max(
@@ -748,6 +918,7 @@ export default function AdminWorkspace({
             daily_visitors: forecastDailyVisitorCounts,
             categories: categorySeries,
             horizon_days: 7,
+            forecast_start_date: formatLocalDateInput(analyticsWindow.endExclusive),
           }),
         }
       );
@@ -836,8 +1007,8 @@ export default function AdminWorkspace({
 
       {/* REPORTS TAB */}
       {tab === 'reports' && (
-        <section className="space-y-6">
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <section className="flex flex-col gap-6">
+          <div className="order-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="flex flex-col gap-4 border-b border-slate-100 bg-linear-to-r from-slate-50 to-white p-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-shelf-primary">
@@ -944,14 +1115,14 @@ export default function AdminWorkspace({
                 String(item.visitorName || '').startsWith('[TEST] ')
               ) && (
                 <p role="note" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
-                  This report includes synthetic attendance test records. They are included in the totals and charts, and are marked as synthetic in the activity table and exported reports. Do not interpret them as real visitor activity.
+                  This report includes test attendance records. They are included in the totals and charts, and are marked as test data in the activity table and exported reports. Do not interpret them as real visitor activity.
                 </p>
               )}
             </div>
           </div>
 
           {/* STAT CARDS WITH HOVER ANIMATION */}
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="order-1 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 cursor-pointer group">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -1018,7 +1189,7 @@ export default function AdminWorkspace({
           </div>
 
           {/* ACTIVITY HISTORY TABLE WITH TITLE CASE STATUS & HOVER */}
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="order-3 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="flex flex-col gap-1 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-base font-bold text-slate-900">Activity history</h3>
@@ -1043,9 +1214,9 @@ export default function AdminWorkspace({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredReportRows.map((row, index) => (
+                  {paginatedReportRows.map((row, index) => (
                     <tr
-                      key={`${row.type}-${row.time}-${index}`}
+                      key={`${row.type}-${row.time}-${activityHistoryStart + index}`}
                       className="transition-colors hover:bg-blue-50/40 cursor-pointer group"
                     >
                       <td className="whitespace-nowrap px-5 py-4 text-xs text-slate-500 font-medium">
@@ -1062,7 +1233,7 @@ export default function AdminWorkspace({
                       <td className="px-5 py-4 font-bold text-slate-800">{row.person}</td>
                       <td className="px-5 py-4">
                         <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                          row.dataClassification === 'Synthetic test data'
+                          row.dataClassification === 'Test data'
                             ? 'border border-amber-200 bg-amber-50 text-amber-900'
                             : 'border border-slate-200 bg-slate-50 text-slate-600'
                         }`}>
@@ -1091,6 +1262,52 @@ export default function AdminWorkspace({
                 </div>
                 <h4 className="mt-3 text-sm font-semibold text-slate-800">No activity found</h4>
                 <p className="mt-1 text-sm text-slate-500">Try selecting a different date range.</p>
+              </div>
+            )}
+
+            {filteredReportRows.length > 0 && (
+              <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-slate-600">
+                  Showing {activityHistoryStart + 1}–{Math.min(activityHistoryStart + activityHistoryPageSize, filteredReportRows.length)} of {filteredReportRows.length} activities
+                </p>
+                <nav className="flex flex-wrap items-center gap-1.5" aria-label="Activity history pages">
+                  <button
+                    type="button"
+                    onClick={() => setActivityHistoryPage((page) => Math.max(1, page - 1))}
+                    disabled={visibleActivityHistoryPage === 1}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  {activityHistoryPages.map((page) => (
+                    typeof page === 'string' ? (
+                      <span key={page} className="px-2 text-sm text-slate-500" aria-hidden="true">…</span>
+                    ) : (
+                      <button
+                        key={page}
+                        type="button"
+                        onClick={() => setActivityHistoryPage(page)}
+                        aria-label={`Go to activity history page ${page}`}
+                        aria-current={page === visibleActivityHistoryPage ? 'page' : undefined}
+                        className={`min-w-10 rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                          page === visibleActivityHistoryPage
+                            ? 'border-shelf-primary bg-shelf-primary text-white'
+                            : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    )
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setActivityHistoryPage((page) => Math.min(activityHistoryPageCount, page + 1))}
+                    disabled={visibleActivityHistoryPage === activityHistoryPageCount}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </nav>
               </div>
             )}
           </div>
@@ -1137,9 +1354,15 @@ export default function AdminWorkspace({
                   setForecast(null);
                 }}
                 customStart={customStartDate}
-                onCustomStartChange={setCustomStartDate}
+                onCustomStartChange={(value) => {
+                  setCustomStartDate(value);
+                  setForecast(null);
+                }}
                 customEnd={customEndDate}
-                onCustomEndChange={setCustomEndDate}
+                onCustomEndChange={(value) => {
+                  setCustomEndDate(value);
+                  setForecast(null);
+                }}
                 range={analyticsWindow}
               />
             </div>
@@ -1171,7 +1394,7 @@ export default function AdminWorkspace({
             )}
           </section>
 
-          <section className="grid gap-5 xl:grid-cols-[1.3fr_0.7fr]">
+          <section className="grid gap-5 xl:grid-cols-2">
             <div className="border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
               <div className="mb-4">
                 <h2 className="text-lg font-bold text-slate-900">Branch demand</h2>
@@ -1227,26 +1450,82 @@ export default function AdminWorkspace({
                   value={analyticsBorrows.filter((item) => item.status === 'borrowed').length}
                 />
               </div>
-              <div className="mt-5">
-                <h3 className="text-sm font-bold text-slate-800">Most requested categories</h3>
-                {topCategories.length > 0 ? (
-                  <ol className="mt-2 space-y-1 text-sm text-slate-600">
-                    {topCategories.map(([category, count]) => (
-                      <li key={category} className="flex justify-between border-b border-slate-100 py-1.5">
-                        <span>{category}</span>
-                        <span className="font-bold text-slate-800">{count}</span>
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  <p className="mt-2 text-sm text-slate-500">
-                    No book transaction data found for the selected filters.
-                  </p>
-                )}
-              </div>
             </div>
 
-            <aside className="space-y-4">
+            <section className="flex min-h-0 min-w-0 flex-col border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Most requested categories</h2>
+                  <p className="mt-1 text-sm text-slate-500">Top categories from book requests in the selected range.</p>
+                </div>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
+                  Total: {totalCategoryRequests} requests
+                </span>
+              </div>
+              {topCategories.length > 0 ? (
+                <>
+                  <div className="relative mt-4 min-h-72 min-w-0 w-full flex-1">
+                    <Bar
+                      data={{
+                        labels: categoryChartRows.map(([category]) => category),
+                        datasets: [{
+                          label: 'Book requests',
+                          data: categoryChartRows.map(([, count]) => count),
+                          backgroundColor: categoryChartRows.map((_, index) => CATEGORY_CHART_COLORS[index % CATEGORY_CHART_COLORS.length]),
+                          borderRadius: 5,
+                          barThickness: 28,
+                        }],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        plugins: {
+                          legend: { display: false },
+                          tooltip: {
+                            callbacks: {
+                              label: (context) => ` ${context.label}: ${context.parsed.x} requests`,
+                            },
+                          },
+                        },
+                        scales: {
+                          x: {
+                            beginAtZero: true,
+                            ticks: { precision: 0, stepSize: 1 },
+                            grid: { color: '#e2e8f0' },
+                          },
+                          y: {
+                            grid: { display: false },
+                            ticks: { color: '#475569' },
+                          },
+                        },
+                      }}
+                    />
+                  </div>
+                  <ul className="mt-3 grid gap-x-5 gap-y-2 border-t border-slate-100 pt-3 sm:grid-cols-2">
+                    {categoryChartRows.map(([category, count], index) => (
+                      <li key={category} className="flex min-w-0 items-center justify-between gap-3 text-xs">
+                        <span className="flex min-w-0 items-center gap-2 text-slate-600">
+                          <span
+                            aria-hidden="true"
+                            className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                            style={{ backgroundColor: CATEGORY_CHART_COLORS[index % CATEGORY_CHART_COLORS.length] }}
+                          />
+                          <span className="truncate">{category}</span>
+                        </span>
+                        <span className="shrink-0 font-bold text-slate-800">{count} requests</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-slate-500">
+                  No book transaction data found for the selected filters.
+                </p>
+              )}
+            </section>
+
+            <div className="space-y-4 xl:col-span-2">
               <section className="border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
                 <h2 className="text-base font-bold text-slate-800">Operational recommendations</h2>
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-600">
@@ -1262,24 +1541,44 @@ export default function AdminWorkspace({
                   <button
                     type="button"
                     onClick={runForecast}
-                    disabled={forecastLoading || !analyticsWindow.valid}
+                    disabled={forecastLoading || !analyticsWindow.valid || forecastHistoryDays < 14}
                     className="bg-shelf-primary px-3 py-2 text-xs font-bold text-white rounded-lg transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {forecastLoading ? 'Forecasting...' : 'Run forecast'}
                   </button>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">
-                  Forecast input follows the selected analytics branch and date range.
+                  Uses daily visits from the selected range, then projects the following 7 days. At least 14 days of history are needed.
+                </p>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  History available: {forecastHistoryDays} day{forecastHistoryDays === 1 ? '' : 's'}.
                 </p>
                 {forecast?.forecasts?.length ? (
-                  <ol className="mt-3 space-y-1 text-sm text-slate-600">
-                    {forecast.forecasts.map((item) => (
-                      <li key={item.date} className="flex justify-between border-b border-slate-50 py-1">
-                        <span>{item.date}</span>
-                        <span className="font-bold">{item.visitorCount} visitors</span>
-                      </li>
-                    ))}
-                  </ol>
+                  <>
+                    {forecastChartData && (
+                      <div className="mt-4">
+                        <Line
+                          data={forecastChartData}
+                          options={{
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            scales: {
+                              y: { beginAtZero: true, ticks: { precision: 0 } },
+                            },
+                            plugins: { legend: { position: 'bottom' } },
+                          }}
+                        />
+                      </div>
+                    )}
+                    <ol className="mt-3 space-y-1 text-sm text-slate-600">
+                      {forecast.forecasts.map((item) => (
+                        <li key={item.date} className="flex justify-between border-b border-slate-50 py-1">
+                          <span>{new Date(`${item.date}T00:00:00`).toLocaleDateString()}</span>
+                          <span className="font-bold">{item.visitorCount} visitors</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </>
                 ) : (
                   <p className="mt-3 text-xs text-slate-500">
                     Run the forecast to generate a seven-day visitor forecast.
@@ -1306,7 +1605,7 @@ export default function AdminWorkspace({
                   </div>
                 )}
               </section>
-            </aside>
+            </div>
           </section>
           <div className="flex flex-wrap items-center gap-2.5 border-t border-slate-200 pt-4">
             <span className="mr-1 text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -1348,11 +1647,41 @@ export default function AdminWorkspace({
       {/* FEEDBACK TAB */}
       {tab === 'feedback' && (
         <section className="space-y-4">
-          <div>
-            <h2 className="text-lg font-bold text-slate-800">Visitor feedback</h2>
-            <p className="text-sm text-slate-500">Review submissions and add a manual reply.</p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-slate-800">Visitor feedback</h2>
+              <p className="text-sm text-slate-500">Review submissions and add a manual reply.</p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-[minmax(14rem,1fr)_auto]">
+              <input
+                type="search"
+                value={feedbackSearch}
+                onChange={(event) => {
+                  setFeedbackSearch(event.target.value);
+                  setFeedbackPage(1);
+                }}
+                placeholder="Search visitor, email, or subject"
+                aria-label="Search feedback"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20"
+              />
+              <select
+                value={feedbackStatusFilter}
+                onChange={(event) => {
+                  setFeedbackStatusFilter(event.target.value);
+                  setFeedbackPage(1);
+                }}
+                aria-label="Filter feedback by status"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20"
+              >
+                <option value="all">All statuses</option>
+                <option value="new">New</option>
+                <option value="answered">Answered</option>
+              </select>
+            </div>
           </div>
-          {feedback.map((item) => (
+          {loading && <p className="text-sm text-slate-500">Loading feedback…</p>}
+          {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
+          {!loading && feedback.map((item) => (
             <article key={item.id} className="space-y-3 border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
               <div className="flex flex-wrap justify-between gap-2">
                 <div>
@@ -1395,11 +1724,20 @@ export default function AdminWorkspace({
               </div>
             </article>
           ))}
-          {!loading && feedback.length === 0 && (
+          {!loading && feedbackTotal === 0 && (
             <p className="border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 rounded-xl">
-              No feedback submissions found.
+              {feedbackSearch || feedbackStatusFilter !== 'all'
+                ? 'No feedback matches these filters.'
+                : 'No feedback submissions found.'}
             </p>
           )}
+          <AdminListPagination
+            page={visibleFeedbackPage}
+            pageSize={10}
+            total={feedbackTotal}
+            onPageChange={setFeedbackPage}
+            itemLabel="feedback submissions"
+          />
         </section>
       )}
 
@@ -1407,18 +1745,53 @@ export default function AdminWorkspace({
       {tab === 'announcements' && (
         <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
           <div className="space-y-3">
-            <div>
-              <h2 className="text-lg font-bold text-slate-800">Published and draft announcements</h2>
-              <p className="text-sm text-slate-500">Published notices are visible to all visitors.</p>
+            <div className="space-y-3">
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Announcements</h2>
+                <p className="text-sm text-slate-500">Published notices stay visible until their expiration date.</p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-[minmax(14rem,1fr)_auto]">
+                <input
+                  type="search"
+                  value={announcementsSearch}
+                  onChange={(event) => {
+                    setAnnouncementsSearch(event.target.value);
+                    setAnnouncementsPage(1);
+                  }}
+                  placeholder="Search announcement title"
+                  aria-label="Search announcements"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20"
+                />
+                <select
+                  value={announcementsStatusFilter}
+                  onChange={(event) => {
+                    setAnnouncementsStatusFilter(event.target.value);
+                    setAnnouncementsPage(1);
+                  }}
+                  aria-label="Filter announcements by status"
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20"
+                >
+                  <option value="all">All announcements</option>
+                  <option value="published">Published</option>
+                  <option value="expired">Expired</option>
+                </select>
+              </div>
             </div>
-            {announcements.map((item) => (
+            {loading && <p className="text-sm text-slate-500">Loading announcements…</p>}
+            {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
+            {!loading && announcements.map((item) => (
               <article key={item.id} className="border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="font-bold text-slate-900">{item.title}</h3>
                     <p className="mt-1.5 whitespace-pre-wrap text-sm text-slate-600 leading-relaxed">{item.message}</p>
                     <p className="mt-3 text-xs font-medium text-slate-400">
-                      {item.published ? 'Published' : 'Draft'} · {new Date(item.created_at).toLocaleString()}
+                  {item.published && item.expires_at && isAnnouncementExpired(item.expires_at)
+                        ? 'Expired'
+                        : 'Published'} · {new Date(item.created_at).toLocaleString()}
+                      {item.expires_at && (
+                        <> · Expires {new Date(item.expires_at).toLocaleDateString()}</>
+                      )}
                     </p>
                   </div>
                   <div className="flex gap-2 shrink-0">
@@ -1440,11 +1813,20 @@ export default function AdminWorkspace({
                 </div>
               </article>
             ))}
-            {!loading && announcements.length === 0 && (
+            {!loading && announcementsTotal === 0 && (
               <p className="border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 rounded-xl">
-                No announcements have been created.
+                {announcementsSearch || announcementsStatusFilter !== 'all'
+                  ? 'No announcements match these filters.'
+                  : 'No announcements have been created.'}
               </p>
             )}
+            <AdminListPagination
+              page={visibleAnnouncementsPage}
+              pageSize={10}
+              total={announcementsTotal}
+              onPageChange={setAnnouncementsPage}
+              itemLabel="announcements"
+            />
           </div>
 
           <form onSubmit={handleAnnouncementSave} className="h-fit space-y-3 border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
@@ -1476,18 +1858,72 @@ export default function AdminWorkspace({
                 className="mt-1 w-full border border-slate-300 px-3 py-2 text-sm font-normal rounded-lg focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
               />
             </label>
-            <div className="flex gap-2 pt-1">
-              <button
-                type="submit"
-                className="bg-shelf-primary px-4 py-2 text-sm font-bold text-white rounded-lg transition hover:opacity-90"
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Announcement duration
+              <select
+                value={announcementForm.expirationMode}
+                onChange={(event) => {
+                  setAnnouncementForm({ ...announcementForm, expirationMode: event.target.value });
+                  setAnnouncementExpirationChanged(true);
+                }}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal normal-case text-slate-700 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
               >
-                {editingAnnouncementId ? 'Save changes' : 'Publish announcement'}
-              </button>
+                <option value="permanent">Permanent</option>
+                <option value="temporary">Temporary</option>
+              </select>
+            </label>
+            {announcementForm.expirationMode === 'temporary' && (
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(8rem,0.8fr)] gap-2">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Duration
+                  <input
+                    type="number"
+                    min="1"
+                    max={announcementForm.durationUnit === 'months' ? 120 : 3650}
+                    required
+                    value={announcementForm.duration}
+                    onChange={(event) => {
+                      setAnnouncementForm({ ...announcementForm, duration: event.target.value });
+                      setAnnouncementExpirationChanged(true);
+                    }}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal normal-case text-slate-700 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
+                  />
+                </label>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Unit
+                  <select
+                    value={announcementForm.durationUnit}
+                    onChange={(event) => {
+                      setAnnouncementForm({ ...announcementForm, durationUnit: event.target.value });
+                      setAnnouncementExpirationChanged(true);
+                    }}
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal normal-case text-slate-700 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
+                  >
+                    <option value="days">Days</option>
+                    <option value="months">Months</option>
+                  </select>
+                </label>
+              </div>
+            )}
+            <p className="text-xs leading-5 text-slate-500">
+              {announcementForm.expirationMode === 'temporary'
+                ? 'Visitors will no longer see this announcement after its expiration date.'
+                : 'This announcement will remain visible until you unpublish or delete it.'}
+            </p>
+            <div className="flex flex-wrap justify-end gap-2 pt-1">
               {editingAnnouncementId && (
                 <button
                   type="button"
                   onClick={() => {
-                    setAnnouncementForm({ title: '', message: '' });
+                    setAnnouncementForm({
+                      title: '',
+                      message: '',
+                      expirationMode: 'permanent',
+                      duration: '7',
+                      durationUnit: 'days',
+                      expiresAt: null,
+                    });
+                    setAnnouncementExpirationChanged(false);
                     setEditingAnnouncementId(null);
                   }}
                   className="border border-slate-300 px-4 py-2 text-sm font-semibold rounded-lg hover:bg-slate-50"
@@ -1495,6 +1931,12 @@ export default function AdminWorkspace({
                   Cancel
                 </button>
               )}
+              <button
+                type="submit"
+                className="bg-shelf-primary px-4 py-2 text-sm font-bold text-white rounded-lg transition hover:opacity-90"
+              >
+                {editingAnnouncementId ? 'Save changes' : 'Publish announcement'}
+              </button>
             </div>
           </form>
         </section>
@@ -1511,6 +1953,72 @@ function Metric({ label, value }) {
     <div className="border border-slate-200 bg-white p-4 rounded-xl shadow-sm">
       <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p>
       <p className="mt-1 text-2xl font-black text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+function getAnnouncementExpirationDate(duration, unit) {
+  const expirationDate = new Date();
+  if (unit === 'months') {
+    const originalDay = expirationDate.getDate();
+    expirationDate.setDate(1);
+    expirationDate.setMonth(expirationDate.getMonth() + duration);
+    const lastDayOfMonth = new Date(
+      expirationDate.getFullYear(),
+      expirationDate.getMonth() + 1,
+      0
+    ).getDate();
+    expirationDate.setDate(Math.min(originalDay, lastDayOfMonth));
+  } else {
+    expirationDate.setDate(expirationDate.getDate() + duration);
+  }
+  return expirationDate.toISOString();
+}
+
+function AdminListPagination({ page, pageSize, total, onPageChange, itemLabel }) {
+  if (total === 0) return null;
+  const pageCount = Math.ceil(total / pageSize);
+  const pages = pageCount <= 5
+    ? Array.from({ length: pageCount }, (_, index) => index + 1)
+    : [
+        1,
+        ...(page > 3 ? ['ellipsis-left'] : []),
+        ...Array.from(
+          { length: Math.max(0, Math.min(pageCount - 1, page + 1) - Math.max(2, page - 1) + 1) },
+          (_, index) => Math.max(2, page - 1) + index
+        ),
+        ...(page < pageCount - 2 ? ['ellipsis-right'] : []),
+        pageCount,
+      ];
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, total);
+  const buttonClass = 'rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40';
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm text-slate-600">Showing {start}–{end} of {total} {itemLabel}</p>
+      <nav className="flex flex-wrap items-center gap-1.5" aria-label={`${itemLabel} pages`}>
+        <button type="button" onClick={() => onPageChange(Math.max(1, page - 1))} disabled={page === 1} className={buttonClass}>
+          Previous
+        </button>
+        {pages.map((number) => typeof number === 'string' ? (
+          <span key={number} className="px-2 text-sm text-slate-500" aria-hidden="true">…</span>
+        ) : (
+          <button
+            key={number}
+            type="button"
+            onClick={() => onPageChange(number)}
+            aria-label={`Go to ${itemLabel} page ${number}`}
+            aria-current={number === page ? 'page' : undefined}
+            className={`min-w-10 rounded-lg border px-3 py-2 text-sm font-semibold transition ${number === page ? 'border-shelf-primary bg-shelf-primary text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+          >
+            {number}
+          </button>
+        ))}
+        <button type="button" onClick={() => onPageChange(Math.min(pageCount, page + 1))} disabled={page === pageCount} className={buttonClass}>
+          Next
+        </button>
+      </nav>
     </div>
   );
 }

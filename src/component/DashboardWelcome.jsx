@@ -102,13 +102,12 @@ const markAllNotificationsRead = () => {
   return (
     <section
       aria-labelledby="visitor-welcome-title"
-      className={`visitor-welcome relative isolate overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-800 ${visitorAppearance ? 'visitor-welcome-compact' : ''}`}
+      className={`visitor-welcome relative isolate rounded-3xl border border-slate-200 bg-white shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-800 ${visitorAppearance ? 'visitor-welcome-compact' : ''}`}
     >
       {/* Decorative background */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-12 -top-16 h-48 w-48 rounded-full bg-amber-400/10 blur-3xl"
-      />
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-3xl">
+        <div className="absolute -right-12 -top-16 h-48 w-48 rounded-full bg-amber-400/10 blur-3xl" />
+      </div>
 
       <div
         role="status"
@@ -221,7 +220,7 @@ const markAllNotificationsRead = () => {
       </button>
 
       {notificationsOpen && (
-        <div className="absolute right-0 top-full z-50 mt-3 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-600 dark:bg-slate-800">
+        <div className="absolute right-0 top-full z-50 mt-3 flex max-h-[min(70vh,32rem)] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-600 dark:bg-slate-800">
           <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-700">
             <div>
               <h2 className="text-sm font-bold text-slate-900 dark:text-white">
@@ -243,7 +242,7 @@ const markAllNotificationsRead = () => {
             </button>
           </div>
 
-          <div className="max-h-80 overflow-y-auto">
+          <div className="min-h-0 max-h-[min(20rem,65vh)] flex-1 overflow-y-auto overscroll-contain">
             {notifications.length === 0 ? (
               <p className="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
                 You're all caught up. No current alerts.

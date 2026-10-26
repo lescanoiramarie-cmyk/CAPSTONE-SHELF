@@ -29,6 +29,7 @@ class ForecastRequest(BaseModel):
     daily_visitors: list[int] = Field(min_length=1, max_length=366)
     categories: list[CategorySeries] = Field(default_factory=list, max_length=30)
     horizon_days: int = Field(default=7, ge=1, le=30)
+    forecast_start_date: date | None = None
 
 
 class GeminiAnalytics(BaseModel):
@@ -338,7 +339,7 @@ def forecast(
     ] = Query(default="7d"),
 ):
     visitor_counts = linear_forecast(request.daily_visitors, request.horizon_days)
-    start_date = date.today() + timedelta(days=1)
+    start_date = request.forecast_start_date or (date.today() + timedelta(days=1))
     visitor_forecasts = [
         {"date": (start_date + timedelta(days=index)).isoformat(), "visitorCount": count}
         for index, count in enumerate(visitor_counts)
@@ -350,13 +351,20 @@ def forecast(
         category_forecasts.append({"category": series.category, "projectedDemand": values[0]})
     category_forecasts.sort(key=lambda item: item["projectedDemand"], reverse=True)
 
-    gemini_analytics = generate_gemini_analytics(
-        timeframe=timeframe,
-        daily_visitors=request.daily_visitors,
-        categories=request.categories,
-        visitor_forecasts=visitor_forecasts,
-        category_forecasts=category_forecasts,
-    )
+    try:
+        gemini_analytics = generate_gemini_analytics(
+            timeframe=timeframe,
+            daily_visitors=request.daily_visitors,
+            categories=request.categories,
+            visitor_forecasts=visitor_forecasts,
+            category_forecasts=category_forecasts,
+        )
+    except HTTPException as exc:
+        logger.warning("Returning numerical forecast without AI insights: %s", exc.detail)
+        gemini_analytics = GeminiAnalytics(
+            insights=["AI insights are temporarily unavailable; the visitor forecast is based on the selected historical counts."],
+            recommendations=[],
+        )
 
     return {
         "timeframe": timeframe,

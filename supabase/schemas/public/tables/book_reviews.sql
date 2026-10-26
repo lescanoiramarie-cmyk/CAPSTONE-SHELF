@@ -10,6 +10,14 @@ CREATE TABLE "public"."book_reviews" (
   CONSTRAINT "book_reviews_rating_check" CHECK (((rating >= 1) AND (rating <= 5)))
 );
 
+CREATE INDEX IF NOT EXISTS book_reviews_book_id_rating_idx
+  ON public.book_reviews (book_id) INCLUDE (rating);
+
+CREATE TRIGGER maintain_book_rating_aggregates
+  AFTER INSERT OR UPDATE OF book_id, rating OR DELETE ON public.book_reviews
+  FOR EACH ROW
+  EXECUTE FUNCTION public.maintain_book_rating_aggregates();
+
 ALTER TABLE "public"."book_reviews"
   ENABLE ROW LEVEL SECURITY;
 

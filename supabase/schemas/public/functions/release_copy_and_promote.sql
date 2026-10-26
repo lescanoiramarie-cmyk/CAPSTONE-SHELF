@@ -11,6 +11,7 @@ DECLARE
   v_total integer;
   v_available integer;
   v_allocations integer := 0;
+  v_allocations_after_promotion integer := 0;
   v_available_after_release integer := 0;
 BEGIN
   -- Callers first move the relevant request out of its allocating status.
@@ -23,7 +24,7 @@ BEGIN
   FOR UPDATE;
 
   IF NOT FOUND THEN
-    RETURN;
+    RAISE EXCEPTION 'Book not found: %', p_book_id;
   END IF;
 
   SELECT
@@ -62,7 +63,7 @@ BEGIN
   FROM public.borrow_requests
   WHERE book_id::text = p_book_id
     AND status = 'queued'
-  ORDER BY queue_position ASC
+  ORDER BY queue_position ASC NULLS LAST, id ASC
   LIMIT 1
   FOR UPDATE;
 
@@ -73,6 +74,25 @@ BEGIN
         queue_position = NULL
     WHERE id = v_next.id;
 
+    SELECT
+      (SELECT count(*)::integer
+       FROM public.borrow_requests AS request
+       WHERE request.book_id = p_book_id
+         AND request.status IN ('ready_for_pickup', 'borrowed')
+         AND request.return_date IS NULL)
+      +
+      (SELECT count(*)::integer
+       FROM public.community_book_requests AS request
+       WHERE request.book_id = p_book_id
+         AND request.status IN ('approved', 'borrowed')
+         AND request.return_date IS NULL)
+    INTO v_allocations_after_promotion;
+
+    IF v_allocations_after_promotion > v_total THEN
+      RAISE EXCEPTION
+        'Promotion exceeds inventory capacity for book %', p_book_id;
+    END IF;
+
     UPDATE public.books
     SET available_copies = available_copies - 1
     WHERE id::text = p_book_id;
@@ -81,7 +101,9 @@ BEGIN
     SET queue_position = queued.row_number
     FROM (
       SELECT id,
-        pg_catalog.row_number() OVER (ORDER BY queue_position ASC) AS row_number
+        pg_catalog.row_number() OVER (
+          ORDER BY queue_position ASC NULLS LAST, id ASC
+        ) AS row_number
       FROM public.borrow_requests
       WHERE book_id::text = p_book_id
         AND status = 'queued'

@@ -12,6 +12,7 @@ function mapVisitor(row) {
     address: row.address,
     libraryId: row.library_id ?? null,
     otpVerified: row.otp_verified,
+    isActive: row.is_active,
     qrCode: row.qr_code,
     registeredAt: row.registered_at,
   };
@@ -62,7 +63,7 @@ export async function fetchVisitorAccounts({
   let query = supabase
     .from('visitors')
     .select(
-      'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at, library_id',
+      'id, full_name, contact_number, email, address, otp_verified, is_active, qr_code, registered_at, library_id',
       { count: 'exact' }
     )
     .order('registered_at', { ascending: false });

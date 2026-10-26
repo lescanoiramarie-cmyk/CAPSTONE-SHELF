@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useLibraryData } from '../../context/useLibrary.js';
 import { fetchPopularBorrowedBookCounts } from '../../data/store.js';
 import BookCover from '../../component/BookCover.jsx';
+import { supabase } from '../../lib/supabaseClient.js';
 import { 
   Megaphone, 
   Sparkles, 
@@ -177,6 +178,11 @@ const featuredBooks = books
   .slice(0, 4);
   const [feedback, setFeedback] = useState({ name: '', email: '', message: '' });
   const [submitted, setSubmitted] = useState(false);
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackError, setFeedbackError] = useState('');
+  const [announcements, setAnnouncements] = useState([]);
+  const [announcementsLoading, setAnnouncementsLoading] = useState(true);
+  const [announcementsError, setAnnouncementsError] = useState('');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const landingHeaderRef = useRef(null);
   const libraryCarouselRef = useRef(null);
@@ -204,36 +210,73 @@ const featuredBooks = books
   // STATE PARA SA SELECTED ANNOUNCEMENT MODAL
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
 
-  // LIST OF ANNOUNCEMENTS DATA
-  const announcementsList = [
-    {
-      id: 1,
-      type: 'System Notice',
-      title: 'Extended Library Hours During Midterms',
-      shortContent: 'All participating campus libraries will remain open until 8:00 PM during exam week to support student revision.',
-      fullContent: 'To help students prepare for their upcoming midterm examinations, all campus libraries under the SHELF network will extend their operating hours up to 8:00 PM starting October 20 until October 31, 2026. Discussion rooms, computer laboratories, and silent study zones will remain open. Security and library staff will be on duty during these extended hours.',
-      date: 'October 15, 2026',
-      icon: Megaphone,
-    },
-    {
-      id: 2,
-      type: 'New Arrival',
-      title: '2026 Tech & Science Collection Added',
-      shortContent: 'Over 200 new titles in computer science, engineering, and digital media have been added to the public catalog.',
-      fullContent: 'We are excited to announce that over 200 physical and digital books have been added to our catalog! Highlights include the latest editions on Artificial Intelligence, Web Development, Data Structures, Robotics, and Renewable Energy Systems. Visit your campus library or check out the OPAC online catalog to place a reservation today.',
-      date: 'October 10, 2026',
-      icon: Sparkles,
-    },
-  ];
+  useEffect(() => {
+    let active = true;
 
-  const handleFeedbackSubmit = (e) => {
+    async function loadLandingAnnouncements() {
+      if (!supabase) {
+        setAnnouncementsError('Announcements are unavailable until Supabase is configured.');
+        setAnnouncementsLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('announcements')
+        .select('id, title, message, created_at, expires_at')
+        .eq('published', true)
+        .is('library_id', null)
+        .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+        .order('created_at', { ascending: false });
+
+      if (!active) return;
+      if (error) {
+        setAnnouncementsError(error.message || 'Unable to load announcements.');
+      } else {
+        setAnnouncements(data || []);
+      }
+      setAnnouncementsLoading(false);
+    }
+
+    loadLandingAnnouncements().catch((error) => {
+      if (!active) return;
+      setAnnouncementsError(error.message || 'Unable to load announcements.');
+      setAnnouncementsLoading(false);
+    });
+
+    return () => { active = false; };
+  }, []);
+
+  const handleFeedbackSubmit = async (e) => {
     e.preventDefault();
-    if (feedback.message.trim()) {
+    if (feedbackSubmitting) return;
+    if (!supabase) {
+      setFeedbackError('Feedback submission is unavailable until Supabase is configured.');
+      return;
+    }
+
+    setFeedbackSubmitting(true);
+    setFeedbackError('');
+    try {
+      const { error } = await supabase.from('visitor_feedback').insert({
+        visitor_id: null,
+        library_id: null,
+        visitor_name: feedback.name.trim(),
+        visitor_email: feedback.email.trim(),
+        category: 'General',
+        subject: 'Landing page feedback',
+        message: feedback.message.trim(),
+      });
+      if (error) throw error;
+
       setSubmitted(true);
-      setTimeout(() => {
+      window.setTimeout(() => {
         setSubmitted(false);
         setFeedback({ name: '', email: '', message: '' });
       }, 3000);
+    } catch (error) {
+      setFeedbackError(error.message || 'Unable to submit feedback. Please try again.');
+    } finally {
+      setFeedbackSubmitting(false);
     }
   };
 
@@ -606,12 +649,39 @@ const featuredBooks = books
         </div>
         {/* ANNOUNCEMENT CARDS GRID */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {announcementsList.map((item) => {
-            const IconComponent = item.icon || Megaphone;
+          {announcementsLoading && (
+            <p className="md:col-span-2 rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">Loading announcements...</p>
+          )}
+          {!announcementsLoading && announcementsError && (
+            <p role="status" className="md:col-span-2 rounded-xl border border-amber-200 bg-amber-50 p-6 text-center text-sm text-amber-800">{announcementsError}</p>
+          )}
+          {!announcementsLoading && !announcementsError && announcements.length === 0 && (
+            <p className="md:col-span-2 rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">No announcements are currently published.</p>
+          )}
+          {!announcementsLoading && !announcementsError && announcements.map((item) => {
+            const IconComponent = Megaphone;
+            const announcement = {
+              ...item,
+              type: 'General Announcement',
+              shortContent: item.message,
+              fullContent: item.message,
+              date: item.created_at
+                ? new Date(item.created_at).toLocaleDateString('en-PH', { dateStyle: 'medium' })
+                : 'Date unavailable',
+            };
             return (
               <div
-                key={item.id}
-                onClick={() => setSelectedAnnouncement(item)}
+                key={announcement.id}
+                onClick={() => setSelectedAnnouncement(announcement)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setSelectedAnnouncement(announcement);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label={`Read announcement: ${announcement.title}`}
                 className="group relative bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl hover:border-blue-300 flex flex-col justify-between overflow-hidden cursor-pointer"
               >
                 <div className="absolute top-0 left-0 right-0 h-1.5 bg-blue-600 transition-colors duration-300" />
@@ -619,22 +689,22 @@ const featuredBooks = books
                   <div className="flex items-center justify-between">
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200/60 bg-blue-50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-blue-700">
                       <IconComponent size={14} className="text-blue-600" />
-                      {item.type}
+                      {announcement.type}
                     </span>
                   </div>
                   <div>
                     <h3 className="text-lg font-bold text-slate-800 group-hover:text-blue-600 transition-colors duration-200 line-clamp-2">
-                      {item.title}
+                      {announcement.title}
                     </h3>
                     <p className="mt-2 text-xs text-slate-600 leading-relaxed line-clamp-3">
-                      {item.shortContent}
+                      {announcement.shortContent}
                     </p>
                   </div>
                 </div>
                 <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
                   <div className="flex items-center gap-1.5">
                     <Calendar size={13} className="text-slate-400" />
-                    <span>Posted on {item.date}</span>
+                    <span>Posted on {announcement.date}</span>
                   </div>
                   <div className="inline-flex items-center gap-1 font-bold text-blue-600 opacity-90 transform translate-x-0 transition-all duration-300 group-hover:translate-x-1">
                     <span>Read details</span>
@@ -671,7 +741,7 @@ const featuredBooks = books
                 </div>
                 <h3 className="font-bold text-base text-blue-100">Feedback Submitted!</h3>
                 <p className="text-xs text-blue-200/80">
-                  Thank you for taking the time to share your feedback. We appreciate your input!
+                  Thank you for taking the time to share your feedback. It has been sent to the SHELF Super Admin.
                 </p>
               </div>
             ) : (
@@ -685,8 +755,9 @@ const featuredBooks = books
                     <input
                       type="text"
                       value={feedback.name}
-                      onChange={(e) => setFeedback({ ...feedback, name: e.target.value })}
+                      onChange={(e) => setFeedback((current) => ({ ...current, name: e.target.value }))}
                       placeholder="Juan Dela Cruz"
+                      maxLength={120}
                       className="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-700/80 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                       required
                     />
@@ -701,8 +772,9 @@ const featuredBooks = books
                     <input
                       type="email"
                       value={feedback.email}
-                      onChange={(e) => setFeedback({ ...feedback, email: e.target.value })}
+                      onChange={(e) => setFeedback((current) => ({ ...current, email: e.target.value }))}
                       placeholder="your.email@example.com"
+                      maxLength={254}
                       className="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-700/80 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                       required
                     />
@@ -715,18 +787,23 @@ const featuredBooks = books
                   <textarea
                     rows="4"
                     value={feedback.message}
-                    onChange={(e) => setFeedback({ ...feedback, message: e.target.value })}
+                    onChange={(e) => setFeedback((current) => ({ ...current, message: e.target.value }))}
                     placeholder="Share your thoughts, suggestions, or issues..."
+                    maxLength={5000}
                     className="w-full p-4 bg-slate-900/90 border border-slate-700/80 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all resize-none"
                     required
                   ></textarea>
                 </div>
+                {feedbackError && (
+                  <p role="alert" className="rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{feedbackError}</p>
+                )}
                 <button
                   type="submit"
-                  className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 text-sm transform hover:-translate-y-0.5"
+                  disabled={feedbackSubmitting}
+                  className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 disabled:cursor-wait disabled:opacity-70 text-white font-bold rounded-xl transition shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 text-sm transform hover:-translate-y-0.5"
                 >
                   <Send size={16} />
-                  <span>Submit Feedback</span>
+                  <span>{feedbackSubmitting ? 'Sending...' : 'Submit Feedback'}</span>
                 </button>
               </form>
             )}
@@ -768,7 +845,7 @@ const featuredBooks = books
               </p>
             </div>
             {/* FULL CONTENT */}
-            <p className="text-sm text-slate-600 leading-relaxed border-t border-slate-100 pt-4">
+            <p className="whitespace-pre-wrap break-words text-sm text-slate-600 leading-relaxed border-t border-slate-100 pt-4">
               {selectedAnnouncement.fullContent}
             </p>
             {/* MODAL FOOTER BUTTON */}
