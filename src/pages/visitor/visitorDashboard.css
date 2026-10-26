@@ -97,15 +97,28 @@
 }
 
 .visitor-dashboard main select {
+  -webkit-appearance: none;
   appearance: none;
   padding-right: 2.75rem;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23002046' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-position: right 0.85rem center;
+  background-position: right 0.75rem center;
+  background-size: 16px 16px;
   background-repeat: no-repeat;
 }
 
 .visitor-dashboard.theme-dark main select {
+  color: #f3f4f6;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23e2e8f0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+.visitor-dashboard.theme-dark main input::placeholder {
+  color: #9ca3af;
+  opacity: 1;
+}
+
+.visitor-dashboard.theme-dark main select option {
+  background-color: #111c2e;
+  color: #f3f4f6;
 }
 
 .visitor-dashboard .visitor-header {
@@ -176,8 +189,8 @@
   border-radius: var(--visitor-radius-card);
   background-color: var(--visitor-page);
   box-shadow: 0 3px 8px rgb(15 23 42 / 8%);
-  scrollbar-color: #64748b transparent;
-  scrollbar-width: thin;
+  scrollbar-color: #64748b #e2e8f0;
+  scrollbar-width: auto;
   max-width: 100%;
   overscroll-behavior-inline: contain;
   white-space: nowrap;
@@ -206,6 +219,15 @@
 .visitor-dashboard .visitor-book-modal-body::-webkit-scrollbar-thumb {
   border-radius: var(--visitor-radius-chip);
   background: #64748b;
+}
+
+.visitor-dashboard [aria-label='Visitor dashboard']::-webkit-scrollbar {
+  height: 10px;
+}
+
+.visitor-dashboard [aria-label='Visitor dashboard']::-webkit-scrollbar-track {
+  border-radius: var(--visitor-radius-chip);
+  background: #e2e8f0;
 }
 
 .visitor-dashboard main {
@@ -1039,6 +1061,20 @@
   .visitor-dashboard .visitor-requests-table-content td[data-label='Action'] {
     align-self: end;
     text-align: right;
+  }
+
+  .visitor-dashboard .visitor-requests-table-content td[data-label='Fine (PHP)'] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .visitor-dashboard .visitor-requests-table-content td[data-label='Fine (PHP)']::before {
+    margin-bottom: 0;
+    text-align: left;
   }
 
   .visitor-dashboard .visitor-modal-community-action {

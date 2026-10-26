@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/useAuth.js';
 import { useLibraryData } from '../../context/useLibrary.js';
 import { fetchPopularBorrowedBookCounts } from '../../data/store.js';
 import BookCover from '../../component/BookCover.jsx';
@@ -128,6 +129,7 @@ function ParticleConstellation() {
 // =========================================================
 export default function LandingPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { books = [], libraries = [] } = useLibraryData();
   const [popularBookCounts, setPopularBookCounts] = useState([]);
 
@@ -180,12 +182,16 @@ const featuredBooks = books
   const [submitted, setSubmitted] = useState(false);
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackError, setFeedbackError] = useState('');
+  const [showFeedbackAuthModal, setShowFeedbackAuthModal] = useState(false);
   const [announcements, setAnnouncements] = useState([]);
   const [announcementsLoading, setAnnouncementsLoading] = useState(true);
   const [announcementsError, setAnnouncementsError] = useState('');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const landingHeaderRef = useRef(null);
   const libraryCarouselRef = useRef(null);
+  const isAuthenticated = Boolean(user?.id);
+  const authenticatedName = user?.name || user?.fullName || user?.fullname || '';
+  const authenticatedEmail = user?.email || '';
 
   useEffect(() => {
     if (!mobileNavOpen) return undefined;
@@ -249,6 +255,11 @@ const featuredBooks = books
   const handleFeedbackSubmit = async (e) => {
     e.preventDefault();
     if (feedbackSubmitting) return;
+    if (!isAuthenticated) {
+      setShowFeedbackAuthModal(true);
+      return;
+    }
+    if (!e.currentTarget.reportValidity()) return;
     if (!supabase) {
       setFeedbackError('Feedback submission is unavailable until Supabase is configured.');
       return;
@@ -260,8 +271,8 @@ const featuredBooks = books
       const { error } = await supabase.from('visitor_feedback').insert({
         visitor_id: null,
         library_id: null,
-        visitor_name: feedback.name.trim(),
-        visitor_email: feedback.email.trim(),
+        visitor_name: authenticatedName.trim(),
+        visitor_email: authenticatedEmail.trim(),
         category: 'General',
         subject: 'Landing page feedback',
         message: feedback.message.trim(),
@@ -271,7 +282,7 @@ const featuredBooks = books
       setSubmitted(true);
       window.setTimeout(() => {
         setSubmitted(false);
-        setFeedback({ name: '', email: '', message: '' });
+        setFeedback((current) => ({ ...current, message: '' }));
       }, 3000);
     } catch (error) {
       setFeedbackError(error.message || 'Unable to submit feedback. Please try again.');
@@ -745,7 +756,7 @@ const featuredBooks = books
                 </p>
               </div>
             ) : (
-              <form onSubmit={handleFeedbackSubmit} className="space-y-5 text-left">
+              <form onSubmit={handleFeedbackSubmit} noValidate className="space-y-5 text-left">
                 <div>
                   <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
                     Your Name
@@ -754,8 +765,9 @@ const featuredBooks = books
                     <User className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                     <input
                       type="text"
-                      value={feedback.name}
+                      value={isAuthenticated ? authenticatedName : feedback.name}
                       onChange={(e) => setFeedback((current) => ({ ...current, name: e.target.value }))}
+                      readOnly={isAuthenticated}
                       placeholder="Juan Dela Cruz"
                       maxLength={120}
                       className="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-700/80 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
@@ -771,8 +783,9 @@ const featuredBooks = books
                     <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                     <input
                       type="email"
-                      value={feedback.email}
+                      value={isAuthenticated ? authenticatedEmail : feedback.email}
                       onChange={(e) => setFeedback((current) => ({ ...current, email: e.target.value }))}
+                      readOnly={isAuthenticated}
                       placeholder="your.email@example.com"
                       maxLength={254}
                       className="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-700/80 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
@@ -815,6 +828,43 @@ const featuredBooks = books
       <footer className="bg-slate-950 text-slate-500 py-6 text-center text-xs border-t border-slate-800">
         &copy; 2026 SHELF Integrated Library Management System. All rights reserved.
       </footer>
+
+      {showFeedbackAuthModal && (
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="feedback-auth-title"
+            className="relative w-full max-w-md space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
+          >
+            <button
+              type="button"
+              onClick={() => setShowFeedbackAuthModal(false)}
+              aria-label="Close sign-in prompt"
+              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-800"
+            >
+              <X size={18} aria-hidden="true" />
+            </button>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+              <MessageSquare size={20} aria-hidden="true" />
+            </div>
+            <h2 id="feedback-auth-title" className="pr-8 text-lg font-bold text-slate-900">
+              Sign in required
+            </h2>
+            <p className="text-sm leading-relaxed text-slate-600">
+              Please sign in to send feedback or suggestions.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate('/visitor-login')}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-shelf-primary px-4 py-3 text-sm font-bold text-white transition hover:opacity-90"
+            >
+              <LogIn size={16} aria-hidden="true" />
+              Sign In
+            </button>
+          </section>
+        </div>
+      )}
 
       {/* ANNOUNCEMENT DETAILS MODAL POPUP */}
       {selectedAnnouncement && (

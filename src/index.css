@@ -353,7 +353,7 @@ html {
 .dark .public-opac-filter-bar input,
 .dark .public-opac-filter-bar select {
   border-color: #475569;
-  background: #111c2e;
+  background-color: #111c2e;
   color: #f1f5f9;
 }
 

@@ -23,11 +23,20 @@ function ResizeMap({ isFullscreen }) {
   const map = useMap();
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      map.invalidateSize();
-    }, 200);
+    const mapContainer = map.getContainer();
+    const resizeObserver = new ResizeObserver(() => {
+      map.invalidateSize({ pan: false });
+    });
+    const frameId = window.requestAnimationFrame(() => {
+      map.invalidateSize({ pan: false });
+    });
 
-    return () => window.clearTimeout(timeoutId);
+    resizeObserver.observe(mapContainer);
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      resizeObserver.disconnect();
+    };
   }, [isFullscreen, map]);
 
   return null;
@@ -42,6 +51,32 @@ function FocusBranch({ library, markerRef }) {
     map.setView([latitude, longitude], Math.max(map.getZoom(), 15));
     markerRef.current?.openPopup();
   }, [latitude, longitude, map, markerRef]);
+
+  return null;
+}
+
+function FitLibraries({ coordinates, focusBranchId }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (focusBranchId != null || coordinates === '') {
+      return;
+    }
+
+    const locations = coordinates
+      .split('|')
+      .map((coordinate) => coordinate.split(',').map(Number));
+
+    if (locations.length === 1) {
+      map.setView(locations[0], 15);
+      return;
+    }
+
+    map.fitBounds(locations, {
+      padding: [24, 24],
+      maxZoom: 12,
+    });
+  }, [coordinates, focusBranchId, map]);
 
   return null;
 }
@@ -65,6 +100,8 @@ export default function LibraryMap({
   const [campusFilter, setCampusFilter] = useState('All');
   const [isMapFullscreen, setIsMapFullscreen] = useState(false);
   const [showMap, setShowMap] = useState(true);
+  const [selectedLibraryId, setSelectedLibraryId] = useState(null);
+  const activeFocusBranchId = focusBranchId ?? selectedLibraryId;
 
   // =========================================================
   // GET AVAILABLE CAMPUSES
@@ -150,13 +187,16 @@ export default function LibraryMap({
         );
       }
     );
+  const markerCoordinates = librariesWithCoordinates
+    .map((library) => `${Number(library.lat)},${Number(library.lng)}`)
+    .join('|');
 
   // =========================================================
   // COMPONENT
   // =========================================================
 
   return (
-    <div className="space-y-4">
+    <div className="w-full min-w-0 space-y-4">
 
       {/* =====================================================
           SEARCH AND FILTER CONTROLS
@@ -217,7 +257,7 @@ export default function LibraryMap({
       <div
         className={
           showMap && showLibraryList
-          ? 'grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]'
+          ? 'grid grid-cols-1 items-stretch gap-5 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:grid-cols-[minmax(0,13fr)_minmax(0,7fr)]'
           : 'grid grid-cols-1 gap-5'
         }
       >
@@ -230,7 +270,7 @@ export default function LibraryMap({
             className={
               isMapFullscreen
                 ? 'fixed inset-0 z-9999 h-screen w-screen overflow-hidden bg-white'
-                : 'relative isolate z-0 min-w-0 h-105 lg:h-140 overflow-hidden rounded-xl border border-slate-200 shadow-sm'
+                : 'relative isolate z-0 h-[380px] min-w-0 w-full overflow-hidden rounded-xl border border-slate-200 shadow-sm sm:h-[480px] md:h-[540px] lg:h-[640px]'
             }
           >
             <button
@@ -257,22 +297,26 @@ export default function LibraryMap({
             </button>
 
             <MapContainer
-              center={[14.085, 121.149]}
-              zoom={13}
+              center={[13.9, 121.1]}
+              zoom={10}
               scrollWheelZoom
               className="relative z-0 h-full w-full"
             >
               <ResizeMap isFullscreen={isMapFullscreen} />
+              <FitLibraries
+                coordinates={markerCoordinates}
+                focusBranchId={activeFocusBranchId}
+              />
 
               <TileLayer
                 attribution="&copy; OpenStreetMap contributors"
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
 
-              {focusBranchId &&
+              {activeFocusBranchId != null &&
                 (() => {
                   const branch = libraries.find(
-                    (library) => library.id === focusBranchId
+                    (library) => library.id === activeFocusBranchId
                   );
                   return branch &&
                     branch.lat != null &&
@@ -297,10 +341,13 @@ export default function LibraryMap({
                   <Marker
                     key={library.id}
                     ref={
-                      library.id === focusBranchId
+                      library.id === activeFocusBranchId
                         ? focusedMarkerRef
                         : undefined
                     }
+                    eventHandlers={{
+                      click: () => setSelectedLibraryId(library.id),
+                    }}
                     position={[
                       Number(library.lat),
                       Number(library.lng),
@@ -383,7 +430,11 @@ export default function LibraryMap({
         ==================================================== */}
       {showLibraryList && (
         <div
-          className="min-w-0 space-y-3"
+          className={
+            showMap
+              ? 'h-[380px] min-w-0 space-y-2 overflow-y-auto overscroll-contain pr-2 sm:h-[480px] md:h-[540px] lg:h-[640px]'
+              : 'min-w-0 space-y-2'
+          }
         >
 
           {/* NO RESULTS */}
@@ -404,16 +455,25 @@ export default function LibraryMap({
             (library) => (
               <div
                 key={library.id}
-                className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
+                onClick={() => setSelectedLibraryId(library.id)}
+                className={`cursor-pointer rounded-xl border bg-white p-3 shadow-sm transition hover:shadow-md ${
+                  activeFocusBranchId === library.id
+                    ? 'border-shelf-primary ring-1 ring-shelf-primary/30'
+                    : 'border-slate-200'
+                }`}
               >
 
-                <div className="flex justify-between items-start gap-3">
+                <div className="flex items-start justify-between gap-3">
 
-                  <div>
+                  <div className="min-w-0">
 
-                    <h3 className="text-base font-bold leading-snug text-slate-900">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedLibraryId(library.id)}
+                      className="text-left text-base font-bold leading-snug text-slate-900 hover:text-shelf-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary"
+                    >
                       {library.name}
-                    </h3>
+                    </button>
 
                     {library.campus && (
                       <p className="mt-1 text-sm leading-relaxed text-slate-600">
@@ -428,8 +488,8 @@ export default function LibraryMap({
                       className={
                         library.status ===
                         'Open'
-                          ? 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700'
-                          : 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600'
+                          ? 'shrink-0 whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700'
+                          : 'shrink-0 whitespace-nowrap rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-600'
                       }
                     >
                       {library.status}
@@ -439,26 +499,29 @@ export default function LibraryMap({
                 </div>
 
                 {library.address && (
-                  <p className="mt-3 text-sm leading-relaxed text-slate-600">
-                    {library.address}
+                  <p className="mt-2 flex min-w-0 items-start gap-2 text-sm leading-snug text-slate-600">
+                    <MapPin size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+                    <span className="min-w-0 break-words">{library.address}</span>
                   </p>
                 )}
 
                 {library.hours && (
-                  <p className="mt-2 text-sm leading-relaxed text-slate-500">
-                    Hours: {library.hours}
+                  <p className="mt-1.5 flex min-w-0 items-start gap-2 text-sm leading-snug text-slate-500">
+                    <Clock3 size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+                    <span className="min-w-0 break-words">Hours: {library.hours}</span>
                   </p>
                 )}
 
                 {onBrowseLibrary && (
                   <button
                     type="button"
-                    onClick={() =>
-                      onBrowseLibrary(
-                        library.id
-                      )
+                    onClick={(event) =>
+                      {
+                        event.stopPropagation();
+                        onBrowseLibrary(library.id);
+                      }
                     }
-                    className="mt-4 inline-flex items-center text-sm font-bold text-shelf-primary hover:underline"
+                    className="mt-2.5 inline-flex items-center text-sm font-bold text-shelf-primary hover:underline"
                   >
                     Browse Library Catalog →
                   </button>

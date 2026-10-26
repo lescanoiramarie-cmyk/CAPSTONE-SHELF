@@ -2775,8 +2775,8 @@ export default function OPACCatalog({
                     <th className="p-4">Book Title</th>
                     <th className="p-4">Status</th>
                     <th className="p-4">Details</th>
-                    <th className="p-4">Fine (PHP)</th>
-                    <th className="p-4 text-right">Action</th>
+                    <th className="p-4 pr-6 text-center">Fine (PHP)</th>
+                    <th className="p-4 pl-6 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -3001,13 +3001,13 @@ export default function OPACCatalog({
                         </td>
                         <td
                           data-label="Fine (PHP)"
-                          className={`p-4 text-right font-bold tabular-nums text-xs ${
+                          className={`p-4 pr-6 text-center font-bold tabular-nums text-xs ${
                             currentFine > 0 ? 'text-red-600' : 'text-slate-500'
                           }`}
                         >
                           {"\u20B1"}{currentFine.toFixed(2)}
                         </td>
-                        <td data-label="Action" className="p-4 text-right">
+                        <td data-label="Action" className="p-4 pl-6 text-right">
                           {canCancel && (
                             <button
                               type="button"

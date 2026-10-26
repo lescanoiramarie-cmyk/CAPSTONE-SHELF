@@ -1206,7 +1206,7 @@ function VisitorDashboardContent() {
         ================================================== */}
         <nav
           aria-label="Visitor dashboard"
-          className="relative z-30 -mx-4 flex min-w-0 gap-2 overflow-x-auto border-b border-slate-200 bg-shelf-bg/95 px-4 pb-3 pt-2 backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/95 sm:sticky sm:top-20 sm:mx-0 sm:rounded-2xl sm:border sm:p-3"
+          className="relative z-30 -mx-4 flex min-w-0 gap-3 overflow-x-scroll border-b border-slate-200 bg-shelf-bg/95 px-4 pb-3 pt-2 backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/95 sm:sticky sm:top-20 sm:mx-0 sm:rounded-2xl sm:border sm:px-3 sm:py-2.5"
         >
           {[
             { id: 'catalog', label: 'Catalog', Icon: BookOpen },
@@ -1228,7 +1228,7 @@ function VisitorDashboardContent() {
                   setCatalogResetKey((key) => key + 1);
                 }
               }}
-              className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition sm:px-4 sm:text-sm ${
+              className={`inline-flex min-h-12 shrink-0 items-center gap-2.5 rounded-xl px-4 py-2.5 text-sm font-bold transition sm:px-5 sm:text-base ${
                 tab === id
                   ? 'bg-shelf-primary text-white shadow-sm dark:bg-shelf-primary'
                   : 'border border-transparent text-slate-600 hover:border-slate-200 hover:bg-white hover:text-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-white'
@@ -1641,12 +1641,12 @@ function VisitorDashboardContent() {
                                   {/* BORROW DATE */}
 
                                   {transaction.borrowDate && (
-                                    <div>
-                                      <span className="font-semibold text-slate-600 dark:text-slate-400">
+                                    <div className="flex min-w-0 items-start justify-between gap-2">
+                                      <span className="shrink-0 font-semibold text-slate-600 dark:text-slate-400">
                                         Borrowed:{' '}
                                       </span>
 
-                                      <span className="text-slate-500 dark:text-slate-300">
+                                      <span className="min-w-0 break-words text-right text-slate-500 dark:text-slate-300">
                                         {formatDateTime(
                                           transaction.borrowDate
                                         )}
@@ -1657,12 +1657,12 @@ function VisitorDashboardContent() {
                                   {/* DUE DATE */}
 
                                   {transaction.dueDate && (
-                                    <div>
-                                      <span className="font-semibold text-slate-600 dark:text-slate-400">
+                                    <div className="flex min-w-0 items-start justify-between gap-2">
+                                      <span className="shrink-0 font-semibold text-slate-600 dark:text-slate-400">
                                         Due:{' '}
                                       </span>
 
-                                      <span className="text-slate-500 dark:text-slate-300">
+                                      <span className="min-w-0 break-words text-right text-slate-500 dark:text-slate-300">
                                         {formatDateTime(
                                           transaction.dueDate
                                         )}
@@ -1673,12 +1673,12 @@ function VisitorDashboardContent() {
                                   {/* RETURN DATE */}
 
                                   {transaction.returnDate && (
-                                    <div>
-                                      <span className="font-semibold text-slate-600 dark:text-slate-400">
+                                    <div className="flex min-w-0 items-start justify-between gap-2">
+                                      <span className="shrink-0 font-semibold text-slate-600 dark:text-slate-400">
                                         Returned:{' '}
                                       </span>
 
-                                      <span className="text-slate-500 dark:text-slate-300">
+                                      <span className="min-w-0 break-words text-right text-slate-500 dark:text-slate-300">
                                         {formatDateTime(
                                           transaction.returnDate
                                         )}
@@ -1690,12 +1690,12 @@ function VisitorDashboardContent() {
 
                                   {!Number.isNaN(fineAmount) &&
                                     fineAmount > 0 && (
-                                      <div>
-                                        <span className="font-semibold text-red-600 dark:text-red-400">
-                                          Fine:{' '}
+                                      <div className="flex min-w-0 items-center justify-between gap-3 border-t border-slate-200 pt-2 sm:col-span-2 dark:border-slate-600">
+                                        <span className="shrink-0 text-xs font-semibold text-red-600 dark:text-red-400">
+                                          Fine
                                         </span>
 
-                                        <span className="font-bold text-red-600 dark:text-red-400">
+                                        <span className="shrink-0 whitespace-nowrap text-sm font-bold text-red-600 dark:text-red-400">
                                           ₱<span className="tabular-nums">{fineAmount.toFixed(2)}</span>
                                         </span>
                                       </div>
