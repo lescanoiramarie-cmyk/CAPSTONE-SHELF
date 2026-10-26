@@ -5,7 +5,7 @@
 **Branch:** `main`
 **HEAD:** `11b2280d2db2867350aeaca38a34c4c8f1d9109e` — `Fix book inventory validation and harden borrowing RPCs`
 **Upstream status:** Local `main` and `origin/main` point to the same commit.
-**Git status:** Commit `93e3b7e` was created after reviewing the staged diff; not pushed.  
+**Git status:** Commit `93e3b7e` was created after reviewing the staged diff; not pushed.
 **Remote Supabase:** Five reviewed migrations were applied on October 27, 2026. No seed scripts or synthetic records were run. A schema-only backup was saved outside the repository before migration.
 
 > This handover describes the current working tree as of the date above. Recheck `git status` before staging because files may have changed after this handover was written.
