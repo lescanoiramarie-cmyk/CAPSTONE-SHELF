@@ -25,6 +25,11 @@ ALTER TABLE "public"."borrow_requests"
 
 CREATE INDEX borrow_requests_book_status_idx ON public.borrow_requests USING btree (book_id, status);
 
+CREATE INDEX borrow_requests_popular_book_counts_idx
+  ON public.borrow_requests USING btree (book_id)
+  WHERE book_id IS NOT NULL
+    AND (status IN ('borrowed', 'returned') OR borrow_date IS NOT NULL);
+
 CREATE INDEX borrow_requests_request_date_id_idx ON public.borrow_requests USING btree (request_date DESC, id);
 
 CREATE TRIGGER audit_borrow_request_insert_delete
