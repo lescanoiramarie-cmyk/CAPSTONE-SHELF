@@ -356,12 +356,18 @@ const mapVisitor = (r) => ({
   registeredAt: r.registered_at,
 });
 
+const cleanTestVisitorName = (name) =>
+  typeof name === 'string' ? name.replace(/^\[TEST\]\s*/i, '').trim() : name;
+
 const mapBorrowRequest = (r) => ({
   id: r.id,
   bookId: r.book_id,
   bookTitle: r.book_title,
   visitorId: r.visitor_id,
-  visitorName: r.visitor_name,
+  visitorName: cleanTestVisitorName(r.visitor_name),
+  isTestData: /^\[TEST\]\s*/i.test(String(r.visitor_name || ''))
+    || r.confirmed_by === 'Test data seed'
+    || r.return_confirmed_by === 'Test data seed',
   status: r.status,
   requestDate: r.request_date,
   pickupDeadline: r.pickup_deadline,
@@ -378,7 +384,8 @@ const mapBorrowRequest = (r) => ({
 const mapAttendance = (r) => ({
   id: r.id,
   visitorId: r.visitor_id,
-  visitorName: r.visitor_name,
+  visitorName: cleanTestVisitorName(r.visitor_name),
+  isTestData: /^\[TEST\]\s*/i.test(String(r.visitor_name || '')),
   libraryId: r.library_id,
   timeIn: r.time_in,
   checkedOutAt: r.checked_out_at,

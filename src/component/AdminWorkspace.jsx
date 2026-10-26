@@ -44,10 +44,8 @@ function getLibraryName(libraries, id) {
   );
 }
 
-function getReportVisitorName(value, isSubAdmin) {
-  const name = String(value || '').trim();
-  const displayName = isSubAdmin ? name : name.replace(/^\[TEST\]\s*/i, '').trim();
-  return displayName || 'Unknown visitor';
+function getReportVisitorName(value) {
+  return String(value || '').trim() || 'Unknown visitor';
 }
 
 function formatStatus(status) {
@@ -252,11 +250,11 @@ export default function AdminWorkspace({
       .map((item) => ({
         type: 'Visitor',
         time: item.timeIn,
-        person: getReportVisitorName(item.visitorName, isSubAdmin),
+        person: getReportVisitorName(item.visitorName),
         detail: 'Library visit',
         branch: getLibraryName(libraries, item.libraryId),
         status: item.checkedOutAt ? 'Checked out' : 'Checked in',
-        dataClassification: String(item.visitorName || '').startsWith('[TEST] ')
+        dataClassification: item.isTestData
           ? 'Test data'
           : 'Operational data',
       }));
@@ -266,11 +264,11 @@ export default function AdminWorkspace({
       .map((item) => ({
         type: 'Book transaction',
         time: item.requestDate,
-        person: getReportVisitorName(item.visitorName, isSubAdmin),
+        person: getReportVisitorName(item.visitorName),
         detail: item.bookTitle || 'Book transaction',
         branch: getLibraryName(libraries, booksById.get(item.bookId)?.libraryId),
         status: formatStatus(item.status),
-        dataClassification: 'Operational data',
+        dataClassification: item.isTestData ? 'Test data' : 'Operational data',
       }));
 
     const returnRows = scopedBorrows
@@ -278,11 +276,11 @@ export default function AdminWorkspace({
       .map((item) => ({
         type: 'Book return',
         time: item.returnDate,
-        person: getReportVisitorName(item.visitorName, isSubAdmin),
+        person: getReportVisitorName(item.visitorName),
         detail: item.bookTitle || 'Book return',
         branch: getLibraryName(libraries, booksById.get(item.bookId)?.libraryId),
         status: `Returned${Number(item.fineAmount) > 0 ? `; Fine ₱${item.fineAmount}` : ''}`,
-        dataClassification: 'Operational data',
+        dataClassification: item.isTestData ? 'Test data' : 'Operational data',
       }));
 
     return [...attendanceRows, ...transactionRows, ...returnRows].sort((a, b) => {
@@ -298,7 +296,6 @@ export default function AdminWorkspace({
     reportSort,
     scopedAttendance,
     scopedBorrows,
-    isSubAdmin,
   ]);
 
   const filteredReportRows = useMemo(
@@ -1119,11 +1116,9 @@ export default function AdminWorkspace({
                   {analyticsWindow.error}
                 </p>
               )}
-              {analyticsAttendance.some((item) =>
-                String(item.visitorName || '').startsWith('[TEST] ')
-              ) && (
+              {filteredReportRows.some((row) => row.dataClassification === 'Test data') && (
                 <p role="note" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
-                  This report includes test attendance records. They are included in the totals and charts, and are marked as test data in the activity table and exported reports. Do not interpret them as real visitor activity.
+                  This report includes test records. They are included in the totals and charts, and are marked as test data in the activity table and exported reports. Do not interpret them as real visitor activity.
                 </p>
               )}
             </div>
