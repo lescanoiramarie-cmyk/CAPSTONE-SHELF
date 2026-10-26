@@ -723,22 +723,50 @@ export async function fetchBooks() {
   return (data || []).map(mapBook);
 }
 
+const POPULAR_BORROW_COUNTS_CACHE_MS = 60_000;
+let popularBorrowCountsCache = null;
+let popularBorrowCountsCacheExpiresAt = 0;
+let popularBorrowCountsPromise = null;
+
 export async function fetchPopularBorrowedBookCounts(limit = 40) {
   const normalizedLimit = Math.min(
     100,
     Math.max(1, Math.trunc(Number(limit) || 40))
   );
-  const { data, error } = await supabase.rpc(
-    'get_popular_borrowed_book_counts',
-    { p_limit: normalizedLimit }
-  );
 
-  if (error) throw cleanErr(error);
+  if (
+    popularBorrowCountsCache &&
+    popularBorrowCountsCacheExpiresAt > Date.now() &&
+    popularBorrowCountsCache.length >= normalizedLimit
+  ) {
+    return popularBorrowCountsCache.slice(0, normalizedLimit).map((item) => ({ ...item }));
+  }
 
-  return (data || []).map((row) => ({
-    bookId: String(row.book_id),
-    borrowCount: Number(row.borrow_count) || 0,
-  }));
+  if (!popularBorrowCountsPromise) {
+    popularBorrowCountsPromise = (async () => {
+      const { data, error } = await supabase.rpc(
+        'get_popular_borrowed_book_counts',
+        { p_limit: 100 }
+      );
+
+      if (error) throw cleanErr(error);
+
+      popularBorrowCountsCache = (data || []).map((row) => ({
+        bookId: String(row.book_id),
+        borrowCount: Number(row.borrow_count) || 0,
+      }));
+      popularBorrowCountsCacheExpiresAt = Date.now() + POPULAR_BORROW_COUNTS_CACHE_MS;
+      return popularBorrowCountsCache;
+    })();
+  }
+
+  try {
+    const counts = await popularBorrowCountsPromise;
+    return counts.slice(0, normalizedLimit).map((item) => ({ ...item }));
+  } finally {
+    popularBorrowCountsPromise = null;
+  }
+
 }
 
 // ============================================================================
@@ -1105,9 +1133,7 @@ export async function fetchBorrowRequests() {
     // ------------------------------------------------------------------------
 
     else {
-      console.warn(
-        'SHELF â€” borrow requests skipped: no Supabase session for this visitor.'
-      );
+      // No borrowing requests are loaded for anonymous pages.
     }
 
   } catch (normalError) {
@@ -1167,9 +1193,7 @@ export async function fetchBorrowRequests() {
         communityRequests = Array.isArray(data) ? data : [];
       }
     } else {
-      console.warn(
-        'SHELF — Community requests skipped: no authenticated visitor session.'
-      );
+      // No community requests are loaded without an authenticated visitor session.
     }
   } catch (error) {
     console.error(

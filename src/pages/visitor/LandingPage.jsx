@@ -514,17 +514,6 @@ const featuredBooks = books
           role="region"
           aria-label="Participating libraries"
           tabIndex={0}
-          onWheel={(event) => {
-            const scroller = event.currentTarget;
-            const maxScrollLeft = scroller.scrollWidth - scroller.clientWidth;
-            const canScroll = event.deltaY < 0
-              ? scroller.scrollLeft > 0
-              : scroller.scrollLeft < maxScrollLeft;
-            if (maxScrollLeft > 0 && canScroll && Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
-              event.preventDefault();
-              scroller.scrollLeft += event.deltaY;
-            }
-          }}
         >
           {featuredLibraries.map((lib) => {
             const isOpen = String(lib.status || '').toLowerCase() === 'open';

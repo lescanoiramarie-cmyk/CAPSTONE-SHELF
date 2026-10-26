@@ -42,6 +42,12 @@ CREATE TRIGGER audit_borrow_request_status
   FOR EACH ROW
   EXECUTE FUNCTION public.capture_shelf_audit_event();
 
+CREATE TRIGGER maintain_borrowed_book_counts
+  AFTER INSERT OR DELETE OR UPDATE OF book_id, status, borrow_date
+  ON public.borrow_requests
+  FOR EACH ROW
+  EXECUTE FUNCTION public.maintain_borrowed_book_counts();
+
 CREATE POLICY "visitors and branch staff read requests" ON "public"."borrow_requests"
   FOR SELECT
   TO "authenticated"

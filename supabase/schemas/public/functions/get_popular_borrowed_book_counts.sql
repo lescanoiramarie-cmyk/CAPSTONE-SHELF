@@ -10,15 +10,9 @@ CREATE OR REPLACE FUNCTION public.get_popular_borrowed_book_counts (
   SECURITY DEFINER
   SET search_path TO 'public', 'pg_temp'
   AS $function$
-  select request.book_id::text, count(*)::bigint
-  from public.borrow_requests request
-  where request.book_id is not null
-    and (
-      request.status in ('borrowed', 'returned')
-      or request.borrow_date is not null
-    )
-  group by request.book_id
-  order by count(*) desc, request.book_id::text
+  select counts.book_id, counts.borrow_count
+  from public.borrowed_book_counts as counts
+  order by counts.borrow_count desc, counts.book_id asc
   limit least(greatest(coalesce(p_limit, 40), 1), 100);
 $function$;
 
