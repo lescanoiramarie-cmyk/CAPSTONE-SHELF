@@ -269,6 +269,26 @@ Deno.serve(async (request) => {
     });
   }
 
+  // JWT app_metadata can remain valid until a session is refreshed. Confirm
+  // the caller's current database role and active state before using the
+  // service-role client, which bypasses RLS for staff management operations.
+  const { data: callerProfile, error: callerProfileError } = await userClient
+    .from("staff_profiles")
+    .select("role, is_active")
+    .eq("id", authData.user.id)
+    .maybeSingle();
+
+  if (
+    callerProfileError ||
+    !callerProfile ||
+    callerProfile.role !== "superadmin" ||
+    callerProfile.is_active !== true
+  ) {
+    return respond(403, {
+      error: "Only an active super-admin can manage staff accounts.",
+    });
+  }
+
   const admin = createClient(
     supabaseUrl,
     serviceRoleKey,

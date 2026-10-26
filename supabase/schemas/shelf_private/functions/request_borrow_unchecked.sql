@@ -12,6 +12,7 @@ DECLARE
   v_visitor visitors%rowtype;
   v_req borrow_requests%rowtype;
   v_queue_count int;
+  v_active_allocations integer := 0;
 BEGIN
 
   -- ============================================================
@@ -94,7 +95,24 @@ BEGIN
   -- ============================================================
   -- AVAILABLE COPY
   -- ============================================================
-  IF coalesce(v_book.available_copies, 0) > 0 THEN
+  SELECT count(*)::integer
+  INTO v_active_allocations
+  FROM public.borrow_requests AS request
+  WHERE request.book_id = v_book.id
+    AND request.status IN ('ready_for_pickup', 'borrowed')
+    AND request.return_date IS NULL;
+
+  SELECT v_active_allocations + count(*)::integer
+  INTO v_active_allocations
+  FROM public.community_book_requests AS request
+  WHERE request.book_id = v_book.id
+    AND request.status IN ('approved', 'borrowed')
+    AND request.return_date IS NULL;
+
+  IF coalesce(v_book.available_copies, 0) > 0
+     AND v_book.total_copies > v_active_allocations
+     AND v_book.available_copies <= v_book.total_copies - v_active_allocations
+  THEN
 
     UPDATE public.books AS b
     SET available_copies = b.available_copies - 1

@@ -86,20 +86,23 @@ BEGIN
             'Total copies must be a positive whole number.';
     END IF;
 
-    -- Count active library-book loans.
+    -- Count every library request that currently holds a physical copy.
+    -- ready_for_pickup has already consumed a copy; confirming pickup only
+    -- changes its status to borrowed and must not allocate a second copy.
     SELECT count(*)::integer
     INTO borrowed_count
     FROM public.borrow_requests request
     WHERE request.book_id = p_book_id
-      AND request.status = 'borrowed'
+      AND request.status IN ('ready_for_pickup', 'borrowed')
       AND request.return_date IS NULL;
 
-    -- Count active community-book loans.
+    -- Community approval allocates the copy. The later borrowed transition
+    -- retains that allocation, so approved and borrowed are counted once.
     SELECT count(*)::integer
     INTO community_borrowed_count
     FROM public.community_book_requests request
     WHERE request.book_id = p_book_id
-      AND request.status = 'borrowed'
+      AND request.status IN ('approved', 'borrowed')
       AND request.return_date IS NULL;
 
     borrowed_count :=

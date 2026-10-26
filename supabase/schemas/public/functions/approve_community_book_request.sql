@@ -20,6 +20,8 @@ CREATE OR REPLACE FUNCTION public.approve_community_book_request (
 DECLARE
   request_row public.community_book_requests%ROWTYPE;
   available_count integer;
+  total_count integer;
+  active_allocations integer := 0;
 BEGIN
   -- Verify the authenticated, active, OTP-verified visitor.
   IF auth.uid() IS NULL OR NOT EXISTS (
@@ -55,8 +57,8 @@ BEGIN
   END IF;
 
   -- Verify that the community book has an available copy.
-  SELECT book.available_copies
-  INTO available_count
+  SELECT book.available_copies, book.total_copies
+  INTO available_count, total_count
   FROM public.books AS book
   WHERE book.id = request_row.book_id
     AND book.book_type = 'personal'
@@ -67,6 +69,28 @@ BEGIN
   IF NOT FOUND OR COALESCE(available_count, 0) < 1 THEN
     RAISE EXCEPTION
       'No copies of this community book are currently available.';
+  END IF;
+
+  SELECT count(*)::integer
+  INTO active_allocations
+  FROM public.borrow_requests AS request
+  WHERE request.book_id = request_row.book_id
+    AND request.status IN ('ready_for_pickup', 'borrowed')
+    AND request.return_date IS NULL;
+
+  SELECT active_allocations + count(*)::integer
+  INTO active_allocations
+  FROM public.community_book_requests AS request
+  WHERE request.book_id = request_row.book_id
+    AND request.status IN ('approved', 'borrowed')
+    AND request.return_date IS NULL;
+
+  IF total_count IS NULL
+     OR total_count <= active_allocations
+     OR available_count > total_count - active_allocations
+  THEN
+    RAISE EXCEPTION
+      'No unallocated copy is available for this community request.';
   END IF;
 
   -- Preserve the request queue order.

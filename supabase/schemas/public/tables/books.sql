@@ -51,7 +51,7 @@ CREATE TRIGGER audit_inventory_update
   EXECUTE FUNCTION public.capture_shelf_audit_event();
 
 CREATE TRIGGER enforce_book_copy_inventory
-  BEFORE UPDATE OF total_copies, available_copies ON public.books
+  BEFORE INSERT OR UPDATE OF total_copies, available_copies ON public.books
   FOR EACH ROW
   EXECUTE FUNCTION public.enforce_book_copy_inventory();
 

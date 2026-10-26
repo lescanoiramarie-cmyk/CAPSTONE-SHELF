@@ -159,9 +159,9 @@ begin
 end;
 $$;
 
-drop function public.cancel_borrow_request(uuid, text);
+drop function if exists public.cancel_borrow_request(uuid, text);
 
-create function public.cancel_borrow_request(
+create or replace function public.cancel_borrow_request(
   p_request_id text,
   p_reason text default 'cancelled'
 )

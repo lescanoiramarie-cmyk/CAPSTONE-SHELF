@@ -11,6 +11,18 @@ DECLARE
   v_req public.community_book_requests%rowtype;
   v_fine numeric := 0;
 BEGIN
+  IF auth.uid() IS NULL OR NOT EXISTS (
+    SELECT 1
+    FROM public.visitors AS visitor
+    WHERE visitor.id::text = trim(p_owner_visitor_id)
+      AND visitor.auth_user_id = auth.uid()
+      AND visitor.otp_verified = true
+      AND visitor.is_active = true
+  ) THEN
+    RAISE EXCEPTION
+      'The authenticated, verified owner account could not be found.';
+  END IF;
+
   -- Get and lock the request
   SELECT cbr.*
   INTO v_req
