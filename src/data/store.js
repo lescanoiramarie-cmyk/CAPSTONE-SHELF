@@ -1033,34 +1033,16 @@ export async function fetchBorrowRequests() {
     if (
       sessionData?.session
     ) {
-      const {
-        data,
-        error,
-      } = await supabase
-        .from(
-          'borrow_requests'
-        )
-        .select('*')
-        .order(
-          'request_date',
-          {
-            ascending: false,
-          }
-        );
+      const data = await fetchAllRowsInPages(
+        () => supabase
+          .from('borrow_requests')
+          .select('*')
+          .order('request_date', { ascending: false })
+          .order('id', { ascending: true }),
+        'borrow requests'
+      );
 
-      if (error) {
-        throw cleanErr(
-          error,
-          'Unable to load borrow requests.'
-        );
-      }
-
-      normalRequests =
-        Array.isArray(data)
-          ? data.map(
-              mapBorrowRequest
-            )
-          : [];
+      normalRequests = data.map(mapBorrowRequest);
     }
 
     // ------------------------------------------------------------------------

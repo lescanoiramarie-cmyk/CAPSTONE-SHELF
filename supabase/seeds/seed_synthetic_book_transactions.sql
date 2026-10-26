@@ -1,9 +1,8 @@
--- Seed at least 5,000 clearly labeled historical book transactions.
--- Transactions are spread across the most recent 12 calendar months and
--- evenly across every library/month pair. Existing visitor accounts are
--- rotated through the generated transactions; books are selected only from
--- the branch whose reports should include each transaction.
--- Safe to rerun: deterministic UUIDs prevent duplicate seed rows.
+-- Seed 1,000 to 1,500 clearly labeled historical book transactions per
+-- library/month pair across the most recent 12 calendar months. Each pair has
+-- a deterministic target in that range. Existing visitor accounts are rotated
+-- through generated transactions; books belong to the branch receiving them.
+-- Safe to rerun: deterministic UUIDs and conflict handling prevent duplicates.
 -- These rows change dashboard/report totals. Use local/disposable data unless
 -- a project owner explicitly approves inserting test records into live data.
 
@@ -61,25 +60,23 @@ WITH library_pool AS MATERIALIZED (
     date_trunc('month', current_date)::date,
     interval '1 month'
   )::date AS month_start
-), seed_size AS (
-  SELECT
-    greatest(5000, (SELECT count(*) FROM visitor_pool))::bigint AS target_rows,
-    (SELECT count(*) FROM library_pool)::bigint AS library_count
-), monthly_branch_volume AS (
-  SELECT greatest(
-    1,
-    ceil(seed_size.target_rows::numeric / (seed_size.library_count * 12))::integer
-  ) AS rows_per_branch_month
-  FROM seed_size
-), branch_month_rows AS MATERIALIZED (
+), branch_month_targets AS MATERIALIZED (
   SELECT
     library.id AS library_id,
     months.month_start,
-    sequence.row_number AS sequence_number
+    1000 + mod(
+      abs(hashtext(format('%s|%s', library.id, months.month_start))::bigint),
+      501
+    )::integer AS target_rows
   FROM library_pool AS library
   CROSS JOIN months
-  CROSS JOIN monthly_branch_volume AS volume
-  CROSS JOIN LATERAL generate_series(1, volume.rows_per_branch_month) AS sequence(row_number)
+), branch_month_rows AS MATERIALIZED (
+  SELECT
+    target.library_id,
+    target.month_start,
+    sequence.row_number AS sequence_number
+  FROM branch_month_targets AS target
+  CROSS JOIN LATERAL generate_series(1, target.target_rows) AS sequence(row_number)
 ), ordered_rows AS MATERIALIZED (
   SELECT
     row_number() OVER (
@@ -173,10 +170,7 @@ SELECT
   'Test data seed',
   'Test data seed'
 FROM generated
-ON CONFLICT (id) DO UPDATE
-SET visitor_name = EXCLUDED.visitor_name
-WHERE public.borrow_requests.confirmed_by = 'Test data seed'
-  AND public.borrow_requests.return_confirmed_by = 'Test data seed';
+ON CONFLICT (id) DO NOTHING;
 
 COMMIT;
 
