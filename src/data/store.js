@@ -393,6 +393,7 @@ const mapAttendance = (r) => ({
 
 const FETCH_PAGE_SIZE = 1000;
 const FETCH_PAGE_BATCH_SIZE = 2;
+const borrowRequestsFetchesInFlight = new Map();
 
 async function getAuthenticatedDataScope() {
   const {
@@ -464,6 +465,49 @@ async function fetchAllRowsInPages(buildQuery, resourceName) {
       return rows;
     }
   }
+}
+
+async function fetchAllBorrowRequestRows() {
+  const rangeStarts = [
+    '00000000-0000-0000-0000-000000000000',
+    '20000000-0000-0000-0000-000000000000',
+    '40000000-0000-0000-0000-000000000000',
+    '60000000-0000-0000-0000-000000000000',
+    '80000000-0000-0000-0000-000000000000',
+    'a0000000-0000-0000-0000-000000000000',
+    'c0000000-0000-0000-0000-000000000000',
+    'e0000000-0000-0000-0000-000000000000',
+  ];
+
+  const rangeRows = await Promise.all(rangeStarts.map(async (rangeStart, index) => {
+    const rangeEnd = rangeStarts[index + 1] || null;
+    const rows = [];
+    let cursor = rangeStart;
+
+    for (;;) {
+      let query = supabase
+        .from('borrow_requests')
+        .select('*')
+        .gte('id', rangeStart)
+        .order('id', { ascending: true })
+        .limit(FETCH_PAGE_SIZE);
+
+      if (cursor !== rangeStart) query = query.gt('id', cursor);
+      if (rangeEnd) query = query.lt('id', rangeEnd);
+
+      const { data, error } = await query;
+      if (error) {
+        throw cleanErr(error, 'Unable to fetch all borrow requests.');
+      }
+
+      const pageRows = data || [];
+      rows.push(...pageRows);
+      if (pageRows.length < FETCH_PAGE_SIZE) return rows;
+      cursor = pageRows[pageRows.length - 1].id;
+    }
+  }));
+
+  return rangeRows.flat();
 }
 
 // ============================================================================
@@ -1033,16 +1077,22 @@ export async function fetchBorrowRequests() {
     if (
       sessionData?.session
     ) {
-      const data = await fetchAllRowsInPages(
-        () => supabase
-          .from('borrow_requests')
-          .select('*')
-          .order('request_date', { ascending: false })
-          .order('id', { ascending: true }),
-        'borrow requests'
-      );
+      const authUserId = sessionData.session.user.id;
+      let requestsPromise = borrowRequestsFetchesInFlight.get(authUserId);
 
-      normalRequests = data.map(mapBorrowRequest);
+      if (!requestsPromise) {
+        requestsPromise = fetchAllBorrowRequestRows()
+          .then((data) => data.map(mapBorrowRequest));
+        borrowRequestsFetchesInFlight.set(authUserId, requestsPromise);
+        const clearRequestsPromise = () => {
+          if (borrowRequestsFetchesInFlight.get(authUserId) === requestsPromise) {
+            borrowRequestsFetchesInFlight.delete(authUserId);
+          }
+        };
+        requestsPromise.then(clearRequestsPromise, clearRequestsPromise);
+      }
+
+      normalRequests = await requestsPromise;
     }
 
     // ------------------------------------------------------------------------

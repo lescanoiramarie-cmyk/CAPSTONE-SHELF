@@ -633,6 +633,19 @@ export function LibraryProvider({ children }) {
 
   useEffect(() => {
     let mounted = true;
+    let realtimeRefreshTimer = null;
+
+    const scheduleRealtimeRefresh = () => {
+      if (realtimeRefreshTimer) clearTimeout(realtimeRefreshTimer);
+      realtimeRefreshTimer = setTimeout(() => {
+        realtimeRefreshTimer = null;
+        if (mounted) {
+          void refreshAll().catch((error) => {
+            console.error('SHELF realtime refresh failed:', error);
+          });
+        }
+      }, 500);
+    };
 
     // ------------------------------------------------------------------------
     // Initial data load.
@@ -696,14 +709,7 @@ export function LibraryProvider({ children }) {
               table: 'books',
             },
             () => {
-              void refreshAll().catch(
-                (error) => {
-                  console.error(
-                    'Realtime books refresh failed:',
-                    error
-                  );
-                }
-              );
+              scheduleRealtimeRefresh();
             }
           )
 
@@ -719,14 +725,7 @@ export function LibraryProvider({ children }) {
               table: 'borrow_requests',
             },
             () => {
-              void refreshAll().catch(
-                (error) => {
-                  console.error(
-                    'Realtime borrow requests refresh failed:',
-                    error
-                  );
-                }
-              );
+              scheduleRealtimeRefresh();
             }
           )
 
@@ -742,14 +741,7 @@ export function LibraryProvider({ children }) {
               table: 'community_book_requests',
             },
             () => {
-              void refreshAll().catch(
-                (error) => {
-                  console.error(
-                    'Realtime community book request refresh failed:',
-                    error
-                  );
-                }
-              );
+              scheduleRealtimeRefresh();
             }
           )
 
@@ -765,14 +757,7 @@ export function LibraryProvider({ children }) {
               table: 'attendance_logs',
             },
             () => {
-              void refreshAll().catch(
-                (error) => {
-                  console.error(
-                    'Realtime attendance refresh failed:',
-                    error
-                  );
-                }
-              );
+              scheduleRealtimeRefresh();
             }
           )
 
@@ -788,14 +773,7 @@ export function LibraryProvider({ children }) {
               table: 'visitors',
             },
             () => {
-              void refreshAll().catch(
-                (error) => {
-                  console.error(
-                    'Realtime visitors refresh failed:',
-                    error
-                  );
-                }
-              );
+              scheduleRealtimeRefresh();
             }
           )
 
@@ -811,14 +789,7 @@ export function LibraryProvider({ children }) {
               table: 'libraries',
             },
             () => {
-              void refreshAll().catch(
-                (error) => {
-                  console.error(
-                    'Realtime libraries refresh failed:',
-                    error
-                  );
-                }
-              );
+              scheduleRealtimeRefresh();
             }
           )
 
@@ -836,6 +807,7 @@ export function LibraryProvider({ children }) {
 
     return () => {
       mounted = false;
+      if (realtimeRefreshTimer) clearTimeout(realtimeRefreshTimer);
 
       if (supabase && channel) {
         void supabase.removeChannel(
