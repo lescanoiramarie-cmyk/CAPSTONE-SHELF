@@ -5,7 +5,7 @@
 **Branch:** `main`
 **HEAD:** `11b2280d2db2867350aeaca38a34c4c8f1d9109e` — `Fix book inventory validation and harden borrowing RPCs`
 **Upstream status:** Local `main` and `origin/main` point to the same commit.
-**Working tree:** Changes are staged for commit after review; not pushed.
+**Git status:** Commit `93e3b7e` was created after reviewing the staged diff; not pushed.  
 **Remote Supabase:** Five reviewed migrations were applied on October 27, 2026. No seed scripts or synthetic records were run. A schema-only backup was saved outside the repository before migration.
 
 > This handover describes the current working tree as of the date above. Recheck `git status` before staging because files may have changed after this handover was written.
@@ -115,7 +115,7 @@ The current `git diff --stat` for tracked modifications reports **16 files chang
 - [ ] Browser/manual checks of landing feedback, announcement editing/expiry, dashboards, and responsive layouts — not recorded as completed.
 - [ ] Full authenticated community-book lifecycle, authorization, and concurrent-request checks — not run.
 - [x] Live migrations — applied as listed above; seed scripts were not run.
-- [ ] Commit — pending final staged diff review.
+- [x] Commit `93e3b7e` — created after final staged diff review.
 - [ ] Push — not requested and not done.
 
 ## 5. Before committing or pushing

@@ -6,7 +6,7 @@
 **Branch:** `main`
 **Base commit:** `11b2280` — `Fix book inventory validation and harden borrowing RPCs`
 **Remote alignment:** Local `main` is aligned with `origin/main`.
-**Current changes:** Staged for commit after review. Not pushed.
+**Current changes:** Committed as `93e3b7e`. Not pushed.
 
 ### Current changes in the working tree
 
@@ -113,7 +113,7 @@
 - [x] `npm run lint` passed; `npm run build` passed with existing large-chunk warnings.
 - [x] Disposable local migration/workflow checks passed as documented in the updated handover.
 - [ ] Browser/manual UI checks and full authenticated lifecycle/concurrency tests remain unverified.
-- [ ] Commit not done. Push not requested and not done.
+- [x] Commit `93e3b7e` created after staged-diff review. Push not requested and not done.
 
 ---
 
@@ -135,5 +135,5 @@
 3. **Tests performed:** Lint, build, clean local migration/workflow checks, live migration dry run/application, post-apply ledger/catalog checks, and staged diff review.
 4. **Results:** Recorded checks passed. Browser/manual UI checks and full authenticated lifecycle/concurrency checks remain unverified.
 5. **Risks:** Rating seed assigns libraries to currently unassigned visitors. Do not execute either seed script against live data.
-6. **Git status:** Local `main` is based on `11b2280`; changes are staged for commit after final review. They are not pushed.
+6. **Git status:** Local `main` contains commit `93e3b7e` based on `11b2280`; it is not pushed.
 7. **Review request:** Inspect migration ordering, schema consistency, rating aggregate permissions/triggers, seed effects, and dashboard branch scoping before approving commit/push.
