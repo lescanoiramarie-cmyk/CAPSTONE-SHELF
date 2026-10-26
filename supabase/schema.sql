@@ -196,6 +196,8 @@ create table if not exists announcements (
   library_id text references libraries(id) on delete set null,
   title text not null,
   message text not null,
+  audience text not null default 'visitor'
+    constraint announcements_audience_check check (audience in ('general', 'visitor', 'both')),
   published boolean not null default true,
   expires_at timestamptz,
   created_by text,
@@ -205,6 +207,10 @@ create table if not exists announcements (
 
 alter table announcements
   add column if not exists expires_at timestamptz;
+
+alter table announcements
+  add column if not exists audience text not null default 'visitor'
+    constraint announcements_audience_check check (audience in ('general', 'visitor', 'both'));
 
 create table if not exists due_date_notifications (
   id uuid primary key default gen_random_uuid(),
@@ -349,6 +355,8 @@ create index if not exists announcements_published_created_idx
   on announcements (published, created_at desc);
 create index if not exists announcements_published_expiration_created_idx
   on announcements (published, expires_at, created_at desc);
+create index if not exists announcements_audience_published_expiration_idx
+  on announcements (audience, published, expires_at, created_at desc);
 
 create table if not exists staff_profiles (
   id uuid primary key references auth.users(id) on delete cascade,

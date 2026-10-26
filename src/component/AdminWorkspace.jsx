@@ -44,6 +44,12 @@ function getLibraryName(libraries, id) {
   );
 }
 
+function getReportVisitorName(value, isSubAdmin) {
+  const name = String(value || '').trim();
+  const displayName = isSubAdmin ? name : name.replace(/^\[TEST\]\s*/i, '').trim();
+  return displayName || 'Unknown visitor';
+}
+
 function formatStatus(status) {
   if (!status) return '—';
   const clean = String(status).toLowerCase().replace(/_/g, ' ').trim();
@@ -167,6 +173,7 @@ export default function AdminWorkspace({
   const [announcementForm, setAnnouncementForm] = useState({
     title: '',
     message: '',
+    audience: 'visitor',
     expirationMode: 'permanent',
     duration: '7',
     durationUnit: 'days',
@@ -245,9 +252,7 @@ export default function AdminWorkspace({
       .map((item) => ({
         type: 'Visitor',
         time: item.timeIn,
-        person: isSubAdmin
-          ? item.visitorName || 'Unknown visitor'
-          : (item.visitorName || 'Unknown visitor').replace(/^\[TEST\]\s*/i, ''),
+        person: getReportVisitorName(item.visitorName, isSubAdmin),
         detail: 'Library visit',
         branch: getLibraryName(libraries, item.libraryId),
         status: item.checkedOutAt ? 'Checked out' : 'Checked in',
@@ -261,7 +266,7 @@ export default function AdminWorkspace({
       .map((item) => ({
         type: 'Book transaction',
         time: item.requestDate,
-        person: item.visitorName || 'Unknown visitor',
+        person: getReportVisitorName(item.visitorName, isSubAdmin),
         detail: item.bookTitle || 'Book transaction',
         branch: getLibraryName(libraries, booksById.get(item.bookId)?.libraryId),
         status: formatStatus(item.status),
@@ -273,7 +278,7 @@ export default function AdminWorkspace({
       .map((item) => ({
         type: 'Book return',
         time: item.returnDate,
-        person: item.visitorName || 'Unknown visitor',
+        person: getReportVisitorName(item.visitorName, isSubAdmin),
         detail: item.bookTitle || 'Book return',
         branch: getLibraryName(libraries, booksById.get(item.bookId)?.libraryId),
         status: `Returned${Number(item.fineAmount) > 0 ? `; Fine ₱${item.fineAmount}` : ''}`,
@@ -706,6 +711,7 @@ export default function AdminWorkspace({
     setAnnouncementForm({
       title: item.title || '',
       message: item.message || '',
+      audience: item.audience || 'visitor',
       expirationMode: expiryDate ? 'temporary' : 'permanent',
       duration: expiryDate
         ? String(getDaysUntilExpiration(expiryDate))
@@ -752,6 +758,7 @@ export default function AdminWorkspace({
       const values = {
         title,
         message: messageText,
+        audience: isSubAdmin ? 'visitor' : announcementForm.audience,
         library_id: isSubAdmin ? currentLibraryId : null,
         created_by: user?.name || user?.email || 'Admin',
         published: true,
@@ -774,6 +781,7 @@ export default function AdminWorkspace({
       setAnnouncementForm({
         title: '',
         message: '',
+        audience: 'visitor',
         expirationMode: 'permanent',
         duration: '7',
         durationUnit: 'days',
@@ -1786,6 +1794,13 @@ export default function AdminWorkspace({
                     <h3 className="font-bold text-slate-900">{item.title}</h3>
                     <p className="mt-1.5 whitespace-pre-wrap text-sm text-slate-600 leading-relaxed">{item.message}</p>
                     <p className="mt-3 text-xs font-medium text-slate-400">
+                  <span className="mr-1 rounded-full bg-blue-50 px-2 py-1 font-semibold text-blue-700">
+                    {item.audience === 'general'
+                      ? 'General · Landing page'
+                      : item.audience === 'both'
+                        ? 'Both · Landing page + Visitors'
+                        : 'Visitor'}
+                  </span>
                   {item.published && item.expires_at && isAnnouncementExpired(item.expires_at)
                         ? 'Expired'
                         : 'Published'} · {new Date(item.created_at).toLocaleString()}
@@ -1858,6 +1873,23 @@ export default function AdminWorkspace({
                 className="mt-1 w-full border border-slate-300 px-3 py-2 text-sm font-normal rounded-lg focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
               />
             </label>
+            {!isSubAdmin && (
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Announcement audience
+                <select
+                  value={announcementForm.audience}
+                  onChange={(event) => setAnnouncementForm({ ...announcementForm, audience: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal normal-case text-slate-700 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
+                >
+                  <option value="general">General — Landing page</option>
+                  <option value="visitor">Visitor — Visitor dashboard</option>
+                  <option value="both">Both — Landing page + Visitors</option>
+                </select>
+                <span className="mt-1 block text-xs font-normal normal-case text-slate-500">
+                  General announcements appear on the landing page, Visitor announcements appear to signed-in visitors, and Both announcements appear in both places.
+                </span>
+              </label>
+            )}
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
               Announcement duration
               <select
@@ -1918,6 +1950,7 @@ export default function AdminWorkspace({
                     setAnnouncementForm({
                       title: '',
                       message: '',
+                      audience: 'visitor',
                       expirationMode: 'permanent',
                       duration: '7',
                       durationUnit: 'days',

@@ -230,6 +230,7 @@ const featuredBooks = books
         .from('announcements')
         .select('id, title, message, created_at, expires_at')
         .eq('published', true)
+        .in('audience', ['general', 'both'])
         .is('library_id', null)
         .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
         .order('created_at', { ascending: false });
