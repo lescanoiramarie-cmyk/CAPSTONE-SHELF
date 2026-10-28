@@ -182,7 +182,7 @@ const featuredBooks = books
   const [submitted, setSubmitted] = useState(false);
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackError, setFeedbackError] = useState('');
-  const [showFeedbackAuthModal, setShowFeedbackAuthModal] = useState(false);
+  const [signInPromptMessage, setSignInPromptMessage] = useState('');
   const [announcements, setAnnouncements] = useState([]);
   const [announcementsLoading, setAnnouncementsLoading] = useState(true);
   const [announcementsError, setAnnouncementsError] = useState('');
@@ -192,6 +192,15 @@ const featuredBooks = books
   const isAuthenticated = Boolean(user?.id);
   const authenticatedName = user?.name || user?.fullName || user?.fullname || '';
   const authenticatedEmail = user?.email || '';
+
+  const navigateToProtectedCatalog = (message) => {
+    if (!isAuthenticated) {
+      setSignInPromptMessage(message);
+      return;
+    }
+
+    navigate('/catalog');
+  };
 
   useEffect(() => {
     if (!mobileNavOpen) return undefined;
@@ -257,7 +266,7 @@ const featuredBooks = books
     e.preventDefault();
     if (feedbackSubmitting) return;
     if (!isAuthenticated) {
-      setShowFeedbackAuthModal(true);
+      setSignInPromptMessage('Please sign in to send feedback or suggestions.');
       return;
     }
     if (!e.currentTarget.reportValidity()) return;
@@ -501,7 +510,11 @@ const featuredBooks = books
             </div>
             <button
               type="button"
-              onClick={() => navigate('/catalog')}
+              onClick={() =>
+                navigateToProtectedCatalog(
+                  'Please sign in to explore the participating libraries.'
+                )
+              }
               className="inline-flex min-h-10 w-fit items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-shelf-primary shadow-sm transition hover:border-shelf-primary hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary focus-visible:ring-offset-2"
             >
               Browse library catalog
@@ -521,7 +534,11 @@ const featuredBooks = books
             <button
               key={lib.id}
               type="button"
-              onClick={() => navigate('/catalog')}
+              onClick={() =>
+                navigateToProtectedCatalog(
+                  'Please sign in to explore the participating libraries.'
+                )
+              }
               className="landing-library-card group flex h-full min-w-0 flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 sm:p-6"
             >
               <div>
@@ -581,7 +598,11 @@ const featuredBooks = books
             </div>
             <button
               type="button"
-              onClick={() => navigate('/catalog')}
+              onClick={() =>
+                navigateToProtectedCatalog(
+                  'Please sign in to view all featured books.'
+                )
+              }
               className="flex w-fit items-center gap-1 font-bold text-blue-600 transition hover:text-blue-800 group"
             >
               View All Books <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" aria-hidden="true" />
@@ -593,7 +614,11 @@ const featuredBooks = books
               <button
                 key={book.id || i}
                 type="button"
-                onClick={() => navigate('/catalog')}
+                onClick={() =>
+                  navigateToProtectedCatalog(
+                    'Please sign in to view featured books in the OPAC.'
+                  )
+                }
                 aria-label={`View ${book.title || 'featured book'} in the public catalog`}
                 className="landing-featured-card group flex min-w-0 flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary focus-visible:ring-offset-2"
               >
@@ -819,17 +844,17 @@ const featuredBooks = books
         &copy; 2026 SHELF Integrated Library Management System. All rights reserved.
       </footer>
 
-      {showFeedbackAuthModal && (
+      {signInPromptMessage && (
         <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
           <section
             role="dialog"
             aria-modal="true"
-            aria-labelledby="feedback-auth-title"
+            aria-labelledby="signin-required-title"
             className="relative w-full max-w-md space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
           >
             <button
               type="button"
-              onClick={() => setShowFeedbackAuthModal(false)}
+              onClick={() => setSignInPromptMessage('')}
               aria-label="Close sign-in prompt"
               className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-800"
             >
@@ -838,11 +863,11 @@ const featuredBooks = books
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
               <MessageSquare size={20} aria-hidden="true" />
             </div>
-            <h2 id="feedback-auth-title" className="pr-8 text-lg font-bold text-slate-900">
+            <h2 id="signin-required-title" className="pr-8 text-lg font-bold text-slate-900">
               Sign in required
             </h2>
             <p className="text-sm leading-relaxed text-slate-600">
-              Please sign in to send feedback or suggestions.
+              {signInPromptMessage}
             </p>
             <button
               type="button"

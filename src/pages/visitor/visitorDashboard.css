@@ -1,4 +1,5 @@
 .visitor-dashboard {
+  --visitor-header-height: calc(3.5rem + 1px);
   --visitor-brand: #002046;
   --visitor-page: #f4f6f9;
   --visitor-surface: #ffffff;
@@ -184,17 +185,41 @@
 
 .visitor-dashboard [aria-label='Visitor dashboard'] {
   position: sticky;
-  top: 3.5rem;
+  top: var(--visitor-header-height);
   z-index: 30;
   border-radius: var(--visitor-radius-card);
-  background-color: var(--visitor-page);
+  background-color: var(--visitor-surface);
   box-shadow: 0 3px 8px rgb(15 23 42 / 8%);
   scrollbar-color: #64748b #e2e8f0;
   scrollbar-width: auto;
   max-width: 100%;
-  overscroll-behavior-inline: contain;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-inline: 12px;
+  scroll-padding-inline: 12px;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
   white-space: nowrap;
   scrollbar-gutter: stable;
+}
+
+.visitor-dashboard [aria-label='Visitor dashboard']::after {
+  flex: 0 0 12px;
+  content: '';
+}
+
+.visitor-dashboard [aria-label='Visitor dashboard'] > button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+  .visitor-dashboard .opac-book-card-cover {
+    width: 4.5rem;
+    height: 6.25rem;
+    aspect-ratio: auto;
+  }
 }
 
 .visitor-dashboard main,
@@ -378,7 +403,7 @@
   margin-top: 0.75rem;
 }
 
-.visitor-dashboard .visitor-book-cover {
+.visitor-dashboard .visitor-book-cover:not(.opac-book-card-cover) {
   width: 4.5rem;
   height: 6.25rem;
   flex: 0 0 auto;
@@ -558,7 +583,7 @@
     row-gap: 0.25rem;
   }
 
-  .visitor-dashboard .visitor-book-cover {
+  .visitor-dashboard .visitor-book-cover:not(.opac-book-card-cover) {
     width: 3.5rem;
     height: 5rem;
   }
@@ -624,7 +649,7 @@
   }
 }
 
-.visitor-dashboard .visitor-book-cover {
+.visitor-dashboard .visitor-book-cover:not(.opac-book-card-cover) {
   flex: 0 0 auto;
 }
 
@@ -639,6 +664,11 @@
   font-weight: 700;
   line-height: 1.25;
   white-space: nowrap;
+}
+
+.visitor-dashboard .opac-book-card-availability .visitor-status {
+  white-space: normal;
+  overflow-wrap: normal;
 }
 
 .visitor-dashboard .visitor-status::before {
@@ -882,19 +912,24 @@
 @media (max-width: 639px) {
   .visitor-dashboard .faq-chat-shell {
     bottom: max(0.5rem, env(safe-area-inset-bottom));
-    right: 0.5rem;
+    right: max(0.5rem, env(safe-area-inset-right));
+    left: auto;
+    width: fit-content;
+    max-width: none;
+  }
+
+  .visitor-dashboard .faq-chat-shell.faq-chat-open {
     left: 0.5rem;
     width: auto;
-    max-width: none;
   }
 
   .visitor-dashboard .faq-chat-panel {
     width: 100%;
-    max-height: calc(100dvh - 5rem);
+    max-height: min(65dvh, 32rem);
   }
 
   .visitor-dashboard .faq-chat-content {
-    max-height: calc(100dvh - 14rem);
+    max-height: calc(65dvh - 6rem);
   }
 
   .visitor-dashboard .faq-chat-panel .faq-widget .h-105,
@@ -909,6 +944,11 @@
 
   .visitor-dashboard .faq-chat-panel .faq-widget form {
     align-items: stretch;
+  }
+
+  .visitor-dashboard .faq-drag-handle {
+    cursor: default;
+    touch-action: pan-y;
   }
 }
 
@@ -961,7 +1001,7 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-@media (min-width: 640px) {
+@media (min-width: 768px) {
   .visitor-dashboard .opac-book-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -997,8 +1037,6 @@
   }
 
   .visitor-dashboard [aria-label='Visitor dashboard'] {
-    top: 3.25rem;
-    margin-inline: -0.75rem;
     border-radius: 0;
     padding: 0.5rem 0.75rem;
   }

@@ -170,6 +170,7 @@ html {
    Visitor Dashboard both render OPACBookCard, so these selectors are the
    source of truth for the catalog visual system. */
 .opac-book-grid {
+  align-items: stretch;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.625rem;
   min-width: 0;
@@ -207,6 +208,9 @@ html {
   min-width: 0;
   height: 100%;
   flex-direction: row;
+  align-items: stretch;
+  gap: 1rem;
+  padding: 1rem;
   border: 1px solid var(--visitor-border, #dce3ec);
   border-radius: 1rem;
   background: var(--visitor-surface, #ffffff);
@@ -225,16 +229,6 @@ html {
 .opac-book-card:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 2px;
-}
-
-.opac-book-card-content {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 1rem;
-  padding: 1rem;
 }
 
 .opac-book-card-cover {
@@ -299,21 +293,40 @@ html {
 }
 
 .opac-book-card-availability {
+  display: flex;
+  flex-direction: column;
   margin-top: auto;
   padding-top: 0.625rem;
 }
 
 .opac-book-card-availability .visitor-status {
   display: inline-flex;
+  box-sizing: border-box;
+  width: fit-content;
+  min-width: 0;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  align-self: flex-end;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  flex-wrap: nowrap;
+  overflow-wrap: normal;
+  white-space: normal;
+  text-wrap: balance;
   border: 1px solid transparent;
   border-radius: 999px;
   padding: 0.25rem 0.625rem;
   font-size: 0.75rem;
   line-height: 1.25;
+  text-align: center;
+}
+
+.opac-book-card-availability-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: normal;
+  text-wrap: balance;
 }
 
 .opac-book-card-availability .visitor-status-success {
@@ -363,7 +376,7 @@ html {
   }
 }
 
-@media (min-width: 640px) {
+@media (min-width: 768px) {
   .opac-book-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.875rem;
@@ -384,23 +397,77 @@ html {
   }
 }
 
-@media (max-width: 639px) {
-  .opac-book-card-content {
-    gap: 0.625rem;
+@media (max-width: 767px) {
+  .opac-book-card {
+    flex-direction: column;
+    gap: 0.25rem;
     padding: 0.625rem;
   }
 
   .opac-book-card-cover {
-    width: 4.25rem;
-    height: 6.5rem;
+    align-self: center;
+    width: clamp(88px, 72%, 120px);
+    height: auto;
+    aspect-ratio: 2 / 3;
+    margin-inline: auto;
+  }
+
+  .opac-book-card-details {
+    width: 100%;
   }
 
   .opac-book-card h3 {
-    font-size: 0.875rem;
+    display: -webkit-box;
+    min-height: 2.8em;
+    margin-top: 0.25rem;
+    overflow: hidden;
+    overflow-wrap: break-word;
+    line-height: 1.4;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 
   .opac-book-card-author {
-    font-size: 0.75rem;
+    display: -webkit-box;
+    margin-top: 0.25rem;
+    overflow: hidden;
+    line-height: 1.4;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+  }
+
+  .opac-book-card-isbn {
+    display: -webkit-box;
+    margin-top: 0.25rem;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    line-height: 1.4;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+  }
+
+  .opac-book-card-availability {
+    box-sizing: border-box;
+    align-items: center;
+    min-height: 48px;
+    padding-top: 8px;
+  }
+
+  .opac-book-card-availability .visitor-status {
+    align-self: center;
+    padding-right: 0.5rem;
+    padding-left: 0.5rem;
+    text-align: center;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1279px) {
+  .opac-book-card-availability {
+    box-sizing: border-box;
+    min-height: 48px;
+    padding-top: 8px;
   }
 }
 

@@ -174,6 +174,7 @@ function VisitorDashboardContent() {
     : 'Outside Visitor';
 
   const [tab, setTab] = useState('catalog');
+  const activeVisitorNavTabRef = useRef(null);
   const [catalogResetKey, setCatalogResetKey] = useState(0);
   const [libraryFilter, setLibraryFilter] = useState(null);
   const [isSavingQr, setIsSavingQr] = useState(false);
@@ -201,6 +202,13 @@ function VisitorDashboardContent() {
   const avatarButtonRef = useRef(null);
 
   const { isDarkAppearance, setIsDarkAppearance } = useTheme();
+
+  useEffect(() => {
+    activeVisitorNavTabRef.current?.scrollIntoView({
+      inline: 'nearest',
+      block: 'nearest',
+    });
+  }, [tab]);
 
   const loadTermsAcceptance = useCallback(async () => {
     if (libraryLoading) return;
@@ -1207,7 +1215,7 @@ function VisitorDashboardContent() {
         ================================================== */}
         <nav
           aria-label="Visitor dashboard"
-          className="relative z-30 -mx-4 flex min-w-0 gap-3 overflow-x-scroll border-b border-slate-200 bg-shelf-bg/95 px-4 pb-3 pt-2 backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/95 sm:sticky sm:top-20 sm:mx-0 sm:rounded-2xl sm:border sm:px-3 sm:py-2.5"
+          className="relative z-30 flex min-w-0 flex-nowrap gap-2 overflow-x-auto overflow-y-hidden scroll-px-3 snap-x snap-proximity border-b border-slate-200 bg-shelf-bg/95 px-3 pb-3 pt-2 backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/95 sm:sticky sm:top-20 sm:rounded-2xl sm:border sm:px-3 sm:py-2.5"
         >
           {[
             { id: 'catalog', label: 'Catalog', Icon: BookOpen },
@@ -1222,6 +1230,7 @@ function VisitorDashboardContent() {
             <button
               key={id}
               type="button"
+              ref={tab === id ? activeVisitorNavTabRef : null}
               onClick={() => {
                 setTab(id);
 
@@ -1229,7 +1238,7 @@ function VisitorDashboardContent() {
                   setCatalogResetKey((key) => key + 1);
                 }
               }}
-              className={`inline-flex min-h-12 shrink-0 items-center gap-2.5 rounded-xl px-4 py-2.5 text-sm font-bold transition sm:px-5 sm:text-base ${
+              className={`inline-flex min-h-12 shrink-0 snap-start items-center gap-2.5 rounded-xl px-4 py-2.5 text-sm font-bold transition sm:px-5 sm:text-base ${
                 tab === id
                   ? 'bg-shelf-primary text-white shadow-sm dark:bg-shelf-primary'
                   : 'border border-transparent text-slate-600 hover:border-slate-200 hover:bg-white hover:text-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-white'
@@ -1855,12 +1864,13 @@ function VisitorDashboardContent() {
       {/* Floating FAQ Chatbot */}
       <Draggable
         nodeRef={faqDragRef}
-        handle=".faq-drag-handle, .faq-floating-button"
+        handle=".faq-drag-handle"
+        cancel="button, input, textarea"
         bounds="body"
       >
         <div
           ref={faqDragRef}
-          className="faq-chat-shell fixed bottom-5 right-5 z-100 w-fit"
+          className={`faq-chat-shell fixed bottom-5 right-5 z-100 w-fit${isFaqOpen ? ' faq-chat-open' : ''}`}
         >
           {/* FAQ Chatbot Window */}
           {isFaqOpen && (
@@ -1880,7 +1890,7 @@ function VisitorDashboardContent() {
                 <button
                   type="button"
                   onClick={() => setIsFaqOpen(false)}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                   aria-label="Close FAQ chatbot"
                   title="Close chatbot"
                 >

@@ -16,27 +16,27 @@ export default function OPACBookCard({ book, onSelect }) {
       aria-label={`View details for ${title}`}
       className="opac-book-card"
     >
-      <div className="opac-book-card-content">
-        <BookCover
-          src={book?.coverUrl}
-          title={title}
-          imageFit="contain"
-          className="opac-book-card-cover"
-        />
-        <div className="opac-book-card-details">
-          <span className="opac-book-card-category">
-            {book?.category || 'Uncategorized'}
-          </span>
-          <h3 title={title}>{title}</h3>
-          <p className="opac-book-card-author" title={author}>{author}</p>
-          <p className="opac-book-card-isbn">
-            ISBN: {book?.isbn || '—'}
-          </p>
-          <div className="opac-book-card-availability">
-            <span className={`visitor-status ${availableCopies > 0 ? 'visitor-status-success' : 'visitor-status-neutral'}`}>
+      <BookCover
+        src={book?.coverUrl}
+        title={title}
+        imageFit="contain"
+        className="opac-book-card-cover"
+      />
+      <div className="opac-book-card-details">
+        <span className="opac-book-card-category">
+          {book?.category || 'Uncategorized'}
+        </span>
+        <h3 title={title}>{title}</h3>
+        <p className="opac-book-card-author" title={author}>{author}</p>
+        <p className="opac-book-card-isbn">
+          ISBN: {book?.isbn || '—'}
+        </p>
+        <div className="opac-book-card-availability">
+          <span className={`visitor-status ${availableCopies > 0 ? 'visitor-status-success' : 'visitor-status-neutral'}`}>
+            <span className="opac-book-card-availability-label">
               {availableCopies > 0 ? `${availableCopies} Copies Available` : 'Unavailable'}
             </span>
-          </div>
+          </span>
         </div>
       </div>
     </button>

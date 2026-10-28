@@ -1933,7 +1933,7 @@ export default function OPACCatalog({
       
       {/* 1. TOP NAVBAR FOR BRANDING AND VISUAL BREATHING ROOM */}
       {!embedded && <header className="bg-slate-900 text-white shadow-md sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-3 py-4 sm:px-4 md:px-6">
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
             <div className="flex items-center gap-1.5">
               <span className="text-2xl font-black tracking-wider text-blue-400">SHELF</span>
@@ -1964,7 +1964,7 @@ export default function OPACCatalog({
       </header>}
 
       {/* 2. MAIN CONTAINER WITH TOP PADDING & MARGIN */}
-      <main className="max-w-7xl mx-auto px-6 pt-6 pb-12 space-y-6">
+      <main className={`${embedded ? 'mx-auto max-w-7xl space-y-6 px-0 py-0' : 'mx-auto max-w-7xl space-y-6 px-3 pt-6 pb-12 sm:px-4 md:px-6'}`}>
         
         {notice && (
           <div role="status" aria-live="polite" className="visitor-feedback visitor-feedback-info flex items-start justify-between gap-3 rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
