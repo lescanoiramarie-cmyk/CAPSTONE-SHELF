@@ -228,3 +228,4 @@ grant execute on function public.fetch_my_community_book_requests(text)
   to authenticated;
 
 notify pgrst, 'reload schema';
+

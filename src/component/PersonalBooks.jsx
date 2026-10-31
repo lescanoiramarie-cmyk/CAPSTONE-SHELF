@@ -13,6 +13,7 @@ import {
   fetchPersonalBooks,
   setPersonalBookVisibility,
 } from '../data/store.js';
+import { getBookFineRate } from '../lib/bookFineRate.js';
 
 const CONDITIONS = [
   'New',
@@ -199,6 +200,7 @@ export default function PersonalBooks({ userId }) {
     const condition = form.condition;
     const handoverLocation =
       form.handoverLocation.trim();
+    const fineRate = getBookFineRate(category);
 
     const lendingPeriodDays = Number(
       form.lendingPeriodDays
@@ -242,6 +244,11 @@ export default function PersonalBooks({ userId }) {
       return;
     }
 
+    if (form.lendingEnabled && fineRate == null) {
+      setError('Unclassified — checkout unavailable. Choose an approved category before enabling community lending.');
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -260,6 +267,7 @@ export default function PersonalBooks({ userId }) {
           Boolean(form.lendingEnabled),
         isPublic:
           Boolean(form.isPublic),
+        fineRate,
       });
 
       /*
@@ -561,6 +569,13 @@ export default function PersonalBooks({ userId }) {
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/10 disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:disabled:bg-slate-800"
                 />
               </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+              <span className="font-bold">Fine rate: </span>
+              {getBookFineRate(form.category) == null
+                ? 'Unclassified — checkout unavailable'
+                : `₱${getBookFineRate(form.category)} per overdue day`}
             </div>
 
             {/* SUMMARY */}

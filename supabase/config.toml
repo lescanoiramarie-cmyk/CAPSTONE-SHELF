@@ -1,3 +1,4 @@
+project_id = "shelf-ilms-local"
 [functions.send-visitor-otp]
 enabled = true
 verify_jwt = false

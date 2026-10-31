@@ -43,6 +43,7 @@ import { supabase } from '../../lib/supabaseClient.js';
 import { exportReport } from '../../lib/excelUtils.js';
 import Papa from 'papaparse';
 import { findVisitorByQr } from '../../data/store.js';
+import { validateImportedBookFineRates } from '../../lib/bookFineRate.js';
 import { sendDueDateFollowUp } from '../../lib/dueDateFollowUp.js';
 import {
   buildBranchAuditAnalytics,
@@ -593,6 +594,8 @@ function QRBookBorrowing({
             due_date,
             return_date,
             fine_amount,
+            fine_rate_snapshot,
+            fine_review_required,
             confirmed_by,
             return_confirmed_by,
             books!inner(library_id, title, author, isbn, cover_url)
@@ -619,6 +622,8 @@ function QRBookBorrowing({
         dueDate: r.due_date,
         returnDate: r.return_date,
         fineAmount: r.fine_amount,
+        fineRateSnapshot: r.fine_rate_snapshot,
+        fineReviewRequired: r.fine_review_required === true,
         confirmedBy: r.confirmed_by,
         returnConfirmedBy: r.return_confirmed_by,
         bookAuthor: r.books?.author || '',
@@ -1358,12 +1363,22 @@ export default function SubAdminDashboard() {
         if (!Array.isArray(records)) {
           throw new Error('The file must contain a JSON array of book records.');
         }
-        const booksToInsert = records.map((record) => ({
+        const booksWithDerivedFineRates = validateImportedBookFineRates(records);
+        const booksToInsert = booksWithDerivedFineRates.map((record) => ({
           ...record,
           library_id: currentLibraryId,
         }));
-        await addBooksBulk(booksToInsert);
-        setImportMessage(`${records.length} book${records.length === 1 ? '' : 's'} imported to your branch.`);
+        const { books, rateMismatches } = await addBooksBulk(booksToInsert);
+        const mismatchMessage = rateMismatches.length
+          ? ` Existing categories and rates were kept; manual review required for: ${rateMismatches
+              .map(({ title, existingCategory, existingRate, importedCategory, importedRate }) =>
+                `${title} (existing "${existingCategory || 'Unclassified'}": ${existingRate ?? 'unassigned'}, imported "${importedCategory || 'Unclassified'}": ${importedRate ?? 'unassigned'})`
+              )
+              .join(', ')}.`
+          : '';
+        setImportMessage(
+          `${books.length} book${books.length === 1 ? '' : 's'} imported to your branch.${mismatchMessage}`
+        );
       } catch (error) {
         setImportError(error.message || 'Unable to import books.');
       } finally {
@@ -1681,6 +1696,9 @@ export default function SubAdminDashboard() {
                           <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">shelf_location</code>,{' '}
                           <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">summary</code>,{' '}
                           <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">cover_url</code>
+                        </p>
+                        <p>
+                          The fine rate is derived from the exact category name (case-insensitive, surrounding whitespace ignored). Unsupported or blank categories remain unclassified and cannot be checked out; any imported fine_rate value is ignored.
                         </p>
                         <p className="pt-1.5 text-[11px] text-sky-700 italic border-t border-sky-200/80 mt-2">
                           Accepts .CSV format or JSON array files.

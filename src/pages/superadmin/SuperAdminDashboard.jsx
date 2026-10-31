@@ -176,6 +176,7 @@ export default function SuperAdminDashboard() {
   };
 
   const {
+    importBooksBulk,
     addLibrary,
     updateLibrary,
     deleteLibrary,
@@ -315,6 +316,23 @@ export default function SuperAdminDashboard() {
       file,
       async (importedJSON) => {
         try {
+          if (importTarget === 'books') {
+            const { books: importedBooks, rateMismatches } =
+              await importBooksBulk(importedJSON);
+            const mismatchMessage = rateMismatches.length
+              ? `\nExisting rates were preserved. Manual review required:\n${rateMismatches
+                  .map(({ title, existingRate, importedRate }) =>
+                    `${title}: existing ${existingRate ?? 'unclassified'}, imported ${importedRate}`
+                  )
+                  .join('\n')}`
+              : '';
+            window.alert(
+              `${importedBooks.length} book${importedBooks.length === 1 ? '' : 's'} imported.${mismatchMessage}`
+            );
+            window.location.reload();
+            return;
+          }
+
           const {
             error,
           } = await supabase

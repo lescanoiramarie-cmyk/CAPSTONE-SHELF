@@ -361,7 +361,9 @@ const featuredBooks = books
           {/* ACTION BUTTONS */}
           <div className="hidden items-center justify-self-end gap-2.5 lg:flex">
             <button
-              onClick={() => navigate('/catalog')}
+              onClick={() =>
+                navigateToProtectedCatalog('Please sign in to access the OPAC Catalog.')
+              }
               className="px-3.5 py-2 border border-slate-700 bg-slate-800/80 text-slate-200 hover:text-white hover:bg-slate-700 hover:border-slate-600 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 shadow-sm"
             >
               <Search size={14} className="text-blue-400" />
@@ -410,7 +412,10 @@ const featuredBooks = books
               <div className="mt-2 grid gap-2 border-t border-slate-800 pt-3 sm:grid-cols-2">
                 <button
                   type="button"
-                  onClick={() => { setMobileNavOpen(false); navigate('/catalog'); }}
+                  onClick={() => {
+                    setMobileNavOpen(false);
+                    navigateToProtectedCatalog('Please sign in to access the OPAC Catalog.');
+                  }}
                   className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-bold text-slate-200 transition hover:bg-slate-700"
                 >
                   <Search size={15} className="text-blue-400" aria-hidden="true" />
@@ -459,7 +464,9 @@ const featuredBooks = books
           {/* ACTION BUTTONS */}
           <div className="flex flex-col sm:flex-row justify-center items-center gap-3.5 pt-2">
             <button 
-              onClick={() => navigate('/catalog')} 
+              onClick={() =>
+                navigateToProtectedCatalog('Please sign in to access the OPAC Catalog.')
+              }
               className="w-full sm:w-auto px-6 py-3.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-blue-600/30 transition-all duration-200 flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
             >
               <Search size={16} />
@@ -657,7 +664,9 @@ const featuredBooks = books
               <p className="mt-3 text-sm font-semibold text-slate-700">No featured books with cover images are available right now.</p>
               <button
                 type="button"
-                onClick={() => navigate('/catalog')}
+                onClick={() =>
+                  navigateToProtectedCatalog('Please sign in to access the OPAC Catalog.')
+                }
                 className="mt-4 rounded-lg bg-shelf-primary px-4 py-2 text-xs font-bold text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary focus-visible:ring-offset-2"
               >
                 Browse Catalog
@@ -870,13 +879,21 @@ const featuredBooks = books
               {signInPromptMessage}
             </p>
             <button
-              type="button"
-              onClick={() => navigate('/visitor-login')}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-shelf-primary px-4 py-3 text-sm font-bold text-white transition hover:opacity-90"
-            >
-              <LogIn size={16} aria-hidden="true" />
-              Sign In
-            </button>
+  type="button"
+  onClick={() =>
+    navigate('/visitor-login', {
+      state: {
+        from: {
+          pathname: '/catalog',
+        },
+      },
+    })
+  }
+  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-shelf-primary px-4 py-3 text-sm font-bold text-white transition hover:opacity-90"
+>
+  <LogIn size={16} aria-hidden="true" />
+  Sign In
+</button>
           </section>
         </div>
       )}

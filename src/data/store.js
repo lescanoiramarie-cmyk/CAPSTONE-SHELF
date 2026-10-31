@@ -13,6 +13,11 @@
 
 import { supabase } from '../lib/supabaseClient.js';
 import { normalizeBookCategory } from '../lib/bookCategory.js';
+import {
+  buildDuplicateBookImportUpdate,
+  getBookFineRate,
+  validateImportedBookFineRates,
+} from '../lib/bookFineRate.js';
 import { invalidateVisitorAccountsCache } from './visitorAccounts.js';
 export { fetchVisitorAccounts } from './visitorAccounts.js';
 
@@ -302,7 +307,8 @@ export const mapBook = (r) => ({
   id: r.id,
   title: r.title,
   author: r.author,
-  category: normalizeBookCategory(r.category),
+  category: r.category ?? null,
+  fineRate: r.fine_rate == null ? null : Number(r.fine_rate),
   isbn: r.isbn,
   shelfLocation: r.shelf_location,
   libraryId: r.library_id,
@@ -356,6 +362,19 @@ const mapVisitor = (r) => ({
   registeredAt: r.registered_at,
 });
 
+const hasValidFineRateSnapshot = (request) =>
+  [10, 15, 20].includes(Number(request.fine_rate_snapshot));
+
+export const isFineReviewRequired = (request) => {
+  const status = String(request.status || '').trim().toLowerCase();
+  const validSnapshot = hasValidFineRateSnapshot(request);
+  const hasExistingFine = Number(request.fine_amount || 0) !== 0;
+
+  return request.fine_review_required === true ||
+    (['borrowed', 'returned'].includes(status) && !validSnapshot) ||
+    (hasExistingFine && (status !== 'returned' || !validSnapshot));
+};
+
 const cleanTestVisitorName = (name) =>
   typeof name === 'string' ? name.replace(/^\[TEST\]\s*/i, '').trim() : name;
 
@@ -376,6 +395,9 @@ const mapBorrowRequest = (r) => ({
   dueDate: r.due_date,
   returnDate: r.return_date,
   fineAmount: r.fine_amount,
+  fineRateSnapshot:
+    r.fine_rate_snapshot == null ? null : Number(r.fine_rate_snapshot),
+  fineReviewRequired: isFineReviewRequired(r),
   confirmedBy: r.confirmed_by,
   returnConfirmedBy: r.return_confirmed_by,
   cancelReason: r.cancel_reason,
@@ -1318,6 +1340,14 @@ export async function fetchBorrowRequests() {
                 request.fine_amount ??
                 0
               ) || 0,
+
+            fineRateSnapshot:
+              request.fine_rate_snapshot == null
+                ? null
+                : Number(request.fine_rate_snapshot),
+
+            fineReviewRequired:
+              isFineReviewRequired(request),
 
             confirmedBy:
               request.confirmed_by ||
@@ -3200,6 +3230,11 @@ function normalizeInventoryMatch(value) {
     .toLocaleLowerCase();
 }
 
+function preserveBookCategory(value) {
+  const category = String(value ?? '').trim();
+  return category || null;
+}
+
 /**
  * Adds incoming library stock to an existing matching book,
  * or inserts a new book if no match exists.
@@ -3214,7 +3249,7 @@ function normalizeInventoryMatch(value) {
 
 export async function mergeOrInsertLibraryBooks(incomingRows) {
   if (!Array.isArray(incomingRows) || incomingRows.length === 0) {
-    return [];
+    return { books: [], rateMismatches: [] };
   }
 
   const grouped = new Map();
@@ -3222,11 +3257,21 @@ export async function mergeOrInsertLibraryBooks(incomingRows) {
   // Combine repeated copies of the same book within this import.
   for (const source of incomingRows) {
     const row = { ...source };
+    row.category = preserveBookCategory(row.category);
+    row.fine_rate = getBookFineRate(row.category);
 
     const title = normalizeText(row.title);
     const author = normalizeText(row.author);
     const libraryId = normalizeText(row.library_id) || null;
-    const stock = Number(row.total_copies);
+    const rawStock =
+      row.total_copies ??
+      row.stock_count ??
+      row.stock ??
+      row.copies;
+    const stock =
+      rawStock == null || String(rawStock).trim() === ''
+        ? 1
+        : Number(rawStock);
 
     if (!title || !author) {
       throw new Error('Every library book requires a title and author.');
@@ -3240,15 +3285,22 @@ export async function mergeOrInsertLibraryBooks(incomingRows) {
       throw new Error(`Invalid library ID for "${title}".`);
     }
 
+    const isbn = normalizeText(row.isbn).replace(/[\s-]/g, '').toUpperCase();
     const key = JSON.stringify([
-      normalizeInventoryMatch(title),
-      normalizeInventoryMatch(author),
+      isbn || normalizeInventoryMatch(title),
+      isbn ? '' : normalizeInventoryMatch(author),
       libraryId,
     ]);
 
     const existingGroup = grouped.get(key);
 
     if (existingGroup) {
+      if (Number(existingGroup.fine_rate) !== Number(row.fine_rate)) {
+        throw new Error(
+          `Duplicate import rows for "${title}" by ${author} have different fine rates. ` +
+          'Resolve the rate conflict before importing.'
+        );
+      }
       existingGroup.total_copies += stock;
       existingGroup.available_copies += Number(
         row.available_copies ?? stock
@@ -3278,7 +3330,7 @@ export async function mergeOrInsertLibraryBooks(incomingRows) {
     let query = supabase
       .from('books')
       .select(
-        'id, title, author, library_id, total_copies, available_copies, book_type'
+        'id, title, author, category, isbn, library_id, total_copies, available_copies, fine_rate, book_type'
       )
       .or('book_type.eq.library,book_type.is.null');
 
@@ -3301,12 +3353,20 @@ export async function mergeOrInsertLibraryBooks(incomingRows) {
   // Validate every match before changing any records.
   const plan = rows.map((row) => {
     const branchBooks = existingByBranch.get(row.library_id) || [];
+    const incomingIsbn = normalizeText(row.isbn)
+      .replace(/[\s-]/g, '')
+      .toUpperCase();
 
     const matches = branchBooks.filter((book) =>
-      normalizeInventoryMatch(book.title) ===
-        normalizeInventoryMatch(row.title) &&
-      normalizeInventoryMatch(book.author) ===
-        normalizeInventoryMatch(row.author)
+      (incomingIsbn &&
+        normalizeText(book.isbn).replace(/[\s-]/g, '').toUpperCase() ===
+          incomingIsbn) ||
+      (
+        normalizeInventoryMatch(book.title) ===
+          normalizeInventoryMatch(row.title) &&
+        normalizeInventoryMatch(book.author) ===
+          normalizeInventoryMatch(row.author)
+      )
     );
 
     if (matches.length > 1) {
@@ -3324,24 +3384,27 @@ export async function mergeOrInsertLibraryBooks(incomingRows) {
   });
 
   const saved = [];
+  const rateMismatches = [];
 
   // Apply the validated plan.
   for (const { incoming, existing } of plan) {
     if (existing) {
-      const newTotal =
-        Number(existing.total_copies || 0) +
-        Number(incoming.total_copies || 0);
-
-      const newAvailable =
-        Number(existing.available_copies || 0) +
-        Number(incoming.available_copies || 0);
-
+      const { update: copyUpdate, fineRateMismatch } =
+        buildDuplicateBookImportUpdate(existing, incoming);
+      if (fineRateMismatch) {
+        rateMismatches.push({
+          title: incoming.title,
+          author: incoming.author,
+          libraryId: incoming.library_id,
+          existingRate: existing.fine_rate,
+          importedRate: incoming.fine_rate,
+          existingCategory: existing.category,
+          importedCategory: incoming.category,
+        });
+      }
       const { data, error } = await supabase
         .from('books')
-        .update({
-          total_copies: newTotal,
-          available_copies: newAvailable,
-        })
+        .update(copyUpdate)
         .eq('id', existing.id)
         .select('*')
         .single();
@@ -3372,7 +3435,10 @@ export async function mergeOrInsertLibraryBooks(incomingRows) {
     }
   }
 
-  return saved.map(mapBook);
+  return {
+    books: saved.map(mapBook),
+    rateMismatches,
+  };
 }
 
 
@@ -3384,6 +3450,8 @@ export async function mergeOrInsertLibraryBooks(incomingRows) {
 export async function addBook(book) {
   const title = normalizeText(book?.title);
   const author = normalizeText(book?.author);
+  const category = preserveBookCategory(book?.category);
+  const fineRate = getBookFineRate(category);
   const libraryId = normalizeText(book?.libraryId);
   const totalCopies = Math.max(
     1,
@@ -3402,11 +3470,12 @@ export async function addBook(book) {
     throw new Error('Invalid library ID.');
   }
 
-  const rows = await mergeOrInsertLibraryBooks([
+  const result = await mergeOrInsertLibraryBooks([
     {
       title,
       author,
-      category: normalizeBookCategory(book?.category) || 'General',
+      category,
+      fine_rate: fineRate,
       isbn: normalizeText(book?.isbn) || null,
       shelf_location: normalizeText(book?.shelfLocation) || null,
       library_id: libraryId || null,
@@ -3425,7 +3494,10 @@ export async function addBook(book) {
     },
   ]);
 
-  return rows[0];
+  return {
+    ...result.books[0],
+    fineRateMismatch: result.rateMismatches[0] || null,
+  };
 }
 
 
@@ -3458,8 +3530,7 @@ export async function addPersonalBook({
   const normalizedAuthor =
     normalizeText(author);
 
-  const normalizedCategory =
-    normalizeBookCategory(category) || null;
+  const normalizedCategory = preserveBookCategory(category);
 
   const normalizedIsbn =
     normalizeText(isbn) || null;
@@ -3489,6 +3560,11 @@ export async function addPersonalBook({
 
   const normalizedLendingEnabled =
     lendingEnabled !== false;
+  const normalizedFineRate = getBookFineRate(normalizedCategory);
+
+  if (normalizedLendingEnabled && normalizedFineRate == null) {
+    throw new Error('Unclassified — checkout unavailable. Choose an approved category before enabling community lending.');
+  }
 
   if (!normalizedVisitorId) {
     throw new Error(
@@ -3713,7 +3789,7 @@ export async function updatePersonalBook({
   const normalizedBookId = normalizeText(bookId);
   const normalizedTitle = normalizeText(title);
   const normalizedAuthor = normalizeText(author);
-  const normalizedCategory = normalizeBookCategory(category) || null;
+  const normalizedCategory = preserveBookCategory(category);
   const normalizedIsbn = normalizeText(isbn) || null;
   const normalizedSummary = normalizeText(summary) || null;
   const normalizedCondition = normalizeText(condition) || 'Good';
@@ -3723,6 +3799,7 @@ export async function updatePersonalBook({
     normalizeText(handoverMethod).toLowerCase() || 'arrange_with_owner';
   const normalizedHandoverDetails =
     normalizeText(handoverDetails) || null;
+  const normalizedFineRate = getBookFineRate(normalizedCategory);
 
   if (!isValidVisitorId(normalizedVisitorId)) {
     throw new Error('Invalid visitor ID.');
@@ -3753,6 +3830,9 @@ export async function updatePersonalBook({
   }
   if (normalizedHandoverDetails?.length > 500) {
     throw new Error('Handover details must not exceed 500 characters.');
+  }
+  if (lendingEnabled !== false && normalizedFineRate == null) {
+    throw new Error('Unclassified — checkout unavailable. Choose an approved category before enabling community lending.');
   }
 
   const { data, error } = await supabase.rpc(
@@ -4214,6 +4294,14 @@ export async function fetchOwnerCommunityBookRequests(
     fineAmount:
       request.fine_amount ??
       0,
+
+    fineRateSnapshot:
+      request.fine_rate_snapshot == null
+        ? null
+        : Number(request.fine_rate_snapshot),
+
+    fineReviewRequired:
+      isFineReviewRequired(request),
 
     confirmedBy:
       request.confirmed_by ||
@@ -4805,8 +4893,11 @@ export async function addBooksBulk(
     );
   }
 
+  const booksWithDerivedFineRates =
+    validateImportedBookFineRates(books);
+
   const rows =
-    books.map(
+    booksWithDerivedFineRates.map(
       (book, index) => {
         const normalized =
           Object.fromEntries(
@@ -4841,10 +4932,7 @@ export async function addBooksBulk(
             normalized.isbn
           );
 
-        const category =
-          normalizeBookCategory(
-            normalized.category
-          );
+        const category = preserveBookCategory(normalized.category);
 
         const stock =
           Number(
@@ -4857,12 +4945,11 @@ export async function addBooksBulk(
         if (
           !title ||
           !author ||
-          !category ||
           !Number.isInteger(stock) ||
           stock < 1
         ) {
           throw new Error(
-            `Row ${index + 1} requires title, author, category, and a positive whole-number stock count.`
+            `Row ${index + 1} requires title, author, and a positive whole-number stock count.`
           );
         }
 
@@ -4891,6 +4978,9 @@ export async function addBooksBulk(
           isbn,
 
           category,
+
+          fine_rate:
+            getBookFineRate(category),
 
           total_copies:
             stock,
@@ -4942,6 +5032,16 @@ export async function addBooksBulk(
 
 
   return await mergeOrInsertLibraryBooks(rows);
+}
+
+export async function importBooksBulk(books) {
+  if (!Array.isArray(books) || books.length === 0) {
+    throw new Error('Choose a file containing at least one book.');
+  }
+
+  return mergeOrInsertLibraryBooks(
+    validateImportedBookFineRates(books)
+  );
 }
 
 // ============================================================================
@@ -5008,13 +5108,13 @@ export async function updateBook(
       author;
   }
 
-  if (
-    patch?.category !== undefined
-  ) {
-    dbPatch.category =
-      normalizeBookCategory(
-        patch.category
-      ) || null;
+  if (patch?.fineRate !== undefined && patch?.category === undefined) {
+    throw new Error('Fine rate is derived from the book category.');
+  }
+
+  if (patch?.category !== undefined) {
+    dbPatch.category = preserveBookCategory(patch.category);
+    dbPatch.fine_rate = getBookFineRate(dbPatch.category);
   }
 
   if (

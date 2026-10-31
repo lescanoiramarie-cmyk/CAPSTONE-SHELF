@@ -353,10 +353,15 @@ export function LibraryProvider({ children }) {
                 null,
 
               fineAmount:
-                Number(
-                  request.fine_amount ??
-                    0
-                ) || 0,
+  Number(request.fine_amount ?? 0),
+
+fineRateSnapshot:
+  request.fine_rate_snapshot == null
+    ? null
+    : Number(request.fine_rate_snapshot),
+
+fineReviewRequired:
+  store.isFineReviewRequired(request),
 
               confirmedBy:
                 request.confirmed_by ||
@@ -904,6 +909,15 @@ export function LibraryProvider({ children }) {
     [withRefresh]
   );
 
+  const importBooksBulk = useMemo(
+    () =>
+      withRefresh(
+        store.importBooksBulk,
+        'importBooksBulk'
+      ),
+    [withRefresh]
+  );
+
   const updateBook = useMemo(
     () =>
       withRefresh(
@@ -1218,6 +1232,8 @@ export function LibraryProvider({ children }) {
 
       addBooksBulk,
 
+      importBooksBulk,
+
       updateBook,
 
       deleteBook,
@@ -1309,6 +1325,8 @@ export function LibraryProvider({ children }) {
       addBook,
 
       addBooksBulk,
+
+      importBooksBulk,
 
       updateBook,
 

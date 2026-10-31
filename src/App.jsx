@@ -38,7 +38,11 @@ export default function App() {
               <Route path="/" element={<LandingPage />} />
               <Route
                 path="/catalog"
-                element={<OPACCatalog activeView="catalog" />}
+                element={
+                  <ProtectedRoute unauthenticatedTo="/visitor-login">
+                    <OPACCatalog activeView="catalog" />
+                  </ProtectedRoute>
+                }
               />
               <Route path="/visitor-login" element={<VisitorLogin />} />
               <Route

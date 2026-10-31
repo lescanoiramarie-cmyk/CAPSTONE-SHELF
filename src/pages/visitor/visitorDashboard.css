@@ -653,6 +653,11 @@
   flex: 0 0 auto;
 }
 
+.visitor-dashboard .opac-book-card-availability .visitor-status {
+  white-space: normal;
+  overflow-wrap: normal;
+}
+
 .visitor-dashboard .visitor-status {
   display: inline-flex;
   align-items: center;

@@ -1710,6 +1710,15 @@ function VisitorDashboardContent() {
                                         </span>
                                       </div>
                                     )}
+
+                                  {transaction.fineReviewRequired && (
+                                    <p
+                                      role="status"
+                                      className="text-[11px] font-semibold text-amber-700 dark:text-amber-300 sm:col-span-2"
+                                    >
+                                      Manual fine review required. Any assessed amount is preserved; no rate was guessed.
+                                    </p>
+                                  )}
                                 </div>
 
                                 {/* PICKUP DEADLINE */}

@@ -2,7 +2,7 @@ CREATE OR REPLACE FUNCTION public.get_visitor_borrow_requests (
   p_visitor_id uuid
 )
   RETURNS TABLE (
-    id                  uuid,
+    id                  text,
     book_id             text,
     book_title          text,
     visitor_id          text,
@@ -16,7 +16,9 @@ CREATE OR REPLACE FUNCTION public.get_visitor_borrow_requests (
     return_date         timestamp with time zone,
     fine_amount         numeric,
     confirmed_by        text,
-    return_confirmed_by text
+    return_confirmed_by text,
+    fine_rate_snapshot  integer,
+    fine_review_required boolean
   )
   LANGUAGE plpgsql
   SECURITY DEFINER

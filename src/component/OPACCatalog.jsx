@@ -35,6 +35,10 @@ import LibraryMap from './LibraryMap.jsx';
 import { supabase } from '../lib/supabaseClient.js';
 import { recordVisitorSearch } from '../lib/recommendationEngine.js';
 import { fetchReadingList, toggleReadingList } from '../services/shelf.js';
+import {
+  calculateOverdueFine,
+  getBookFineRate,
+} from '../lib/bookFineRate.js';
 
 // =========================================================
 // DATE HELPERS
@@ -89,20 +93,16 @@ function calculateCurrentFine(request) {
   }
   if (
     request.status !== 'borrowed' ||
-    !request.dueDate
+    !request.dueDate ||
+    request.fineReviewRequired
   ) {
     return 0;
   }
-  const dueTime = new Date(request.dueDate).getTime();
-  const nowTime = Date.now();
-  if (nowTime <= dueTime) {
-    return 0;
-  }
-  const overdueDays = Math.ceil(
-    (nowTime - dueTime) /
-      (1000 * 60 * 60 * 24)
-  );
-  return overdueDays * 10;
+  return calculateOverdueFine(
+    request.dueDate,
+    Date.now(),
+    request.fineRateSnapshot
+  ) ?? 0;
 }
 function calculateOverdueDays(dueDate) {
   return Math.ceil(
@@ -652,6 +652,7 @@ export default function OPACCatalog({
     const handoverDetails = personalBookForm.handoverDetails.trim();
     const lendingPeriodDays = Number(personalBookForm.lendingPeriodDays);
     const totalCopies = Number(personalBookForm.totalCopies);
+    const fineRate = getBookFineRate(category);
     if (!title || !author) {
       setNotice('Book title and author are required.');
       return;
@@ -700,6 +701,10 @@ export default function OPACCatalog({
       setNotice('Please select a handover method when lending is enabled.');
       return;
     }
+    if (personalBookForm.lendingEnabled && fineRate == null) {
+      setNotice('Unclassified — checkout unavailable. Choose an approved category before enabling community lending.');
+      return;
+    }
     if (handoverDetails.length > 500) {
       setNotice('Handover details must not exceed 500 characters.');
       return;
@@ -746,6 +751,7 @@ export default function OPACCatalog({
         handoverDetails: handoverDetails || null,
         lendingEnabled: Boolean(personalBookForm.lendingEnabled),
         isPublic: Boolean(personalBookForm.isPublic),
+        fineRate,
       };
       let savedCoverUrl = selectedCoverUrl || null;
       let uploadedCoverPath = null;
@@ -938,6 +944,12 @@ export default function OPACCatalog({
   ]
     .filter((label) => !['other', 'others'].includes(label.toLocaleLowerCase()))
     .sort((a, b) => a.localeCompare(b));
+  const personalBookFineRate = getBookFineRate(
+    personalBookForm.category === 'Others'
+      ? personalBookForm.customCategory
+      : personalBookForm.category
+  );
+  const selectedBookFineRate = getBookFineRate(selectedBook?.category);
   const libraryOptions = [
     'All',
     ...new Set(books.map((book) => book.libraryId).filter(Boolean)),
@@ -1265,6 +1277,11 @@ export default function OPACCatalog({
             returnDate: request.return_date ?? request.returnDate ?? null,
             fineAmount:
               Number(request.fine_amount ?? request.fineAmount ?? 0) || 0,
+            fineRateSnapshot:
+              request.fine_rate_snapshot ?? request.fineRateSnapshot ?? null,
+            fineReviewRequired:
+              request.fine_review_required === true ||
+              request.fineReviewRequired === true,
             approvedAt: request.approved_at ?? request.approvedAt ?? null,
             rejectedAt: request.rejected_at ?? request.rejectedAt ?? null,
             requestType: 'community',
@@ -1361,6 +1378,10 @@ export default function OPACCatalog({
       );
       return;
     }
+    if (getBookFineRate(bookEntry.category ?? selectedBook?.category) == null) {
+      setNotice('Unclassified — checkout unavailable.');
+      return;
+    }
     if (submittingBorrow) return;
     setSubmittingBorrow(true);
     setSubmittingBorrowBookId(String(bookEntry.id));
@@ -1435,6 +1456,10 @@ export default function OPACCatalog({
     }
     if (book.lendingEnabled === false) {
       setNotice('This community book is not currently available for lending.');
+      return;
+    }
+    if (getBookFineRate(book.category) == null) {
+      setNotice('Unclassified — checkout unavailable.');
       return;
     }
     if (submittingCommunityRequest) return;
@@ -2645,6 +2670,11 @@ export default function OPACCatalog({
                               </p>
                             </div>
                           )}
+                          {request.fineReviewRequired && (
+                            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                              Manual fine review required. The assessed amount was preserved and no rate was guessed.
+                            </p>
+                          )}
                         </div>
                         {status === 'pending' && (
                           <div className="mt-4 flex flex-col gap-2 border-t border-slate-200 pt-4 sm:flex-row sm:justify-end dark:border-slate-700">
@@ -3006,6 +3036,11 @@ export default function OPACCatalog({
                           }`}
                         >
                           {"\u20B1"}{currentFine.toFixed(2)}
+                          {request.fineReviewRequired && (
+                            <span className="mt-1 block text-[10px] font-semibold text-amber-700">
+                              Manual review required
+                            </span>
+                          )}
                         </td>
                         <td data-label="Action" className="p-4 pl-6 text-right">
                           {canCancel && (
@@ -3404,6 +3439,12 @@ export default function OPACCatalog({
                       className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-400"
                     />
                   </div>
+                  <div className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                    <span className="font-bold">Fine rate: </span>
+                    {personalBookFineRate == null
+                      ? 'Unclassified — checkout unavailable'
+                      : `₱${personalBookFineRate} per overdue day`}
+                  </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
                       Condition *
@@ -3705,6 +3746,16 @@ export default function OPACCatalog({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <p className="text-xs font-semibold text-shelf-primary dark:text-slate-200">
+                      Fine Rate
+                    </p>
+                    <p className="text-xs font-semibold text-slate-700">
+                      {selectedBookFineRate == null
+                        ? 'Unclassified — checkout unavailable'
+                        : `₱${selectedBookFineRate} per overdue day`}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-shelf-primary dark:text-slate-200">
                       Condition
                     </p>
                     <p className="text-xs font-semibold text-slate-700">
@@ -3782,57 +3833,67 @@ export default function OPACCatalog({
                       No libraries currently have this book in inventory.
                     </p>
                   ) : (
-                    getPartnerLibraryEntries(selectedBook).map((entry) => (
-                      <div
-                        key={entry.id}
-                        className="visitor-library-entry flex flex-wrap items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs gap-3"
-                      >
-                        <div>
-                          <p className="font-bold text-slate-800 text-sm">
-                            {libraryName(entry.libraryId)}
-                          </p>
-                          <p className="text-slate-500">
-                            {Number(entry.availableCopies || 0) > 0
-                              ? `${entry.availableCopies} available`
-                              : 'Out of stock (Queue available)'}
-                          </p>
+                    getPartnerLibraryEntries(selectedBook).map((entry) => {
+                      const entryFineRate = getBookFineRate(
+                        entry.category ?? selectedBook.category
+                      );
+                      return (
+                        <div
+                          key={entry.id}
+                          className="visitor-library-entry flex flex-wrap items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs gap-3"
+                        >
+                          <div>
+                            <p className="font-bold text-slate-800 text-sm">
+                              {libraryName(entry.libraryId)}
+                            </p>
+                            <p className="text-slate-500">
+                              {Number(entry.availableCopies || 0) > 0
+                                ? `${entry.availableCopies} available`
+                                : 'Out of stock (Queue available)'}
+                            </p>
+                            <p className="text-slate-500">
+                              {entryFineRate == null
+                                ? 'Unclassified — checkout unavailable'
+                                : `₱${entryFineRate} per overdue day`}
+                            </p>
+                          </div>
+                          <div className="visitor-library-actions flex max-w-full flex-wrap items-center justify-end gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleViewMap(entry.libraryId, entry)}
+                              className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-300 transition"
+                            >
+                              View Map
+                            </button>
+                            <button
+                              type="button"
+                              disabled={savingReadingListBookId === entry.id}
+                              onClick={() => handleToggleReadingList(entry)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <ClipboardList size={14} aria-hidden="true" />
+                              {savingReadingListBookId === entry.id
+                                ? 'Saving...'
+                                : isBookInReadingList(entry.id)
+                                  ? 'Saved'
+                                  : 'Read Later'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={submittingBorrow || entryFineRate == null}
+                              onClick={() => handleBorrowOrReserve(entry)}
+                              className="px-3 py-1.5 bg-shelf-primary text-white rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {submittingBorrowBookId === String(entry.id)
+                                ? 'Processing...'
+                                : Number(entry.availableCopies || 0) > 0
+                                  ? 'Borrow'
+                                  : 'Reserve'}
+                            </button>
+                          </div>
                         </div>
-                        <div className="visitor-library-actions flex max-w-full flex-wrap items-center justify-end gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => handleViewMap(entry.libraryId, entry)}
-                            className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-300 transition"
-                          >
-                            View Map
-                          </button>
-                          <button
-                            type="button"
-                            disabled={savingReadingListBookId === entry.id}
-                            onClick={() => handleToggleReadingList(entry)}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            <ClipboardList size={14} aria-hidden="true" />
-                            {savingReadingListBookId === entry.id
-                              ? 'Saving...'
-                              : isBookInReadingList(entry.id)
-                                ? 'Saved'
-                                : 'Read Later'}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={submittingBorrow}
-                            onClick={() => handleBorrowOrReserve(entry)}
-                            className="px-3 py-1.5 bg-shelf-primary text-white rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {submittingBorrowBookId === String(entry.id)
-                              ? 'Processing...'
-                              : Number(entry.availableCopies || 0) > 0
-                                ? 'Borrow'
-                                : 'Reserve'}
-                          </button>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -3856,7 +3917,8 @@ export default function OPACCatalog({
                     submittingCommunityRequest ||
                     (selectedBook.ownerVisitorId &&
                       String(selectedBook.ownerVisitorId) === String(user?.id)) ||
-                    selectedBook.lendingEnabled === false
+                    selectedBook.lendingEnabled === false ||
+                    selectedBookFineRate == null
                   }
                   className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -3999,7 +4061,7 @@ export default function OPACCatalog({
               ) : (
                 <>
                   Borrowed items are due {BORROW_PERIOD_DAYS} days after pickup.
-                  Holds must be picked up within {PICKUP_WINDOW_HOURS} hours or they're released automatically. Overdue books are charged ₱10 per overdue day.
+                  Holds must be picked up within {PICKUP_WINDOW_HOURS} hours or they're released automatically. Overdue fines use each book's assigned rate of ₱10, ₱15, or ₱20 per day.
                 </>
               )}
             </p>

@@ -16,7 +16,7 @@ export const FAQS = [
       },
       {
         q: 'What happens if I return a library book late?',
-        a: 'Overdue library books accrue a fine of PHP 10 per day. Check the due date and any current fine in My Requests & Borrows.',
+        a: 'Overdue books accrue fines at the rate explicitly assigned to that book: PHP 10, 15, or 20 per day. Check the due date and any current fine in My Requests & Borrows.',
       },
       {
         q: 'How do I cancel a library book request?',

@@ -135,6 +135,11 @@ export default function BookTransactions() {
                           ? `Hold expires: ${formatDateTime(r.pickupDeadline)}`
                           : `Due: ${formatDateTime(r.dueDate)}`}
                       </p>
+                      {mode === 'returning' && r.fineReviewRequired && (
+                        <p className="mt-1 text-xs font-semibold text-amber-700">
+                          Manual fine review required. Any assessed fine is preserved.
+                        </p>
+                      )}
                     </div>
                     <button
                       onClick={() => (mode === 'borrowing' ? handleConfirmPickup(r.id) : handleConfirmReturn(r.id))}

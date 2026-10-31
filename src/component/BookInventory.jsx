@@ -3,17 +3,18 @@ import { Search, X } from 'lucide-react';
 import { useLibrary } from '../context/useLibrary';
 import { useAuth } from '../context/useAuth.js';
 import { supabase } from '../lib/supabaseClient';
+import { getBookFineRate } from '../lib/bookFineRate.js';
 
 export default function BookInventory() {
   const { user } = useAuth();
-  const { 
-    books, 
-    addBook, 
-    updateBook, 
-    deleteBook, 
-    libraries, 
-    loading, 
-    error 
+  const {
+    books,
+    addBook,
+    updateBook,
+    deleteBook,
+    libraries,
+    loading,
+    error
   } = useLibrary();
 
   const [search, setSearch] = useState('');
@@ -22,10 +23,11 @@ export default function BookInventory() {
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [mutationError, setMutationError] = useState('');
+  const [mutationNotice, setMutationNotice] = useState('');
   const [selectedCoverFile, setSelectedCoverFile] = useState(null);
   const [coverPreview, setCoverPreview] = useState('');
   const [isDraggingCover, setIsDraggingCover] = useState(false);
-  
+
   const getBookCopies = (book) =>
     Number(book?.totalCopies ?? book?.total_copies ?? book?.copies ?? 0);
 
@@ -66,7 +68,9 @@ export default function BookInventory() {
 
   const uploadBookCover = async (file, libraryId) => {
     if (!supabase) {
-      throw new Error('Cover uploads are unavailable because the storage service is not configured.');
+      throw new Error(
+        'Cover uploads are unavailable because the storage service is not configured.'
+      );
     }
 
     if (!libraryId) {
@@ -74,11 +78,14 @@ export default function BookInventory() {
     }
 
     const assignedBranch = user?.libraryId || user?.assignedBranch;
+
     if (
       user?.role === 'subadmin' &&
       String(assignedBranch || '') !== String(libraryId)
     ) {
-      throw new Error('You can only upload covers for books assigned to your branch.');
+      throw new Error(
+        'You can only upload covers for books assigned to your branch.'
+      );
     }
 
     const extension = file.type === 'image/png' ? 'png' : 'jpg';
@@ -94,23 +101,33 @@ export default function BookInventory() {
 
     if (uploadError) {
       console.error('Book cover upload failed:', uploadError);
+
       const uploadMessage = String(uploadError.message || '').toLowerCase();
+
       if (
         uploadError.statusCode === '403' ||
         uploadMessage.includes('row-level security') ||
         uploadMessage.includes('not authorized') ||
         uploadMessage.includes('permission')
       ) {
-        throw new Error('Cover upload was denied. Verify that your account can manage books for the selected branch.');
+        throw new Error(
+          'Cover upload was denied. Verify that your account can manage books for the selected branch.'
+        );
       }
+
       if (
         uploadMessage.includes('network') ||
         uploadMessage.includes('fetch') ||
         uploadMessage.includes('connection')
       ) {
-        throw new Error('Unable to connect to cover storage. Check your connection and try again.');
+        throw new Error(
+          'Unable to connect to cover storage. Check your connection and try again.'
+        );
       }
-      throw new Error('Unable to upload the book cover. Check the file and try again.');
+
+      throw new Error(
+        'Unable to upload the book cover. Check the file and try again.'
+      );
     }
 
     const { data } = supabase.storage
@@ -136,8 +153,12 @@ export default function BookInventory() {
   });
 
   const getLibraryDisplayName = (libId) => {
-    if (!libId) return 'Personal Collection'; 
-    const found = libraries?.find((l) => String(l.id) === String(libId));
+    if (!libId) return 'Personal Collection';
+
+    const found = libraries?.find(
+      (library) => String(library.id) === String(libId)
+    );
+
     return found ? found.name : 'Personal Collection';
   };
 
@@ -145,6 +166,7 @@ export default function BookInventory() {
     setEditingId(null);
     setSelectedCoverFile(null);
     setCoverPreview('');
+
     setForm({
       title: '',
       author: '',
@@ -155,7 +177,9 @@ export default function BookInventory() {
       coverUrl: '',
       summary: ''
     });
+
     setMutationError('');
+    setMutationNotice('');
     setShowForm(true);
   };
 
@@ -163,6 +187,7 @@ export default function BookInventory() {
     setEditingId(book.id);
     setSelectedCoverFile(null);
     setCoverPreview('');
+
     setForm({
       title: book.title || '',
       author: book.author || '',
@@ -171,14 +196,18 @@ export default function BookInventory() {
       copies: getBookCopies(book) || 1,
       libraryId: book.libraryId || '',
       coverUrl: book.coverUrl || '',
-      summary: book.summary || ''
+      summary: book.summary || '',
+      updatedAt: book.updatedAt || ''
     });
+
     setMutationError('');
+    setMutationNotice('');
     setShowForm(true);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     setSaving(true);
     setMutationError('');
 
@@ -186,31 +215,44 @@ export default function BookInventory() {
       let coverUrl = form.coverUrl;
 
       if (selectedCoverFile) {
-        coverUrl = await uploadBookCover(selectedCoverFile, form.libraryId);
+        coverUrl = await uploadBookCover(
+          selectedCoverFile,
+          form.libraryId
+        );
       }
 
       const bookPayload = {
         ...form,
         coverUrl,
-        totalCopies: form.copies,
+        totalCopies: form.copies
       };
 
+      let savedBook;
+
       if (editingId) {
-        await updateBook(editingId, bookPayload);
+        savedBook = await updateBook(editingId, bookPayload);
       } else {
-        await addBook(bookPayload);
+        savedBook = await addBook(bookPayload);
       }
+
+      setMutationNotice(
+        savedBook?.fineRateMismatch
+          ? `Copies were added, but the existing category and rate for "${savedBook.title}" were preserved. Existing category "${savedBook.fineRateMismatch.existingCategory || 'Unclassified'}" is stored at ₱${savedBook.fineRateMismatch.existingRate ?? 'unassigned'}; imported category "${savedBook.fineRateMismatch.importedCategory || 'Unclassified'}" derives ₱${savedBook.fineRateMismatch.importedRate ?? 'unassigned'}. Review manually.`
+          : ''
+      );
 
       setSelectedCoverFile(null);
       setCoverPreview('');
       setShowForm(false);
     } catch (err) {
       console.error('Book inventory save failed:', err);
+
       const saveMessage = String(err?.message || '').toLowerCase();
+
       setMutationError(
         saveMessage.includes('row-level security') ||
-          saveMessage.includes('permission denied') ||
-          saveMessage.includes('not authorized')
+        saveMessage.includes('permission denied') ||
+        saveMessage.includes('not authorized')
           ? 'Book changes were denied. Verify that your account can manage inventory for the selected branch.'
           : err.message || 'Unable to save the book. Please try again.'
       );
@@ -230,34 +272,57 @@ export default function BookInventory() {
   };
 
   const filteredBooks = (books || [])
-    .filter((b) => {
+    .filter((book) => {
       const q = search.toLowerCase();
+
       return (
-        b.title?.toLowerCase().includes(q) ||
-        b.author?.toLowerCase().includes(q) ||
-        b.isbn?.toLowerCase().includes(q) ||
-        b.category?.toLowerCase().includes(q)
+        book.title?.toLowerCase().includes(q) ||
+        book.author?.toLowerCase().includes(q) ||
+        book.isbn?.toLowerCase().includes(q) ||
+        book.category?.toLowerCase().includes(q)
       );
     })
     .sort((a, b) => {
-      if (sortBy === 'title-asc') return (a.title || '').localeCompare(b.title || '');
-      if (sortBy === 'title-desc') return (b.title || '').localeCompare(a.title || '');
-      if (sortBy === 'author-asc') return (a.author || '').localeCompare(b.author || '');
-      if (sortBy === 'copies-desc') return getBookCopies(b) - getBookCopies(a);
+      if (sortBy === 'title-asc') {
+        return (a.title || '').localeCompare(b.title || '');
+      }
+
+      if (sortBy === 'title-desc') {
+        return (b.title || '').localeCompare(a.title || '');
+      }
+
+      if (sortBy === 'author-asc') {
+        return (a.author || '').localeCompare(b.author || '');
+      }
+
+      if (sortBy === 'copies-desc') {
+        return getBookCopies(b) - getBookCopies(a);
+      }
+
       return 0;
     });
 
   if (loading) {
-    return <div className="p-4 text-slate-600">Loading book inventory...</div>;
+    return (
+      <div className="p-4 text-slate-600">
+        Loading book inventory...
+      </div>
+    );
   }
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Book Inventory</h1>
-          <p className="text-xs text-slate-500">Manage all books across system libraries</p>
+          <h1 className="text-2xl font-bold text-slate-800">
+            Book Inventory
+          </h1>
+
+          <p className="text-xs text-slate-500">
+            Manage all books across system libraries
+          </p>
         </div>
+
         <button
           onClick={handleOpenAdd}
           className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition"
@@ -272,10 +337,19 @@ export default function BookInventory() {
         </div>
       )}
 
+      {mutationNotice && (
+        <div
+          role="status"
+          className="p-3 bg-amber-50 text-amber-800 rounded-lg text-sm"
+        >
+          {mutationNotice}
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-100">
-        {/* SEARCH INPUT WITH CLEAR (X) BUTTON */}
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+
           <input
             type="text"
             placeholder="Search by title, author, ISBN, category..."
@@ -283,6 +357,7 @@ export default function BookInventory() {
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-9 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
+
           {search && (
             <button
               type="button"
@@ -312,32 +387,33 @@ export default function BookInventory() {
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-600 border-collapse">
-            {/* TABLE HEADER */}
             <thead className="bg-slate-50/80 text-slate-700 font-bold uppercase text-xs border-b border-slate-100">
               <tr>
-                <th className="p-4 w-5/12">Book</th>
+                <th className="p-4 w-4/12">Book</th>
                 <th className="p-4 w-2/12">Category</th>
-                <th className="p-4 w-3/12">Library Location</th>
+                <th className="p-4 w-2/12">Fine Rate</th>
+                <th className="p-4 w-2/12">Library Location</th>
                 <th className="p-4 w-1/12 text-center">Copies</th>
                 <th className="p-4 w-1/12 text-right">Actions</th>
               </tr>
             </thead>
 
-            {/* TABLE BODY WITH FULL ROW HOVER */}
             <tbody className="divide-y divide-slate-100">
               {filteredBooks.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="p-8 text-center text-slate-400 font-medium">
+                  <td
+                    colSpan="6"
+                    className="p-8 text-center text-slate-400 font-medium"
+                  >
                     No books found.
                   </td>
                 </tr>
               ) : (
                 filteredBooks.map((book) => (
-                  <tr 
-                    key={book.id} 
+                  <tr
+                    key={book.id}
                     className="group hover:bg-indigo-50/50 hover:shadow-inner transition-all duration-150 cursor-pointer"
                   >
-                    {/* BOOK COVER & TITLE */}
                     <td className="p-4 flex items-center gap-3.5">
                       {book.coverUrl ? (
                         <img
@@ -350,13 +426,16 @@ export default function BookInventory() {
                           No Cover
                         </div>
                       )}
+
                       <div className="min-w-0">
                         <div className="font-bold text-slate-800 text-sm group-hover:text-indigo-900 transition-colors truncate">
                           {book.title}
                         </div>
+
                         <div className="text-xs text-slate-500 font-medium">
                           By {book.author || 'Unknown'}
                         </div>
+
                         {book.isbn && (
                           <div className="text-[11px] text-slate-400 font-mono mt-0.5">
                             ISBN: {book.isbn}
@@ -365,26 +444,32 @@ export default function BookInventory() {
                       </div>
                     </td>
 
-                    {/* CATEGORY */}
                     <td className="p-4 align-middle">
                       <span className="inline-block px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md text-xs font-semibold group-hover:bg-white group-hover:shadow-sm transition-all">
-                        {book.category}
+                        {book.category || 'Unclassified'}
                       </span>
                     </td>
 
-                    {/* LIBRARY LOCATION */}
+                    <td className="p-4 align-middle text-xs font-semibold text-slate-700">
+                      {getBookFineRate(book.category) == null ? (
+                        <div>Unclassified — checkout unavailable</div>
+                      ) : (
+                        <div className="mt-1 text-[11px] font-medium text-slate-500">
+                          ₱{getBookFineRate(book.category)} per overdue day
+                        </div>
+                      )}
+                    </td>
+
                     <td className="p-4 align-middle text-xs font-semibold text-slate-700">
                       {getLibraryDisplayName(book.libraryId)}
                     </td>
 
-                    {/* COPIES (Naka-center para tapat sa Header) */}
                     <td className="p-4 align-middle text-center">
                       <span className="inline-flex items-center justify-center font-extrabold text-slate-800 text-sm px-2.5 py-1 rounded-full bg-slate-100 group-hover:bg-indigo-100 group-hover:text-indigo-800 transition-colors">
                         {getBookCopies(book)}
                       </span>
                     </td>
 
-                    {/* ACTIONS */}
                     <td className="p-4 align-middle text-right space-x-2">
                       <button
                         type="button"
@@ -396,6 +481,7 @@ export default function BookInventory() {
                       >
                         Edit
                       </button>
+
                       <button
                         type="button"
                         onClick={(e) => {
@@ -430,32 +516,48 @@ export default function BookInventory() {
 
             <form onSubmit={handleSubmit} className="space-y-3 text-xs">
               <div>
-                <label className="block text-slate-700 font-semibold mb-1">Title *</label>
+                <label className="block text-slate-700 font-semibold mb-1">
+                  Title *
+                </label>
+
                 <input
                   required
                   type="text"
                   value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, title: e.target.value })
+                  }
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Author</label>
+                  <label className="block text-slate-700 font-semibold mb-1">
+                    Author
+                  </label>
+
                   <input
                     type="text"
                     value={form.author}
-                    onChange={(e) => setForm({ ...form, author: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, author: e.target.value })
+                    }
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-slate-700 font-semibold mb-1">ISBN</label>
+                  <label className="block text-slate-700 font-semibold mb-1">
+                    ISBN
+                  </label>
+
                   <input
                     type="text"
                     value={form.isbn}
-                    onChange={(e) => setForm({ ...form, isbn: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, isbn: e.target.value })
+                    }
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
@@ -463,36 +565,66 @@ export default function BookInventory() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Category *</label>
+                  <label className="block text-slate-700 font-semibold mb-1">
+                    Category *
+                  </label>
+
                   <input
                     required
                     type="text"
                     placeholder="e.g. Fiction, History, Science"
                     value={form.category}
-                    onChange={(e) => setForm({ ...form, category: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, category: e.target.value })
+                    }
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Copies</label>
+                  <label className="block text-slate-700 font-semibold mb-1">
+                    Copies
+                  </label>
+
                   <input
                     type="number"
                     min="1"
                     value={form.copies}
-                    onChange={(e) => setForm({ ...form, copies: parseInt(e.target.value) || 1 })}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        copies: parseInt(e.target.value, 10) || 1
+                      })
+                    }
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
               </div>
 
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                <span className="font-semibold">Fine rate: </span>
+
+                {getBookFineRate(form.category) == null
+                  ? 'Unclassified — checkout unavailable'
+                  : `₱${getBookFineRate(form.category)} per overdue day`}
+              </div>
+
               <div>
-                <label className="block text-slate-700 font-semibold mb-1">Library Location</label>
+                <label className="block text-slate-700 font-semibold mb-1">
+                  Library Location
+                </label>
+
                 <select
                   value={form.libraryId}
-                  onChange={(e) => setForm({ ...form, libraryId: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, libraryId: e.target.value })
+                  }
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="">Personal Collection / Main Branch</option>
+                  <option value="">
+                    Personal Collection / Main Branch
+                  </option>
+
                   {(libraries || []).map((lib) => (
                     <option key={lib.id} value={lib.id}>
                       {lib.name}
@@ -531,7 +663,9 @@ export default function BookInventory() {
                     setIsDraggingCover(false);
                     handleCoverSelect(e.dataTransfer.files?.[0]);
                   }}
-                  onClick={() => document.getElementById('book-cover-input')?.click()}
+                  onClick={() =>
+                    document.getElementById('book-cover-input')?.click()
+                  }
                   className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition ${
                     isDraggingCover
                       ? 'border-indigo-500 bg-indigo-50'
@@ -553,12 +687,15 @@ export default function BookInventory() {
                   ) : (
                     <div className="py-3">
                       <p className="text-2xl mb-2">📚</p>
+
                       <p className="font-semibold text-slate-700">
                         Drag and drop your book cover here
                       </p>
+
                       <p className="text-slate-500 mt-1">
                         or click to browse your files
                       </p>
+
                       <p className="text-slate-400 mt-2">
                         JPG or PNG · Maximum 5 MB
                       </p>
@@ -578,11 +715,16 @@ export default function BookInventory() {
               </div>
 
               <div>
-                <label className="block text-slate-700 font-semibold mb-1">Summary</label>
+                <label className="block text-slate-700 font-semibold mb-1">
+                  Summary
+                </label>
+
                 <textarea
                   rows="2"
                   value={form.summary}
-                  onChange={(e) => setForm({ ...form, summary: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, summary: e.target.value })
+                  }
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
@@ -590,17 +732,25 @@ export default function BookInventory() {
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => { setShowForm(false); setMutationError(''); }}
+                  onClick={() => {
+                    setShowForm(false);
+                    setMutationError('');
+                  }}
                   className="px-4 py-2 border rounded-lg text-slate-600 hover:bg-slate-50 font-medium"
                 >
                   Cancel
                 </button>
+
                 <button
                   type="submit"
                   disabled={saving}
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold disabled:opacity-50"
                 >
-                  {saving ? 'Saving...' : (editingId ? 'Save Changes' : 'Add Book')}
+                  {saving
+                    ? 'Saving...'
+                    : editingId
+                      ? 'Save Changes'
+                      : 'Add Book'}
                 </button>
               </div>
             </form>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import ParticleConstellation from '../../component/ParticleConstellation.jsx';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -27,6 +27,28 @@ const RESET_CODE_TTL_SECONDS = 10 * 60;
 const RESET_CODE_RESEND_COOLDOWN_SECONDS = 60;
 const MAX_QR_IMAGE_SIZE = 10 * 1024 * 1024;
 const preventPasswordClipboard = (event) => event.preventDefault();
+
+function getInternalReturnPath(from) {
+  const returnPath =
+    typeof from === 'string'
+      ? from
+      : from && typeof from.pathname === 'string'
+        ? `${from.pathname}${from.search || ''}${from.hash || ''}`
+        : '';
+
+  if (
+    !returnPath.startsWith('/') ||
+    returnPath.startsWith('//') ||
+    returnPath.includes('\\')
+  ) {
+    return null;
+  }
+
+  const returnUrl = new URL(returnPath, window.location.origin);
+  return returnUrl.origin === window.location.origin
+    ? `${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`
+    : null;
+}
 
 function getCameraErrorMessage(error) {
   if (
@@ -96,6 +118,7 @@ function PasswordRequirement({ valid, children }) {
 
 export default function VisitorLogin({ initialView = 'login' }) {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const {
     registerVisitor,
@@ -979,7 +1002,9 @@ useEffect(() => {
         result?.role ===
         'visitor'
       ) {
-        navigate('/visitor');
+        navigate(
+          getInternalReturnPath(location.state?.from) || '/visitor'
+        );
       } else if (
         result?.role ===
         'subadmin'
