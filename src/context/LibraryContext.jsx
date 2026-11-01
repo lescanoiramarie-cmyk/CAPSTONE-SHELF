@@ -167,7 +167,9 @@ export function LibraryProvider({ children }) {
         store.fetchExternalCatalogBooks(),
         store.fetchLibraries(),
         store.fetchVisitors(),
-        store.fetchBorrowRequests(),
+        store.fetchBorrowRequests({
+          includeCommunityRequests: false,
+        }),
         store.fetchAttendanceLogs().then(
           (attendanceLogs) => ({ attendanceLogs, error: '' }),
           (error) => ({

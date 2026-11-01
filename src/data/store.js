@@ -945,15 +945,15 @@ export async function fetchVisitors() {
 // This function:
 //   - Gets the current visitor from the SHELF local session.
 //   - Loads normal library borrow requests.
-//   - Loads community requests through the PostgreSQL RPC.
-//   - If the community RPC returns no rows, it also attempts a direct
-//     Supabase table query as a fallback.
-//   - Normalizes both request types into one structure.
+//   - Optionally loads community requests through the PostgreSQL RPC.
+//   - Normalizes the loaded request types into one structure.
 //   - Removes duplicates.
 //   - Sorts newest requests first.
 // ============================================================================
 
-export async function fetchBorrowRequests() {
+export async function fetchBorrowRequests({
+  includeCommunityRequests = true,
+} = {}) {
   // ==========================================================================
   // 1. READ LOCAL SHELF SESSION
   // ==========================================================================
@@ -1219,50 +1219,52 @@ export async function fetchBorrowRequests() {
 
   let communityRequests = [];
 
-  try {
-    // Kunin ang kasalukuyang Supabase Auth session.
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
-
-    if (sessionError) {
-      throw sessionError;
-    }
-
-    // Huwag tawagin ang protected RPC kapag walang authenticated session.
-    if (session?.user?.id && isValidVisitorId(normalizedVisitorId)) {
+  if (includeCommunityRequests) {
+    try {
+      // Kunin ang kasalukuyang Supabase Auth session.
       const {
-        data,
-        error,
-      } = await supabase.rpc(
-        'fetch_my_community_book_requests',
-        {
-          p_requester_visitor_id: normalizedVisitorId,
-        }
-      );
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
 
-      if (error) {
-        console.error(
-          'SHELF — COMMUNITY REQUEST RPC ERROR:',
-          error
-        );
-        throw cleanErr(
-          error,
-          'Unable to load your community book requests.'
-        );
-      } else {
-        communityRequests = Array.isArray(data) ? data : [];
+      if (sessionError) {
+        throw sessionError;
       }
-    } else {
-      // No community requests are loaded without an authenticated visitor session.
+
+      // Huwag tawagin ang protected RPC kapag walang authenticated session.
+      if (session?.user?.id && isValidVisitorId(normalizedVisitorId)) {
+        const {
+          data,
+          error,
+        } = await supabase.rpc(
+          'fetch_my_community_book_requests',
+          {
+            p_requester_visitor_id: normalizedVisitorId,
+          }
+        );
+
+        if (error) {
+          console.error(
+            'SHELF — COMMUNITY REQUEST RPC ERROR:',
+            error
+          );
+          throw cleanErr(
+            error,
+            'Unable to load your community book requests.'
+          );
+        } else {
+          communityRequests = Array.isArray(data) ? data : [];
+        }
+      } else {
+        // No community requests are loaded without an authenticated visitor session.
+      }
+    } catch (error) {
+      console.error(
+        'SHELF — COMMUNITY REQUEST FETCH ERROR:',
+        error
+      );
+      throw error;
     }
-  } catch (error) {
-    console.error(
-      'SHELF — COMMUNITY REQUEST FETCH ERROR:',
-      error
-    );
-    throw error;
   }
 
   // ==========================================================================
