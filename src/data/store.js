@@ -953,6 +953,7 @@ export async function fetchVisitors() {
 
 export async function fetchBorrowRequests({
   includeCommunityRequests = true,
+  visitorId = null,
 } = {}) {
   // ==========================================================================
   // 1. READ LOCAL SHELF SESSION
@@ -996,7 +997,8 @@ export async function fetchBorrowRequests({
   // Therefore we MUST use visitors.id.
   // ==========================================================================
 
-  let normalizedVisitorId = null;
+  let normalizedVisitorId =
+    normalizeText(visitorId) || null;
   let authenticatedUserId;
 
   try {
@@ -1026,6 +1028,7 @@ export async function fetchBorrowRequests({
     // ------------------------------------------------------------------------
 
     if (
+      !normalizedVisitorId &&
       authUserId &&
       isValidUuid(authUserId)
     ) {
@@ -1131,18 +1134,6 @@ export async function fetchBorrowRequests({
   let normalRequests;
 
   try {
-    const {
-      data: sessionData,
-      error: sessionError,
-    } = await supabase.auth.getSession();
-
-    if (sessionError) {
-      throw cleanErr(
-        sessionError,
-        'Unable to check the current authentication session.'
-      );
-    }
-
     // ------------------------------------------------------------------------
     // AUTHENTICATED SESSION
     //
@@ -1150,22 +1141,21 @@ export async function fetchBorrowRequests({
     // visitor's own rows.
     // ------------------------------------------------------------------------
 
-    if (
-      sessionData?.session
-    ) {
-      const authUserId = sessionData.session.user.id;
+    if (authenticatedUserId) {
       if (
-        authenticatedUserId === authUserId &&
         normalizedVisitorId &&
         isValidVisitorId(normalizedVisitorId)
       ) {
         normalRequests = await getBorrowRequestsForSession(
-          authUserId,
+          authenticatedUserId,
           async () => {
-            const { data, error } = await supabase.rpc(
-              'get_visitor_borrow_requests',
-              { p_visitor_id: authUserId }
-            );
+            const { data, error } = await supabase
+              .from('borrow_requests')
+              .select(
+                'id, book_id, book_title, visitor_id, visitor_name, status, request_date, pickup_deadline, queue_position, borrow_date, due_date, return_date, fine_amount, confirmed_by, return_confirmed_by, fine_rate_snapshot, fine_review_required'
+              )
+              .eq('visitor_id', normalizedVisitorId)
+              .order('request_date', { ascending: false });
 
             if (error) {
               throw cleanErr(
@@ -1179,7 +1169,7 @@ export async function fetchBorrowRequests({
         );
       } else {
         normalRequests = await getBorrowRequestsForSession(
-          authUserId,
+          authenticatedUserId,
           fetchAllBorrowRequestRows
         );
       }

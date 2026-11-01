@@ -33,21 +33,22 @@ test('restoring the saved auth user does not dispatch a duplicate initial data r
   );
 });
 
-test('authenticated visitor borrow history uses the self-verifying visitor RPC', () => {
+test('authenticated visitor borrow history uses a visitor-scoped RLS query', () => {
   const visitorRequestBranch = storeSource.match(
-    /if\s*\(\s*authenticatedUserId\s*===\s*authUserId[\s\S]*?\n\s*\}\s*else\s*\{/
+    /if\s*\(\s*authenticatedUserId\s*\)\s*\{\s*if\s*\([\s\S]*?\n\s*\}\s*else\s*\{/
   );
   assert.ok(visitorRequestBranch, 'Expected a separate authenticated visitor request path.');
   assert.match(visitorRequestBranch[0], /normalizedVisitorId/);
-  assert.match(visitorRequestBranch[0], /'get_visitor_borrow_requests'/);
-  assert.match(visitorRequestBranch[0], /p_visitor_id:\s*authUserId/);
+  assert.match(visitorRequestBranch[0], /\.from\('borrow_requests'\)/);
+  assert.match(visitorRequestBranch[0], /\.eq\('visitor_id',\s*normalizedVisitorId\)/);
+  assert.doesNotMatch(visitorRequestBranch[0], /'get_visitor_borrow_requests'/);
   assert.doesNotMatch(visitorRequestBranch[0], /fetchAllBorrowRequestRows/);
 });
 
 test('library refresh does not fetch requester community requests twice', () => {
   assert.match(
     storeSource,
-    /export async function fetchBorrowRequests\(\{\s*includeCommunityRequests = true,\s*\} = \{\}\)/
+    /export async function fetchBorrowRequests\(\{\s*includeCommunityRequests = true,\s*visitorId = null,\s*\} = \{\}\)/
   );
   assert.match(
     storeSource,
@@ -55,7 +56,7 @@ test('library refresh does not fetch requester community requests twice', () => 
   );
   assert.match(
     libraryContextSource,
-    /store\.fetchBorrowRequests\(\{\s*includeCommunityRequests:\s*false,\s*\}\)/
+    /store\.fetchBorrowRequests\(\{\s*includeCommunityRequests:\s*false,\s*visitorId:\s*currentVisitorId,\s*\}\)/
   );
   assert.match(
     libraryContextSource,

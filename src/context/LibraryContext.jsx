@@ -176,6 +176,7 @@ export function LibraryProvider({ children }) {
         waitForData(
           store.fetchBorrowRequests({
             includeCommunityRequests: false,
+            visitorId: currentVisitorId,
           }),
           'Borrowing history'
         ),
