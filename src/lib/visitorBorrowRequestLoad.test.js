@@ -50,7 +50,7 @@ test('authenticated visitor borrow history uses a visitor-scoped RLS query', () 
 test('library refresh does not fetch requester community requests twice', () => {
   assert.match(
     storeSource,
-    /export async function fetchBorrowRequests\(\{\s*includeCommunityRequests = true,\s*visitorId = null,\s*signal,\s*\} = \{\}\)/
+    /export async function fetchBorrowRequests\(\{\s*includeCommunityRequests = true,\s*visitorId = null,\s*signal,\s*skipVisitorResolution = false,\s*\} = \{\}\)/
   );
   assert.match(
     storeSource,
@@ -69,7 +69,7 @@ test('library refresh does not fetch requester community requests twice', () => 
 test('visitor borrow history does not block the main dashboard refresh', () => {
   assert.match(
     libraryContextSource,
-    /currentVisitorId\s*\?\s*Promise\.resolve\(\[\]\)\s*:\s*waitForData\([\s\S]*?'Borrowing history'/
+    /currentVisitorId\s*\?\s*Promise\.resolve\(\[\]\)\s*:\s*waitForData\([\s\S]*?skipVisitorResolution:\s*true[\s\S]*?'Borrowing history'/
   );
   assert.match(
     libraryContextSource,
@@ -87,6 +87,21 @@ test('visitor borrow history does not block the main dashboard refresh', () => {
     libraryContextSource,
     /borrowRequestsLoadSequenceRef\.current \+= 1/
   );
+});
+
+test('unresolved visitor sessions do not fall back to loading all borrow requests', () => {
+  const missingVisitorBranch = storeSource.match(
+    /if\s*\(skipVisitorResolution\)\s*\{[\s\S]*?normalRequests\s*=\s*staff\?\.is_active[\s\S]*?:\s*\[\];/
+  );
+  assert.ok(
+    missingVisitorBranch,
+    'Expected missing visitor IDs to load borrow history only for an active staff account.'
+  );
+  assert.match(
+    missingVisitorBranch[0],
+    /\.from\('staff_profiles'\)[\s\S]*?\.eq\('id',\s*authenticatedUserId\)/
+  );
+  assert.match(missingVisitorBranch[0], /getBorrowRequestsForSession\(fetchAllBorrowRequestRows\)/);
 });
 
 test('visitor can see and retry borrowing history loading errors', () => {

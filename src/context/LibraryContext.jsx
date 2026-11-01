@@ -282,6 +282,7 @@ export function LibraryProvider({ children }) {
           : waitForData(
               store.fetchBorrowRequests({
                 includeCommunityRequests: false,
+                skipVisitorResolution: true,
               }),
               'Borrowing history'
             ),

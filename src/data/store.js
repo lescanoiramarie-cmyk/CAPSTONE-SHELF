@@ -967,6 +967,7 @@ export async function fetchBorrowRequests({
   includeCommunityRequests = true,
   visitorId = null,
   signal,
+  skipVisitorResolution = false,
 } = {}) {
   // ==========================================================================
   // 1. READ LOCAL SHELF SESSION
@@ -1041,6 +1042,7 @@ export async function fetchBorrowRequests({
     // ------------------------------------------------------------------------
 
     if (
+      !skipVisitorResolution &&
       !normalizedVisitorId &&
       authUserId &&
       isValidUuid(authUserId)
@@ -1090,6 +1092,7 @@ export async function fetchBorrowRequests({
     // ========================================================================
 
     if (
+      !skipVisitorResolution &&
       !normalizedVisitorId
     ) {
       const localVisitorId =
@@ -1180,9 +1183,28 @@ export async function fetchBorrowRequests({
           return data || [];
         });
       } else {
-        normalRequests = await getBorrowRequestsForSession(
-          fetchAllBorrowRequestRows
-        );
+        if (skipVisitorResolution) {
+          const { data: staff, error: staffError } = await supabase
+            .from('staff_profiles')
+            .select('id, is_active')
+            .eq('id', authenticatedUserId)
+            .maybeSingle();
+
+          if (staffError) {
+            throw cleanErr(
+              staffError,
+              'Unable to verify staff access to borrowing history.'
+            );
+          }
+
+          normalRequests = staff?.is_active
+            ? await getBorrowRequestsForSession(fetchAllBorrowRequestRows)
+            : [];
+        } else {
+          normalRequests = await getBorrowRequestsForSession(
+            fetchAllBorrowRequestRows
+          );
+        }
       }
     }
 
