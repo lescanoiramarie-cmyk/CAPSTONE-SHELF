@@ -887,7 +887,32 @@ export async function fetchCommunityBooks() {
 // FETCH VISITORS
 // ============================================================================
 
-export async function fetchVisitors() {
+export async function fetchVisitors(visitorId = null, knownVisitor = null) {
+  const normalizedVisitorId = normalizeText(visitorId);
+
+  if (normalizedVisitorId) {
+    if (
+      knownVisitor?.id &&
+      normalizeText(knownVisitor.id) === normalizedVisitorId
+    ) {
+      return [knownVisitor];
+    }
+
+    const { data, error } = await supabase
+      .from('visitors')
+      .select(
+        'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at, library_id'
+      )
+      .eq('id', normalizedVisitorId)
+      .maybeSingle();
+
+    if (error) {
+      throw cleanErr(error, 'Unable to fetch your visitor profile.');
+    }
+
+    return data ? [mapVisitor(data)] : [];
+  }
+
   const scope = await getAuthenticatedDataScope();
   if (scope.type === 'anonymous') return [];
 

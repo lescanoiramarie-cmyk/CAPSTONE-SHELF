@@ -60,6 +60,7 @@ export function LibraryProvider({ children }) {
   const refreshSequenceRef = useRef(0);
   const borrowRequestsAbortControllerRef = useRef(null);
   const borrowRequestsLoadSequenceRef = useRef(0);
+  const currentVisitorProfileRef = useRef(null);
 
   // ==========================================================================
   // GET CURRENT VISITOR ID
@@ -71,6 +72,7 @@ export function LibraryProvider({ children }) {
   // ==========================================================================
 
   const getCurrentVisitorId = useCallback(async () => {
+    currentVisitorProfileRef.current = null;
     // Community-request RPCs are granted to authenticated visitors only.
     // Do not trust the local SHELF UI session as proof of identity: it can
     // exist without a Supabase access token and would make PostgREST execute
@@ -112,8 +114,10 @@ export function LibraryProvider({ children }) {
       }
 
       const visitor = await store.getVisitor(authUserId);
+      currentVisitorProfileRef.current = visitor;
       return visitor?.id || null;
     } catch (error) {
+      currentVisitorProfileRef.current = null;
       console.warn('SHELF could not resolve authenticated visitor:', error);
       return null;
     }
@@ -266,7 +270,13 @@ export function LibraryProvider({ children }) {
           'External catalog books'
         ),
         waitForData(store.fetchLibraries(), 'Library list'),
-        waitForData(store.fetchVisitors(), 'Visitor profiles'),
+        waitForData(
+          store.fetchVisitors(
+            currentVisitorId,
+            currentVisitorProfileRef.current
+          ),
+          'Visitor profiles'
+        ),
         currentVisitorId
           ? Promise.resolve([])
           : waitForData(

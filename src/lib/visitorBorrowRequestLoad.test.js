@@ -100,6 +100,29 @@ test('visitor can see and retry borrowing history loading errors', () => {
   );
 });
 
+test('visitor dashboard loads only the signed-in visitor profile', () => {
+  assert.match(
+    storeSource,
+    /export async function fetchVisitors\(visitorId = null,\s*knownVisitor = null\)/
+  );
+  assert.match(
+    storeSource,
+    /knownVisitor\?\.id[\s\S]*?normalizeText\(knownVisitor\.id\) === normalizedVisitorId/
+  );
+  assert.match(
+    storeSource,
+    /\.eq\('id', normalizedVisitorId\)[\s\S]*?\.maybeSingle\(\)/
+  );
+  assert.match(
+    libraryContextSource,
+    /store\.fetchVisitors\(\s*currentVisitorId,\s*currentVisitorProfileRef\.current\s*\)/
+  );
+  assert.match(
+    libraryContextSource,
+    /currentVisitorProfileRef\.current = visitor/
+  );
+});
+
 test('visitor borrow RPC lookup has a matching request-date index migration', () => {
   assert.match(
     visitorBorrowIndexMigration,
