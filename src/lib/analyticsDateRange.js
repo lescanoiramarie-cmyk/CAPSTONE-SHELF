@@ -1,4 +1,5 @@
 export const TIMEFRAME_OPTIONS = [
+  { id: 'all', label: 'All time' },
   { id: 'today', label: 'Today' },
   { id: '7d', label: 'Last 7 days' },
   { id: 'this_week', label: 'This week' },
@@ -31,6 +32,22 @@ function range(start, endExclusive, label) {
   return { start, endExclusive, label, valid: true, error: '' };
 }
 
+export function getTimeframeBucketKey(value, timeframe) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+  if (timeframe === 'all') {
+    return String(date.getFullYear());
+  }
+
+  const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  if (timeframe === 'year') {
+    return monthKey;
+  }
+  return `${monthKey}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 export function getTimeframeRange(
   timeframe,
   customStart = '',
@@ -39,6 +56,10 @@ export function getTimeframeRange(
 ) {
   const today = startOfDay(now);
   const tomorrow = addDays(today, 1);
+
+  if (timeframe === 'all') {
+    return range(new Date(0), tomorrow, 'All time');
+  }
 
   if (timeframe === 'today') {
     return range(today, tomorrow, 'Today');
@@ -123,6 +144,25 @@ export function getTimeframeBuckets(timeframe, timeframeRange) {
   const buckets = [];
 
   if (!timeframeRange?.valid) {
+    return buckets;
+  }
+
+  if (timeframe === 'all') {
+    const cursor = new Date(timeframeRange.start.getFullYear(), 0, 1);
+
+    while (cursor < timeframeRange.endExclusive) {
+      const endExclusive = new Date(cursor.getFullYear() + 1, 0, 1);
+      buckets.push({
+        start: new Date(cursor),
+        endExclusive: new Date(
+          Math.min(endExclusive.getTime(), timeframeRange.endExclusive.getTime())
+        ),
+        key: String(cursor.getFullYear()),
+        label: String(cursor.getFullYear()),
+      });
+      cursor.setFullYear(cursor.getFullYear() + 1);
+    }
+
     return buckets;
   }
 

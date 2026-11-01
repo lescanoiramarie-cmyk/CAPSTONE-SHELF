@@ -16,6 +16,7 @@ import { exportReport } from '../lib/excelUtils.js';
 import AnalyticsDateFilter from './AnalyticsDateFilter.jsx';
 import AuditLogViewer from './AuditLogViewer.jsx';
 import {
+  getTimeframeBucketKey,
   getTimeframeBuckets,
   getTimeframeRange,
 } from '../lib/analyticsDateRange.js';
@@ -89,18 +90,6 @@ function isDateInsideWindow(value, window) {
   return date >= window.start && date < window.endExclusive;
 }
 
-function getDateKey(value, timeframe) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-  const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-  if (timeframe === 'year') {
-    return monthKey;
-  }
-  return `${monthKey}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
 function formatLocalDateInput(value) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
 }
@@ -148,7 +137,9 @@ export default function AdminWorkspace({
   }, [mode]);
 
   const [analyticsLibraryId, setAnalyticsLibraryId] = useState('');
-  const [timeframe, setTimeframe] = useState('this_month');
+  const [timeframe, setTimeframe] = useState(
+    user?.role === 'superadmin' ? 'all' : 'this_month'
+  );
   const [activityTypeFilter, setActivityTypeFilter] = useState('all');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
@@ -468,11 +459,11 @@ export default function AdminWorkspace({
     const transactionCounts = new Map();
 
     analyticsAttendance.forEach((item) => {
-      const key = getDateKey(item.timeIn, timeframe);
+      const key = getTimeframeBucketKey(item.timeIn, timeframe);
       visitCounts.set(key, (visitCounts.get(key) || 0) + 1);
     });
     analyticsBorrows.forEach((item) => {
-      const key = getDateKey(item.requestDate, timeframe);
+      const key = getTimeframeBucketKey(item.requestDate, timeframe);
       transactionCounts.set(key, (transactionCounts.get(key) || 0) + 1);
     });
 
@@ -493,7 +484,7 @@ export default function AdminWorkspace({
     if (!forecastHistoryDays) return [];
     const counts = new Map();
     analyticsAttendance.forEach((item) => {
-      const key = getDateKey(item.timeIn, 'custom');
+      const key = getTimeframeBucketKey(item.timeIn, 'custom');
       counts.set(key, (counts.get(key) || 0) + 1);
     });
     return forecastHistoryBuckets.map((bucket) => counts.get(bucket.key) || 0);
