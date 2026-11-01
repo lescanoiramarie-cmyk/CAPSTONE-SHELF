@@ -121,29 +121,32 @@ export function LibraryProvider({ children }) {
 
   const refreshAll = useCallback(async () => {
     const refreshSequence = ++refreshSequenceRef.current;
-    let timeoutId;
-    let timedOut = false;
-    const timeout = new Promise((_, reject) => {
-      timeoutId = setTimeout(
-        () => {
-          timedOut = true;
-          reject(
-            new Error(
-              'Library data is taking too long to load. Check your connection and retry.'
-            )
+    const waitForData = (request, operation) => {
+      let timeoutId;
+      const timeout = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          const error = new Error(
+            `${operation} is taking too long to load. Check your connection and retry.`
           );
-        },
-        DATA_LOAD_TIMEOUT_MS
-      );
-    });
-    const waitForData = (request) => Promise.race([request, timeout]);
+          error.name = 'DataLoadTimeoutError';
+          reject(error);
+        }, DATA_LOAD_TIMEOUT_MS);
+      });
+
+      return Promise.race([request, timeout]).finally(() => {
+        clearTimeout(timeoutId);
+      });
+    };
     setLoading(true);
     try {
       // ----------------------------------------------------------------------
       // Resolve current visitor first.
       // ----------------------------------------------------------------------
 
-      const currentVisitorId = await waitForData(getCurrentVisitorId());
+      const currentVisitorId = await waitForData(
+        getCurrentVisitorId(),
+        'Visitor account data'
+      );
 
       console.log(
         'SHELF — CURRENT VISITOR ID:',
@@ -162,23 +165,32 @@ export function LibraryProvider({ children }) {
         normalBorrowRequests,
         attendanceResult,
         communityBooks,
-      ] = await waitForData(Promise.all([
-        store.fetchBooks(),
-        store.fetchExternalCatalogBooks(),
-        store.fetchLibraries(),
-        store.fetchVisitors(),
-        store.fetchBorrowRequests({
-          includeCommunityRequests: false,
-        }),
-        store.fetchAttendanceLogs().then(
-          (attendanceLogs) => ({ attendanceLogs, error: '' }),
-          (error) => ({
-            attendanceLogs: [],
-            error: error?.message || 'Unable to load attendance records.',
-          })
+      ] = await Promise.all([
+        waitForData(store.fetchBooks(), 'Library books'),
+        waitForData(
+          store.fetchExternalCatalogBooks(),
+          'External catalog books'
         ),
-        store.fetchCommunityBooks(),
-      ]));
+        waitForData(store.fetchLibraries(), 'Library list'),
+        waitForData(store.fetchVisitors(), 'Visitor profiles'),
+        waitForData(
+          store.fetchBorrowRequests({
+            includeCommunityRequests: false,
+          }),
+          'Borrowing history'
+        ),
+        waitForData(store.fetchAttendanceLogs(), 'Attendance records').then(
+          (attendanceLogs) => ({ attendanceLogs, error: '' }),
+          (error) => {
+            if (error?.name === 'DataLoadTimeoutError') throw error;
+            return {
+              attendanceLogs: [],
+              error: error?.message || 'Unable to load attendance records.',
+            };
+          }
+        ),
+        waitForData(store.fetchCommunityBooks(), 'Community books'),
+      ]);
       const { attendanceLogs, error: attendanceError } = attendanceResult;
 
       if (attendanceError) {
@@ -189,101 +201,60 @@ export function LibraryProvider({ children }) {
       // Load books owned by the current visitor.
       // ----------------------------------------------------------------------
 
-      let personalBooks = [];
+      const loadVisitorData = async (operation, request, fallback) => {
+        if (!currentVisitorId || !request) return fallback;
 
-      if (currentVisitorId) {
         try {
-          personalBooks = await waitForData(
-            store.fetchPersonalBooks(currentVisitorId)
-          );
+          const result = await waitForData(request, operation);
+          return Array.isArray(result) ? result : fallback;
         } catch (error) {
-          console.error(
-            'SHELF personal books loading failed:',
-            error
-          );
-
-          personalBooks = [];
+          console.error(`SHELF ${operation.toLowerCase()} loading failed:`, error);
+          if (error?.name === 'DataLoadTimeoutError') throw error;
+          return fallback;
         }
-      }
+      };
 
-      // ----------------------------------------------------------------------
-      // Load community-book requests made by current visitor.
-      // ----------------------------------------------------------------------
+      const [personalBooks, myCommunityBookRequests, ownerRequestsResult] =
+        currentVisitorId
+          ? await Promise.all([
+              loadVisitorData(
+                'Personal books',
+                store.fetchPersonalBooks(currentVisitorId),
+                []
+              ),
+              loadVisitorData(
+                'Your community book requests',
+                typeof store.fetchMyCommunityBookRequests === 'function'
+                  ? store.fetchMyCommunityBookRequests(currentVisitorId)
+                  : null,
+                []
+              ),
+              loadVisitorData(
+                'Community book owner requests',
+                typeof store.fetchOwnerCommunityBookRequests === 'function'
+                  ? store.fetchOwnerCommunityBookRequests(currentVisitorId)
+                  : null,
+                []
+              ).then(
+                (requests) => ({ requests, error: '' }),
+                (error) => {
+                  if (error?.name === 'DataLoadTimeoutError') throw error;
+                  return {
+                    requests: [],
+                    error:
+                      error?.message ||
+                      'Unable to load community book requests.',
+                  };
+                }
+              ),
+            ])
+          : [[], [], { requests: [], error: '' }];
+      const ownerCommunityBookRequests = ownerRequestsResult.requests;
+      const ownerCommunityRequestLoadError = ownerRequestsResult.error;
 
-      let myCommunityBookRequests = [];
-
-      if (
-        currentVisitorId &&
-        typeof store.fetchMyCommunityBookRequests ===
-          'function'
-      ) {
-        try {
-          const result = await waitForData(
-            store.fetchMyCommunityBookRequests(currentVisitorId)
-          );
-
-          myCommunityBookRequests =
-            Array.isArray(result)
-              ? result
-              : [];
-
-          console.log(
-            'SHELF — MY COMMUNITY REQUESTS:',
-            {
-              visitorId:
-                currentVisitorId,
-
-              count:
-                myCommunityBookRequests.length,
-
-              requests:
-                myCommunityBookRequests,
-            }
-          );
-        } catch (error) {
-          console.error(
-            'SHELF my community book requests loading failed:',
-            error
-          );
-
-          myCommunityBookRequests = [];
-        }
-      }
-
-      // ----------------------------------------------------------------------
-      // Load community-book requests for books owned by current visitor.
-      // ----------------------------------------------------------------------
-
-      let ownerCommunityBookRequests = [];
-      let ownerCommunityRequestLoadError = '';
-
-      if (
-        currentVisitorId &&
-        typeof store.fetchOwnerCommunityBookRequests ===
-          'function'
-      ) {
-        try {
-          const result = await waitForData(
-            store.fetchOwnerCommunityBookRequests(currentVisitorId)
-          );
-
-          ownerCommunityBookRequests =
-            Array.isArray(result)
-              ? result
-              : [];
-
-        } catch (error) {
-          console.error(
-            'SHELF owner community book requests loading failed:',
-            error
-          );
-
-          ownerCommunityBookRequests = [];
-          ownerCommunityRequestLoadError =
-            error?.message ||
-            'Unable to load community book requests.';
-        }
-      }
+      console.log('SHELF — MY COMMUNITY REQUESTS:', {
+        count: myCommunityBookRequests.length,
+      });
 
       // ----------------------------------------------------------------------
       // Map normal library borrow requests.
@@ -521,12 +492,6 @@ fineReviewRequired:
         return;
       }
 
-      if (timedOut) {
-        throw new Error(
-          'Library data is taking too long to load. Check your connection and retry.'
-        );
-      }
-
       setData({
         externalCatalogBooks: Array.isArray(externalCatalogBooks)
           ? externalCatalogBooks
@@ -616,7 +581,6 @@ fineReviewRequired:
 
       throw err;
     } finally {
-      clearTimeout(timeoutId);
       if (refreshSequence === refreshSequenceRef.current) {
         setLoading(false);
       }

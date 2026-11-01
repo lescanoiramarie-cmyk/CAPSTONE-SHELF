@@ -63,6 +63,25 @@ test('library refresh does not fetch requester community requests twice', () => 
   );
 });
 
+test('refresh reports which data operation timed out and loads visitor data concurrently', () => {
+  assert.match(
+    libraryContextSource,
+    /const waitForData = \(request, operation\) =>/
+  );
+  assert.match(
+    libraryContextSource,
+    /error\.name = 'DataLoadTimeoutError'/
+  );
+  assert.match(
+    libraryContextSource,
+    /await Promise\.all\(\[\s*loadVisitorData\([\s\S]*?store\.fetchOwnerCommunityBookRequests/
+  );
+  assert.match(
+    libraryContextSource,
+    /if \(error\?\.name === 'DataLoadTimeoutError'\) throw error;/
+  );
+});
+
 test('visitor borrow RPC lookup has a matching request-date index migration', () => {
   assert.match(
     visitorBorrowIndexMigration,
