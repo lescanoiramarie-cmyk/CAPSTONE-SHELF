@@ -66,10 +66,10 @@ test('library refresh does not fetch requester community requests twice', () => 
   );
 });
 
-test('visitor borrow history does not block the main dashboard refresh', () => {
+test('staff borrowing history loads after the main dashboard refresh', () => {
   assert.match(
     libraryContextSource,
-    /currentVisitorId\s*\?\s*Promise\.resolve\(\[\]\)\s*:\s*waitForData\([\s\S]*?skipVisitorResolution:\s*true[\s\S]*?'Borrowing history'/
+    /currentVisitorId\s*\?\s*Promise\.resolve\(\[\]\)\s*:\s*Promise\.resolve\(\[\]\)/
   );
   assert.match(
     libraryContextSource,
@@ -77,7 +77,23 @@ test('visitor borrow history does not block the main dashboard refresh', () => {
   );
   assert.match(
     libraryContextSource,
+    /const loadAllBorrowRequests = useCallback\(async \(sequence\) => \{[\s\S]*?BORROW_REQUESTS_LOAD_TIMEOUT_MS/
+  );
+  assert.match(
+    libraryContextSource,
+    /store\.fetchBorrowRequests\(\{[\s\S]*?skipVisitorResolution:\s*true,[\s\S]*?signal:\s*controller\.signal/
+  );
+  assert.match(
+    libraryContextSource,
+    /void loadAllBorrowRequests\(refreshSequence\)/
+  );
+  assert.match(
+    libraryContextSource,
     /borrowRequestsAbortControllerRef\.current\?\.abort\(\)/
+  );
+  assert.match(
+    libraryContextSource,
+    /allBorrowRequestsAbortControllerRef\.current\?\.abort\(\)/
   );
   assert.match(
     libraryContextSource,
@@ -101,7 +117,10 @@ test('unresolved visitor sessions do not fall back to loading all borrow request
     missingVisitorBranch[0],
     /\.from\('staff_profiles'\)[\s\S]*?\.eq\('id',\s*authenticatedUserId\)/
   );
-  assert.match(missingVisitorBranch[0], /getBorrowRequestsForSession\(fetchAllBorrowRequestRows\)/);
+  assert.match(
+    missingVisitorBranch[0],
+    /getBorrowRequestsForSession\(\(\)\s*=>\s*fetchAllBorrowRequestRows\(signal\)\s*\)/
+  );
 });
 
 test('visitor can see and retry borrowing history loading errors', () => {

@@ -48,6 +48,7 @@ const emptyData = {
 };
 
 const DATA_LOAD_TIMEOUT_MS = 15000;
+const BORROW_REQUESTS_LOAD_TIMEOUT_MS = 60000;
 
 export function LibraryProvider({ children }) {
   const [data, setData] = useState(emptyData);
@@ -59,6 +60,7 @@ export function LibraryProvider({ children }) {
   const [borrowRequestsLoadError, setBorrowRequestsLoadError] = useState('');
   const refreshSequenceRef = useRef(0);
   const borrowRequestsAbortControllerRef = useRef(null);
+  const allBorrowRequestsAbortControllerRef = useRef(null);
   const borrowRequestsLoadSequenceRef = useRef(0);
   const currentVisitorProfileRef = useRef(null);
 
@@ -210,6 +212,68 @@ export function LibraryProvider({ children }) {
     }
   }, []);
 
+  const loadAllBorrowRequests = useCallback(async (sequence) => {
+    const controller = new AbortController();
+    allBorrowRequestsAbortControllerRef.current?.abort();
+    allBorrowRequestsAbortControllerRef.current = controller;
+    setBorrowRequestsLoading(true);
+    setBorrowRequestsLoadError('');
+
+    let timeoutId;
+    const timeout = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        const error = new Error(
+          'Borrowing history is taking too long to load. You can retry without reloading the dashboard.'
+        );
+        error.name = 'DataLoadTimeoutError';
+        reject(error);
+        controller.abort();
+      }, BORROW_REQUESTS_LOAD_TIMEOUT_MS);
+    });
+
+    try {
+      const requests = await Promise.race([
+        store.fetchBorrowRequests({
+          includeCommunityRequests: false,
+          skipVisitorResolution: true,
+          signal: controller.signal,
+        }),
+        timeout,
+      ]);
+
+      if (sequence !== refreshSequenceRef.current) return;
+
+      const mappedRequests = Array.isArray(requests)
+        ? requests.map((requestRow) => ({
+            ...requestRow,
+            requestType: requestRow?.requestType || 'library',
+            isCommunityBook: requestRow?.isCommunityBook === true,
+          }))
+        : [];
+      setData((currentData) => ({
+        ...currentData,
+        borrowRequests: mappedRequests,
+      }));
+    } catch (error) {
+      if (sequence !== refreshSequenceRef.current) return;
+      console.error('SHELF borrowing history loading failed:', error);
+      setBorrowRequestsLoadError(
+        error?.message || 'Unable to load borrowing history.'
+      );
+      setConnectionError(
+        error?.message || 'Unable to load borrowing history.'
+      );
+    } finally {
+      clearTimeout(timeoutId);
+      if (allBorrowRequestsAbortControllerRef.current === controller) {
+        allBorrowRequestsAbortControllerRef.current = null;
+      }
+      if (sequence === refreshSequenceRef.current) {
+        setBorrowRequestsLoading(false);
+      }
+    }
+  }, []);
+
   // ==========================================================================
   // LOAD ALL SHELF DATA
   // ==========================================================================
@@ -219,6 +283,8 @@ export function LibraryProvider({ children }) {
     borrowRequestsLoadSequenceRef.current += 1;
     borrowRequestsAbortControllerRef.current?.abort();
     borrowRequestsAbortControllerRef.current = null;
+    allBorrowRequestsAbortControllerRef.current?.abort();
+    allBorrowRequestsAbortControllerRef.current = null;
     const waitForData = (request, operation) => {
       let timeoutId;
       const timeout = new Promise((_, reject) => {
@@ -279,13 +345,7 @@ export function LibraryProvider({ children }) {
         ),
         currentVisitorId
           ? Promise.resolve([])
-          : waitForData(
-              store.fetchBorrowRequests({
-                includeCommunityRequests: false,
-                skipVisitorResolution: true,
-              }),
-              'Borrowing history'
-            ),
+          : Promise.resolve([]),
         waitForData(store.fetchAttendanceLogs(), 'Attendance records').then(
           (attendanceLogs) => ({ attendanceLogs, error: '' }),
           (error) => {
@@ -652,8 +712,7 @@ fineReviewRequired:
       if (currentVisitorId) {
         void loadVisitorBorrowRequests(currentVisitorId, refreshSequence);
       } else {
-        setBorrowRequestsLoading(false);
-        setBorrowRequestsLoadError('');
+        void loadAllBorrowRequests(refreshSequence);
       }
 
       return {
@@ -698,7 +757,7 @@ fineReviewRequired:
         setLoading(false);
       }
     }
-  }, [getCurrentVisitorId, loadVisitorBorrowRequests]);
+  }, [getCurrentVisitorId, loadAllBorrowRequests, loadVisitorBorrowRequests]);
 
   const retryBorrowRequests = useCallback(async () => {
     const sequence = refreshSequenceRef.current;

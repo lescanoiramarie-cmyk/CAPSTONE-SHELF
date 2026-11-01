@@ -489,7 +489,7 @@ async function fetchAllRowsInPages(buildQuery, resourceName) {
   }
 }
 
-async function fetchAllBorrowRequestRows() {
+async function fetchAllBorrowRequestRows(signal) {
   const rangeStarts = [
     '00000000-0000-0000-0000-000000000000',
     '20000000-0000-0000-0000-000000000000',
@@ -517,6 +517,7 @@ async function fetchAllBorrowRequestRows() {
       if (cursor !== rangeStart) query = query.gt('id', cursor);
       if (rangeEnd) query = query.lt('id', rangeEnd);
 
+      if (signal) query = query.abortSignal(signal);
       const { data, error } = await query;
       if (error) {
         throw cleanErr(error, 'Unable to fetch all borrow requests.');
@@ -1184,11 +1185,13 @@ export async function fetchBorrowRequests({
         });
       } else {
         if (skipVisitorResolution) {
-          const { data: staff, error: staffError } = await supabase
+          let staffQuery = supabase
             .from('staff_profiles')
             .select('id, is_active')
             .eq('id', authenticatedUserId)
             .maybeSingle();
+          if (signal) staffQuery = staffQuery.abortSignal(signal);
+          const { data: staff, error: staffError } = await staffQuery;
 
           if (staffError) {
             throw cleanErr(
@@ -1198,11 +1201,13 @@ export async function fetchBorrowRequests({
           }
 
           normalRequests = staff?.is_active
-            ? await getBorrowRequestsForSession(fetchAllBorrowRequestRows)
+            ? await getBorrowRequestsForSession(() =>
+                fetchAllBorrowRequestRows(signal)
+              )
             : [];
         } else {
           normalRequests = await getBorrowRequestsForSession(
-            fetchAllBorrowRequestRows
+            () => fetchAllBorrowRequestRows(signal)
           );
         }
       }
