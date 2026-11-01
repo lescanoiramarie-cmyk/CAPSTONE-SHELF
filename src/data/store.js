@@ -295,6 +295,7 @@ const mapLibrary = (r) => ({
   id: r.id,
   name: r.name,
   campus: r.campus,
+  emailDomain: r.email_domain ?? null,
   address: r.address,
   lat: r.lat,
   lng: r.lng,
@@ -612,6 +613,12 @@ export async function addLibrary(library) {
     .insert({
       id,
       name,
+      email_domain: normalizeText(
+        library?.email_domain ?? library?.emailDomain
+      )
+        .toLowerCase()
+        .replace(/^@+/, '')
+        .replace(/\.+$/, '') || null,
       campus:
         normalizeText(library?.campus) || null,
       address:
@@ -1692,8 +1699,8 @@ export async function registerVisitor({
   }
 
   const normalizedLibraryId = normalizeText(libraryId) || null;
-  if (normalizedLibraryId && !isValidUuid(normalizedLibraryId)) {
-    throw new Error('Select a valid library branch or Outside Visitor.');
+  if (!normalizedLibraryId || !isValidUuid(normalizedLibraryId)) {
+    throw new Error('Select a valid participating library or school.');
   }
 
   const registrationNonce =
@@ -1717,6 +1724,7 @@ export async function registerVisitor({
       options: {
         data: {
           role: 'visitor',
+          library_id: normalizedLibraryId,
           full_name:
             normalizedFullName,
           contact_number:
@@ -3695,6 +3703,8 @@ export async function addPersonalBook({
 
         p_is_public:
           Boolean(isPublic),
+        p_fine_rate:
+          normalizedFineRate,
         ...(coverUrl === undefined
           ? {}
           : {

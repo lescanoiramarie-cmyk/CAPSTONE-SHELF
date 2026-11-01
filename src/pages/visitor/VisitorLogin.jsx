@@ -303,7 +303,13 @@ useEffect(() => {
     let cancelled = false;
     fetchLibraries()
       .then((libraryList) => {
-        if (!cancelled) setLibraries(libraryList);
+        if (!cancelled) {
+          setLibraries(
+            libraryList.filter((library) =>
+              String(library.emailDomain || '').trim()
+            )
+          );
+        }
       })
       .catch((loadError) => {
         console.error('Failed to load registration library list:', loadError);
@@ -1218,13 +1224,29 @@ useEffect(() => {
 
     if (!selectedLibraryId) {
       errors.libraryId =
-        'Please select your library branch or Outside Visitor.';
-    } else if (
-      selectedLibraryId !== 'outside' &&
-      !libraries.some((library) => library.id === selectedLibraryId)
-    ) {
+        'Please select your participating library or school.';
+    } else if (!libraries.some((library) => library.id === selectedLibraryId)) {
       errors.libraryId =
-        'Select a valid library branch or Outside Visitor.';
+        'Select a participating library with a configured email domain.';
+    } else {
+      const selectedLibrary = libraries.find(
+        (library) => library.id === selectedLibraryId
+      );
+      const emailDomain = trimmedEmail.toLowerCase().split('@')[1] || '';
+      const allowedDomain = String(selectedLibrary?.emailDomain || '')
+        .toLowerCase()
+        .trim()
+        .replace(/^@+/, '')
+        .replace(/\.+$/, '');
+      if (
+        emailDomain === 'gmail.com' ||
+        !allowedDomain ||
+        (emailDomain !== allowedDomain &&
+          !emailDomain.endsWith(`.${allowedDomain}`))
+      ) {
+        errors.email =
+          'Use an email address belonging to the selected partner library or school.';
+      }
     }
 
     // -------------------------------------------------------
@@ -1323,7 +1345,7 @@ useEffect(() => {
             completeAddress,
 
           libraryId:
-            selectedLibraryId === 'outside' ? null : selectedLibraryId,
+            selectedLibraryId,
 
           password:
             formData.password,
@@ -2426,14 +2448,13 @@ setOtpResendRemaining(
                   }`}
                 >
                   <option value="">
-                    {librariesLoading ? 'Loading library branches…' : 'Select your library branch'}
+                    {librariesLoading ? 'Loading partner schools…' : 'Select your participating library or school'}
                   </option>
                   {libraries.map((library) => (
                     <option key={library.id} value={library.id}>
                       {library.name}
                     </option>
                   ))}
-                  <option value="outside">Outside Visitor</option>
                 </select>
                 {libraryLoadError ? (
                   <p role="alert" className="mt-1 text-[11px] font-medium text-red-600">
@@ -2441,7 +2462,7 @@ setOtpResendRemaining(
                   </p>
                 ) : (
                   <p className="mt-1 text-[10px] text-slate-500">
-                    Choose a branch from the official list or select Outside Visitor.
+                    Registration is limited to email domains configured for participating libraries and schools.
                   </p>
                 )}
                 {fieldErrors.libraryId && (

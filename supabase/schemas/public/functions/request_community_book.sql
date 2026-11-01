@@ -60,6 +60,9 @@ begin
   ) then
     raise exception 'You already have an active request for this community book.';
   end if;
+  if coalesce(book_row.available_copies, 0) <= 0 then
+    raise exception 'This community book is currently unavailable.';
+  end if;
 
   select count(*)::integer + 1 into position_value
   from public.community_book_requests request

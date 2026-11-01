@@ -9,6 +9,7 @@ import {
 import { supabase } from '../lib/supabaseClient';
 import * as store from '../data/store';
 import { LibraryContext } from './libraryContext.js';
+import ShelfLoader from '../component/ShelfLoader.jsx';
 
 // ============================================================================
 // SHELF ILMS — Library Context Provider
@@ -49,6 +50,7 @@ const emptyData = {
 export function LibraryProvider({ children }) {
   const [data, setData] = useState(emptyData);
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [connectionError, setConnectionError] = useState('');
   const [attendanceLoadError, setAttendanceLoadError] = useState('');
   const refreshSequenceRef = useRef(0);
@@ -117,6 +119,7 @@ export function LibraryProvider({ children }) {
 
   const refreshAll = useCallback(async () => {
     const refreshSequence = ++refreshSequenceRef.current;
+    setLoading(true);
     try {
       // ----------------------------------------------------------------------
       // Resolve current visitor first.
@@ -551,6 +554,7 @@ fineReviewRequired:
 
       setAttendanceLoadError(attendanceError);
       setConnectionError('');
+      setHasLoadedOnce(true);
 
       return {
         books,
@@ -1387,8 +1391,16 @@ fineReviewRequired:
           Attendance data is temporarily unavailable. Other library data may still load.
         </div>
       )}
+      {loading && hasLoadedOnce && (
+        <div className="shelf-loader-refresh">
+          <ShelfLoader label="Refreshing dashboard data..." compact />
+        </div>
+      )}
 
       {children}
+      {loading && !hasLoadedOnce && (
+        <ShelfLoader screen label="Loading dashboard data..." />
+      )}
     </LibraryContext.Provider>
   );
 }

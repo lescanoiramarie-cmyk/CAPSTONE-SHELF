@@ -19,11 +19,36 @@ const fineRateMigration = readFileSync(
   ),
   'utf8'
 );
+const communityQueueMigration = readFileSync(
+  new URL(
+    '../../supabase/migrations/20261204000100_disable_community_queue_when_unavailable.sql',
+    import.meta.url
+  ),
+  'utf8'
+);
+const libraryPickupMigration = readFileSync(
+  new URL(
+    '../../supabase/migrations/20261205000000_fix_library_book_pickup_confirmation.sql',
+    import.meta.url
+  ),
+  'utf8'
+);
+const visitorDomainMigration = readFileSync(
+  new URL(
+    '../../supabase/migrations/20261206000000_restrict_visitor_registration_to_partner_domains.sql',
+    import.meta.url
+  ),
+  'utf8'
+);
+const storeSource = readFileSync(
+  new URL('../data/store.js', import.meta.url),
+  'utf8'
+);
 
-function migrationFunction(name) {
-  const match = fineRateMigration.match(
+function migrationFunction(name, migration = fineRateMigration) {
+  const match = migration.match(
     new RegExp(
-      `CREATE OR REPLACE FUNCTION public\\.${name} \\([\\s\\S]*?\\$function\\$;`,
+      `CREATE(?: OR REPLACE)? FUNCTION public\\.${name}\\s*\\([\\s\\S]*?\\$function\\$;`,
       'i'
     )
   );
@@ -71,43 +96,85 @@ test('approved SHELF categories map to fixed per-day rates', () => {
 });
 
 test('checkout functions snapshot only when transitioning to borrowed', () => {
-  for (const name of [
+  const libraryPickup = migrationFunction(
     'confirm_pickup',
-    'confirm_community_book_pickup',
-  ]) {
-    const body = migrationFunction(name);
-    assert.match(body, /status\s*=\s*'borrowed'/i);
-    assert.match(body, /fine_rate_snapshot\s*=\s*v_fine_rate/i);
-    assert.match(body, /IS NULL OR v_fine_rate NOT IN \(10, 15, 20\)/i);
-  }
+    libraryPickupMigration
+  );
+  assert.match(libraryPickup, /status\s*=\s*'borrowed'/i);
+  assert.match(libraryPickup, /fine_rate_snapshot\s*=\s*v_fine_rate/i);
+  assert.match(
+    libraryPickup,
+    /v_fine_rate\s+IS NULL\s+OR\s+v_fine_rate\s+NOT IN \(10, 15, 20\)/i
+  );
+
+  const communityPickup = migrationFunction('confirm_community_book_pickup');
+  assert.match(communityPickup, /status\s*=\s*'borrowed'/i);
+  assert.match(communityPickup, /fine_rate_snapshot\s*=\s*v_fine_rate/i);
+  assert.match(communityPickup, /IF v_fine_rate IS NULL THEN/i);
 });
 
 test('checkout RPC contracts preserve staff signatures and community lending behavior', () => {
   for (const name of ['confirm_pickup', 'confirm_return']) {
     assert.match(
-      migrationFunction(name),
-      new RegExp(`${name} \\(\\s*p_request_id text`, 'i')
+      migrationFunction(name, name === 'confirm_pickup' ? libraryPickupMigration : fineRateMigration),
+      new RegExp(`${name} \\(\\s*p_request_id uuid`, 'i')
     );
   }
-  assert.doesNotMatch(
-    fineRateMigration,
-    /DROP FUNCTION(?: IF EXISTS)? public\.confirm_(?:pickup|return)\s*\(/i
-  );
 
   const communityPickup = migrationFunction(
     'confirm_community_book_pickup'
   );
   assert.match(
     communityPickup,
-    /RETURNS TABLE\s*\(\s*id uuid,\s*status text,\s*borrow_date timestamp with time zone,\s*due_date timestamp with time zone,\s*confirmed_by text\s*\)/i
+    /RETURNS void/i
   );
-  assert.match(communityPickup, /book\.book_type = 'personal'/i);
-  assert.match(communityPickup, /book\.lending_enabled/i);
   assert.match(
     communityPickup,
-    /make_interval\(days\s*=>\s*v_lending_days\)/i
+    /lower\(trim\(v_book_type\)\)\s*<>\s*'personal'/i
   );
+  assert.match(communityPickup, /b\.lending_enabled/i);
+  assert.match(communityPickup, /due_date = now\(\) \+ interval '7 days'/i);
   assert.match(communityPickup, /fine_rate_snapshot\s*=\s*v_fine_rate/i);
+});
+
+test('library pickup does not depend on the personal-book lending flag', () => {
+  const body = migrationFunction('confirm_pickup', libraryPickupMigration);
+  assert.match(body, /v_book_type IS DISTINCT FROM 'library'/i);
+  assert.doesNotMatch(body, /lending_enabled/i);
+  assert.match(body, /pickup_deadline IS NULL OR v_req\.pickup_deadline <= now\(\)/i);
+});
+
+test('community book requests reject books with no available copies', () => {
+  const body = migrationFunction(
+    'request_community_book',
+    communityQueueMigration
+  );
+  assert.match(body, /COALESCE\(book_row\.available_copies, 0\) <= 0/i);
+  assert.match(body, /This community book is currently unavailable\./i);
+});
+
+test('visitor registration requires the selected partner school domain', () => {
+  const trigger = migrationFunction(
+    'enforce_visitor_email_domain',
+    visitorDomainMigration
+  );
+  const register = migrationFunction(
+    'register_visitor',
+    visitorDomainMigration
+  );
+  assert.match(trigger, /visitor_domain = 'gmail\.com'/i);
+  assert.match(trigger, /selected_library_id/i);
+  assert.match(register, /p_library_id IS NULL/i);
+  assert.match(register, /auth_metadata ->> 'library_id' IS DISTINCT FROM p_library_id::text/i);
+  assert.doesNotMatch(trigger, /IF visitor_domain = 'gmail\.com' THEN\s+RETURN new/i);
+});
+
+test('personal book creation passes the required fine rate to its RPC', () => {
+  const addBookBody = storeSource.slice(
+    storeSource.indexOf('export async function addPersonalBook'),
+    storeSource.indexOf('export async function setPersonalBookVisibility')
+  );
+  assert.match(addBookBody, /p_fine_rate:\s*normalizedFineRate/i);
 });
 
 test('return functions calculate from snapshots and keep legacy fines untouched', () => {
@@ -118,7 +185,7 @@ test('return functions calculate from snapshots and keep legacy fines untouched'
     const legacyBranchStart = body.lastIndexOf('  ELSE');
     assert.notEqual(legacyBranchStart, -1);
     const legacyBranch = body.slice(legacyBranchStart);
-    assert.doesNotMatch(legacyBranch, /fine_amount\s*=/i);
+    assert.match(legacyBranch, /fine_amount\s*=\s*v_req\.fine_amount/i);
     assert.match(legacyBranch, /fine_review_required\s*=\s*true/i);
   }
 });

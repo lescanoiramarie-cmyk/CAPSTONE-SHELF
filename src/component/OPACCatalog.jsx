@@ -1458,6 +1458,10 @@ export default function OPACCatalog({
       setNotice('This community book is not currently available for lending.');
       return;
     }
+    if (getPersonalBookCopyAvailability(book).availableCopies === 0) {
+      setNotice('This community book is currently unavailable.');
+      return;
+    }
     if (getBookFineRate(book.category) == null) {
       setNotice('Unclassified — checkout unavailable.');
       return;
@@ -3906,7 +3910,7 @@ export default function OPACCatalog({
                   </h4>
                   <p className="mt-1 text-xs leading-5 text-emerald-900/80 dark:text-emerald-200/80">
                     {getPersonalBookCopyAvailability(selectedBook).availableCopies === 0
-                      ? 'Join the queue. The owner must approve your request before arranging a handover.'
+                      ? 'No copies are currently available to borrow.'
                       : 'Send a request to the owner. You can coordinate the handover after approval.'}
                   </p>
                 </div>
@@ -3918,6 +3922,7 @@ export default function OPACCatalog({
                     (selectedBook.ownerVisitorId &&
                       String(selectedBook.ownerVisitorId) === String(user?.id)) ||
                     selectedBook.lendingEnabled === false ||
+                    getPersonalBookCopyAvailability(selectedBook).availableCopies === 0 ||
                     selectedBookFineRate == null
                   }
                   className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
@@ -3931,7 +3936,7 @@ export default function OPACCatalog({
                       : selectedBook.lendingEnabled === false
                         ? 'Lending unavailable'
                         : getPersonalBookCopyAvailability(selectedBook).availableCopies === 0
-                      ? 'Join Community Book Queue'
+                      ? 'Unavailable'
                       : 'Request Community Book'}
                 </button>
                 {selectedBook.ownerVisitorId &&
@@ -3942,6 +3947,10 @@ export default function OPACCatalog({
                 ) : selectedBook.lendingEnabled === false ? (
                   <p role="status" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                     This book is not currently available for community lending.
+                  </p>
+                ) : getPersonalBookCopyAvailability(selectedBook).availableCopies === 0 ? (
+                  <p role="status" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                    There are no copies available to borrow right now.
                   </p>
                 ) : (
                   <p className="flex items-start gap-2 text-xs leading-5 text-slate-600 dark:text-slate-300">

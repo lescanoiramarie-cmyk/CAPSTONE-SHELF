@@ -168,58 +168,48 @@ export const AuthProvider = ({ children }) => {
   // =========================================================
   const registerVisitor = async (formData) => {
     try {
-      // 1. Tiyaking kunin ang email address mula sa formData
       const targetEmail = (formData.email || formData.studentEmail || '').toLowerCase().trim();
       const emailDomain = targetEmail.split('@')[1];
+      const selectedLibraryId = String(formData.libraryId || '').trim();
 
       if (!targetEmail || !emailDomain) {
         throw new Error('Please enter a valid email address.');
       }
+      if (!selectedLibraryId) {
+        throw new Error('Select your participating library or school.');
+      }
 
-      // 2. Fetch whitelisted email domains mula sa 'libraries' table sa Supabase
       const { data: libraryRecords, error: libError } = await supabase
         .from('libraries')
-        .select('email_domain')
+        .select('id, email_domain')
+        .eq('id', selectedLibraryId)
         .not('email_domain', 'is', null)
         .neq('email_domain', '');
 
       if (libError) {
-        throw new Error(`Failed to check partner school whitelist: ${libError.message}`);
+        throw new Error(`Failed to verify your partner school email domain: ${libError.message}`);
       }
 
-      const allowedDomains = [
-  ...new Set(
-    (libraryRecords || [])
-      .map((lib) =>
-        lib.email_domain
-          ?.toLowerCase()
-          .trim()
-          .replace(/^@+/, '')
-          .replace(/\.$/, '')
-      )
-      .filter(Boolean)
-  ),
-];
-
-      // 3. I-verify kung ang domain ay kasama sa allowed domains (e.g. g.batstate-u.edu.ph)
+      const selectedLibrary = libraryRecords?.[0];
+      const allowedDomain = String(selectedLibrary?.email_domain || '')
+        .toLowerCase()
+        .trim()
+        .replace(/^@+/, '')
+        .replace(/\.+$/, '');
       const isDomainAllowed =
-  emailDomain === 'gmail.com' ||
-  allowedDomains.some(
-    (domain) =>
-      emailDomain === domain ||
-      emailDomain.endsWith('.' + domain)
-  );
+        allowedDomain &&
+        emailDomain !== 'gmail.com' &&
+        (emailDomain === allowedDomain ||
+          emailDomain.endsWith(`.${allowedDomain}`));
 
-      // HAHARANGIN KAPAG HINDI KASAMA SA ALLOWED DOMAINS
       if (!isDomainAllowed) {
         throw new Error(
-          allowedDomains.length > 0
-            ? `Registration restricted! @${emailDomain} is not an authorized partner school email. Allowed domains: @${allowedDomains.join(', @')}`
-            : 'Registration restricted! No active partner school email domains are configured in the system.'
+          allowedDomain
+            ? `Use an email address belonging to your selected partner school domain (@${allowedDomain}).`
+            : 'The selected partner school does not have an email domain configured. Please contact the library.'
         );
       }
 
-      // 4. Pag pumasa sa domain check, itutuloy ang registration sa store/Supabase
       return await store.registerVisitor(formData);
     } catch (error) {
       console.error('Visitor registration error:', error);

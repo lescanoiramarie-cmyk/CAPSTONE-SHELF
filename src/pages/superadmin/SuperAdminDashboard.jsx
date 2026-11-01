@@ -828,11 +828,22 @@ const handleEditStaff = (staff) => {
         );
         return;
       }
+      const formattedDomain = libraryForm.emailDomain
+        .toLowerCase()
+        .trim()
+        .replace(/^@+/, '')
+        .replace(/\.+$/, '');
+      if (
+        !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(formattedDomain) ||
+        formattedDomain === 'gmail.com'
+      ) {
+        setLibraryMessage('Enter a valid institutional email domain for this partner library or school.');
+        return;
+      }
       try {
         setSavingLibrary(true);
         setLibraryMessage('');
 
-        const formattedDomain = libraryForm.emailDomain ? libraryForm.emailDomain.toLowerCase().trim() : null;
         const payload = {
           name: libraryForm.name.trim(),
           campus: libraryForm.campus.trim(),
@@ -846,15 +857,6 @@ const handleEditStaff = (staff) => {
         };
 
         await addLibrary(payload);
-
-        const { error: directInsertError } = await supabase
-          .from('libraries')
-          .update({ email_domain: formattedDomain })
-          .eq('name', libraryForm.name.trim());
-
-        if (directInsertError) {
-          console.warn('Direct domain update notice:', directInsertError.message);
-        }
 
         setLibraryMessage(
           'Library added successfully.'
@@ -905,13 +907,22 @@ const handleEditStaff = (staff) => {
       return;
     }
 
+    const formattedDomain = libraryForm.emailDomain
+      .toLowerCase()
+      .trim()
+      .replace(/^@+/, '')
+      .replace(/\.+$/, '');
+    if (
+      !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(formattedDomain) ||
+      formattedDomain === 'gmail.com'
+    ) {
+      setLibraryMessage('Enter a valid institutional email domain for this partner library or school.');
+      return;
+    }
+
     try {
       setSavingLibrary(true);
       setLibraryMessage('');
-
-      const formattedDomain = libraryForm.emailDomain
-        ? libraryForm.emailDomain.toLowerCase().trim()
-        : null;
 
       await updateLibrary(editingLibraryId, {
         name: libraryForm.name.trim(),
@@ -1808,7 +1819,7 @@ const handleEditStaff = (staff) => {
                       {/* Allowed Student Email Domain */}
                       <div className="md:col-span-2">
                         <label className="mb-1 block text-xs font-medium text-slate-700">
-                          Allowed Student Email Domain
+                          Allowed Student Email Domain *
                         </label>
                         <div className="relative rounded-lg shadow-sm">
                           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
@@ -1826,10 +1837,11 @@ const handleEditStaff = (staff) => {
                             }
                             placeholder="e.g. g.batstate-u.edu.ph"
                             className="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                            required
                           />
                         </div>
                         <p className="text-[11px] text-slate-500 mt-1.5 leading-normal">
-                          Leave this field blank to allow registration from all email domains, or enter a specific institutional domain (e.g., g.batstate-u.edu.ph) to restrict registration exclusively to verified partner school students.
+                          Enter the institutional domain used to verify visitor registration. Personal email providers such as Gmail are not allowed.
                         </p>
                       </div>
 

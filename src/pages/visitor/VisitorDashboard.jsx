@@ -194,6 +194,8 @@ function VisitorDashboardContent() {
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
   const [isTermsReviewOpen, setIsTermsReviewOpen] = useState(false);
   const [focusRequestId, setFocusRequestId] = useState(null);
+  const [communityApprovalNotice, setCommunityApprovalNotice] = useState('');
+  const previousCommunityRequestStatusesRef = useRef(null);
   const [termsStatus, setTermsStatus] = useState('loading');
   const [termsAcceptedAt, setTermsAcceptedAt] = useState(null);
   const [termsError, setTermsError] = useState('');
@@ -209,6 +211,35 @@ function VisitorDashboardContent() {
       block: 'nearest',
     });
   }, [tab]);
+
+  useEffect(() => {
+    if (libraryLoading) return;
+
+    const communityRequestStatuses = new Map(
+      borrowRequests
+        .filter((request) => request.isCommunityBook)
+        .map((request) => [
+          String(request.id),
+          {
+            status: String(request.status || '').toLowerCase(),
+            title: request.bookTitle || 'Community book',
+          },
+        ])
+    );
+    const previousStatuses = previousCommunityRequestStatusesRef.current;
+    if (previousStatuses) {
+      for (const [requestId, request] of communityRequestStatuses) {
+        const previousStatus = previousStatuses.get(requestId)?.status;
+        if (previousStatus === 'pending' && request.status === 'approved') {
+          setCommunityApprovalNotice(
+            `Your request for "${request.title}" was approved. Check My Requests & Borrows to see the full information.`
+          );
+          break;
+        }
+      }
+    }
+    previousCommunityRequestStatusesRef.current = communityRequestStatuses;
+  }, [borrowRequests, libraryLoading]);
 
   const loadTermsAcceptance = useCallback(async () => {
     if (libraryLoading) return;
@@ -1207,6 +1238,46 @@ function VisitorDashboardContent() {
                 <X size={17} aria-hidden="true" />
               </button>
             </div>
+          </section>
+        )}
+
+        {communityApprovalNotice && (
+          <section
+            role="status"
+            aria-live="polite"
+            className="visitor-feedback visitor-feedback-success flex items-start gap-3 rounded-xl border border-emerald-300 bg-emerald-50 p-4 shadow-sm dark:border-emerald-800 dark:bg-emerald-950/40"
+          >
+            <CheckCircle2
+              size={20}
+              className="mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-300"
+              aria-hidden="true"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-emerald-950 dark:text-emerald-100">
+                {communityApprovalNotice}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setTab('myBorrows');
+                  setCommunityApprovalNotice('');
+                  document
+                    .getElementById('visitor-catalog')
+                    ?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="mt-2 text-xs font-bold text-emerald-900 underline hover:no-underline dark:text-emerald-200"
+              >
+                Open My Requests &amp; Borrows
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCommunityApprovalNotice('')}
+              className="rounded-lg p-2 text-emerald-900 transition hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary dark:text-emerald-200 dark:hover:bg-emerald-900/50"
+              aria-label="Dismiss approval notification"
+            >
+              <X size={17} aria-hidden="true" />
+            </button>
           </section>
         )}
 

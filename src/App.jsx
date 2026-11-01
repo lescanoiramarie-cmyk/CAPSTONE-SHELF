@@ -1,10 +1,12 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useContext } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 import { AuthProvider } from './context/AuthContext.jsx';
 import { LibraryProvider } from './context/LibraryContext.jsx';
+import { LibraryContext } from './context/libraryContext.js';
 
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
+import ShelfLoader from './component/ShelfLoader.jsx';
 
 const LandingPage = lazy(() => import('./pages/visitor/LandingPage.jsx'));
 const VisitorLogin = lazy(() => import('./pages/visitor/VisitorLogin.jsx'));
@@ -19,21 +21,24 @@ const SuperAdminDashboard = lazy(
   () => import('./pages/superadmin/SuperAdminDashboard.jsx')
 );
 
+function RouteLoadingFallback() {
+  const library = useContext(LibraryContext);
+
+  if (library?.loading) return null;
+
+  return (
+    <main>
+      <ShelfLoader screen label="Loading SHELF..." />
+    </main>
+  );
+}
+
 export default function App() {
   return (
     <AuthProvider>
       <LibraryProvider>
         <BrowserRouter>
-          <Suspense
-            fallback={
-              <main
-                role="status"
-                className="flex min-h-screen items-center justify-center text-sm font-semibold text-slate-600"
-              >
-                Loading SHELF...
-              </main>
-            }
-          >
+          <Suspense fallback={<RouteLoadingFallback />}>
             <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route

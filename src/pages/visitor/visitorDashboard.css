@@ -486,14 +486,14 @@
 }
 
 .visitor-dashboard .visitor-community-book-card .visitor-book-card-footer {
-  align-items: center;
-  text-align: center;
+  align-items: flex-start;
+  text-align: left;
 }
 
 .visitor-dashboard .visitor-community-book-card .visitor-book-card-handover,
 .visitor-dashboard .visitor-community-book-card .visitor-book-card-approval-note {
-  justify-content: center;
-  text-align: center;
+  justify-content: flex-start;
+  text-align: left;
 }
 
 .visitor-dashboard .visitor-book-card-handover {
