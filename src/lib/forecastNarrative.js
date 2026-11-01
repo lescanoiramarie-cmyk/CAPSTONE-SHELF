@@ -10,7 +10,6 @@ export function getForecastNarrative(forecast) {
   const insights = normalizeTextList(forecast?.insights);
   const recommendations = normalizeTextList(forecast?.recommendations);
   const hasForecast = Array.isArray(forecast?.forecasts) && forecast.forecasts.length > 0;
-  const isGeminiResponse = forecast?.analyticsSource !== 'fallback';
 
   return {
     insights:
@@ -18,17 +17,16 @@ export function getForecastNarrative(forecast) {
         ? insights
         : [
             hasForecast
-              ? 'Gemini did not return analytics insights for this forecast.'
-              : 'Run the forecast to request Gemini-generated analytics insights.',
+              ? 'No analytics insights were returned for this forecast.'
+              : 'Run the forecast to generate analytics insights.',
           ],
     recommendations:
       recommendations.length > 0
         ? recommendations
         : [
             hasForecast
-              ? 'Gemini did not return recommendations for this forecast. Check the analytics service and Gemini API configuration, then run the forecast again.'
-              : 'Gemini-generated recommendations will appear after a forecast completes.',
+              ? 'No recommendations were returned for this forecast. Check the analytics service and run the forecast again.'
+              : 'Recommendations will appear after a forecast completes.',
           ],
-    isGeminiResponse,
   };
 }

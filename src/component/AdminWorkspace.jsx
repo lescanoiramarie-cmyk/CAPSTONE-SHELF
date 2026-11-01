@@ -1589,9 +1589,7 @@ export default function AdminWorkspace({
                       id="forecast-insights-heading"
                       className="text-sm font-bold text-slate-800"
                     >
-                      {forecastNarrative.isGeminiResponse
-                        ? 'System Analytics Insights (Gemini)'
-                        : 'System Analytics Insights (Fallback)'}
+                      System Analytics Insights
                     </h3>
                     <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-700">
                       {forecastNarrative.insights.map((item) => (
@@ -1607,9 +1605,7 @@ export default function AdminWorkspace({
                       id="forecast-recommendations-heading"
                       className="text-sm font-bold text-emerald-900"
                     >
-                      {forecastNarrative.isGeminiResponse
-                        ? 'Predictive Recommendations (Gemini)'
-                        : 'Predictive Recommendations (Fallback)'}
+                      Predictive Recommendations
                     </h3>
                     <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-6 text-emerald-900">
                       {forecastNarrative.recommendations.map((item) => (
