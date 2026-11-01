@@ -19,6 +19,7 @@ import {
   getTimeframeBuckets,
   getTimeframeRange,
 } from '../lib/analyticsDateRange.js';
+import { getForecastNarrative } from '../lib/forecastNarrative.js';
 
 ChartJS.register(
   CategoryScale,
@@ -551,6 +552,8 @@ export default function AdminWorkspace({
     : topCategories;
   const totalCategoryRequests = categoryDemand.reduce((sum, [, count]) => sum + count, 0);
 
+  const forecastNarrative = useMemo(() => getForecastNarrative(forecast), [forecast]);
+
   const demandRecommendations = useMemo(() => {
     if (!analyticsWindow.valid) {
       return [analyticsWindow.error || 'Select a valid analytics date range.'];
@@ -883,7 +886,6 @@ export default function AdminWorkspace({
 
     setForecastLoading(true);
     setError('');
-    setForecast(null);
     try {
       const categorySeries = topCategories.map(([category]) => {
         const weekCount = Math.max(
@@ -1587,26 +1589,47 @@ export default function AdminWorkspace({
                     Run the forecast to generate a seven-day visitor forecast.
                   </p>
                 )}
-                {forecast?.insights?.length > 0 && (
-                  <div className="mt-4 border-t border-slate-200 pt-3">
-                    <h3 className="text-sm font-bold text-slate-800">System Analytics Insights</h3>
-                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600">
-                      {forecast.insights.map((item) => (
+                <div className="mt-5 grid gap-4 border-t border-slate-200 pt-4 lg:grid-cols-2">
+                  <section
+                    className="rounded-lg border border-blue-100 bg-blue-50/60 p-4"
+                    aria-labelledby="forecast-insights-heading"
+                  >
+                    <h3
+                      id="forecast-insights-heading"
+                      className="text-sm font-bold text-slate-800"
+                    >
+                      {forecastNarrative.isGeminiResponse
+                        ? 'System Analytics Insights (Gemini)'
+                        : 'System Analytics Insights (Fallback)'}
+                    </h3>
+                    <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-700">
+                      {forecastNarrative.insights.map((item) => (
                         <li key={item}>{item}</li>
                       ))}
                     </ul>
-                  </div>
-                )}
-                {forecast?.recommendations?.length > 0 && (
-                  <div className="mt-4 border-t border-slate-200 pt-3">
-                    <h3 className="text-sm font-bold text-emerald-900">Predictive Recommendations</h3>
-                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-emerald-800">
-                      {forecast.recommendations.map((item) => (
+                  </section>
+                  <section
+                    className="rounded-lg border border-emerald-100 bg-emerald-50/60 p-4"
+                    aria-labelledby="forecast-recommendations-heading"
+                  >
+                    <h3
+                      id="forecast-recommendations-heading"
+                      className="text-sm font-bold text-emerald-900"
+                    >
+                      {forecastNarrative.isGeminiResponse
+                        ? 'Predictive Recommendations (Gemini)'
+                        : 'Predictive Recommendations (Fallback)'}
+                    </h3>
+                    <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-6 text-emerald-900">
+                      {forecastNarrative.recommendations.map((item) => (
                         <li key={item}>{item}</li>
                       ))}
                     </ul>
-                  </div>
-                )}
+                  </section>
+                </div>
+                <p className="mt-3 text-[11px] leading-5 text-slate-500">
+                  Forecasts are estimates from the selected date range and filters, not guarantees. Use these insights with branch schedules and verified inventory before changing staffing, hours, or purchasing plans.
+                </p>
               </section>
             </div>
           </section>

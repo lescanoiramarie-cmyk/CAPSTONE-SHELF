@@ -150,3 +150,34 @@ be exercised in the deployed application with test accounts.
 - Authenticated workflows, mobile library details, invalid-email submission
   rejection, and deployed frontend delivery remain unverified and require
   dedicated test accounts or deployment access.
+
+### Repeat verification on 2026-11-01
+
+- [x] `npm run build` completed successfully (Vite reports the existing large
+  bundle-size advisory).
+- [x] Repository-wide `npm run lint` passed.
+- [x] All 18 focused Node regression tests passed, including lending,
+  registration-domain, personal-book fine-rate, and Gemini forecast display
+  contracts.
+- [x] Local public landing page loaded 13 participating libraries and showed
+  the 987-book catalog summary. The announcements section finished loading,
+  and the public feedback form rendered.
+- [x] At a 390px browser viewport, the rendered document had no horizontal
+  overflow (375px CSS viewport/document width).
+- [x] Visitor registration route displayed 14 configured partner choices, the
+  partner-domain restriction message, and no Outside Visitor option. No
+  registration was submitted.
+- [x] Direct unauthenticated navigation to `/catalog` redirected to
+  `/visitor-login`.
+- [x] Browser smoke test recorded no failed HTTP responses or uncaught page
+  errors.
+- [ ] Registration submission and server/database rejection cases remain
+  unverified; do not treat form-option inspection as proof of the RPC boundary.
+- [ ] No authenticated visitor, sub-admin, or super-admin workflows were
+  exercised. Borrow/return, community requests, staff management, RLS/RPC
+  authorization, account recovery, and role-specific dashboard behavior still
+  require dedicated test accounts and a test environment.
+- [ ] Production frontend deployment, production Supabase policies/functions,
+  and Gemini service availability were not tested in this local browser run.
+- Python syntax validation could not be run in this environment because the
+  `python` command is unavailable.

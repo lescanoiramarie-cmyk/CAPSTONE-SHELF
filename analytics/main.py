@@ -351,6 +351,7 @@ def forecast(
         category_forecasts.append({"category": series.category, "projectedDemand": values[0]})
     category_forecasts.sort(key=lambda item: item["projectedDemand"], reverse=True)
 
+    analytics_source = "gemini"
     try:
         gemini_analytics = generate_gemini_analytics(
             timeframe=timeframe,
@@ -361,9 +362,14 @@ def forecast(
         )
     except HTTPException as exc:
         logger.warning("Returning numerical forecast without AI insights: %s", exc.detail)
+        analytics_source = "fallback"
         gemini_analytics = GeminiAnalytics(
-            insights=["AI insights are temporarily unavailable; the visitor forecast is based on the selected historical counts."],
-            recommendations=[],
+            insights=[
+                "Gemini insights are temporarily unavailable; the visitor forecast is based on the selected historical counts."
+            ],
+            recommendations=[
+                "Check the analytics service's Gemini API configuration and quota, then run the forecast again for AI-generated recommendations."
+            ],
         )
 
     return {
@@ -372,4 +378,5 @@ def forecast(
         "highDemandCategories": category_forecasts,
         "insights": gemini_analytics.insights,
         "recommendations": gemini_analytics.recommendations,
+        "analyticsSource": analytics_source,
     }
