@@ -47,6 +47,8 @@ const emptyData = {
   ownerCommunityRequestLoadError: '',
 };
 
+const DATA_LOAD_TIMEOUT_MS = 15000;
+
 export function LibraryProvider({ children }) {
   const [data, setData] = useState(emptyData);
   const [loading, setLoading] = useState(true);
@@ -119,14 +121,29 @@ export function LibraryProvider({ children }) {
 
   const refreshAll = useCallback(async () => {
     const refreshSequence = ++refreshSequenceRef.current;
+    let timeoutId;
+    let timedOut = false;
+    const timeout = new Promise((_, reject) => {
+      timeoutId = setTimeout(
+        () => {
+          timedOut = true;
+          reject(
+            new Error(
+              'Library data is taking too long to load. Check your connection and retry.'
+            )
+          );
+        },
+        DATA_LOAD_TIMEOUT_MS
+      );
+    });
+    const waitForData = (request) => Promise.race([request, timeout]);
     setLoading(true);
     try {
       // ----------------------------------------------------------------------
       // Resolve current visitor first.
       // ----------------------------------------------------------------------
 
-      const currentVisitorId =
-        await getCurrentVisitorId();
+      const currentVisitorId = await waitForData(getCurrentVisitorId());
 
       console.log(
         'SHELF — CURRENT VISITOR ID:',
@@ -145,7 +162,7 @@ export function LibraryProvider({ children }) {
         normalBorrowRequests,
         attendanceResult,
         communityBooks,
-      ] = await Promise.all([
+      ] = await waitForData(Promise.all([
         store.fetchBooks(),
         store.fetchExternalCatalogBooks(),
         store.fetchLibraries(),
@@ -159,7 +176,7 @@ export function LibraryProvider({ children }) {
           })
         ),
         store.fetchCommunityBooks(),
-      ]);
+      ]));
       const { attendanceLogs, error: attendanceError } = attendanceResult;
 
       if (attendanceError) {
@@ -174,10 +191,9 @@ export function LibraryProvider({ children }) {
 
       if (currentVisitorId) {
         try {
-          personalBooks =
-            await store.fetchPersonalBooks(
-              currentVisitorId
-            );
+          personalBooks = await waitForData(
+            store.fetchPersonalBooks(currentVisitorId)
+          );
         } catch (error) {
           console.error(
             'SHELF personal books loading failed:',
@@ -200,10 +216,9 @@ export function LibraryProvider({ children }) {
           'function'
       ) {
         try {
-          const result =
-            await store.fetchMyCommunityBookRequests(
-              currentVisitorId
-            );
+          const result = await waitForData(
+            store.fetchMyCommunityBookRequests(currentVisitorId)
+          );
 
           myCommunityBookRequests =
             Array.isArray(result)
@@ -246,10 +261,9 @@ export function LibraryProvider({ children }) {
           'function'
       ) {
         try {
-          const result =
-            await store.fetchOwnerCommunityBookRequests(
-              currentVisitorId
-            );
+          const result = await waitForData(
+            store.fetchOwnerCommunityBookRequests(currentVisitorId)
+          );
 
           ownerCommunityBookRequests =
             Array.isArray(result)
@@ -505,6 +519,12 @@ fineReviewRequired:
         return;
       }
 
+      if (timedOut) {
+        throw new Error(
+          'Library data is taking too long to load. Check your connection and retry.'
+        );
+      }
+
       setData({
         externalCatalogBooks: Array.isArray(externalCatalogBooks)
           ? externalCatalogBooks
@@ -590,9 +610,11 @@ fineReviewRequired:
         err?.message ||
           'Could not connect to the database.'
       );
+      setHasLoadedOnce(true);
 
       throw err;
     } finally {
+      clearTimeout(timeoutId);
       if (refreshSequence === refreshSequenceRef.current) {
         setLoading(false);
       }
@@ -681,7 +703,11 @@ fineReviewRequired:
 
     const authSubscription =
       supabase?.auth?.onAuthStateChange(
-        () => {
+        (event) => {
+          if (event === 'INITIAL_SESSION') {
+            return;
+          }
+
           // Avoid heavy operations directly inside the auth callback.
           setTimeout(() => {
             if (mounted) {
@@ -1381,9 +1407,22 @@ fineReviewRequired:
       value={value}
     >
       {connectionError && (
-        <div className="bg-red-600 text-white text-xs font-semibold px-4 py-2 text-center">
-          Could not reach the database:{' '}
-          {connectionError}
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-center gap-2 bg-red-700 px-4 py-2 text-center text-xs font-semibold text-white"
+        >
+          <span>Unable to load library data: {connectionError}</span>
+          <button
+            type="button"
+            onClick={() =>
+              refreshAll().catch((error) => {
+                console.error('SHELF manual data refresh failed:', error);
+              })
+            }
+            className="rounded border border-white/70 px-2 py-1 font-bold hover:bg-white/10"
+          >
+            Retry
+          </button>
         </div>
       )}
       {attendanceLoadError && (
