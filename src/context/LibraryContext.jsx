@@ -55,7 +55,11 @@ export function LibraryProvider({ children }) {
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [connectionError, setConnectionError] = useState('');
   const [attendanceLoadError, setAttendanceLoadError] = useState('');
+  const [borrowRequestsLoading, setBorrowRequestsLoading] = useState(false);
+  const [borrowRequestsLoadError, setBorrowRequestsLoadError] = useState('');
   const refreshSequenceRef = useRef(0);
+  const borrowRequestsAbortControllerRef = useRef(null);
+  const borrowRequestsLoadSequenceRef = useRef(0);
 
   // ==========================================================================
   // GET CURRENT VISITOR ID
@@ -115,12 +119,102 @@ export function LibraryProvider({ children }) {
     }
   }, []);
 
+  const loadVisitorBorrowRequests = useCallback(async (visitorId, sequence) => {
+    const loadSequence = ++borrowRequestsLoadSequenceRef.current;
+    setBorrowRequestsLoading(true);
+    setBorrowRequestsLoadError('');
+
+    borrowRequestsAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    borrowRequestsAbortControllerRef.current = controller;
+    try {
+      const request = store.fetchBorrowRequests({
+        includeCommunityRequests: false,
+        visitorId,
+        signal: controller.signal,
+      });
+      let timeoutId;
+      const timeout = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          const error = new Error(
+            'Borrowing history is taking too long to load. You can retry without reloading the dashboard.'
+          );
+          error.name = 'DataLoadTimeoutError';
+          reject(error);
+          controller.abort();
+        }, DATA_LOAD_TIMEOUT_MS);
+      });
+      const requests = await Promise.race([request, timeout]).finally(() => {
+        clearTimeout(timeoutId);
+      });
+
+      if (
+        sequence !== refreshSequenceRef.current ||
+        loadSequence !== borrowRequestsLoadSequenceRef.current
+      ) return;
+
+      const mappedLibraryRequests = Array.isArray(requests)
+        ? requests.map((requestRow) => ({
+            ...requestRow,
+            requestType: 'library',
+            isCommunityBook: false,
+          }))
+        : [];
+      setData((currentData) => {
+        const communityRequests = currentData.borrowRequests.filter(
+          (requestRow) =>
+            requestRow?.isCommunityBook === true ||
+            requestRow?.requestType === 'community'
+        );
+        const uniqueBorrowRequests = Array.from(
+          new Map(
+            [...mappedLibraryRequests, ...communityRequests]
+              .filter((requestRow) => requestRow?.id)
+              .map((requestRow) => [String(requestRow.id), requestRow])
+          ).values()
+        ).sort(
+          (first, second) =>
+            new Date(second?.requestDate || 0).getTime() -
+            new Date(first?.requestDate || 0).getTime()
+        );
+
+        return {
+          ...currentData,
+          borrowRequests: uniqueBorrowRequests,
+        };
+      });
+    } catch (error) {
+      if (
+        sequence !== refreshSequenceRef.current ||
+        loadSequence !== borrowRequestsLoadSequenceRef.current
+      ) return;
+      console.error('SHELF borrowing history loading failed:', error);
+      setBorrowRequestsLoadError(
+        error?.message || 'Unable to load your borrowing history.'
+      );
+    } finally {
+      controller.abort();
+      if (borrowRequestsAbortControllerRef.current === controller) {
+        borrowRequestsAbortControllerRef.current = null;
+      }
+      if (
+        sequence === refreshSequenceRef.current &&
+        loadSequence === borrowRequestsLoadSequenceRef.current
+      ) {
+        setBorrowRequestsLoading(false);
+      }
+    }
+  }, []);
+
   // ==========================================================================
   // LOAD ALL SHELF DATA
   // ==========================================================================
 
   const refreshAll = useCallback(async () => {
     const refreshSequence = ++refreshSequenceRef.current;
+    borrowRequestsLoadSequenceRef.current += 1;
+    borrowRequestsAbortControllerRef.current?.abort();
+    borrowRequestsAbortControllerRef.current = null;
     const waitForData = (request, operation) => {
       let timeoutId;
       const timeout = new Promise((_, reject) => {
@@ -173,13 +267,14 @@ export function LibraryProvider({ children }) {
         ),
         waitForData(store.fetchLibraries(), 'Library list'),
         waitForData(store.fetchVisitors(), 'Visitor profiles'),
-        waitForData(
-          store.fetchBorrowRequests({
-            includeCommunityRequests: false,
-            visitorId: currentVisitorId,
-          }),
-          'Borrowing history'
-        ),
+        currentVisitorId
+          ? Promise.resolve([])
+          : waitForData(
+              store.fetchBorrowRequests({
+                includeCommunityRequests: false,
+              }),
+              'Borrowing history'
+            ),
         waitForData(store.fetchAttendanceLogs(), 'Attendance records').then(
           (attendanceLogs) => ({ attendanceLogs, error: '' }),
           (error) => {
@@ -543,6 +638,12 @@ fineReviewRequired:
       setAttendanceLoadError(attendanceError);
       setConnectionError('');
       setHasLoadedOnce(true);
+      if (currentVisitorId) {
+        void loadVisitorBorrowRequests(currentVisitorId, refreshSequence);
+      } else {
+        setBorrowRequestsLoading(false);
+        setBorrowRequestsLoadError('');
+      }
 
       return {
         books,
@@ -586,7 +687,21 @@ fineReviewRequired:
         setLoading(false);
       }
     }
-  }, [getCurrentVisitorId]);
+  }, [getCurrentVisitorId, loadVisitorBorrowRequests]);
+
+  const retryBorrowRequests = useCallback(async () => {
+    const sequence = refreshSequenceRef.current;
+    const visitorId = await getCurrentVisitorId();
+
+    if (!visitorId) {
+      setBorrowRequestsLoadError(
+        'Unable to verify your visitor account. Please sign in again and retry.'
+      );
+      return;
+    }
+
+    await loadVisitorBorrowRequests(visitorId, sequence);
+  }, [getCurrentVisitorId, loadVisitorBorrowRequests]);
 
   // ==========================================================================
   // VISITOR LOCAL SESSION CHANGES
@@ -1212,6 +1327,9 @@ fineReviewRequired:
 
       connectionError,
       attendanceLoadError,
+      borrowRequestsLoading,
+      borrowRequestsLoadError,
+      retryBorrowRequests,
 
       refreshAll,
 
@@ -1310,6 +1428,9 @@ fineReviewRequired:
 
       connectionError,
       attendanceLoadError,
+      borrowRequestsLoading,
+      borrowRequestsLoadError,
+      retryBorrowRequests,
 
       refreshAll,
 

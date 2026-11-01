@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../../context/useAuth.js';
-import { useLibraryData } from '../../context/useLibrary.js';
+import { useLibrary, useLibraryData } from '../../context/useLibrary.js';
 import { supabase } from '../../lib/supabaseClient.js';
 
 import OPACCatalog from '../../component/OPACCatalog.jsx';
@@ -162,6 +162,11 @@ function VisitorDashboardContent() {
   ownerCommunityBookRequests = [],
   loading: libraryLoading = true,
 } = useLibraryData();
+  const {
+    borrowRequestsLoading,
+    borrowRequestsLoadError,
+    retryBorrowRequests,
+  } = useLibrary();
   const visitorDetails = visitors.find(
     (visitor) => visitor.id === user?.id
   );
@@ -1378,6 +1383,9 @@ function VisitorDashboardContent() {
               onViewChange={setTab}
               catalogResetKey={catalogResetKey}
               focusRequestId={focusRequestId}
+              borrowRequestsLoading={borrowRequestsLoading}
+              borrowRequestsLoadError={borrowRequestsLoadError}
+              onRetryBorrowRequests={retryBorrowRequests}
             />
           </div>
         )}

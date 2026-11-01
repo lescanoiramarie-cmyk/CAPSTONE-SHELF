@@ -222,6 +222,9 @@ export default function OPACCatalog({
   catalogResetKey = 0,
   focusRequestId = null,
   embedded = false,
+  borrowRequestsLoading = false,
+  borrowRequestsLoadError = '',
+  onRetryBorrowRequests = () => {},
 }) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -2798,7 +2801,29 @@ export default function OPACCatalog({
           </section>
         ) : (
           <div className="visitor-requests-table rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
-            {myRequests.length === 0 ? (
+            {borrowRequestsLoading && (
+              <p role="status" className="border-b border-slate-200 p-4 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                Loading your library borrowing history…
+              </p>
+            )}
+            {borrowRequestsLoadError && (
+              <div role="alert" className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                <span>Library borrowing history is unavailable: {borrowRequestsLoadError}</span>
+                <button
+                  type="button"
+                  onClick={() => void onRetryBorrowRequests()}
+                  disabled={borrowRequestsLoading}
+                  className="rounded-md border border-current px-3 py-1.5 font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+            {myRequests.length === 0 && borrowRequestsLoading ? null : myRequests.length === 0 && borrowRequestsLoadError ? (
+              <p className="p-6 text-sm text-slate-500">
+                Your request list will appear here when the borrowing history can be loaded.
+              </p>
+            ) : myRequests.length === 0 ? (
               <p className="p-6 text-sm text-slate-500">
                 You have no borrow requests yet. Browse the catalog to get started.
               </p>

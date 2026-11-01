@@ -41,14 +41,16 @@ test('authenticated visitor borrow history uses a visitor-scoped RLS query', () 
   assert.match(visitorRequestBranch[0], /normalizedVisitorId/);
   assert.match(visitorRequestBranch[0], /\.from\('borrow_requests'\)/);
   assert.match(visitorRequestBranch[0], /\.eq\('visitor_id',\s*normalizedVisitorId\)/);
+  assert.match(visitorRequestBranch[0], /\.abortSignal\(signal\)/);
   assert.doesNotMatch(visitorRequestBranch[0], /'get_visitor_borrow_requests'/);
   assert.doesNotMatch(visitorRequestBranch[0], /fetchAllBorrowRequestRows/);
+  assert.doesNotMatch(storeSource, /borrowRequestsFetchesInFlight/);
 });
 
 test('library refresh does not fetch requester community requests twice', () => {
   assert.match(
     storeSource,
-    /export async function fetchBorrowRequests\(\{\s*includeCommunityRequests = true,\s*visitorId = null,\s*\} = \{\}\)/
+    /export async function fetchBorrowRequests\(\{\s*includeCommunityRequests = true,\s*visitorId = null,\s*signal,\s*\} = \{\}\)/
   );
   assert.match(
     storeSource,
@@ -56,7 +58,7 @@ test('library refresh does not fetch requester community requests twice', () => 
   );
   assert.match(
     libraryContextSource,
-    /store\.fetchBorrowRequests\(\{\s*includeCommunityRequests:\s*false,\s*visitorId:\s*currentVisitorId,\s*\}\)/
+    /store\.fetchBorrowRequests\(\{\s*includeCommunityRequests:\s*false,\s*visitorId,\s*signal:\s*controller\.signal,\s*\}\)/
   );
   assert.match(
     libraryContextSource,
@@ -64,22 +66,37 @@ test('library refresh does not fetch requester community requests twice', () => 
   );
 });
 
-test('refresh reports which data operation timed out and loads visitor data concurrently', () => {
+test('visitor borrow history does not block the main dashboard refresh', () => {
   assert.match(
     libraryContextSource,
-    /const waitForData = \(request, operation\) =>/
+    /currentVisitorId\s*\?\s*Promise\.resolve\(\[\]\)\s*:\s*waitForData\([\s\S]*?'Borrowing history'/
   );
   assert.match(
     libraryContextSource,
-    /error\.name = 'DataLoadTimeoutError'/
+    /void loadVisitorBorrowRequests\(currentVisitorId,\s*refreshSequence\)/
   );
   assert.match(
     libraryContextSource,
-    /await Promise\.all\(\[\s*loadVisitorData\([\s\S]*?store\.fetchOwnerCommunityBookRequests/
+    /borrowRequestsAbortControllerRef\.current\?\.abort\(\)/
   );
   assert.match(
     libraryContextSource,
-    /if \(error\?\.name === 'DataLoadTimeoutError'\) throw error;/
+    /controller\.abort\(\)/
+  );
+  assert.match(
+    libraryContextSource,
+    /borrowRequestsLoadSequenceRef\.current \+= 1/
+  );
+});
+
+test('visitor can see and retry borrowing history loading errors', () => {
+  assert.match(
+    libraryContextSource,
+    /const retryBorrowRequests = useCallback\(async \(\) =>/
+  );
+  assert.match(
+    readFileSync(new URL('../component/OPACCatalog.jsx', import.meta.url), 'utf8'),
+    /Library borrowing history is unavailable:[\s\S]*?onClick=\{\(\) => void onRetryBorrowRequests\(\)\}/
   );
 });
 

@@ -416,7 +416,6 @@ const mapAttendance = (r) => ({
 
 const FETCH_PAGE_SIZE = 1000;
 const FETCH_PAGE_BATCH_SIZE = 2;
-const borrowRequestsFetchesInFlight = new Map();
 
 async function getAuthenticatedDataScope() {
   const {
@@ -533,21 +532,9 @@ async function fetchAllBorrowRequestRows() {
   return rangeRows.flat();
 }
 
-function getBorrowRequestsForSession(authUserId, loadRows) {
-  let requestsPromise = borrowRequestsFetchesInFlight.get(authUserId);
-
-  if (!requestsPromise) {
-    requestsPromise = loadRows().then((rows) => rows.map(mapBorrowRequest));
-    borrowRequestsFetchesInFlight.set(authUserId, requestsPromise);
-    const clearRequestsPromise = () => {
-      if (borrowRequestsFetchesInFlight.get(authUserId) === requestsPromise) {
-        borrowRequestsFetchesInFlight.delete(authUserId);
-      }
-    };
-    requestsPromise.then(clearRequestsPromise, clearRequestsPromise);
-  }
-
-  return requestsPromise;
+async function getBorrowRequestsForSession(loadRows) {
+  const rows = await loadRows();
+  return rows.map(mapBorrowRequest);
 }
 
 // ============================================================================
@@ -954,6 +941,7 @@ export async function fetchVisitors() {
 export async function fetchBorrowRequests({
   includeCommunityRequests = true,
   visitorId = null,
+  signal,
 } = {}) {
   // ==========================================================================
   // 1. READ LOCAL SHELF SESSION
@@ -1146,30 +1134,28 @@ export async function fetchBorrowRequests({
         normalizedVisitorId &&
         isValidVisitorId(normalizedVisitorId)
       ) {
-        normalRequests = await getBorrowRequestsForSession(
-          authenticatedUserId,
-          async () => {
-            const { data, error } = await supabase
-              .from('borrow_requests')
-              .select(
-                'id, book_id, book_title, visitor_id, visitor_name, status, request_date, pickup_deadline, queue_position, borrow_date, due_date, return_date, fine_amount, confirmed_by, return_confirmed_by, fine_rate_snapshot, fine_review_required'
-              )
-              .eq('visitor_id', normalizedVisitorId)
-              .order('request_date', { ascending: false });
+        normalRequests = await getBorrowRequestsForSession(async () => {
+          let query = supabase
+            .from('borrow_requests')
+            .select(
+              'id, book_id, book_title, visitor_id, visitor_name, status, request_date, pickup_deadline, queue_position, borrow_date, due_date, return_date, fine_amount, confirmed_by, return_confirmed_by, fine_rate_snapshot, fine_review_required'
+            )
+            .eq('visitor_id', normalizedVisitorId)
+            .order('request_date', { ascending: false });
+          if (signal) query = query.abortSignal(signal);
+          const { data, error } = await query;
 
-            if (error) {
-              throw cleanErr(
-                error,
-                'Unable to load your borrowing history.'
-              );
-            }
-
-            return data || [];
+          if (error) {
+            throw cleanErr(
+              error,
+              'Unable to load your borrowing history.'
+            );
           }
-        );
+
+          return data || [];
+        });
       } else {
         normalRequests = await getBorrowRequestsForSession(
-          authenticatedUserId,
           fetchAllBorrowRequestRows
         );
       }
@@ -1178,10 +1164,8 @@ export async function fetchBorrowRequests({
     // ------------------------------------------------------------------------
     // NO SUPABASE SESSION
     //
-    // get_visitor_borrow_requests requires auth.uid() to own
-    // the visitor, so it cannot answer for an anonymous
-    // caller. Every visitor path now establishes a Supabase
-    // session, so this only happens if sign-in failed.
+    // Visitors without an authenticated Supabase session have
+    // no borrowing history to load.
     // ------------------------------------------------------------------------
 
     else {
