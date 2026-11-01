@@ -533,6 +533,23 @@ async function fetchAllBorrowRequestRows() {
   return rangeRows.flat();
 }
 
+function getBorrowRequestsForSession(authUserId, loadRows) {
+  let requestsPromise = borrowRequestsFetchesInFlight.get(authUserId);
+
+  if (!requestsPromise) {
+    requestsPromise = loadRows().then((rows) => rows.map(mapBorrowRequest));
+    borrowRequestsFetchesInFlight.set(authUserId, requestsPromise);
+    const clearRequestsPromise = () => {
+      if (borrowRequestsFetchesInFlight.get(authUserId) === requestsPromise) {
+        borrowRequestsFetchesInFlight.delete(authUserId);
+      }
+    };
+    requestsPromise.then(clearRequestsPromise, clearRequestsPromise);
+  }
+
+  return requestsPromise;
+}
+
 // ============================================================================
 // FETCH LIBRARIES
 // ============================================================================
@@ -980,6 +997,7 @@ export async function fetchBorrowRequests() {
   // ==========================================================================
 
   let normalizedVisitorId = null;
+  let authenticatedUserId;
 
   try {
     // ------------------------------------------------------------------------
@@ -1001,6 +1019,7 @@ export async function fetchBorrowRequests() {
     const authUserId =
       sessionData?.session?.user?.id ||
       null;
+    authenticatedUserId = authUserId;
 
     // ------------------------------------------------------------------------
     // 2B. RESOLVE AUTH USER â†’ SHELF VISITOR
@@ -1135,21 +1154,35 @@ export async function fetchBorrowRequests() {
       sessionData?.session
     ) {
       const authUserId = sessionData.session.user.id;
-      let requestsPromise = borrowRequestsFetchesInFlight.get(authUserId);
+      if (
+        authenticatedUserId === authUserId &&
+        normalizedVisitorId &&
+        isValidVisitorId(normalizedVisitorId)
+      ) {
+        normalRequests = await getBorrowRequestsForSession(
+          authUserId,
+          async () => {
+            const { data, error } = await supabase.rpc(
+              'get_visitor_borrow_requests',
+              { p_visitor_id: authUserId }
+            );
 
-      if (!requestsPromise) {
-        requestsPromise = fetchAllBorrowRequestRows()
-          .then((data) => data.map(mapBorrowRequest));
-        borrowRequestsFetchesInFlight.set(authUserId, requestsPromise);
-        const clearRequestsPromise = () => {
-          if (borrowRequestsFetchesInFlight.get(authUserId) === requestsPromise) {
-            borrowRequestsFetchesInFlight.delete(authUserId);
+            if (error) {
+              throw cleanErr(
+                error,
+                'Unable to load your borrowing history.'
+              );
+            }
+
+            return data || [];
           }
-        };
-        requestsPromise.then(clearRequestsPromise, clearRequestsPromise);
+        );
+      } else {
+        normalRequests = await getBorrowRequestsForSession(
+          authUserId,
+          fetchAllBorrowRequestRows
+        );
       }
-
-      normalRequests = await requestsPromise;
     }
 
     // ------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as store from '../data/store.js';
 import { AuthContext } from './authContext.js';
 import { supabase } from '../lib/supabaseClient.js';
@@ -54,6 +54,7 @@ export const AuthProvider = ({ children }) => {
       return null;
     }
   });
+  const persistedUserSnapshotRef = useRef(JSON.stringify(user));
 
   useEffect(() => {
     if (!supabase?.auth) return undefined;
@@ -123,6 +124,7 @@ export const AuthProvider = ({ children }) => {
   // =========================================================
   useEffect(() => {
     try {
+      const nextSnapshot = JSON.stringify(user);
       if (user) {
         globalThis.localStorage.setItem(
           SESSION_KEY,
@@ -131,7 +133,10 @@ export const AuthProvider = ({ children }) => {
       } else {
         globalThis.localStorage.removeItem(SESSION_KEY);
       }
-      notifyVisitorSessionChanged();
+      if (nextSnapshot !== persistedUserSnapshotRef.current) {
+        persistedUserSnapshotRef.current = nextSnapshot;
+        notifyVisitorSessionChanged();
+      }
     } catch (error) {
       console.error(
         'Failed to save SHELF session:',
