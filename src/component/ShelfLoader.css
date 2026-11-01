@@ -104,6 +104,8 @@
   min-height: 100vh;
   min-height: 100dvh;
   flex-direction: column;
+  background:
+    radial-gradient(ellipse at 50% 42%, #ffffff 0%, #f8faff 54%, #eaf0ff 100%);
   pointer-events: auto;
 }
 

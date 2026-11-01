@@ -10,26 +10,31 @@ be exercised in the deployed application with test accounts.
 - [x] Repository ESLint check passes.
 - [x] Focused lending and registration regression tests pass.
 - [x] Database migration dry-run targets only the three SHELF changes.
-- [ ] Confirm the deployed frontend is serving the pushed release.
+- [ ] Confirm the deployed frontend is serving the pushed release; only the
+  local development preview was tested.
 - [x] Confirm the linked database has all migrations through
   `20261206000000`.
-- [ ] Confirm the deployed frontend is serving the pushed release.
 
 ## Public landing and navigation
 
-- [ ] Load the landing page on desktop and mobile.
-- [ ] Browse partner libraries and featured books.
+- [x] Load the landing page on desktop and mobile; confirm it renders without
+  horizontal overflow at a 390px mobile viewport.
+- [x] Confirm public library/book data loads on the landing page (13 libraries
+  and 987 books observed in the local preview).
 - [ ] Open announcements and feedback form; submit a test inquiry.
-- [ ] Verify public catalog and visitor sign-in navigation.
-- [ ] Confirm first-load, route-load, and refresh loading feedback is visible,
-  does not stack, and clears when loading finishes.
+- [x] Verify visitor sign-in and protected-catalog redirect to sign-in.
+- [x] Delay read-only landing-page data requests and confirm one opaque,
+  full-viewport initial loader appears with logo, brand, tagline, and progress
+  bar, then disappears when loading finishes.
+- [ ] Verify route-load and refresh indicators on authenticated dashboards.
 
 ## Visitor registration and account
 
 - [ ] Register with an email matching the selected partner's configured domain.
 - [ ] Reject Gmail, an unrelated domain, a missing library, and a mismatched
   partner/domain at both UI and database boundaries.
-- [ ] Verify no Outside Visitor registration choice is available.
+- [x] Verify no Outside Visitor registration choice is available in the
+  registration form; only configured partner libraries are listed.
 - [ ] Complete email/OTP verification and confirm the visitor is assigned to the
   selected library.
 - [ ] Sign in, sign out, and verify protected routes redirect correctly.
@@ -124,3 +129,24 @@ be exercised in the deployed application with test accounts.
   sensitive responses.
 - [ ] Perform role-based end-to-end smoke tests with dedicated test accounts;
   do not use real visitor credentials or real borrowing records.
+
+## Verification notes
+
+- Local browser smoke test on 2026-11-01 confirmed the landing page renders at
+  desktop and mobile widths, partner library/book data loads, visitor
+  registration has no Outside Visitor option, and an unauthenticated catalog
+  route redirects to visitor sign-in.
+- Registration form inspection confirmed only partner libraries with configured
+  email domains are offered; no account was submitted or created.
+- A delayed, read-only data-load test confirmed the initial full-screen loader
+  covers a 390x844 viewport with an opaque backdrop and shows its logo, brand,
+  tagline, and progress bar. A normal reload confirmed the loader clears after
+  data loading.
+- The responsive landing-page check reported no horizontal overflow at 390px.
+- No registration, feedback submission, book, borrowing, staff, or account
+  records were created or modified during these checks.
+- The full-screen loader backdrop correction was made during this verification
+  and still needs deployment.
+- Authenticated workflows, mobile library details, invalid-email submission
+  rejection, and deployed frontend delivery remain unverified and require
+  dedicated test accounts or deployment access.
