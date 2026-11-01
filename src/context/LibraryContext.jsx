@@ -62,7 +62,9 @@ export function LibraryProvider({ children }) {
   const borrowRequestsAbortControllerRef = useRef(null);
   const allBorrowRequestsAbortControllerRef = useRef(null);
   const borrowRequestsLoadSequenceRef = useRef(0);
+  const borrowRequestsScopeRef = useRef(null);
   const currentVisitorProfileRef = useRef(null);
+  const currentAuthUserIdRef = useRef(null);
 
   // ==========================================================================
   // GET CURRENT VISITOR ID
@@ -75,6 +77,7 @@ export function LibraryProvider({ children }) {
 
   const getCurrentVisitorId = useCallback(async () => {
     currentVisitorProfileRef.current = null;
+    currentAuthUserIdRef.current = null;
     // Community-request RPCs are granted to authenticated visitors only.
     // Do not trust the local SHELF UI session as proof of identity: it can
     // exist without a Supabase access token and would make PostgREST execute
@@ -115,6 +118,7 @@ export function LibraryProvider({ children }) {
         }
       }
 
+      currentAuthUserIdRef.current = authUserId;
       const visitor = await store.getVisitor(authUserId);
       currentVisitorProfileRef.current = visitor;
       return visitor?.id || null;
@@ -125,7 +129,24 @@ export function LibraryProvider({ children }) {
     }
   }, []);
 
-  const loadVisitorBorrowRequests = useCallback(async (visitorId, sequence) => {
+  const loadVisitorBorrowRequests = useCallback(async (visitorId) => {
+    const scope = `visitor:${visitorId}`;
+    if (
+      borrowRequestsScopeRef.current === scope &&
+      borrowRequestsAbortControllerRef.current &&
+      !borrowRequestsAbortControllerRef.current.signal.aborted
+    ) return;
+
+    if (borrowRequestsScopeRef.current !== scope) {
+      borrowRequestsAbortControllerRef.current?.abort();
+      allBorrowRequestsAbortControllerRef.current?.abort();
+      setData((currentData) => ({
+        ...currentData,
+        borrowRequests: [],
+      }));
+    }
+
+    borrowRequestsScopeRef.current = scope;
     const loadSequence = ++borrowRequestsLoadSequenceRef.current;
     setBorrowRequestsLoading(true);
     setBorrowRequestsLoadError('');
@@ -154,10 +175,7 @@ export function LibraryProvider({ children }) {
         clearTimeout(timeoutId);
       });
 
-      if (
-        sequence !== refreshSequenceRef.current ||
-        loadSequence !== borrowRequestsLoadSequenceRef.current
-      ) return;
+      if (loadSequence !== borrowRequestsLoadSequenceRef.current) return;
 
       const mappedLibraryRequests = Array.isArray(requests)
         ? requests.map((requestRow) => ({
@@ -190,10 +208,8 @@ export function LibraryProvider({ children }) {
         };
       });
     } catch (error) {
-      if (
-        sequence !== refreshSequenceRef.current ||
-        loadSequence !== borrowRequestsLoadSequenceRef.current
-      ) return;
+      if (loadSequence !== borrowRequestsLoadSequenceRef.current) return;
+      if (error?.name === 'AbortError') return;
       console.error('SHELF borrowing history loading failed:', error);
       setBorrowRequestsLoadError(
         error?.message || 'Unable to load your borrowing history.'
@@ -203,16 +219,31 @@ export function LibraryProvider({ children }) {
       if (borrowRequestsAbortControllerRef.current === controller) {
         borrowRequestsAbortControllerRef.current = null;
       }
-      if (
-        sequence === refreshSequenceRef.current &&
-        loadSequence === borrowRequestsLoadSequenceRef.current
-      ) {
+      if (loadSequence === borrowRequestsLoadSequenceRef.current) {
         setBorrowRequestsLoading(false);
       }
     }
   }, []);
 
-  const loadAllBorrowRequests = useCallback(async (sequence) => {
+  const loadAllBorrowRequests = useCallback(async () => {
+    const scope = `account:${currentAuthUserIdRef.current || 'anonymous'}`;
+    if (
+      borrowRequestsScopeRef.current === scope &&
+      allBorrowRequestsAbortControllerRef.current &&
+      !allBorrowRequestsAbortControllerRef.current.signal.aborted
+    ) return;
+
+    if (borrowRequestsScopeRef.current !== scope) {
+      borrowRequestsAbortControllerRef.current?.abort();
+      allBorrowRequestsAbortControllerRef.current?.abort();
+      setData((currentData) => ({
+        ...currentData,
+        borrowRequests: [],
+      }));
+    }
+
+    borrowRequestsScopeRef.current = scope;
+    const loadSequence = ++borrowRequestsLoadSequenceRef.current;
     const controller = new AbortController();
     allBorrowRequestsAbortControllerRef.current?.abort();
     allBorrowRequestsAbortControllerRef.current = controller;
@@ -241,7 +272,7 @@ export function LibraryProvider({ children }) {
         timeout,
       ]);
 
-      if (sequence !== refreshSequenceRef.current) return;
+      if (loadSequence !== borrowRequestsLoadSequenceRef.current) return;
 
       const mappedRequests = Array.isArray(requests)
         ? requests.map((requestRow) => ({
@@ -255,7 +286,8 @@ export function LibraryProvider({ children }) {
         borrowRequests: mappedRequests,
       }));
     } catch (error) {
-      if (sequence !== refreshSequenceRef.current) return;
+      if (loadSequence !== borrowRequestsLoadSequenceRef.current) return;
+      if (error?.name === 'AbortError') return;
       console.error('SHELF borrowing history loading failed:', error);
       setBorrowRequestsLoadError(
         error?.message || 'Unable to load borrowing history.'
@@ -268,7 +300,7 @@ export function LibraryProvider({ children }) {
       if (allBorrowRequestsAbortControllerRef.current === controller) {
         allBorrowRequestsAbortControllerRef.current = null;
       }
-      if (sequence === refreshSequenceRef.current) {
+      if (loadSequence === borrowRequestsLoadSequenceRef.current) {
         setBorrowRequestsLoading(false);
       }
     }
@@ -280,11 +312,6 @@ export function LibraryProvider({ children }) {
 
   const refreshAll = useCallback(async () => {
     const refreshSequence = ++refreshSequenceRef.current;
-    borrowRequestsLoadSequenceRef.current += 1;
-    borrowRequestsAbortControllerRef.current?.abort();
-    borrowRequestsAbortControllerRef.current = null;
-    allBorrowRequestsAbortControllerRef.current?.abort();
-    allBorrowRequestsAbortControllerRef.current = null;
     const waitForData = (request, operation) => {
       let timeoutId;
       const timeout = new Promise((_, reject) => {
@@ -659,7 +686,7 @@ fineReviewRequired:
         return;
       }
 
-      setData({
+      setData((currentData) => ({
         externalCatalogBooks: Array.isArray(externalCatalogBooks)
           ? externalCatalogBooks
             : [],
@@ -679,8 +706,16 @@ fineReviewRequired:
             ? visitors
             : [],
 
-        borrowRequests:
-          uniqueBorrowRequests,
+        borrowRequests: currentVisitorId
+          ? [
+              ...currentData.borrowRequests.filter(
+                (requestRow) =>
+                  requestRow?.isCommunityBook !== true &&
+                  requestRow?.requestType !== 'community'
+              ),
+              ...uniqueBorrowRequests,
+            ]
+          : currentData.borrowRequests,
 
         attendanceLogs:
           Array.isArray(attendanceLogs)
@@ -704,15 +739,15 @@ fineReviewRequired:
           ownerCommunityBookRequests,
 
         ownerCommunityRequestLoadError,
-      });
+      }));
 
       setAttendanceLoadError(attendanceError);
       setConnectionError('');
       setHasLoadedOnce(true);
       if (currentVisitorId) {
-        void loadVisitorBorrowRequests(currentVisitorId, refreshSequence);
+        void loadVisitorBorrowRequests(currentVisitorId);
       } else {
-        void loadAllBorrowRequests(refreshSequence);
+        void loadAllBorrowRequests();
       }
 
       return {
@@ -760,7 +795,6 @@ fineReviewRequired:
   }, [getCurrentVisitorId, loadAllBorrowRequests, loadVisitorBorrowRequests]);
 
   const retryBorrowRequests = useCallback(async () => {
-    const sequence = refreshSequenceRef.current;
     const visitorId = await getCurrentVisitorId();
 
     if (!visitorId) {
@@ -770,7 +804,7 @@ fineReviewRequired:
       return;
     }
 
-    await loadVisitorBorrowRequests(visitorId, sequence);
+    await loadVisitorBorrowRequests(visitorId);
   }, [getCurrentVisitorId, loadVisitorBorrowRequests]);
 
   // ==========================================================================

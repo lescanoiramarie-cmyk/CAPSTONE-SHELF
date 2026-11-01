@@ -1225,6 +1225,9 @@ export async function fetchBorrowRequests({
     }
 
   } catch (normalError) {
+    if (signal?.aborted || normalError?.name === 'AbortError') {
+      throw normalError;
+    }
     console.error(
       'SHELF â€” NORMAL BORROW REQUESTS ERROR:',
       normalError

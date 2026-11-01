@@ -73,11 +73,11 @@ test('staff borrowing history loads after the main dashboard refresh', () => {
   );
   assert.match(
     libraryContextSource,
-    /void loadVisitorBorrowRequests\(currentVisitorId,\s*refreshSequence\)/
+    /void loadVisitorBorrowRequests\(currentVisitorId\)/
   );
   assert.match(
     libraryContextSource,
-    /const loadAllBorrowRequests = useCallback\(async \(sequence\) => \{[\s\S]*?BORROW_REQUESTS_LOAD_TIMEOUT_MS/
+    /const loadAllBorrowRequests = useCallback\(async \(\) => \{[\s\S]*?BORROW_REQUESTS_LOAD_TIMEOUT_MS/
   );
   assert.match(
     libraryContextSource,
@@ -85,24 +85,25 @@ test('staff borrowing history loads after the main dashboard refresh', () => {
   );
   assert.match(
     libraryContextSource,
-    /void loadAllBorrowRequests\(refreshSequence\)/
+    /void loadAllBorrowRequests\(\)/
+  );
+  const refreshStart = libraryContextSource.match(
+    /const refreshAll = useCallback\(async \(\) => \{([\s\S]*?)setLoading\(true\);/
+  );
+  assert.ok(refreshStart, 'Expected a main refresh setup.');
+  assert.doesNotMatch(
+    refreshStart[1],
+    /borrowRequests(?:LoadSequenceRef|AbortControllerRef)\.current(?:\s*\+=|\?\.abort)/
   );
   assert.match(
     libraryContextSource,
-    /borrowRequestsAbortControllerRef\.current\?\.abort\(\)/
+    /borrowRequestsScopeRef\.current === scope[\s\S]*?borrowRequestsAbortControllerRef\.current[\s\S]*?return;/
   );
   assert.match(
     libraryContextSource,
-    /allBorrowRequestsAbortControllerRef\.current\?\.abort\(\)/
+    /if \(error\?\.name === 'AbortError'\) return/
   );
-  assert.match(
-    libraryContextSource,
-    /controller\.abort\(\)/
-  );
-  assert.match(
-    libraryContextSource,
-    /borrowRequestsLoadSequenceRef\.current \+= 1/
-  );
+  assert.match(libraryContextSource, /borrowRequestsScopeRef\.current = scope/);
 });
 
 test('unresolved visitor sessions do not fall back to loading all borrow requests', () => {
@@ -120,6 +121,22 @@ test('unresolved visitor sessions do not fall back to loading all borrow request
   assert.match(
     missingVisitorBranch[0],
     /getBorrowRequestsForSession\(\(\)\s*=>\s*fetchAllBorrowRequestRows\(signal\)\s*\)/
+  );
+});
+
+test('aborted borrowing history requests are not logged as database failures', () => {
+  const normalRequestsCatch = storeSource.match(
+    /catch \(normalError\) \{([\s\S]*?)\n\s*\}\s*const libraryBorrowRequests/
+  );
+  assert.ok(normalRequestsCatch, 'Expected a borrowing-history error handler.');
+  assert.match(
+    normalRequestsCatch[1],
+    /signal\?\.aborted \|\| normalError\?\.name === 'AbortError'/
+  );
+  assert.ok(
+    normalRequestsCatch[1].indexOf('signal?.aborted') <
+      normalRequestsCatch[1].indexOf("console.error("),
+    'Expected cancellation handling before error logging.'
   );
 });
 
