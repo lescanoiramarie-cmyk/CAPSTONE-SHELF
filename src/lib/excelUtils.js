@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
+import { formatBookCategory } from './bookCategory.js';
 
 const NAVY = '002046';
 const MISSING = '—';
@@ -250,6 +251,7 @@ const valueFor = (row, column, options, target) => {
   let value = row?.[column.key];
   if (libraryKey(column.key) && !options.preserveLibraryIds) value = resolveLibrary(value, options.libraries);
   if (isMissing(value)) return column.missingValue || (target === 'csv' ? '' : MISSING);
+  if (/category/i.test(column.key)) return formatBookCategory(value);
 
   const type = fieldType(column);
   if (type === 'date') {
@@ -350,7 +352,7 @@ const generatedAt = () => new Date();
 const yieldToUI = () => new Promise((resolve) => window.requestAnimationFrame(resolve));
 
 const makeSummaryRows = (options) => [
-  ['System', 'SHELF ILMS'],
+  ['System', 'SHELF'],
   ['Report', options.title || options.reportType || 'Report'],
   ['Library / Branch', options.libraryName || 'All Libraries'],
   ['Date Range', formatDateRange(options)],
@@ -362,7 +364,7 @@ const makeSummaryRows = (options) => [
 const toArgb = (color) => `FF${color}`;
 
 const setWorksheetTitle = (sheet, columnCount, title) => {
-   sheet.getCell(1, 1).value = `SHELF ILMS — ${title}`;
+   sheet.getCell(1, 1).value = `SHELF — ${title}`;
    if (columnCount > 1) sheet.mergeCells(1, 1, 1, columnCount);
    sheet.getCell(1, 1).font = { bold: true, size: 16, color: { argb: toArgb('FFFFFF') } };
    sheet.getCell(1, 1).fill = {
@@ -554,7 +556,7 @@ export const exportToExcel = async (data = [], fileName, options = {}) => {
    const columns = getColumns(rows, options);
    const formattedRows = outputRows(rows, columns, options, 'excel');
    const workbook = new ExcelJS.Workbook();
-   workbook.creator = options.generatedBy || 'SHELF ILMS';
+   workbook.creator = options.generatedBy || 'SHELF';
    workbook.created = generatedAt();
    workbook.subject = options.title || options.reportType || 'Report';
    const title = options.title || options.reportType || 'Report';
@@ -668,7 +670,7 @@ export const exportToExcel = async (data = [], fileName, options = {}) => {
      margins: { left: 0.3, right: 0.3, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 },
      printTitlesRow: `${headerRowNumber}:${headerRowNumber}`,
    };
-   worksheet.headerFooter.oddFooter = '&LSHELF ILMS&CPage &P of &N&RGenerated &D';
+   worksheet.headerFooter.oddFooter = '&LSHELF&CPage &P of &N&RGenerated &D';
 
    if (options.totalRow && formattedRows.length) {
      const totalRow = worksheet.addRow(
@@ -761,7 +763,7 @@ export const exportToPDF = async (data = [], fileName, options = {}) => {
   document.setFont('helvetica', 'bold');
   document.setTextColor(0, 32, 70);
   document.setFontSize(17);
-  document.text('SHELF ILMS', 15, 17);
+  document.text('SHELF', 15, 17);
   document.setFontSize(14);
   document.text(heading, 15, 25);
   if (options.pdfRoleBadge) {
@@ -917,7 +919,7 @@ export const exportToPDF = async (data = [], fileName, options = {}) => {
     document.setFont('helvetica', 'normal');
     document.setFontSize(8);
     document.setTextColor(71, 85, 105);
-    document.text('SHELF ILMS', 15, pageHeight - 5);
+    document.text('SHELF', 15, pageHeight - 5);
     document.text(`Generated ${generatedOn}`, pageWidth - 15, pageHeight - 5, { align: 'right' });
     document.text(`Page ${page} of ${pageCount}`, pageWidth / 2, pageHeight - 5, { align: 'center' });
   }

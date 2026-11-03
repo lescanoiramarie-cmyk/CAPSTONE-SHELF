@@ -89,7 +89,7 @@ export default function AttendanceScanner() {
         <div className="px-5 py-3 border-b border-slate-200 flex justify-between items-center">
           <div>
             <h3 className="text-sm font-bold text-slate-800">
-              Today's Branch Attendance
+              Today’s Branch Attendance
             </h3>
 
             <p className="text-xs text-slate-500 mt-0.5">

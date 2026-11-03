@@ -3,6 +3,7 @@ import { CircleAlert, CircleCheck, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/useAuth.js';
 import { useLibraryData } from '../context/useLibrary.js';
 import { fetchPopularBorrowedBookCounts } from '../data/store.js';
+import { formatBookCategory } from '../lib/bookCategory.js';
 import {
   getAIRecommendations,
   getVisitorSearchHistory,
@@ -88,9 +89,9 @@ export default function AIRecommendations({ onRequestBorrow }) {
             {topCategories.map((cat) => (
               <span
                 key={cat}
-                className="rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-800 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+                className="category-chip rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 text-slate-800 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
               >
-                {cat}
+                {formatBookCategory(cat)}
               </span>
             ))}
           </div>
@@ -105,10 +106,10 @@ export default function AIRecommendations({ onRequestBorrow }) {
             className="flex min-w-0 flex-row items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 transition hover:border-shelf-primary hover:bg-white hover:shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:hover:bg-slate-800"
           >
             <div className="min-w-0 flex-1">
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">
-                {book.category || 'General'}
+              <span className="category-chip rounded-full bg-slate-100 px-2 py-0.5 text-slate-800 dark:bg-slate-700 dark:text-slate-100">
+                {formatBookCategory(book.category) || 'General'}
               </span>
-              <h4 title={book.title} className="mt-1 truncate text-sm font-bold text-slate-900 dark:text-white">
+              <h4 title={book.title} className="mt-1 line-clamp-2 text-sm font-bold text-slate-900 dark:text-white">
                 {book.title}
               </h4>
               <p title={book.author || 'Unknown Author'} className="truncate text-xs text-slate-700 dark:text-slate-200">

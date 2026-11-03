@@ -22,9 +22,6 @@ export const BOOK_FINE_RATE_CATEGORIES = [
   { category: 'Software Engineering', rate: 20 },
 ];
 
-const VALID_FINE_RATES = new Set(
-  BOOK_FINE_RATE_CATEGORIES.map(({ rate }) => rate)
-);
 const FINE_RATE_BY_CATEGORY = new Map(
   BOOK_FINE_RATE_CATEGORIES.map(({ category, rate }) => [
     category.toLowerCase(),
@@ -39,14 +36,6 @@ export function getBookFineRate(category) {
   return key ? FINE_RATE_BY_CATEGORY.get(key) ?? null : null;
 }
 
-function storedRateMismatch(storedRate, derivedRate) {
-  const raw = typeof storedRate === 'string' ? storedRate.trim() : storedRate;
-  if (raw == null || raw === '') return derivedRate !== null;
-
-  const rate = typeof raw === 'number' ? raw : Number(raw);
-  return !VALID_FINE_RATES.has(rate) || rate !== derivedRate;
-}
-
 function normalizeImportKey(key) {
   return String(key)
     .trim()
@@ -58,19 +47,30 @@ function normalizeImportKey(key) {
 export function normalizeBookFineRate(value) {
   const raw = typeof value === 'string' ? value.trim() : value;
   const rate = typeof raw === 'number' ? raw : Number(raw);
+  const isIntegerInput =
+    typeof raw === 'number' ||
+    (typeof raw === 'string' && /^\d+$/.test(raw));
 
   if (
-    (typeof raw !== 'number' && (typeof raw !== 'string' || !/^\d+(?:\.\d+)?$/.test(raw))) ||
-    !VALID_FINE_RATES.has(rate)
+    !isIntegerInput ||
+    !Number.isInteger(rate) ||
+    rate < 1 ||
+    rate > 100
   ) {
-    throw new Error('Choose a fine rate of 10, 15, or 20 PHP per overdue day.');
+    throw new Error('Fine rate must be a whole number from ₱1 to ₱100 per overdue day.');
   }
 
   return rate;
 }
 
-export function bookFineRateMismatch(existingRate, category) {
-  return storedRateMismatch(existingRate, getBookFineRate(category));
+export function bookFineRateMismatch(existingRate, incomingRate) {
+  const rawExisting =
+    typeof existingRate === 'string' ? existingRate.trim() : existingRate;
+  const rawIncoming =
+    typeof incomingRate === 'string' ? incomingRate.trim() : incomingRate;
+
+  if (rawExisting == null || rawExisting === '') return true;
+  return Number(rawExisting) !== Number(rawIncoming);
 }
 
 export function buildDuplicateBookImportUpdate(existing, incoming) {
@@ -83,9 +83,10 @@ export function buildDuplicateBookImportUpdate(existing, incoming) {
         Number(existing.available_copies || 0) +
         Number(incoming.available_copies || 0),
     },
-    fineRateMismatch:
-      bookFineRateMismatch(existing.fine_rate, existing.category) ||
-      bookFineRateMismatch(existing.fine_rate, incoming.category),
+    fineRateMismatch: bookFineRateMismatch(
+      existing.fine_rate,
+      incoming.fine_rate
+    ),
   };
 }
 
@@ -147,6 +148,9 @@ export function validateImportedBookFineRates(records) {
     const categoryFields = Object.entries(record).filter(
       ([key]) => normalizeImportKey(key) === 'category'
     );
+    const fineRateFields = Object.entries(record).filter(
+      ([key]) => normalizeImportKey(key) === 'fine_rate'
+    );
     const categoryValues = categoryFields
       .map(([, value]) => String(value ?? '').trim())
       .filter(Boolean);
@@ -158,17 +162,42 @@ export function validateImportedBookFineRates(records) {
     }
 
     const category = categoryValues[0] || null;
+    const bookLabel = String(record.title ?? '').trim();
+    const rowLabel = bookLabel
+      ? `Row ${rowNumber} ("${bookLabel}")`
+      : `Row ${rowNumber}`;
+    if (
+      fineRateFields.length > 1 &&
+      new Set(
+        fineRateFields.map(([, value]) => String(value ?? '').trim())
+      ).size > 1
+    ) {
+      errors.push(`${rowLabel} has conflicting fine_rate values.`);
+      return record;
+    }
+
+    let fineRate;
+    try {
+      fineRate = normalizeBookFineRate(fineRateFields[0]?.[1]);
+    } catch {
+      errors.push(
+        `${rowLabel} has an invalid or missing fine_rate. Enter a whole number from 1 to 100.`
+      );
+      return record;
+    }
 
     const nonClassificationFields = Object.fromEntries(
       Object.entries(record).filter(
         ([key]) =>
-          !['category', 'fine_rate'].includes(normalizeImportKey(key))
+          !['category', 'fine_rate'].includes(
+            normalizeImportKey(key)
+          )
       )
     );
     return {
       ...nonClassificationFields,
       category,
-      fine_rate: getBookFineRate(category),
+      fine_rate: fineRate,
     };
   });
 

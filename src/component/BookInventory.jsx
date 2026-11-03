@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { BookOpen, Search, X } from 'lucide-react';
 import { useLibrary } from '../context/useLibrary';
 import { useAuth } from '../context/useAuth.js';
 import { supabase } from '../lib/supabaseClient';
-import { getBookFineRate } from '../lib/bookFineRate.js';
+import { normalizeBookFineRate } from '../lib/bookFineRate.js';
+import { formatBookCategory } from '../lib/bookCategory.js';
 
 export default function BookInventory() {
   const { user } = useAuth();
@@ -27,6 +28,54 @@ export default function BookInventory() {
   const [selectedCoverFile, setSelectedCoverFile] = useState(null);
   const [coverPreview, setCoverPreview] = useState('');
   const [isDraggingCover, setIsDraggingCover] = useState(false);
+
+  useEffect(() => {
+    if (!showForm) return undefined;
+
+    const dialog = document.querySelector(
+      '[aria-labelledby="book-inventory-form-title"]'
+    );
+    if (!dialog) return undefined;
+
+    const previousFocus = document.activeElement;
+    const focusableSelector =
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const focusables = () => [...dialog.querySelectorAll(focusableSelector)];
+    dialog.querySelector('#book-title')?.focus();
+
+    const handleDialogKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setShowForm(false);
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+      const items = focusables();
+      if (!items.length) {
+        event.preventDefault();
+        return;
+      }
+
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleDialogKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleDialogKeyDown);
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+        previousFocus.focus();
+      }
+    };
+  }, [showForm]);
 
   const getBookCopies = (book) =>
     Number(book?.totalCopies ?? book?.total_copies ?? book?.copies ?? 0);
@@ -146,6 +195,7 @@ export default function BookInventory() {
     author: '',
     isbn: '',
     category: '',
+    fine_rate: '',
     copies: 1,
     libraryId: '',
     coverUrl: '',
@@ -172,6 +222,7 @@ export default function BookInventory() {
       author: '',
       isbn: '',
       category: '',
+      fine_rate: '',
       copies: 1,
       libraryId: libraries?.[0]?.id || '',
       coverUrl: '',
@@ -193,6 +244,7 @@ export default function BookInventory() {
       author: book.author || '',
       isbn: book.isbn || '',
       category: book.category || '',
+      fine_rate: book.fineRate ?? book.fine_rate ?? '',
       copies: getBookCopies(book) || 1,
       libraryId: book.libraryId || '',
       coverUrl: book.coverUrl || '',
@@ -212,6 +264,7 @@ export default function BookInventory() {
     setMutationError('');
 
     try {
+      const fineRate = normalizeBookFineRate(form.fine_rate);
       let coverUrl = form.coverUrl;
 
       if (selectedCoverFile) {
@@ -223,6 +276,7 @@ export default function BookInventory() {
 
       const bookPayload = {
         ...form,
+        fine_rate: fineRate,
         coverUrl,
         totalCopies: form.copies
       };
@@ -237,7 +291,7 @@ export default function BookInventory() {
 
       setMutationNotice(
         savedBook?.fineRateMismatch
-          ? `Copies were added, but the existing category and rate for "${savedBook.title}" were preserved. Existing category "${savedBook.fineRateMismatch.existingCategory || 'Unclassified'}" is stored at ₱${savedBook.fineRateMismatch.existingRate ?? 'unassigned'}; imported category "${savedBook.fineRateMismatch.importedCategory || 'Unclassified'}" derives ₱${savedBook.fineRateMismatch.importedRate ?? 'unassigned'}. Review manually.`
+          ? `Copies were added, but the existing fine rate for "${savedBook.title}" was preserved at ₱${savedBook.fineRateMismatch.existingRate ?? 'unassigned'} per overdue day. The import supplied ₱${savedBook.fineRateMismatch.importedRate ?? 'unassigned'}.`
           : ''
       );
 
@@ -327,7 +381,7 @@ export default function BookInventory() {
           onClick={handleOpenAdd}
           className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition"
         >
-          + Add New Book
+          + Add new book
         </button>
       </div>
 
@@ -422,7 +476,7 @@ export default function BookInventory() {
                           className="w-11 h-16 object-cover rounded shadow-sm border border-slate-200/60 shrink-0"
                         />
                       ) : (
-                        <div className="w-11 h-16 bg-slate-100 border border-slate-200/80 rounded flex items-center justify-center text-[10px] font-bold text-slate-400 shrink-0 uppercase tracking-tighter">
+                        <div className="w-11 h-16 bg-slate-100 border border-slate-200/80 rounded flex items-center justify-center text-xs font-bold text-slate-400 shrink-0 uppercase tracking-tighter">
                           No Cover
                         </div>
                       )}
@@ -437,7 +491,7 @@ export default function BookInventory() {
                         </div>
 
                         {book.isbn && (
-                          <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                          <div className="text-xs tabular-nums text-slate-400 mt-0.5 wrap-anywhere">
                             ISBN: {book.isbn}
                           </div>
                         )}
@@ -446,16 +500,16 @@ export default function BookInventory() {
 
                     <td className="p-4 align-middle">
                       <span className="inline-block px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md text-xs font-semibold group-hover:bg-white group-hover:shadow-sm transition-all">
-                        {book.category || 'Unclassified'}
+                        {formatBookCategory(book.category) || 'Unclassified'}
                       </span>
                     </td>
 
                     <td className="p-4 align-middle text-xs font-semibold text-slate-700">
-                      {getBookFineRate(book.category) == null ? (
-                        <div>Unclassified — checkout unavailable</div>
+                      {(book.fineRate ?? book.fine_rate) == null ? (
+                        <div>Fine rate not set</div>
                       ) : (
-                        <div className="mt-1 text-[11px] font-medium text-slate-500">
-                          ₱{getBookFineRate(book.category)} per overdue day
+                        <div className="mt-1 text-xs font-medium text-slate-500">
+                          ₱{book.fineRate ?? book.fine_rate} per overdue day
                         </div>
                       )}
                     </td>
@@ -503,8 +557,13 @@ export default function BookInventory() {
 
       {showForm && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4">
-            <h2 className="text-lg font-bold text-slate-800">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="book-inventory-form-title"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-lg space-y-4 overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 shadow-xl"
+          >
+            <h2 id="book-inventory-form-title" className="text-lg font-bold text-slate-800">
               {editingId ? 'Edit Book' : 'Add New Book'}
             </h2>
 
@@ -516,12 +575,14 @@ export default function BookInventory() {
 
             <form onSubmit={handleSubmit} className="space-y-3 text-xs">
               <div>
-                <label className="block text-slate-700 font-semibold mb-1">
+                <label htmlFor="book-title" className="block text-slate-700 font-semibold mb-1">
                   Title *
+                  <span className="sr-only"> required</span>
                 </label>
 
                 <input
                   required
+                  id="book-title"
                   type="text"
                   value={form.title}
                   onChange={(e) =>
@@ -533,12 +594,13 @@ export default function BookInventory() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-700 font-semibold mb-1">
+                  <label htmlFor="book-author" className="block text-slate-700 font-semibold mb-1">
                     Author
                   </label>
 
                   <input
                     type="text"
+                    id="book-author"
                     value={form.author}
                     onChange={(e) =>
                       setForm({ ...form, author: e.target.value })
@@ -548,12 +610,13 @@ export default function BookInventory() {
                 </div>
 
                 <div>
-                  <label className="block text-slate-700 font-semibold mb-1">
+                  <label htmlFor="book-isbn" className="block text-slate-700 font-semibold mb-1">
                     ISBN
                   </label>
 
                   <input
                     type="text"
+                    id="book-isbn"
                     value={form.isbn}
                     onChange={(e) =>
                       setForm({ ...form, isbn: e.target.value })
@@ -565,12 +628,14 @@ export default function BookInventory() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-700 font-semibold mb-1">
+                  <label htmlFor="book-category" className="block text-slate-700 font-semibold mb-1">
                     Category *
+                    <span className="sr-only"> required</span>
                   </label>
 
                   <input
                     required
+                    id="book-category"
                     type="text"
                     placeholder="e.g. Fiction, History, Science"
                     value={form.category}
@@ -582,12 +647,13 @@ export default function BookInventory() {
                 </div>
 
                 <div>
-                  <label className="block text-slate-700 font-semibold mb-1">
+                  <label htmlFor="book-copies" className="block text-slate-700 font-semibold mb-1">
                     Copies
                   </label>
 
                   <input
                     type="number"
+                    id="book-copies"
                     min="1"
                     value={form.copies}
                     onChange={(e) =>
@@ -601,20 +667,40 @@ export default function BookInventory() {
                 </div>
               </div>
 
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-                <span className="font-semibold">Fine rate: </span>
+              <div>
+                <label htmlFor="book-fine-rate" className="block text-slate-700 font-semibold mb-1">
+                  Fine Rate (₱ per overdue day) *
+                  <span className="sr-only"> required</span>
+                </label>
 
-                {getBookFineRate(form.category) == null
-                  ? 'Unclassified — checkout unavailable'
-                  : `₱${getBookFineRate(form.category)} per overdue day`}
+                <input
+                  required
+                  id="book-fine-rate"
+                  name="fine_rate"
+                  type="number"
+                  min="1"
+                  max="100"
+                  step="1"
+                  inputMode="numeric"
+                  value={form.fine_rate}
+                  onChange={(e) =>
+                    setForm({ ...form, fine_rate: e.target.value })
+                  }
+                  aria-describedby="book-fine-rate-help"
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <p id="book-fine-rate-help" className="mt-1 text-slate-500">
+                  Enter a whole number from ₱1 to ₱100.
+                </p>
               </div>
 
               <div>
-                <label className="block text-slate-700 font-semibold mb-1">
+                <label htmlFor="book-library-location" className="block text-slate-700 font-semibold mb-1">
                   Library Location
                 </label>
 
                 <select
+                  id="book-library-location"
                   value={form.libraryId}
                   onChange={(e) =>
                     setForm({ ...form, libraryId: e.target.value })
@@ -634,7 +720,7 @@ export default function BookInventory() {
               </div>
 
               <div>
-                <label className="block text-slate-700 font-semibold mb-1">
+                <label htmlFor="book-cover-input" className="block text-slate-700 font-semibold mb-1">
                   Book Cover Image
                 </label>
 
@@ -686,7 +772,7 @@ export default function BookInventory() {
                     </div>
                   ) : (
                     <div className="py-3">
-                      <p className="text-2xl mb-2">📚</p>
+                      <BookOpen size={24} className="mb-2 text-slate-400" aria-hidden="true" />
 
                       <p className="font-semibold text-slate-700">
                         Drag and drop your book cover here
@@ -715,11 +801,12 @@ export default function BookInventory() {
               </div>
 
               <div>
-                <label className="block text-slate-700 font-semibold mb-1">
+                <label htmlFor="book-summary" className="block text-slate-700 font-semibold mb-1">
                   Summary
                 </label>
 
                 <textarea
+                  id="book-summary"
                   rows="2"
                   value={form.summary}
                   onChange={(e) =>
@@ -749,8 +836,8 @@ export default function BookInventory() {
                   {saving
                     ? 'Saving...'
                     : editingId
-                      ? 'Save Changes'
-                      : 'Add Book'}
+                      ? 'Save changes'
+                      : 'Add book'}
                 </button>
               </div>
             </form>

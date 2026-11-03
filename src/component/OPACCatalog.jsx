@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth.js';
+import { getDashboardPath } from '../routes/roleHome.js';
 import {
   BookOpen,
   Bookmark,
@@ -35,6 +36,7 @@ import LibraryMap from './LibraryMap.jsx';
 import { supabase } from '../lib/supabaseClient.js';
 import { recordVisitorSearch } from '../lib/recommendationEngine.js';
 import { fetchReadingList, toggleReadingList } from '../services/shelf.js';
+import { formatBookCategory } from '../lib/bookCategory.js';
 import {
   calculateOverdueFine,
   getBookFineRate,
@@ -314,6 +316,57 @@ export default function OPACCatalog({
   const [submittingBorrowBookId, setSubmittingBorrowBookId] = useState(null);
   const [submittingCommunityRequest, setSubmittingCommunityRequest] = useState(false);
   const [updatingVisibilityBookId, setUpdatingVisibilityBookId] = useState(null);
+
+  useEffect(() => {
+    if (!selectedBook) return undefined;
+
+    const dialog = document.querySelector(
+      '[aria-labelledby="visitor-book-modal-title"]'
+    );
+    if (!dialog) return undefined;
+
+    const previousFocus = document.activeElement;
+    const focusableSelector =
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const focusables = () => [...dialog.querySelectorAll(focusableSelector)];
+    const closeButton = dialog.querySelector(
+      '[aria-label="Close book information"]'
+    );
+    closeButton?.focus();
+
+    const handleDialogKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setSelectedBook(null);
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+      const items = focusables();
+      if (!items.length) {
+        event.preventDefault();
+        return;
+      }
+
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleDialogKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleDialogKeyDown);
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+        previousFocus.focus();
+      }
+    };
+  }, [selectedBook]);
 
   // =========================================================
   // PERSONAL / COMMUNITY BOOK STATES
@@ -1794,7 +1847,7 @@ export default function OPACCatalog({
           <div className="visitor-book-card-meta">
             <div className="visitor-book-card-meta-item">
               <span className="visitor-book-card-meta-label">Category</span>
-              <span className="visitor-book-card-meta-value" title={book.category || '—'}>{book.category || '—'}</span>
+              <span className="visitor-book-card-meta-value" title={book.category || '—'}>{formatBookCategory(book.category) || '—'}</span>
             </div>
             <div className="visitor-book-card-meta-item">
               <span className="visitor-book-card-meta-label">Condition</span>
@@ -1817,10 +1870,6 @@ export default function OPACCatalog({
           </div>
 
           <div className="visitor-book-card-footer">
-            <div className="visitor-book-card-handover">
-              <MapPin size={14} aria-hidden="true" />
-              <span>Handover: Arrange with Owner</span>
-            </div>
             {String(book.ownerVisitorId ?? '') === String(user?.id ?? '') && (
               <div className="visitor-book-card-action-row">
                 <button
@@ -1847,7 +1896,7 @@ export default function OPACCatalog({
                 >
                   {book.isPublic ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}
                   <span className="visitor-book-card-action-label">
-                    {updatingVisibilityBookId === book.id ? 'Saving...' : book.isPublic ? 'Make Private' : 'Make Public'}
+                    {updatingVisibilityBookId === book.id ? 'Saving...' : book.isPublic ? 'Make private' : 'Make public'}
                   </span>
                 </button>
                 <button
@@ -1896,7 +1945,7 @@ export default function OPACCatalog({
     >
       <div className="visitor-book-card-inner">
         <div className="visitor-book-card-badge-row">
-          <span className="visitor-book-card-badge visitor-book-card-badge-primary">Community Book</span>
+          <span className="visitor-book-card-badge visitor-book-card-badge-primary">Community book</span>
           <span
             className={`visitor-book-card-badge ${
               getPersonalBookCopyAvailability(book).availableCopies > 0
@@ -1916,15 +1965,15 @@ export default function OPACCatalog({
             className="visitor-book-cover"
           />
           <div className="visitor-book-card-text">
-            <h3 title={book.title || 'Untitled Book'}>{book.title || 'Untitled Book'}</h3>
-            <p title={book.author || 'Unknown Author'}>By {book.author || 'Unknown Author'}</p>
+            <h3 title={book.title || 'Untitled Book'}>{book.title || 'Untitled book'}</h3>
+            <p title={book.author || 'Unknown Author'}>By {book.author || 'Unknown author'}</p>
           </div>
         </div>
 
         <div className="visitor-book-card-meta">
           <div className="visitor-book-card-meta-item">
             <span className="visitor-book-card-meta-label">Category</span>
-            <span className="visitor-book-card-meta-value" title={book.category || '—'}>{book.category || '—'}</span>
+            <span className="visitor-book-card-meta-value" title={book.category || '—'}>{formatBookCategory(book.category) || '—'}</span>
           </div>
           <div className="visitor-book-card-meta-item">
             <span className="visitor-book-card-meta-label">Condition</span>
@@ -1947,9 +1996,10 @@ export default function OPACCatalog({
         <div className="visitor-book-card-footer">
           <div className="visitor-book-card-handover">
             <MapPin size={14} aria-hidden="true" />
-            <span>Handover: Arrange with Owner</span>
+            <span>Handover: arrange with owner</span>
           </div>
           <div className="visitor-book-card-approval-note">
+            <CircleAlert size={14} aria-hidden="true" />
             <span>Borrowing requires owner approval.</span>
           </div>
         </div>
@@ -1966,15 +2016,21 @@ export default function OPACCatalog({
       {/* 1. TOP NAVBAR FOR BRANDING AND VISUAL BREATHING ROOM */}
       {!embedded && <header className="bg-slate-900 text-white shadow-md sticky top-0 z-40">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-3 py-4 sm:px-4 md:px-6">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
-            <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            className="flex items-center gap-3 text-left"
+            onClick={() => navigate(user?.id ? getDashboardPath(user.role) : '/')}
+            aria-label="Go to SHELF home"
+          >
+            <div className="flex items-center gap-2">
+              <img src="/shelf-logo.png" alt="" className="h-9 w-9 object-contain" />
               <span className="text-2xl font-black tracking-wider text-blue-400">SHELF</span>
               <span className="text-xs bg-blue-600 px-2 py-0.5 rounded font-semibold text-white">OPAC</span>
             </div>
             <span className="text-xs text-slate-400 border-l border-slate-700 pl-3 hidden sm:inline">
               Public Catalog Search
             </span>
-          </div>
+          </button>
 
           <div className="flex items-center gap-3">
             <button 
@@ -1982,14 +2038,14 @@ export default function OPACCatalog({
               onClick={() => navigate('/')} 
               className="text-xs font-semibold text-slate-300 hover:text-white transition px-3 py-1.5 rounded-lg hover:bg-slate-800"
             >
-              &larr; Back to Home
+              ← Back to home
             </button>
             <button
               type="button"
               onClick={() => navigate('/visitor-login')}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition shadow"
             >
-              Sign In
+              Sign in
             </button>
           </div>
         </div>
@@ -2069,7 +2125,7 @@ export default function OPACCatalog({
                     onClick={handleCloseMap}
                     className="px-3 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-xs font-bold"
                   >
-                    Close Map
+                    Close map
                   </button>
                 </div>
                 <LibraryMap
@@ -2162,7 +2218,7 @@ export default function OPACCatalog({
             {searchTerm && (
               <div className="flex items-center justify-between text-xs text-slate-500">
                 <span>
-                  Search results for: <strong className="text-slate-800">"{searchTerm}"</strong>
+                  Search results for: <strong className="text-slate-800">“{searchTerm}”</strong>
                 </span>
                 <span>
                   {filteredBooks.length} {filteredBooks.length === 1 ? 'book' : 'books'} found
@@ -2173,7 +2229,7 @@ export default function OPACCatalog({
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
                 <div>
                   <h2 className="text-base font-bold text-slate-800">
-                    Books in {selectedCategory}
+                    Books in {formatBookCategory(selectedCategory)}
                   </h2>
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                     {filteredBooks.length} catalog {filteredBooks.length === 1 ? 'entry' : 'entries'}
@@ -2227,7 +2283,7 @@ export default function OPACCatalog({
                   }}
                   className="mt-4 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
                 >
-                  Clear All Filters
+                  Clear all filters
                 </button>
               </div>
             ) : (
@@ -2302,7 +2358,7 @@ export default function OPACCatalog({
                   >
                     <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
                       <Bookmark size={16} aria-hidden="true" />
-                      {label}
+                      {formatBookCategory(label)}
                     </span>
                     <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
                       {count} {count === 1 ? 'book' : 'books'}
@@ -2348,66 +2404,73 @@ export default function OPACCatalog({
                 </p>
               </div>
             ) : (
-              <div className="grid auto-rows-fr gap-5 md:grid-cols-2 xl:grid-cols-3">
+              <div className="visitor-book-collection-grid">
                 {readingListBooks.map((book) => (
-                  <div
+                  <article
                     key={book.id}
-                    className="flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800"
+                    className="visitor-book-card visitor-reading-list-card"
                   >
-                    <div className="flex flex-1 flex-col p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <span className="inline-block rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                            {book.category || 'Uncategorized'}
-                          </span>
-                          <h3 title={book.title || 'Untitled Book'} className="mt-2 min-h-12 line-clamp-2 text-base font-bold text-slate-900 dark:text-white">
+                    <div className="visitor-book-card-inner">
+                      <div className="visitor-book-card-badge-row">
+                        <span className="visitor-book-card-badge visitor-book-card-badge-neutral category-chip">
+                          {formatBookCategory(book.category) || 'Uncategorized'}
+                        </span>
+                      </div>
+
+                      <div className="visitor-book-card-header">
+                        <BookCover
+                          src={book.coverUrl}
+                          title={book.title || 'Untitled Book'}
+                          className="visitor-book-cover"
+                        />
+                        <div className="visitor-book-card-text">
+                          <h3 title={book.title || 'Untitled Book'}>
                             {book.title || 'Untitled Book'}
                           </h3>
-                          <p title={book.author || 'Unknown Author'} className="mt-1 truncate text-xs text-slate-700 dark:text-slate-200">
+                          <p title={book.author || 'Unknown Author'}>
                             By {book.author || 'Unknown Author'}
                           </p>
                         </div>
-                        <BookOpen size={22} className="shrink-0 text-slate-400" aria-hidden="true" />
                       </div>
-                      <div className="mt-4 space-y-2 text-xs text-slate-600">
-                        <div className="flex items-center justify-between gap-2">
-                          <span>Availability</span>
-                          <span className={`visitor-status ${
-                            Number(book.availableCopies || 0) > 0
-                              ? 'visitor-status-success'
-                              : 'visitor-status-neutral'
-                          }`}>
+
+                      <div className="visitor-book-card-meta">
+                        <div className="visitor-book-card-meta-item">
+                          <span className="visitor-book-card-meta-label">Availability</span>
+                          <span className="visitor-book-card-meta-value">
                             {Number(book.availableCopies || 0) > 0
                               ? `${book.availableCopies} available`
                               : 'Unavailable'}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between gap-2">
-                          <span>ISBN</span>
-                          <span className="truncate text-right tabular-nums text-slate-700 dark:text-slate-200">
+                        <div className="visitor-book-card-meta-item">
+                          <span className="visitor-book-card-meta-label">ISBN</span>
+                          <span className="visitor-book-card-meta-value tabular-nums">
                             {book.isbn || '—'}
                           </span>
                         </div>
                       </div>
-                      <div className="mt-auto flex gap-2 pt-4">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedBook(book)}
-                          className="flex-1 rounded-lg bg-shelf-primary px-3 py-2 text-xs font-bold text-white hover:opacity-90"
-                        >
-                          View Details
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleReadingList(book)}
-                          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                          disabled={savingReadingListBookId === book.id}
-                        >
-                          {savingReadingListBookId === book.id ? 'Saving...' : 'Remove'}
-                        </button>
+
+                      <div className="visitor-book-card-footer visitor-reading-list-footer">
+                        <div className="visitor-book-card-reading-actions">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedBook(book)}
+                            className="rounded-lg bg-shelf-primary px-3 py-2 text-sm font-bold text-white hover:opacity-90"
+                          >
+                            View Details
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleReadingList(book)}
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={savingReadingListBookId === book.id}
+                          >
+                            {savingReadingListBookId === book.id ? 'Saving...' : 'Remove'}
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  </article>
                 ))}
               </div>
             )}
@@ -2452,7 +2515,7 @@ export default function OPACCatalog({
                 </p>
               </div>
             ) : (
-              <div className="opac-book-grid book-card-grid grid min-w-0 gap-5">
+              <div className="opac-book-grid book-card-grid visitor-book-collection-grid">
                 {filteredCommunityBooks.map(renderCommunityBookCard)}
               </div>
             )}
@@ -2482,7 +2545,7 @@ export default function OPACCatalog({
                 className="inline-flex items-center justify-center gap-2 rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white hover:opacity-90"
               >
                 <Plus size={16} aria-hidden="true" />
-                Add Personal Book
+                Add personal book
               </button>
             </div>
             <div className="order-3 w-full min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
@@ -2620,7 +2683,7 @@ export default function OPACCatalog({
                         <div className="space-y-3">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="min-w-0">
-                              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                              <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                                 <Users size={13} aria-hidden="true" />
                                 Community book request
                               </span>
@@ -2669,7 +2732,7 @@ export default function OPACCatalog({
                           </div>
                           {request.ownerResponse && (
                             <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800">
-                              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                              <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                                 Owner response
                               </p>
                               <p className="mt-1 break-words text-xs leading-5 text-slate-600 dark:text-slate-300">
@@ -2699,7 +2762,7 @@ export default function OPACCatalog({
                               onClick={() => openRejectCommunityRequest(request)}
                               className="min-h-10 rounded-lg border border-red-200 bg-white px-5 py-2.5 text-sm font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-red-900 dark:bg-slate-800 dark:text-red-300 dark:hover:bg-red-950/40"
                             >
-                              Reject Request
+                              Reject request
                             </button>
                           </div>
                         )}
@@ -2748,7 +2811,7 @@ export default function OPACCatalog({
                               <CheckCircle2 size={15} className="text-green-700 dark:text-green-300" aria-hidden="true" />
                               Book Returned
                             </p>
-                            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                               This community book transaction is complete.
                             </p>
                           </div>
@@ -2790,11 +2853,11 @@ export default function OPACCatalog({
                   className="mt-4 inline-flex items-center gap-2 rounded-lg bg-shelf-primary px-4 py-2.5 text-xs font-bold text-white transition hover:opacity-90"
                 >
                   <Plus size={15} aria-hidden="true" />
-                  Add Your First Book
+                  Add your first book
                 </button>
               </div>
             ) : (
-              <div className="personal-book-card-grid order-2 grid w-full min-w-0 gap-5">
+              <div className="personal-book-card-grid visitor-book-collection-grid order-2 w-full min-w-0">
                 {filteredPersonalBooks.map(renderPersonalBookCard)}
               </div>
             )}
@@ -2900,7 +2963,7 @@ export default function OPACCatalog({
                           <div className="flex flex-col gap-1">
                             <span className="break-words">{request.bookTitle || 'Untitled Book'}</span>
                             {isCommunityRequest && (
-                              <span className="w-fit rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">
+                              <span className="w-fit rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">
                                 Community Book
                               </span>
                             )}
@@ -3066,7 +3129,7 @@ export default function OPACCatalog({
                         >
                           {"\u20B1"}{currentFine.toFixed(2)}
                           {request.fineReviewRequired && (
-                            <span className="mt-1 block text-[10px] font-semibold text-amber-700">
+                            <span className="mt-1 block text-xs font-semibold text-amber-700">
                               Manual review required
                             </span>
                           )}
@@ -3115,14 +3178,14 @@ export default function OPACCatalog({
                 }}
                 className="w-full py-2.5 bg-shelf-primary hover:opacity-90 text-white font-bold rounded-lg transition shadow-md text-sm"
               >
-                Sign In / Register Now
+                Sign in / register now
               </button>
               <button
                 type="button"
                 onClick={() => setShowAuthModal(false)}
                 className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold rounded-lg transition text-xs dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
               >
-                Continue Browsing as Guest
+                Continue browsing as guest
               </button>
             </div>
           </div>
@@ -3170,7 +3233,7 @@ export default function OPACCatalog({
                   placeholder="Add a short message for the requester."
                   className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 resize-none"
                 />
-                <p className="mt-1 text-[10px] text-slate-400 text-right">
+                <p className="mt-1 text-xs text-slate-400 text-right">
                   {communityRequestResponse.length}/500
                 </p>
               </div>
@@ -3192,7 +3255,7 @@ export default function OPACCatalog({
                   onClick={handleRejectCommunityRequest}
                   className="px-4 py-2.5 rounded-lg bg-red-600 text-white text-xs font-bold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {processingCommunityRequestId ? 'Rejecting...' : 'Confirm Rejection'}
+                  {processingCommunityRequestId ? 'Rejecting...' : 'Confirm rejection'}
                 </button>
               </div>
             </div>
@@ -3356,7 +3419,7 @@ export default function OPACCatalog({
                           {coverFile ? <ImagePlus size={16} aria-hidden="true" /> : <Upload size={16} aria-hidden="true" />}
                           {coverFile ? coverFile.name : 'Click to upload or drag and drop'}
                         </span>
-                        <span className="mt-1 text-[11px] text-slate-600 dark:text-slate-300">
+                        <span className="mt-1 text-xs text-slate-600 dark:text-slate-300">
                           PNG, JPG or WEBP, up to 2 MB
                         </span>
                       </label>
@@ -3439,7 +3502,7 @@ export default function OPACCatalog({
                       <option value="">Select a category</option>
                       {personalBookCategories.map((category) => (
                         <option key={category} value={category}>
-                          {category}
+                          {formatBookCategory(category)}
                         </option>
                       ))}
                       <option value="Others">Others</option>
@@ -3504,7 +3567,7 @@ export default function OPACCatalog({
                       className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-400"
                       required
                     />
-                    <p className="mt-1 text-[10px] text-slate-400">
+                    <p className="mt-1 text-xs text-slate-400">
                       Enter how many copies you own. Borrowed copies will be marked unavailable.
                     </p>
                   </div>
@@ -3544,11 +3607,11 @@ export default function OPACCatalog({
                         checked={personalBookForm.isPublic === value}
                         onChange={() => updatePersonalBookForm('isPublic', value)}
                       />
-                      {label}
+                      {formatBookCategory(label)}
                     </label>
                   ))}
                 </div>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-xs text-slate-500">
                   Public books appear in Community Books. Only Me books are visible only in your personal collection.
                 </p>
               </div>
@@ -3557,7 +3620,7 @@ export default function OPACCatalog({
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600">
                     Community Lending
                   </h3>
-                  <p className="text-[11px] text-slate-400 mt-1">
+                  <p className="text-xs text-slate-400 mt-1">
                     Choose whether other SHELF visitors may request this book.
                   </p>
                 </div>
@@ -3597,7 +3660,7 @@ export default function OPACCatalog({
                           days
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-400 mt-1">
+                      <p className="text-xs text-slate-400 mt-1">
                         Allowed: 1–30 days
                       </p>
                     </div>
@@ -3629,7 +3692,7 @@ export default function OPACCatalog({
                         rows={3}
                         className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 resize-none"
                       />
-                      <p className="text-[10px] text-slate-400 mt-1">
+                      <p className="text-xs text-slate-400 mt-1">
                         Optional, maximum 500 characters. Handover is arranged directly between users, not through a library.
                       </p>
                     </div>
@@ -3640,7 +3703,7 @@ export default function OPACCatalog({
                 <p className="text-xs font-bold text-violet-800">
                   Community lending note
                 </p>
-                <p className="mt-1 text-[11px] leading-relaxed text-violet-700">
+                <p className="mt-1 text-xs leading-relaxed text-violet-700">
                   Your personal book will remain owned by you. If you enable lending, other visitors can see the book in Community Books. Every request requires owner approval.
                 </p>
               </div>
@@ -3665,11 +3728,11 @@ export default function OPACCatalog({
                 >
                   {savingPersonalBook
                     ? editingPersonalBook
-                      ? coverUploading ? 'Uploading cover...' : 'Saving Changes...'
-                      : coverUploading ? 'Uploading cover...' : 'Adding Book...'
+                      ? coverUploading ? 'Uploading cover...' : 'Saving changes...'
+                      : coverUploading ? 'Uploading cover...' : 'Adding book...'
                     : editingPersonalBook
-                      ? 'Save Changes'
-                      : 'Add Personal Book'}
+                      ? 'Save changes'
+                      : 'Add personal book'}
                 </button>
               </div>
             </form>
@@ -3715,7 +3778,7 @@ export default function OPACCatalog({
               >
                 {removingPersonalBookId === personalBookToRemove.id
                   ? 'Removing...'
-                  : 'Remove Book'}
+                  : 'Remove book'}
               </button>
             </div>
           </div>
@@ -3727,7 +3790,12 @@ export default function OPACCatalog({
       ====================================================== */}
       {selectedBook && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="visitor-book-modal relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="visitor-book-modal-title"
+            className="visitor-book-modal relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800"
+          >
             <button
               type="button"
               onClick={() => setSelectedBook(null)}
@@ -3742,21 +3810,26 @@ export default function OPACCatalog({
               <div className="min-w-0 space-y-1">
                 <div className="flex flex-wrap gap-2">
                   {selectedBook.bookType === 'personal' ? (
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">
                       Community Book
                     </span>
                   ) : (
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">
                       Library Book
                     </span>
                   )}
                   {selectedBook.condition && (
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">
                       {selectedBook.condition}
                     </span>
                   )}
+                  {selectedBook.category && (
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100 category-chip">
+                      {formatBookCategory(selectedBook.category)}
+                    </span>
+                  )}
                 </div>
-                <h3 title={selectedBook.title || 'Untitled Book'} className="line-clamp-2 text-lg font-bold text-slate-900 dark:text-white">
+                <h3 id="visitor-book-modal-title" title={selectedBook.title || 'Untitled Book'} className="line-clamp-2 text-lg font-bold text-slate-900 dark:text-white">
                   {selectedBook.title || 'Untitled Book'}
                 </h3>
                 <p className="text-xs text-slate-700 dark:text-slate-200">
@@ -3769,49 +3842,49 @@ export default function OPACCatalog({
             </div>
             {selectedBook.bookType === 'personal' && (
               <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/60">
-                <h4 className="text-sm font-bold text-shelf-primary dark:text-white">
+                <h4 className="visitor-modal-section-title text-sm font-bold text-shelf-primary dark:text-white">
                   Community Lending
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <p className="text-xs font-semibold text-shelf-primary dark:text-slate-200">
+                    <p className="visitor-book-card-meta-label">
                       Fine Rate
                     </p>
-                    <p className="text-xs font-semibold text-slate-700">
+                    <p className="visitor-book-card-meta-value tabular-nums">
                       {selectedBookFineRate == null
                         ? 'Unclassified — checkout unavailable'
                         : `₱${selectedBookFineRate} per overdue day`}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-shelf-primary dark:text-slate-200">
+                    <p className="visitor-book-card-meta-label">
                       Condition
                     </p>
-                    <p className="text-xs font-semibold text-slate-700">
+                    <p className="visitor-book-card-meta-value">
                       {selectedBook.condition || 'Good'}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-shelf-primary dark:text-slate-200">
+                    <p className="visitor-book-card-meta-label">
                       Lending Period
                     </p>
-                    <p className="text-xs font-semibold text-slate-700">
+                    <p className="visitor-book-card-meta-value tabular-nums">
                       {selectedBook.lendingPeriodDays || 7} days
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-shelf-primary dark:text-slate-200">
+                    <p className="visitor-book-card-meta-label">
                       Copies
                     </p>
-                    <p className="text-xs font-semibold text-slate-700">
+                    <p className="visitor-book-card-meta-value tabular-nums">
                       {getPersonalBookAvailabilityLabel(selectedBook)}
                     </p>
                   </div>
                   <div className="sm:col-span-2">
-                    <p className="text-xs font-semibold text-shelf-primary dark:text-slate-200">
+                    <p className="visitor-book-card-meta-label">
                       Handover Arrangement
                     </p>
-                    <p className="text-xs font-semibold text-slate-700">
+                    <p className="visitor-book-card-meta-value">
                       {getHandoverMethodLabel(selectedBook.handoverMethod)}
                     </p>
                   </div>
@@ -3824,7 +3897,7 @@ export default function OPACCatalog({
               </div>
             )}
             <div className="space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/60">
-              <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+              <h4 className="visitor-modal-section-title text-sm font-bold text-slate-900 dark:text-white">
                 Book Summary
               </h4>
               <p className="text-xs text-slate-600 leading-relaxed">
@@ -3892,7 +3965,7 @@ export default function OPACCatalog({
                               onClick={() => handleViewMap(entry.libraryId, entry)}
                               className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-300 transition"
                             >
-                              View Map
+                              View map
                             </button>
                             <button
                               type="button"
@@ -3905,7 +3978,7 @@ export default function OPACCatalog({
                                 ? 'Saving...'
                                 : isBookInReadingList(entry.id)
                                   ? 'Saved'
-                                  : 'Read Later'}
+                                  : 'Read later'}
                             </button>
                             <button
                               type="button"
@@ -3928,7 +4001,7 @@ export default function OPACCatalog({
               </div>
             )}
             {selectedBook?.bookType === 'personal' && (
-              <div className="visitor-modal-community-action space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
+              <div className="visitor-modal-community-action space-y-3 rounded-xl border-0 bg-white p-4 dark:bg-slate-800">
                 <div>
                   <h4 className="text-sm font-bold text-emerald-950 dark:text-emerald-100">
                     Request to borrow
@@ -3954,7 +4027,7 @@ export default function OPACCatalog({
                 >
                   <HandHeart size={16} strokeWidth={2} aria-hidden="true" />
                   {submittingCommunityRequest
-                    ? 'Submitting Request...'
+                    ? 'Submitting request...'
                     : selectedBook.ownerVisitorId &&
                       String(selectedBook.ownerVisitorId) === String(user?.id)
                       ? 'This is your book'
@@ -3962,7 +4035,7 @@ export default function OPACCatalog({
                         ? 'Lending unavailable'
                         : getPersonalBookCopyAvailability(selectedBook).availableCopies === 0
                       ? 'Unavailable'
-                      : 'Request Community Book'}
+                      : 'Request community book'}
                 </button>
                 {selectedBook.ownerVisitorId &&
                 String(selectedBook.ownerVisitorId) === String(user?.id) ? (
@@ -4050,7 +4123,7 @@ export default function OPACCatalog({
                     disabled={isSubmitting}
                     className="bg-shelf-primary text-white text-xs px-4 py-2 rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50"
                   >
-                    {isSubmitting ? 'Submitting...' : 'Submit Review'}
+                    {isSubmitting ? 'Submitting...' : 'Submit review'}
                   </button>
                 </div>
               </form>
@@ -4083,19 +4156,19 @@ export default function OPACCatalog({
                         </span>
                       </div>
                       <p className="text-slate-600">{review.comment}</p>
-                      <p className="text-[10px] text-slate-400">{formatDate(review.created_at)}</p>
+                      <p className="text-xs text-slate-400">{formatDate(review.created_at)}</p>
                     </div>
                   ))
                 )}
               </div>
             </div>
-            <p className="text-[11px] text-slate-400 pt-2 border-t border-slate-100">
+            <p className="text-xs text-slate-400 pt-2 border-t border-slate-100">
               {selectedBook.bookType === 'personal' ? (
                 <>This is a community-owned book. Borrowing requires owner approval.</>
               ) : (
                 <>
                   Borrowed items are due {BORROW_PERIOD_DAYS} days after pickup.
-                  Holds must be picked up within {PICKUP_WINDOW_HOURS} hours or they're released automatically. Overdue fines use each book's assigned rate of ₱10, ₱15, or ₱20 per day.
+                  Holds must be picked up within {PICKUP_WINDOW_HOURS} hours or they’re released automatically. Overdue fines use each book’s assigned rate of ₱10, ₱15, or ₱20 per day.
                 </>
               )}
             </p>

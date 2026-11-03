@@ -1,4 +1,5 @@
 import BookCover from './BookCover.jsx';
+import { formatBookCategory } from '../lib/bookCategory.js';
 
 /**
  * Shared institutional OPAC card used by both the public catalog and the
@@ -7,6 +8,7 @@ import BookCover from './BookCover.jsx';
 export default function OPACBookCard({ book, onSelect }) {
   const title = book?.title || 'Untitled Book';
   const author = book?.author || 'Unknown Author';
+  const category = formatBookCategory(book?.category);
   const availableCopies = Number(book?.availableCopies || 0);
 
   return (
@@ -23,8 +25,8 @@ export default function OPACBookCard({ book, onSelect }) {
         className="opac-book-card-cover"
       />
       <div className="opac-book-card-details">
-        <span className="opac-book-card-category">
-          {book?.category || 'Uncategorized'}
+        <span className="opac-book-card-category category-chip">
+          {category || 'Uncategorized'}
         </span>
         <h3 title={title}>{title}</h3>
         <p className="opac-book-card-author" title={author}>{author}</p>

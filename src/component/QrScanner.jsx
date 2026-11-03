@@ -203,7 +203,7 @@ export default function QrScanner({
           className="w-full sm:w-auto bg-emerald-600 text-white text-sm font-bold px-5 py-2.5 rounded-lg hover:bg-emerald-700 transition"
         >
           <QrCode size={16} className="mr-2 inline-block align-[-3px]" aria-hidden="true" />
-          Scan QR with Camera
+          Scan QR with camera
         </button>
       ) : (
         <div className="fixed inset-0 z-200 grid place-items-center bg-slate-950/70 p-4" role="dialog" aria-modal="true" aria-label="Scan visitor QR code">
@@ -233,7 +233,7 @@ export default function QrScanner({
               onClick={stopCamera}
               className="w-full rounded-lg bg-red-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-700"
             >
-              Stop Camera
+              Stop camera
             </button>
           </div>
         </div>

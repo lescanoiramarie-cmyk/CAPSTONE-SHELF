@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Bot,
   CircleHelp,
+  Hand,
   Send,
   UserRound,
   LoaderCircle,
@@ -11,11 +12,12 @@ import { FAQS, findFAQResponse } from '../data/faqData.js';
 
 const INITIAL_MESSAGE = {
   role: 'bot',
-  text: 'Hi! Welcome to SHELF ILMS. 👋 I can help you with book borrowing, returns, reservations, your Visitor QR Code, library branches, and other library services. What would you like to know?',
+  text: 'Hi! Welcome to SHELF.',
+  followUpText: 'I can help you with book borrowing, returns, reservations, your Visitor QR Code, library branches, and other library services. What would you like to know?',
 };
 
 const SUGGESTED_QUESTIONS = [
-  'How do I request to borrow a book using SHELF ILMS?',
+  'How do I request to borrow a book using SHELF?',
   'How long is the borrowing period?',
   'Where can I find my Visitor QR Code?',
   'How do I check partner library locations?',
@@ -148,7 +150,7 @@ export default function FAQ() {
             className="mt-0.5 shrink-0"
             aria-hidden="true"
           />
-          Ask questions about SHELF ILMS and library services. The assistant
+          Ask questions about SHELF and library services. The assistant
           will decline unrelated questions and may not know information that
           is not available in the FAQ.
         </p>
@@ -186,6 +188,17 @@ export default function FAQ() {
                   }`}
                 >
                   {message.text}
+                  {message.followUpText && (
+                    <>
+                      {' '}
+                      <Hand
+                        size={15}
+                        className="inline-block align-[-2px]"
+                        aria-hidden="true"
+                      />{' '}
+                      {message.followUpText}
+                    </>
+                  )}
                 </div>
 
                 {isUser && (

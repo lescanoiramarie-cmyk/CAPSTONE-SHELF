@@ -11,6 +11,38 @@ const CATEGORY_ACRONYMS = new Set([
   'VR',
 ]);
 
+const LOWERCASE_CATEGORY_WORDS = new Set([
+  'a',
+  'an',
+  'and',
+  'for',
+  'in',
+  'of',
+  'on',
+  'the',
+  'to',
+]);
+
+export function formatBookCategory(value) {
+  let isFirstWord = true;
+
+  return String(value ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/\p{L}[\p{L}\p{M}]*(?:['’]\p{L}[\p{L}\p{M}]*)?/gu, (word) => {
+      const lower = word.toLocaleLowerCase();
+      const formatted =
+        !isFirstWord && LOWERCASE_CATEGORY_WORDS.has(lower)
+          ? lower
+          : lower.replace(/^(\p{L})/u, (firstLetter) =>
+              firstLetter.toLocaleUpperCase()
+            );
+
+      isFirstWord = false;
+      return formatted;
+    });
+}
+
 export function normalizeBookCategory(value) {
   const category = String(value ?? '')
     .trim()

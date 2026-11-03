@@ -14,6 +14,7 @@ import {
   setPersonalBookVisibility,
 } from '../data/store.js';
 import { getBookFineRate } from '../lib/bookFineRate.js';
+import { formatBookCategory } from '../lib/bookCategory.js';
 
 const CONDITIONS = [
   'New',
@@ -387,7 +388,7 @@ export default function PersonalBooks({ userId }) {
               aria-hidden="true"
             />
 
-            Add Personal Book
+            Add personal book
           </button>
         </div>
       </div>
@@ -817,8 +818,8 @@ export default function PersonalBooks({ userId }) {
                 className="rounded-lg bg-shelf-primary px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#003064] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isSaving
-                  ? 'Adding Book...'
-                  : 'Add Personal Book'}
+                  ? 'Adding book...'
+                  : 'Add personal book'}
               </button>
             </div>
           </form>
@@ -890,7 +891,7 @@ export default function PersonalBooks({ userId }) {
                 aria-hidden="true"
               />
 
-              Add Your First Book
+              Add your first book
             </button>
           </div>
         ) : (
@@ -922,7 +923,7 @@ export default function PersonalBooks({ userId }) {
                     </div>
 
                     <div className="flex shrink-0 items-center gap-2">
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                         {book.isPublic ? 'Public' : 'Only Me'}
                       </span>
                       <button
@@ -967,7 +968,7 @@ export default function PersonalBooks({ userId }) {
                         aria-label={`Make ${book.title} ${
                           book.isPublic ? 'private' : 'public'
                         }`}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
                       >
                         {book.isPublic ? (
                           <EyeOff size={13} aria-hidden="true" />
@@ -977,8 +978,8 @@ export default function PersonalBooks({ userId }) {
                         {isUpdatingVisibility
                           ? 'Saving...'
                           : book.isPublic
-                            ? 'Make Private'
-                            : 'Make Public'}
+                            ? 'Make private'
+                            : 'Make public'}
                       </button>
                     </div>
                   </div>
@@ -993,7 +994,7 @@ export default function PersonalBooks({ userId }) {
                         </span>
 
                         <span className="text-slate-500 dark:text-slate-300">
-                          {book.category}
+                          {formatBookCategory(book.category)}
                         </span>
                       </div>
                     )}
@@ -1004,7 +1005,7 @@ export default function PersonalBooks({ userId }) {
                           ISBN:{' '}
                         </span>
 
-                        <span className="text-slate-500 dark:text-slate-300">
+                        <span className="tabular-nums wrap-anywhere text-slate-500 dark:text-slate-300">
                           {book.isbn}
                         </span>
                       </div>
@@ -1049,7 +1050,7 @@ export default function PersonalBooks({ userId }) {
                   <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-700">
                     <div className="flex flex-wrap items-center gap-2">
                       <span
-                        className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                        className={`rounded-full px-2.5 py-1 text-xs font-bold ${
                           isLendingEnabled
                             ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
                             : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
@@ -1060,7 +1061,7 @@ export default function PersonalBooks({ userId }) {
                           : 'Private Book'}
                       </span>
 
-                      <span className="text-[11px] text-slate-400">
+                      <span className="text-xs text-slate-400">
                         {book.createdAt
                           ? `Added ${formatDate(
                               book.createdAt
@@ -1084,7 +1085,7 @@ export default function PersonalBooks({ userId }) {
 
                   {isLendingEnabled && (
                     <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/30">
-                      <p className="text-[11px] leading-5 text-amber-800 dark:text-amber-300">
+                      <p className="text-xs leading-5 text-amber-800 dark:text-amber-300">
                         This book is available for community
                         lending. Borrow requests will use the
                         owner-approval workflow.

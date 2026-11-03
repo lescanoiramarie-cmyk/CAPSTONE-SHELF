@@ -28,7 +28,8 @@ export default function SuperAdminLogin() {
         style={{ backgroundImage: `linear-gradient(rgba(0, 32, 70, 0.88), rgba(0, 32, 70, 0.88)), url(${libraryBg})` }}
       >
         <div className="relative z-10 flex items-center gap-3">
-          <span className="text-xl font-bold tracking-wider">SHELF ILMS</span>
+          <img src="/shelf-logo.png" alt="" className="h-10 w-10 object-contain" />
+          <span className="text-xl font-bold tracking-wider">SHELF</span>
         </div>
 
         <div className="relative z-10 space-y-4 max-w-lg">
@@ -83,11 +84,11 @@ export default function SuperAdminLogin() {
               type="submit"
               className="w-full bg-shelf-primary text-white py-3 rounded-lg font-bold text-sm hover:bg-black transition shadow-sm"
             >
-              Authorize System Entry
+              Authorize system entry
             </button>
           </form>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-[11px] text-slate-600">
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-600">
             Super-admin access requires a provisioned Supabase Auth account.
           </div>
 

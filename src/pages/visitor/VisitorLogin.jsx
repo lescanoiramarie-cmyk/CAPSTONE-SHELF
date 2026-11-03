@@ -98,7 +98,7 @@ function PasswordRequirement({ valid, children }) {
       }`}
     >
       <span
-        className={`flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold ${
+        className={`flex items-center justify-center w-4 h-4 rounded-full text-xs font-bold ${
           valid
             ? 'bg-green-100'
             : 'bg-slate-100'
@@ -1943,7 +1943,7 @@ setOtpResendRemaining(
         <ParticleConstellation />
         <div className="relative z-10 flex items-center gap-3">
           <span className="text-xl font-bold tracking-wider">
-            SHELF ILMS
+            SHELF
           </span>
         </div>
 
@@ -1984,7 +1984,7 @@ setOtpResendRemaining(
                 className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-shelf-primary"
               >
                 <ArrowLeft size={16} aria-hidden="true" />
-                Back to Home
+                Back to home
               </button>
             )}
             {(view === 'register' || view === 'forgot') && (
@@ -2005,7 +2005,7 @@ setOtpResendRemaining(
                 title={view === 'register' ? 'Back to Login' : 'Go back'}
               >
                 <ArrowLeft size={16} aria-hidden="true" />
-                {view === 'register' ? 'Back to Login' : 'Back'}
+                {view === 'register' ? 'Back to login' : 'Back'}
               </button>
             )}
           </div>
@@ -2015,7 +2015,7 @@ setOtpResendRemaining(
           <div className="text-center lg:text-left space-y-1">
             <h2 className="text-2xl font-bold text-shelf-text">
               {view === 'login' &&
-                'SHELF ILMS Login'}
+                'SHELF Login'}
 
               {view === 'register' &&
                 'Visitor Registration'}
@@ -2104,7 +2104,7 @@ setOtpResendRemaining(
               >
                 {isResendingVisitorOtp
                   ? 'Sending verification code...'
-                  : 'Resend Visitor Verification Code'}
+                  : 'Resend visitor verification code'}
               </button>
             )}
 
@@ -2163,7 +2163,7 @@ setOtpResendRemaining(
                   }}
                   className="w-full bg-shelf-primary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition"
                 >
-                  Sign In to Library Portal
+                  Sign in to library portal
                 </button>
               </div>
             )}
@@ -2245,7 +2245,7 @@ setOtpResendRemaining(
                     : 'bg-slate-300 text-slate-500 cursor-not-allowed'
                 }`}
               >
-                Verify & Activate
+                Verify & activate
               </button>
 
               <button
@@ -2260,10 +2260,10 @@ setOtpResendRemaining(
                 className="w-full text-xs font-semibold text-shelf-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isOtpResending
-                  ? 'Sending Code...'
+                  ? 'Sending code...'
                   : otpResendRemaining > 0
                     ? `Resend Code in ${otpResendRemaining}s`
-                    : 'Resend Code'}
+                    : 'Resend code'}
               </button>
             </form>
           )}
@@ -2322,7 +2322,7 @@ setOtpResendRemaining(
                 />
 
                 {fieldErrors.fullName && (
-                  <p className="mt-1 text-[11px] font-medium text-red-600">
+                  <p className="mt-1 text-xs font-medium text-red-600">
                     {fieldErrors.fullName}
                   </p>
                 )}
@@ -2377,7 +2377,7 @@ setOtpResendRemaining(
                 />
 
                 {fieldErrors.contactNumber && (
-                  <p className="mt-1 text-[11px] font-medium text-red-600">
+                  <p className="mt-1 text-xs font-medium text-red-600">
                     {
                       fieldErrors.contactNumber
                     }
@@ -2420,7 +2420,7 @@ setOtpResendRemaining(
                 />
 
                 {fieldErrors.email && (
-                  <p className="mt-1 text-[11px] font-medium text-red-600">
+                  <p className="mt-1 text-xs font-medium text-red-600">
                     {fieldErrors.email}
                   </p>
                 )}
@@ -2457,16 +2457,16 @@ setOtpResendRemaining(
                   ))}
                 </select>
                 {libraryLoadError ? (
-                  <p role="alert" className="mt-1 text-[11px] font-medium text-red-600">
+                  <p role="alert" className="mt-1 text-xs font-medium text-red-600">
                     {libraryLoadError}
                   </p>
                 ) : (
-                  <p className="mt-1 text-[10px] text-slate-500">
+                  <p className="mt-1 text-xs text-slate-500">
                     Registration is limited to email domains configured for participating libraries and schools.
                   </p>
                 )}
                 {fieldErrors.libraryId && (
-                  <p className="mt-1 text-[11px] font-medium text-red-600">
+                  <p className="mt-1 text-xs font-medium text-red-600">
                     {fieldErrors.libraryId}
                   </p>
                 )}
@@ -2482,6 +2482,11 @@ setOtpResendRemaining(
               {/* PROVINCE */}
 
               <select
+                id="visitor-province"
+                aria-label="Province"
+                aria-required="true"
+                aria-invalid={Boolean(fieldErrors.province)}
+                aria-describedby={fieldErrors.province ? 'visitor-province-error' : undefined}
                 value={selectedProvince}
                 onChange={(event) => {
                   const provinceName = event.target.value;
@@ -2523,7 +2528,7 @@ setOtpResendRemaining(
               </select>
 
               {fieldErrors.province && (
-                <p className="mt-1 text-[11px] font-medium text-red-600">
+                <p id="visitor-province-error" role="alert" className="mt-1 text-xs font-medium text-red-600">
                   {fieldErrors.province}
                 </p>
               )}
@@ -2531,6 +2536,11 @@ setOtpResendRemaining(
               {/* CITY / MUNICIPALITY */}
 
               <select
+                id="visitor-city"
+                aria-label="City / Municipality"
+                aria-required="true"
+                aria-invalid={Boolean(fieldErrors.city)}
+                aria-describedby={fieldErrors.city ? 'visitor-city-error' : undefined}
                 value={selectedCity}
                 onChange={(event) => {
                   setSelectedCity(event.target.value);
@@ -2569,7 +2579,7 @@ setOtpResendRemaining(
               </select>
 
               {fieldErrors.city && (
-                <p className="mt-1 text-[11px] font-medium text-red-600">
+                <p id="visitor-city-error" role="alert" className="mt-1 text-xs font-medium text-red-600">
                   {fieldErrors.city}
                 </p>
               )}
@@ -2577,7 +2587,12 @@ setOtpResendRemaining(
               {/* BARANGAY */}
 
               <select
+                id="visitor-barangay"
                 name="user_barangay"
+                aria-label="Barangay"
+                aria-required="true"
+                aria-invalid={Boolean(fieldErrors.barangay)}
+                aria-describedby={fieldErrors.barangay ? 'visitor-barangay-error' : undefined}
                 value={barangay}
                 onChange={(event) => {
                   setBarangay(event.target.value);
@@ -2613,12 +2628,12 @@ setOtpResendRemaining(
               </select>
 
               {fieldErrors.barangay && (
-                <p className="mt-1 text-[11px] font-medium text-red-600">
+                <p id="visitor-barangay-error" role="alert" className="mt-1 text-xs font-medium text-red-600">
                   {fieldErrors.barangay}
                 </p>
               )}
 
-              <p className="text-[10px] text-slate-500">
+              <p className="text-xs text-slate-500">
                 Select your province and city/municipality, then choose your barangay.
               </p>
               </div>
@@ -2676,7 +2691,12 @@ setOtpResendRemaining(
                         !showRegisterPassword
                       )
                     }
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-shelf-primary"
+                    aria-label={
+                      showRegisterPassword
+                        ? 'Hide password'
+                        : 'Show password'
+                    }
+                    className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-slate-500 hover:text-shelf-primary"
                   >
                     {showRegisterPassword ? (
                       <EyeOff size={18} />
@@ -2687,11 +2707,11 @@ setOtpResendRemaining(
                 </div>
 
                 <div className="mt-2 bg-slate-50 border border-slate-200 rounded-lg p-3">
-                  <p className="text-[11px] font-semibold text-slate-700 mb-1">
+                  <p className="text-xs font-semibold text-slate-700 mb-1">
                     Password requirements:
                   </p>
 
-                  <ul className="text-[11px] space-y-1">
+                  <ul className="text-xs space-y-1">
                     <PasswordRequirement
                       valid={
                         passwordRequirements.minLength
@@ -2735,7 +2755,7 @@ setOtpResendRemaining(
                 </div>
 
                 {fieldErrors.password && (
-                  <p className="mt-1 text-[11px] font-medium text-red-600">
+                  <p className="mt-1 text-xs font-medium text-red-600">
                     {fieldErrors.password}
                   </p>
                 )}
@@ -2798,7 +2818,12 @@ setOtpResendRemaining(
                         !showConfirmPassword
                       )
                     }
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-shelf-primary"
+                    aria-label={
+                      showConfirmPassword
+                        ? 'Hide confirm password'
+                        : 'Show confirm password'
+                    }
+                    className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-slate-500 hover:text-shelf-primary"
                   >
                     {showConfirmPassword ? (
                       <EyeOff size={18} />
@@ -2809,7 +2834,7 @@ setOtpResendRemaining(
                 </div>
 
                 {fieldErrors.confirmPassword && (
-                  <p className="mt-1 text-[11px] font-medium text-red-600">
+                  <p className="mt-1 text-xs font-medium text-red-600">
                     {
                       fieldErrors.confirmPassword
                     }
@@ -2830,8 +2855,8 @@ setOtpResendRemaining(
                 className="w-full bg-shelf-primary text-white py-2.5 rounded-lg font-bold text-sm transition shadow-sm hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isRegistering
-                  ? 'Creating Account...'
-                  : 'Send Verification Code'}
+                  ? 'Creating account...'
+                  : 'Send verification code'}
               </button>
 
               <div className="text-center pt-2">
@@ -2843,7 +2868,7 @@ setOtpResendRemaining(
                   className="text-xs font-semibold text-slate-600 hover:text-shelf-primary"
                 >
                   Already have an account?
-                  Sign In
+                  Sign in
                 </button>
               </div>
             </form>
@@ -2868,7 +2893,7 @@ setOtpResendRemaining(
   <div className="space-y-4">
     <div className="bg-shelf-primary text-white rounded-xl p-4 text-center">
       <h3 className="font-bold text-sm">Scan QR Code</h3>
-      <p className="text-[11px] text-slate-300 mt-1">
+      <p className="text-xs text-slate-300 mt-1">
         Hold the QR code steady inside the frame.
       </p>
     </div>
@@ -2884,7 +2909,7 @@ setOtpResendRemaining(
       onClick={stopScanner}
       className="w-full border border-slate-300 text-slate-700 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-50 transition"
     >
-      Cancel Camera
+      Cancel camera
     </button>
   </div>
 ) : (
@@ -2962,7 +2987,12 @@ setOtpResendRemaining(
                             !showLoginPassword
                           )
                         }
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-shelf-primary"
+                        aria-label={
+                          showLoginPassword
+                            ? 'Hide password'
+                            : 'Show password'
+                        }
+                        className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-slate-500 hover:text-shelf-primary"
                       >
                         {showLoginPassword ? (
                           <EyeOff
@@ -2985,7 +3015,7 @@ setOtpResendRemaining(
                     aria-busy={isLoggingIn}
                     className="w-full bg-shelf-primary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    {isLoggingIn ? 'Signing in...' : 'Sign In'}
+                    {isLoggingIn ? 'Signing in...' : 'Sign in'}
                   </button>
 
                   {/* FORGOT PASSWORD */}
@@ -3003,7 +3033,7 @@ setOtpResendRemaining(
                   <div className="relative flex items-center justify-center my-4">
                     <div className="border-t border-slate-200 w-full" />
 
-                    <span className="bg-white px-3 text-[11px] uppercase tracking-wider font-semibold text-slate-400 absolute">
+                    <span className="bg-white px-3 text-xs uppercase tracking-wider font-semibold text-slate-400 absolute">
                       Or
                     </span>
                   </div>
@@ -3018,7 +3048,7 @@ setOtpResendRemaining(
                     className="w-full border border-slate-300 text-slate-700 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition"
                   >
                     <Camera size={18} />
-                    Scan QR Pass
+                    Scan QR pass
                   </button>
 
                   {/* QR FILE INPUT */}
@@ -3048,15 +3078,15 @@ setOtpResendRemaining(
                     <Upload size={18} />
 
                     {isUploadingQr
-                      ? 'Reading QR Code...'
-                      : 'Upload QR Code Image'}
+                      ? 'Reading QR code...'
+                      : 'Upload QR code image'}
                   </button>
 
                   {/* REGISTER LINK */}
 
                   <div className="text-center pt-2">
                     <p className="text-xs text-slate-600">
-                      Don't have an account?{' '}
+                      Don’t have an account?{' '}
 
                       <button
                         type="button"
@@ -3071,7 +3101,7 @@ setOtpResendRemaining(
                         }}
                         className="font-bold text-shelf-primary hover:underline"
                       >
-                        Register as Visitor
+                        Register as visitor
                       </button>
                     </p>
                   </div>
@@ -3136,8 +3166,8 @@ setOtpResendRemaining(
                       className="w-full bg-shelf-primary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isResetSubmitting
-                        ? 'Sending Code...'
-                        : 'Send Verification Code'}
+                        ? 'Sending code...'
+                        : 'Send verification code'}
                     </button>
                   </>
                 )}
@@ -3207,7 +3237,7 @@ setOtpResendRemaining(
                     >
                       {isResetSubmitting
                         ? 'Verifying...'
-                        : 'Verify Code'}
+                        : 'Verify code'}
                     </button>
 
                     <button
@@ -3221,10 +3251,10 @@ setOtpResendRemaining(
                       className="w-full rounded-lg border border-slate-300 bg-white py-2.5 text-sm font-bold text-shelf-primary transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isResetSubmitting
-                        ? 'Sending Code...'
+                        ? 'Sending code...'
                         : resetTimeRemaining === 0 ||
                             resetResendRemaining === 0
-                          ? 'Resend Code'
+                          ? 'Resend code'
                           : `Resend Code in ${resetResendRemaining}s`}
                     </button>
 
@@ -3290,7 +3320,7 @@ setOtpResendRemaining(
                               !showResetPassword
                             )
                           }
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                          className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-slate-400 hover:text-slate-600"
                           aria-label={
                             showResetPassword
                               ? 'Hide password'
@@ -3349,7 +3379,7 @@ setOtpResendRemaining(
                           }`}
                         >
                           <span
-                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                               rule.met
                                 ? 'bg-green-100 text-green-700'
                                 : 'bg-slate-200 text-slate-500'
@@ -3397,7 +3427,7 @@ setOtpResendRemaining(
                               !showResetConfirmPassword
                             )
                           }
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                          className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-slate-400 hover:text-slate-600"
                           aria-label={
                             showResetConfirmPassword
                               ? 'Hide confirm password'
@@ -3430,8 +3460,8 @@ setOtpResendRemaining(
                       className="w-full bg-shelf-primary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isResetSubmitting
-                        ? 'Updating Password...'
-                        : 'Update Password'}
+                        ? 'Updating password...'
+                        : 'Update password'}
                     </button>
                   </>
                 )}
@@ -3456,7 +3486,7 @@ setOtpResendRemaining(
                   }}
                   className="w-full bg-shelf-primary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition shadow-sm"
                 >
-                  Back to Sign In
+                  Back to sign in
                 </button>
               </>
             )}

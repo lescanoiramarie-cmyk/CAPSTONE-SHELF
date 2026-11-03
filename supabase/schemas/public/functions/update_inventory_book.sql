@@ -125,6 +125,17 @@ BEGIN
             );
     END IF;
 
+    IF p_patch ? 'fine_rate' AND CASE
+            WHEN jsonb_typeof(p_patch -> 'fine_rate') IS DISTINCT FROM 'number'
+                THEN true
+            WHEN (p_patch ->> 'fine_rate') !~ '^[0-9]+$'
+                THEN true
+            ELSE (p_patch ->> 'fine_rate')::numeric NOT BETWEEN 1 AND 100
+    END THEN
+            RAISE EXCEPTION
+                'Fine rate must be a whole number from 1 to 100.';
+    END IF;
+
     -- Update only fields explicitly supported by the original RPC.
     UPDATE public.books
     SET
@@ -150,6 +161,11 @@ BEGIN
             WHEN p_patch ? 'shelf_location'
                 THEN nullif(trim(p_patch ->> 'shelf_location'), '')
             ELSE shelf_location
+        END,
+        fine_rate = CASE
+            WHEN p_patch ? 'fine_rate'
+                THEN (p_patch ->> 'fine_rate')::integer
+            ELSE fine_rate
         END,
         library_id = new_library_id::uuid,
         total_copies = new_total,

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Draggable from 'react-draggable';
 import { QRCodeSVG } from 'qrcode.react';
 import { ThemeProvider } from '../../context/ThemeContext.jsx';
@@ -35,6 +36,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../../context/useAuth.js';
+import { getDashboardPath } from '../../routes/roleHome.js';
 import { useLibrary, useLibraryData } from '../../context/useLibrary.js';
 import { supabase } from '../../lib/supabaseClient.js';
 
@@ -45,6 +47,7 @@ import VisitorServices from '../../component/VisitorServices.jsx';
 import AIRecommendations from '../../component/AIRecommendations.jsx';
 import DashboardWelcome from '../../component/DashboardWelcome.jsx';
 import VisitorTermsContent from '../../component/VisitorTermsContent.jsx';
+import DashboardDataBoundary from '../../component/DashboardDataBoundary.jsx';
 
 function formatDateTime(iso) {
   if (!iso) {
@@ -153,6 +156,7 @@ function getCommunityReturnReminder(dueDate) {
 
 function VisitorDashboardContent() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   const {
   attendanceLogs = [],
@@ -160,12 +164,15 @@ function VisitorDashboardContent() {
   libraries = [],
   visitors = [],
   ownerCommunityBookRequests = [],
-  loading: libraryLoading = true,
 } = useLibraryData();
   const {
     borrowRequestsLoading,
     borrowRequestsLoadError,
     retryBorrowRequests,
+    loading: libraryLoading,
+    initialDataReady,
+    connectionError,
+    refreshAll,
   } = useLibrary();
   const visitorDetails = visitors.find(
     (visitor) => visitor.id === user?.id
@@ -489,7 +496,7 @@ function VisitorDashboardContent() {
 
       context.textAlign = 'center';
 
-      context.fillText('SHELF ILMS', canvasWidth / 2, 65);
+      context.fillText('SHELF', canvasWidth / 2, 65);
 
       // Subtitle
       context.fillStyle = '#334155';
@@ -684,6 +691,19 @@ function VisitorDashboardContent() {
   // UI
   // =========================================================
 
+  if (!initialDataReady) {
+    return (
+      <DashboardDataBoundary
+        loading={libraryLoading}
+        error={connectionError}
+        onRetry={() =>
+          refreshAll().catch((error) => {
+            console.error('SHELF initial dashboard retry failed:', error);
+          })
+        }
+      />
+    );
+  }
 
   return (
     <div
@@ -735,7 +755,7 @@ function VisitorDashboardContent() {
                   disabled={isAcceptingTerms}
                   className="min-h-11 w-full rounded-lg bg-shelf-primary px-5 py-3 text-sm font-bold text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isAcceptingTerms ? 'Saving...' : 'I Agree'}
+                  {isAcceptingTerms ? 'Saving...' : 'I agree'}
                 </button>
               </div>
             )}
@@ -869,15 +889,21 @@ function VisitorDashboardContent() {
         <div className="flex min-w-0 items-center justify-between gap-3">
 
           {/* LEFT: LOGO AND PORTAL LABEL */}
-            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={() => navigate(user?.id ? getDashboardPath(user.role) : '/')}
+              aria-label="Go to SHELF home"
+              className="flex min-w-0 items-center gap-2 text-left sm:gap-3"
+            >
+            <img src="/shelf-logo.png" alt="" className="h-8 w-8 shrink-0 object-contain" />
             <span className="shrink-0 text-base font-extrabold tracking-wider sm:text-lg">
-              SHELF ILMS
+              SHELF
             </span>
 
             <span className="visitor-portal-label hidden text-xs font-medium sm:inline">
               Library Visitor
             </span>
-          </div>
+            </button>
 
           {/* RIGHT: USER CONTROLS */}
           <div className="flex shrink-0 items-center justify-end gap-1.5 sm:ml-auto sm:gap-3">
@@ -915,7 +941,7 @@ function VisitorDashboardContent() {
     <Bell size={19} aria-hidden="true" />
 
     {ownerNotificationCount > 0 && (
-      <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+      <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
         {ownerNotificationCount > 99
           ? '99+'
           : ownerNotificationCount}
@@ -997,7 +1023,7 @@ function VisitorDashboardContent() {
                       </p>
 
                       <p className="mt-1 wrap-break-word text-sm">
-                        {request.bookTitle || 'Untitled Book'}
+                        {request.bookTitle || 'Untitled book'}
                       </p>
 
                       {request.requestDate && (
@@ -1031,7 +1057,7 @@ function VisitorDashboardContent() {
                 aria-expanded={isAvatarMenuOpen}
                 title="Account menu"
               >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/15 text-[11px] font-bold">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/15 text-xs font-bold">
                   {(user?.name || visitorDetails?.fullName || 'Visitor')
                     .trim()
                     .split(/\s+/)
@@ -1080,7 +1106,7 @@ function VisitorDashboardContent() {
                     className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary dark:hover:bg-slate-700"
                   >
                     <UserRound size={17} aria-hidden="true" />
-                    View Profile
+                    View profile
                   </button>
                   <button
                     type="button"
@@ -1092,7 +1118,7 @@ function VisitorDashboardContent() {
                     className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary dark:hover:bg-slate-700"
                   >
                     <FileText size={17} aria-hidden="true" />
-                    Terms and Conditions
+                    Terms and conditions
                   </button>
                   <div role="separator" className="my-1 border-t border-slate-200 dark:border-slate-700" />
                   <button
@@ -1105,7 +1131,7 @@ function VisitorDashboardContent() {
                     className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium text-slate-700 hover:bg-red-50 hover:text-red-700 focus-visible:bg-red-50 focus-visible:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-700 dark:text-slate-200 dark:hover:bg-red-950/40 dark:hover:text-red-300 dark:focus-visible:bg-red-950/40 dark:focus-visible:text-red-300"
                   >
                     <LogOut size={17} aria-hidden="true" />
-                    Sign Out
+                    Sign out
                   </button>
                 </div>
               )}
@@ -1272,7 +1298,7 @@ function VisitorDashboardContent() {
                 }}
                 className="mt-2 text-xs font-bold text-emerald-900 underline hover:no-underline dark:text-emerald-200"
               >
-                Open My Requests &amp; Borrows
+                Open my requests & borrows
               </button>
             </div>
             <button
@@ -1726,7 +1752,7 @@ function VisitorDashboardContent() {
 
                                 {/* TRANSACTION DETAILS */}
 
-                                <div className="mt-3 grid grid-cols-1 gap-1.5 text-[11px] sm:grid-cols-2">
+                                <div className="mt-3 grid grid-cols-1 gap-1.5 text-xs sm:grid-cols-2">
                                   {/* BORROW DATE */}
 
                                   {transaction.borrowDate && (
@@ -1793,7 +1819,7 @@ function VisitorDashboardContent() {
                                   {transaction.fineReviewRequired && (
                                     <p
                                       role="status"
-                                      className="text-[11px] font-semibold text-amber-700 dark:text-amber-300 sm:col-span-2"
+                                      className="text-xs font-semibold text-amber-700 dark:text-amber-300 sm:col-span-2"
                                     >
                                       Manual fine review required. Any assessed amount is preserved; no rate was guessed.
                                     </p>
@@ -1830,7 +1856,7 @@ function VisitorDashboardContent() {
 
                                 {status === 'cancelled' &&
                                   transaction.cancelReason && (
-                                    <p className="mt-2 text-[11px] text-red-600 dark:text-red-400">
+                                    <p className="mt-2 text-xs text-red-600 dark:text-red-400">
                                       <span className="font-semibold">
                                         Cancellation reason:{' '}
                                       </span>
@@ -1842,7 +1868,7 @@ function VisitorDashboardContent() {
                                 {/* STAFF CONFIRMATION */}
 
                                 {transaction.confirmedBy && (
-                                  <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">
+                                  <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
                                     Pickup confirmed by:{' '}
                                     {transaction.confirmedBy}
                                   </p>
@@ -1887,7 +1913,7 @@ function VisitorDashboardContent() {
                       <FileText size={18} className="shrink-0 text-slate-700 dark:text-slate-200" aria-hidden="true" />
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm font-semibold text-slate-900 dark:text-white">
-                          Terms and Conditions
+                          Terms and conditions
                         </span>
                         {termsAcceptedAt && (
                           <span className="mt-1 block text-xs text-slate-600 dark:text-slate-300">

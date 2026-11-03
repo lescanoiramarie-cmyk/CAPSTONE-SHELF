@@ -345,14 +345,14 @@ Deno.serve(async (req: Request) => {
 
             body: JSON.stringify({
               from:
-                "SHELF ILMS <support@shelf-ilms.me>",
+                "SHELF <support@shelf-ilms.me>",
 
               to: [
                 visitor.email,
               ],
 
               subject:
-                "Your SHELF ILMS Verification Code",
+                "Your SHELF Verification Code",
 
               html: `
                 <div style="
@@ -364,7 +364,7 @@ Deno.serve(async (req: Request) => {
                 ">
 
                   <h2>
-                    SHELF ILMS Email Verification
+                    SHELF Email Verification
                   </h2>
 
                   <p>
@@ -373,7 +373,7 @@ Deno.serve(async (req: Request) => {
 
                   <p>
                     Thank you for registering with
-                    <strong>SHELF ILMS</strong>.
+                    <strong>SHELF</strong>.
                   </p>
 
                   <p>
@@ -400,13 +400,13 @@ Deno.serve(async (req: Request) => {
 
                   <p>
                     If you did not create a
-                    SHELF ILMS account, you can
+                    SHELF account, you can
                     safely ignore this email.
                   </p>
 
                   <p>
                     Regards,<br />
-                    <strong>SHELF ILMS</strong>
+                    <strong>SHELF</strong>
                   </p>
 
                 </div>
@@ -673,14 +673,14 @@ Deno.serve(async (req: Request) => {
 
           body: JSON.stringify({
             from:
-              "SHELF ILMS <onboarding@resend.dev>",
+              "SHELF <onboarding@resend.dev>",
 
             to: [
               visitor.email,
             ],
 
             subject:
-              "Your SHELF ILMS Visitor QR Code",
+              "Your SHELF Visitor QR Code",
 
             html: `
               <div style="
@@ -692,7 +692,7 @@ Deno.serve(async (req: Request) => {
               ">
 
                 <h2>
-                  SHELF ILMS Visitor QR Code
+                  SHELF Visitor QR Code
                 </h2>
 
                 <p style="text-align: left;">
@@ -700,7 +700,7 @@ Deno.serve(async (req: Request) => {
                 </p>
 
                 <p style="text-align: left;">
-                  Your SHELF ILMS account has been
+                  Your SHELF account has been
                   successfully verified.
                 </p>
 
@@ -720,7 +720,7 @@ Deno.serve(async (req: Request) => {
 
                   <img
                     src="cid:visitor-qr-code"
-                    alt="SHELF ILMS Visitor QR Code"
+                    alt="SHELF Visitor QR Code"
                     width="300"
                     style="
                       display: block;
@@ -738,7 +738,7 @@ Deno.serve(async (req: Request) => {
 
                 <p style="text-align: left;">
                   Regards,<br />
-                  <strong>SHELF ILMS</strong>
+                  <strong>SHELF</strong>
                 </p>
 
               </div>
@@ -747,7 +747,7 @@ Deno.serve(async (req: Request) => {
             attachments: [
               {
                 filename:
-                  "shelf-ilms-visitor-qr.png",
+                  "shelf-visitor-qr.png",
 
                 content:
                   base64Qr,

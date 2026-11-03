@@ -1,10 +1,8 @@
-import { lazy, Suspense, useContext } from 'react';
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 import { AuthProvider } from './context/AuthContext.jsx';
 import { LibraryProvider } from './context/LibraryContext.jsx';
-import { LibraryContext } from './context/libraryContext.js';
-
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 import ShelfLoader from './component/ShelfLoader.jsx';
 
@@ -22,10 +20,6 @@ const SuperAdminDashboard = lazy(
 );
 
 function RouteLoadingFallback() {
-  const library = useContext(LibraryContext);
-
-  if (library?.loading) return null;
-
   return (
     <main>
       <ShelfLoader screen label="Loading SHELF..." />

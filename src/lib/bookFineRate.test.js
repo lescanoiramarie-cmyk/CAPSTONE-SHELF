@@ -11,10 +11,22 @@ import {
   resolveFineAtReturn,
   validateImportedBookFineRates,
 } from './bookFineRate.js';
+import {
+  getCurrentFine,
+  getFineNotificationCopy,
+  getFineOverdueDays,
+} from '../../supabase/functions/send-due-date-notifications/fineNotification.js';
 
 const fineRateMigration = readFileSync(
   new URL(
     '../../supabase/migrations/20261130000000_book_fine_rate_checkout_and_return.sql',
+    import.meta.url
+  ),
+  'utf8'
+);
+const manualFineRateMigration = readFileSync(
+  new URL(
+    '../../supabase/migrations/20261207000000_manual_book_fine_rates.sql',
     import.meta.url
   ),
   'utf8'
@@ -42,6 +54,26 @@ const visitorDomainMigration = readFileSync(
 );
 const storeSource = readFileSync(
   new URL('../data/store.js', import.meta.url),
+  'utf8'
+);
+const inventorySource = readFileSync(
+  new URL('../component/BookInventory.jsx', import.meta.url),
+  'utf8'
+);
+const subAdminImportSource = readFileSync(
+  new URL('../pages/subadmin/SubAdminDashboard.jsx', import.meta.url),
+  'utf8'
+);
+const superAdminImportSource = readFileSync(
+  new URL('../pages/superadmin/SuperAdminDashboard.jsx', import.meta.url),
+  'utf8'
+);
+const excelImportSource = readFileSync(
+  new URL('./excelUtils.js', import.meta.url),
+  'utf8'
+);
+const dueNotificationSource = readFileSync(
+  new URL('../../supabase/functions/send-due-date-notifications/index.ts', import.meta.url),
   'utf8'
 );
 
@@ -111,6 +143,9 @@ test('checkout functions snapshot only when transitioning to borrowed', () => {
   assert.match(communityPickup, /status\s*=\s*'borrowed'/i);
   assert.match(communityPickup, /fine_rate_snapshot\s*=\s*v_fine_rate/i);
   assert.match(communityPickup, /IF v_fine_rate IS NULL THEN/i);
+  assert.match(manualFineRateMigration, /v_fine_rate NOT BETWEEN 1 AND 100/i);
+  assert.match(manualFineRateMigration, /b\.fine_rate/);
+  assert.match(manualFineRateMigration, /fine_rate_snapshot BETWEEN 1 AND 100/i);
 });
 
 test('checkout RPC contracts preserve staff signatures and community lending behavior', () => {
@@ -222,19 +257,49 @@ test('manual review preserves historical flags without mislabeling calculated fi
 
   assert.match(fineRateMigration, /fine_review_required boolean NOT NULL DEFAULT false/i);
   assert.match(fineRateMigration, /fine_rate_snapshot NOT IN \(10, 15, 20\)/i);
+  assert.match(manualFineRateMigration, /fine_rate_snapshot BETWEEN 1 AND 100/i);
+  assert.match(manualFineRateMigration, /fine_rate_snapshot NOT BETWEEN 1 AND 100/i);
+  assert.match(fineRateMigration, /fine_amount = v_req\.fine_amount/i);
+  assert.match(manualFineRateMigration, /books_fine_rate_range/i);
+  assert.match(manualFineRateMigration, /NOT VALID/i);
+  assert.ok(manualFineRateMigration.includes('regexp_matches('));
+  assert.ok(
+    manualFineRateMigration.includes(
+      String.raw`fine_rate_snapshot\s+(NOT BETWEEN|BETWEEN)\s+1\s+AND\s+100`
+    )
+  );
+  assert.match(manualFineRateMigration, /legacy_snapshot_check_count <> 0/i);
+  assert.match(
+    manualFineRateMigration,
+    /updated_snapshot_check_count <> expected_snapshot_check_count/i
+  );
+  assert.match(
+    manualFineRateMigration,
+    /IF patched_definition <> function_definition THEN\s+EXECUTE patched_definition;/i
+  );
+  assert.doesNotMatch(
+    manualFineRateMigration,
+    /UPDATE public\.(?:books|borrow_requests|community_book_requests)\s+SET/i
+  );
 });
 
-test('fine rates outside the approved values are rejected', () => {
-  for (const value of ['', '0', '12', '₱10', null]) {
-    assert.throws(() => normalizeBookFineRate(value), /fine rate of 10, 15, or 20/);
+test('new fine rates accept positive whole-number pesos from 1 through 100', () => {
+  for (const value of [1, 10, 15, 20, 25, 100, '1', '25', '100']) {
+    assert.equal(normalizeBookFineRate(value), Number(value));
+  }
+
+  for (const value of ['', undefined, null, 0, '0', -1, '-1', 1.5, '1.5', 'ten', '₱10', 101, '101']) {
+    assert.throws(
+      () => normalizeBookFineRate(value),
+      /whole number from ₱1 to ₱100/
+    );
   }
 });
 
-test('duplicate imports flag differing or unclassified existing rates', () => {
-  assert.equal(bookFineRateMismatch(10, 'general'), false);
-  assert.equal(bookFineRateMismatch(10, 'Fiction'), true);
-  assert.equal(bookFineRateMismatch(null, 'General'), true);
-  assert.equal(bookFineRateMismatch(null, 'Unlisted'), false);
+test('duplicate imports preserve an existing rate and flag only a differing supplied rate', () => {
+  assert.equal(bookFineRateMismatch(10, 10), false);
+  assert.equal(bookFineRateMismatch(10, 25), true);
+  assert.equal(bookFineRateMismatch(null, 25), true);
 
   const duplicateUpdate = buildDuplicateBookImportUpdate(
     {
@@ -258,6 +323,14 @@ test('duplicate imports flag differing or unclassified existing rates', () => {
 });
 
 test('checkout snapshot rate is used for overdue days with fractional days rounded up', () => {
+  assert.equal(
+    calculateOverdueFine(
+      '2026-01-01T00:00:00Z',
+      '2026-01-04T00:00:00Z',
+      10
+    ),
+    30
+  );
   assert.equal(
     calculateOverdueFine(
       '2026-01-01T00:00:00Z',
@@ -314,21 +387,30 @@ test('legacy loans are reviewable without guessing and historical fines are pres
   );
 });
 
-test('book imports derive rates from categories and ignore independent rates', () => {
+test('book imports require and preserve a supplied fine_rate regardless of category', () => {
   assert.deepEqual(
     validateImportedBookFineRates([
-      { title: 'Book One', Category: '  gEnErAl  ', fine_rate: '20' },
+      { title: 'Book One', Category: '  gEnErAl  ', fine_rate: '25' },
       { title: 'Book Two', category: 'Fiction', fine_rate: 15 },
-      { title: 'Book Three', category: 'Young  Adult', fine_rate: 15 },
-      { title: 'Book Four', category: '   ', fine_rate: 10 },
+      { title: 'Book Three', category: 'Young  Adult', fine_rate: 100 },
+      { title: 'Book Four', category: '   ', fine_rate: 1 },
     ]),
     [
-      { title: 'Book One', category: 'gEnErAl', fine_rate: 10 },
+      { title: 'Book One', category: 'gEnErAl', fine_rate: 25 },
       { title: 'Book Two', category: 'Fiction', fine_rate: 15 },
-      { title: 'Book Three', category: 'Young  Adult', fine_rate: null },
-      { title: 'Book Four', category: null, fine_rate: null },
+      { title: 'Book Three', category: 'Young  Adult', fine_rate: 100 },
+      { title: 'Book Four', category: null, fine_rate: 1 },
     ]
   );
+  for (const value of [undefined, '', 0, -1, 2.5, 'invalid', 101]) {
+    assert.throws(
+      () =>
+        validateImportedBookFineRates([
+          { title: 'Invalid rate', category: 'General', fine_rate: value },
+        ]),
+      /Row 1 \("Invalid rate"\).*fine_rate/
+    );
+  }
   assert.throws(
     () =>
       validateImportedBookFineRates([
@@ -336,4 +418,140 @@ test('book imports derive rates from categories and ignore independent rates', (
       ]),
     /Row 1 has conflicting category values/
   );
+});
+
+test('staff add/edit and import store paths use the validated fine_rate field', () => {
+  const addBookBody = storeSource.slice(
+    storeSource.indexOf('export async function addBook'),
+    storeSource.indexOf('export async function addPersonalBook')
+  );
+  const bulkBookBody = storeSource.slice(
+    storeSource.indexOf('export async function addBooksBulk'),
+    storeSource.indexOf('// UPDATE BOOK')
+  );
+  const updateBookBody = storeSource.slice(
+    storeSource.indexOf('export async function updateBook'),
+    storeSource.indexOf('// DELETE BOOK')
+  );
+
+  assert.match(addBookBody, /normalizeBookFineRate\(book\?\.fine_rate\)/);
+  assert.match(addBookBody, /fine_rate:\s*fineRate/);
+  assert.match(bulkBookBody, /normalizeBookFineRate\(normalized\.fine_rate\)/);
+  assert.doesNotMatch(bulkBookBody, /fine_rate:\s*getBookFineRate\(category\)/);
+  assert.match(updateBookBody, /patch\?\.fine_rate !== undefined/);
+  assert.match(updateBookBody, /dbPatch\.fine_rate = normalizeBookFineRate/);
+  assert.doesNotMatch(updateBookBody, /dbPatch\.fine_rate = getBookFineRate/);
+  assert.match(
+    updateBookBody,
+    /if \(patch\?\.category !== undefined\) \{\s*dbPatch\.category = preserveBookCategory\(patch\.category\);\s*\}/
+  );
+  assert.match(manualFineRateMigration, /p_patch \? 'fine_rate'/);
+  assert.match(manualFineRateMigration, /THEN \(p_patch ->> 'fine_rate'\)::integer/);
+  assert.match(inventorySource, /name="fine_rate"/);
+  assert.match(inventorySource, /normalizeBookFineRate\(form\.fine_rate\)/);
+  assert.match(inventorySource, /book\.fineRate \?\? book\.fine_rate/);
+  assert.doesNotMatch(inventorySource, /getBookFineRate\(form\.category\)/);
+});
+
+test('all supported book import formats document and validate supplied fine_rate', () => {
+  assert.match(subAdminImportSource, /\['csv', 'json'\]/);
+  assert.match(superAdminImportSource, /await importBooksBulk\(importedJSON\)/);
+  assert.match(superAdminImportSource, /fine_rate.*whole number from 1 to 100/i);
+  assert.match(excelImportSource, /extension === 'csv'/);
+  assert.match(excelImportSource, /extension === 'xlsx' \|\| extension === 'xls'/);
+  assert.match(subAdminImportSource, /validateImportedBookFineRates\(records\)/);
+});
+
+test('notification fines prefer saved amounts and calculate snapshot rates from rounded overdue days', () => {
+  const dueDate = '2026-01-01T00:00:00Z';
+  const asOf = new Date('2026-01-02T00:00:01Z');
+
+  assert.equal(getCurrentFine({ due_date: dueDate, fine_amount: 12, fine_rate_snapshot: 100 }, asOf), 12);
+  assert.equal(getCurrentFine({ due_date: dueDate, fine_amount: 0, fine_rate_snapshot: 10 }, asOf), 20);
+  assert.equal(getCurrentFine({ due_date: dueDate, fine_rate_snapshot: null }, asOf), null);
+  assert.equal(getCurrentFine({ due_date: dueDate }, asOf), null);
+  assert.equal(getCurrentFine({ due_date: dueDate, fine_amount: null, fine_rate_snapshot: 20 }, asOf), 40);
+  assert.equal(getCurrentFine({ due_date: dueDate, fine_rate_snapshot: 10 }, asOf), 20);
+  assert.equal(getCurrentFine({ due_date: dueDate, fine_amount: 0, fine_rate_snapshot: 100 }, asOf), 200);
+  assert.equal(getCurrentFine({ due_date: dueDate, fine_amount: 0, fine_rate_snapshot: 0 }, asOf), null);
+  assert.equal(getCurrentFine({ due_date: dueDate, fine_amount: 0, fine_rate_snapshot: 101 }, asOf), null);
+  assert.equal(getCurrentFine({ due_date: dueDate, fine_amount: 0, fine_rate_snapshot: 10.5 }, asOf), null);
+});
+
+test('notification overdue days round partial days up and return zero on or before the due timestamp', () => {
+  const dueDate = '2026-01-01T00:00:00Z';
+
+  assert.equal(getFineOverdueDays(dueDate, new Date('2026-01-01T00:00:00Z')), 0);
+  assert.equal(getFineOverdueDays(dueDate, new Date('2025-12-31T23:59:59Z')), 0);
+  assert.equal(getFineOverdueDays(dueDate, new Date('2026-01-02T00:00:00Z')), 1);
+  assert.equal(getFineOverdueDays(dueDate, new Date('2026-01-02T00:00:01Z')), 2);
+});
+
+test('notification fine copy labels assessed, estimated, and unavailable amounts accurately', () => {
+  assert.deepEqual(
+    getFineNotificationCopy({ fine_amount: 25, fine_rate_snapshot: 20 }, 25),
+    {
+      dailyRate: 'Daily fine rate: ₱20 per overdue day.',
+      fineAmount: 'Previously assessed fine: ₱25.00',
+      unavailable: '',
+    }
+  );
+  assert.deepEqual(
+    getFineNotificationCopy({ fine_amount: 0, fine_rate_snapshot: 100 }, 200),
+    {
+      dailyRate: 'Daily fine rate: ₱100 per overdue day.',
+      fineAmount: 'Estimated fine: ₱200.00',
+      unavailable: '',
+    }
+  );
+  assert.deepEqual(
+    getFineNotificationCopy({ fine_rate_snapshot: null }, null),
+    {
+      dailyRate: 'Daily fine rate unavailable; please contact the library for review.',
+      fineAmount: '',
+      unavailable: 'Fine estimate unavailable; please contact the library for review.',
+    }
+  );
+  assert.equal(
+    getFineNotificationCopy({ fine_rate_snapshot: 101 }, null).fineAmount,
+    ''
+  );
+  assert.equal(
+    getFineNotificationCopy({ fine_rate_snapshot: 101 }, null).unavailable,
+    'Fine estimate unavailable; please contact the library for review.'
+  );
+});
+
+test('notification fine helpers leave fine review flags unchanged and valid rates remain calculable', () => {
+  const request = Object.freeze({
+    due_date: '2026-01-01T00:00:00Z',
+    fine_amount: 0,
+    fine_rate_snapshot: 10,
+    fine_review_required: true,
+  });
+  const asOf = new Date('2026-01-02T00:00:00Z');
+
+  assert.equal(getCurrentFine(request, asOf), 10);
+  getFineNotificationCopy(request, 10);
+  assert.equal(request.fine_review_required, true);
+});
+
+test('scheduled and manual notification messages use the shared fine copy', () => {
+  assert.doesNotMatch(dueNotificationSource, /FINE_PER_DAY/);
+  assert.match(dueNotificationSource, /fine_rate_snapshot/);
+  assert.match(dueNotificationSource, /getFineOverdueDays/);
+  const fineCopyCallSites = dueNotificationSource.split(
+    /const fineCopy\s*=\s*getFineNotificationCopy\(request, currentFine\);/
+  );
+  assert.equal(fineCopyCallSites.length, 3, 'Expected one manual and one scheduled fine-copy call site.');
+  const manualMessage = fineCopyCallSites[1].slice(0, fineCopyCallSites[1].indexOf('const emailResult'));
+  const scheduledMessage = fineCopyCallSites[2].slice(0, fineCopyCallSites[2].indexOf('const resendData'));
+
+  for (const message of [manualMessage, scheduledMessage]) {
+    assert.match(message, /fineCopy\.dailyRate/);
+    assert.match(message, /fineCopy\.fineAmount/);
+    assert.match(message, /fineCopy\.unavailable/);
+    assert.match(message, /Overdue days:/);
+  }
+  assert.doesNotMatch(dueNotificationSource, /fine_review_required/);
 });

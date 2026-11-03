@@ -145,7 +145,7 @@ export default function BookTransactions() {
                       onClick={() => (mode === 'borrowing' ? handleConfirmPickup(r.id) : handleConfirmReturn(r.id))}
                       className="bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-emerald-800 transition"
                     >
-                      {mode === 'borrowing' ? 'Confirm Borrowing' : 'Confirm Return'}
+                      {mode === 'borrowing' ? 'Confirm borrowing' : 'Confirm return'}
                     </button>
                   </div>
                 ))}

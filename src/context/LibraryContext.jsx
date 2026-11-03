@@ -9,6 +9,7 @@ import {
 import { supabase } from '../lib/supabaseClient';
 import * as store from '../data/store';
 import { LibraryContext } from './libraryContext.js';
+import { useAuth } from './useAuth.js';
 import ShelfLoader from '../component/ShelfLoader.jsx';
 
 // ============================================================================
@@ -51,11 +52,14 @@ const DATA_LOAD_TIMEOUT_MS = 15000;
 const BORROW_REQUESTS_LOAD_TIMEOUT_MS = 60000;
 
 export function LibraryProvider({ children }) {
+  const { user } = useAuth();
   const [data, setData] = useState(emptyData);
   const [loading, setLoading] = useState(true);
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [splashElapsed, setSplashElapsed] = useState(false);
+  const [initialDataReady, setInitialDataReady] = useState(false);
   const [connectionError, setConnectionError] = useState('');
   const [attendanceLoadError, setAttendanceLoadError] = useState('');
+  const [optionalDataLoadErrors, setOptionalDataLoadErrors] = useState([]);
   const [borrowRequestsLoading, setBorrowRequestsLoading] = useState(false);
   const [borrowRequestsLoadError, setBorrowRequestsLoadError] = useState('');
   const refreshSequenceRef = useRef(0);
@@ -65,6 +69,25 @@ export function LibraryProvider({ children }) {
   const borrowRequestsScopeRef = useRef(null);
   const currentVisitorProfileRef = useRef(null);
   const currentAuthUserIdRef = useRef(null);
+  const lastResolvedAuthUserIdRef = useRef(undefined);
+  const sessionIdentityRef = useRef(
+    JSON.stringify([user?.id ?? null, user?.role ?? null])
+  );
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSplashElapsed(true), 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const nextIdentity = JSON.stringify([user?.id ?? null, user?.role ?? null]);
+    if (nextIdentity === sessionIdentityRef.current) return;
+
+    sessionIdentityRef.current = nextIdentity;
+    setInitialDataReady(false);
+    setLoading(true);
+    setConnectionError('');
+  }, [user?.id, user?.role]);
 
   // ==========================================================================
   // GET CURRENT VISITOR ID
@@ -90,6 +113,7 @@ export function LibraryProvider({ children }) {
 
       if (authError || !authUserId) {
         if (authError?.name === 'AuthSessionMissingError') {
+          lastResolvedAuthUserIdRef.current = null;
           return null;
         }
 
@@ -102,6 +126,7 @@ export function LibraryProvider({ children }) {
           refreshedAuth?.session?.user?.id || null;
 
         if (refreshError || !authUserId) {
+          if (!authUserId) lastResolvedAuthUserIdRef.current = null;
           if (authError) {
             console.warn(
               'SHELF Supabase user verification failed:',
@@ -119,6 +144,7 @@ export function LibraryProvider({ children }) {
       }
 
       currentAuthUserIdRef.current = authUserId;
+      lastResolvedAuthUserIdRef.current = authUserId;
       const visitor = await store.getVisitor(authUserId);
       currentVisitorProfileRef.current = visitor;
       return visitor?.id || null;
@@ -312,6 +338,7 @@ export function LibraryProvider({ children }) {
 
   const refreshAll = useCallback(async () => {
     const refreshSequence = ++refreshSequenceRef.current;
+    const optionalDataErrors = [];
     const waitForData = (request, operation) => {
       let timeoutId;
       const timeout = new Promise((_, reject) => {
@@ -327,6 +354,23 @@ export function LibraryProvider({ children }) {
       return Promise.race([request, timeout]).finally(() => {
         clearTimeout(timeoutId);
       });
+    };
+    const loadOptionalData = async (operation, request, fallback = []) => {
+      try {
+        const result = await waitForData(request, operation);
+        return {
+          data: Array.isArray(result) ? result : fallback,
+          error: '',
+        };
+      } catch (error) {
+        optionalDataErrors.push(operation);
+        console.error(`SHELF ${operation.toLowerCase()} loading failed:`, error);
+        return {
+          data: fallback,
+          error:
+            error?.message || `Unable to load ${operation.toLowerCase()}.`,
+        };
+      }
     };
     setLoading(true);
     try {
@@ -350,17 +394,18 @@ export function LibraryProvider({ children }) {
 
       const [
         books,
-        externalCatalogBooks,
+        externalCatalogResult,
         libraries,
         visitors,
         normalBorrowRequests,
         attendanceResult,
-        communityBooks,
+        communityBooksResult,
       ] = await Promise.all([
         waitForData(store.fetchBooks(), 'Library books'),
-        waitForData(
+        loadOptionalData(
+          'External catalog books',
           store.fetchExternalCatalogBooks(),
-          'External catalog books'
+          []
         ),
         waitForData(store.fetchLibraries(), 'Library list'),
         waitForData(
@@ -373,19 +418,20 @@ export function LibraryProvider({ children }) {
         currentVisitorId
           ? Promise.resolve([])
           : Promise.resolve([]),
-        waitForData(store.fetchAttendanceLogs(), 'Attendance records').then(
-          (attendanceLogs) => ({ attendanceLogs, error: '' }),
-          (error) => {
-            if (error?.name === 'DataLoadTimeoutError') throw error;
-            return {
-              attendanceLogs: [],
-              error: error?.message || 'Unable to load attendance records.',
-            };
-          }
+        loadOptionalData(
+          'Attendance records',
+          store.fetchAttendanceLogs(),
+          []
         ),
-        waitForData(store.fetchCommunityBooks(), 'Community books'),
+        loadOptionalData(
+          'Community books',
+          store.fetchCommunityBooks(),
+          []
+        ),
       ]);
-      const { attendanceLogs, error: attendanceError } = attendanceResult;
+      const externalCatalogBooks = externalCatalogResult.data;
+      const { data: attendanceLogs, error: attendanceError } = attendanceResult;
+      const communityBooks = communityBooksResult.data;
 
       if (attendanceError) {
         console.error('SHELF attendance loading failed:', attendanceError);
@@ -395,20 +441,14 @@ export function LibraryProvider({ children }) {
       // Load books owned by the current visitor.
       // ----------------------------------------------------------------------
 
-      const loadVisitorData = async (operation, request, fallback) => {
-        if (!currentVisitorId || !request) return fallback;
-
-        try {
-          const result = await waitForData(request, operation);
-          return Array.isArray(result) ? result : fallback;
-        } catch (error) {
-          console.error(`SHELF ${operation.toLowerCase()} loading failed:`, error);
-          if (error?.name === 'DataLoadTimeoutError') throw error;
-          return fallback;
+      const loadVisitorData = (operation, request, fallback) => {
+        if (!currentVisitorId || !request) {
+          return Promise.resolve({ data: fallback, error: '' });
         }
+        return loadOptionalData(operation, request, fallback);
       };
 
-      const [personalBooks, myCommunityBookRequests, ownerRequestsResult] =
+      const [personalBooksResult, myCommunityRequestsResult, ownerRequestsResult] =
         currentVisitorId
           ? await Promise.all([
               loadVisitorData(
@@ -429,21 +469,16 @@ export function LibraryProvider({ children }) {
                   ? store.fetchOwnerCommunityBookRequests(currentVisitorId)
                   : null,
                 []
-              ).then(
-                (requests) => ({ requests, error: '' }),
-                (error) => {
-                  if (error?.name === 'DataLoadTimeoutError') throw error;
-                  return {
-                    requests: [],
-                    error:
-                      error?.message ||
-                      'Unable to load community book requests.',
-                  };
-                }
               ),
             ])
-          : [[], [], { requests: [], error: '' }];
-      const ownerCommunityBookRequests = ownerRequestsResult.requests;
+          : [
+              { data: [], error: '' },
+              { data: [], error: '' },
+              { data: [], error: '' },
+            ];
+      const personalBooks = personalBooksResult.data;
+      const myCommunityBookRequests = myCommunityRequestsResult.data;
+      const ownerCommunityBookRequests = ownerRequestsResult.data;
       const ownerCommunityRequestLoadError = ownerRequestsResult.error;
 
       console.log('SHELF — MY COMMUNITY REQUESTS:', {
@@ -742,8 +777,9 @@ fineReviewRequired:
       }));
 
       setAttendanceLoadError(attendanceError);
+      setOptionalDataLoadErrors([...new Set(optionalDataErrors)]);
       setConnectionError('');
-      setHasLoadedOnce(true);
+      setInitialDataReady(true);
       if (currentVisitorId) {
         void loadVisitorBorrowRequests(currentVisitorId);
       } else {
@@ -784,7 +820,6 @@ fineReviewRequired:
         err?.message ||
           'Could not connect to the database.'
       );
-      setHasLoadedOnce(true);
 
       throw err;
     } finally {
@@ -889,10 +924,21 @@ fineReviewRequired:
 
     const authSubscription =
       supabase?.auth?.onAuthStateChange(
-        (event) => {
+        (event, session) => {
           if (event === 'INITIAL_SESSION') {
             return;
           }
+
+          const nextAuthUserId = session?.user?.id || null;
+          if (
+            lastResolvedAuthUserIdRef.current !== undefined &&
+            lastResolvedAuthUserIdRef.current !== nextAuthUserId
+          ) {
+            setInitialDataReady(false);
+            setLoading(true);
+            setConnectionError('');
+          }
+          lastResolvedAuthUserIdRef.current = nextAuthUserId;
 
           // Avoid heavy operations directly inside the auth callback.
           setTimeout(() => {
@@ -1428,9 +1474,11 @@ fineReviewRequired:
         data.ownerCommunityRequestLoadError || '',
 
       loading,
+      initialDataReady,
 
       connectionError,
       attendanceLoadError,
+      optionalDataLoadErrors,
       borrowRequestsLoading,
       borrowRequestsLoadError,
       retryBorrowRequests,
@@ -1529,9 +1577,11 @@ fineReviewRequired:
       data,
 
       loading,
+      initialDataReady,
 
       connectionError,
       attendanceLoadError,
+      optionalDataLoadErrors,
       borrowRequestsLoading,
       borrowRequestsLoadError,
       retryBorrowRequests,
@@ -1622,15 +1672,41 @@ fineReviewRequired:
           Attendance data is temporarily unavailable. Other library data may still load.
         </div>
       )}
-      {loading && hasLoadedOnce && (
-        <div className="shelf-loader-refresh">
-          <ShelfLoader label="Refreshing dashboard data..." compact />
+      {optionalDataLoadErrors.some(
+        (operation) =>
+          operation !== 'Attendance records' &&
+          operation !== 'Community book owner requests'
+      ) && (
+        <div role="status" className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-center text-xs font-semibold text-amber-950">
+          Some feature data is temporarily unavailable:{' '}
+          {optionalDataLoadErrors
+            .filter(
+              (operation) =>
+                operation !== 'Attendance records' &&
+                operation !== 'Community book owner requests'
+            )
+            .join(', ')}.
+          {' '}Use Retry to refresh.
+          <button
+            type="button"
+            onClick={() =>
+              refreshAll().catch((error) => {
+                console.error('SHELF optional data retry failed:', error);
+              })
+            }
+            className="ml-2 rounded border border-amber-800/50 px-2 py-1 font-bold hover:bg-amber-100"
+          >
+            Retry
+          </button>
         </div>
       )}
-
       {children}
-      {loading && !hasLoadedOnce && (
-        <ShelfLoader screen label="Loading dashboard data..." />
+      {!splashElapsed && <ShelfLoader screen label="Loading SHELF..." />}
+      {loading && initialDataReady && (
+        <div className="pointer-events-none fixed right-4 top-4 z-[190] flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-3 py-2 text-sm font-semibold text-slate-700 shadow-lg">
+          <ShelfLoader compact label="Refreshing dashboard data..." />
+          <span>Refreshing…</span>
+        </div>
       )}
     </LibraryContext.Provider>
   );

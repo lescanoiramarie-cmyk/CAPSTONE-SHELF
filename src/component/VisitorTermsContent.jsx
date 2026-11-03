@@ -2,11 +2,11 @@ export default function VisitorTermsContent() {
   return (
     <>
       <p>
-        By using SHELF ILMS, you agree to provide accurate account
+        By using SHELF, you agree to provide accurate account
         information and keep your password and visitor QR pass secure.
       </p>
       <p>
-        Follow each library's borrowing instructions and return library and
+        Follow each library’s borrowing instructions and return library and
         community books by their due dates. You are responsible for arranging
         community-book handovers and returns with the owner.
       </p>

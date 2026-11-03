@@ -245,8 +245,8 @@ export default function LibraryMap({
           className="px-4 py-2.5 rounded-lg text-sm font-bold border border-slate-300 hover:bg-slate-50 transition"
         >
           {showMap
-            ? 'Hide Map View'
-            : 'Show Map View'}
+            ? 'Hide map view'
+            : 'Show map view'}
         </button>
 
       </div>
@@ -409,7 +409,7 @@ export default function LibraryMap({
                             }
                             className="mt-3 inline-flex items-center text-sm font-bold text-shelf-primary hover:underline"
                           >
-                            Browse Catalog →
+                            Browse catalog →
                           </button>
                         )}
 
@@ -488,8 +488,8 @@ export default function LibraryMap({
                       className={
                         library.status ===
                         'Open'
-                          ? 'shrink-0 whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700'
-                          : 'shrink-0 whitespace-nowrap rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-600'
+                          ? 'shrink-0 whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700'
+                          : 'shrink-0 whitespace-nowrap rounded-full bg-slate-200 px-2 py-0.5 text-xs font-bold text-slate-600'
                       }
                     >
                       {library.status}
@@ -523,7 +523,7 @@ export default function LibraryMap({
                     }
                     className="mt-2.5 inline-flex items-center text-sm font-bold text-shelf-primary hover:underline"
                   >
-                    Browse Library Catalog →
+                    Browse library catalog →
                   </button>
                 )}
 

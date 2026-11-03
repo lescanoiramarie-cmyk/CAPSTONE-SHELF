@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Bar,
   Line,
@@ -38,6 +39,7 @@ import {
   UsersRound,
 } from 'lucide-react';
 import { useAuth } from '../../context/useAuth.js';
+import { getDashboardPath } from '../../routes/roleHome.js';
 import {
   useLibraryData,
   useLibrary,
@@ -47,7 +49,9 @@ import LibraryMap from '../../component/LibraryMap.jsx';
 import AdminWorkspace from '../../component/AdminWorkspace.jsx';
 import DashboardWelcome from '../../component/DashboardWelcome.jsx';
 import BookRatingsChart from '../../component/BookRatingsChart.jsx';
+import DashboardDataBoundary from '../../component/DashboardDataBoundary.jsx';
 import { supabase } from '../../lib/supabaseClient.js';
+import { formatBookCategory } from '../../lib/bookCategory.js';
 import { sendDueDateFollowUp } from '../../lib/dueDateFollowUp.js';
 import {
   exportReport,
@@ -151,6 +155,7 @@ function formatStaffRole(role) {
 }
 
 export default function SuperAdminDashboard() {
+  const navigate = useNavigate();
   const mainScrollRef = useRef(null);
   const {
     user,
@@ -180,6 +185,10 @@ export default function SuperAdminDashboard() {
     addLibrary,
     updateLibrary,
     deleteLibrary,
+    loading: libraryLoading,
+    initialDataReady,
+    connectionError,
+    refreshAll,
   } = useLibrary();
 
   const {
@@ -1242,9 +1251,7 @@ const handleEditStaff = (staff) => {
       );
       return {
         labels:
-          Object.keys(
-            counts
-          ),
+          Object.keys(counts).map(formatBookCategory),
         values:
           Object.values(
             counts
@@ -1255,21 +1262,41 @@ const handleEditStaff = (staff) => {
   // ============================================================
   // UI
   // ============================================================
+  if (!initialDataReady) {
+    return (
+      <DashboardDataBoundary
+        loading={libraryLoading}
+        error={connectionError}
+        onRetry={() =>
+          refreshAll().catch((error) => {
+            console.error('SHELF initial dashboard retry failed:', error);
+          })
+        }
+      />
+    );
+  }
+
   return (
     <div className="superadmin-dashboard flex h-screen overflow-hidden bg-shelf-bg text-slate-800">
       {/* SIDEBAR */}
-      <aside className="fixed inset-y-0 left-0 z-40 flex h-screen w-60 shrink-0 flex-col overflow-y-auto bg-shelf-primary text-white">
+      <aside className="superadmin-sidebar fixed inset-y-0 left-0 z-40 flex h-screen w-60 shrink-0 flex-col overflow-hidden bg-shelf-primary text-white">
         <div className="border-b border-white/10 p-5">
-          <p className="font-extrabold tracking-wider">
-            SHELF ILMS
-          </p>
+          <button
+            type="button"
+            onClick={() => navigate(getDashboardPath(user?.role))}
+            aria-label="Go to SHELF home"
+            className="flex items-center gap-2 text-left text-white"
+          >
+            <img src="/shelf-logo.png" alt="" className="h-9 w-9 object-contain" />
+            <p className="font-extrabold tracking-wider">SHELF</p>
+          </button>
           <p className="mt-1 text-xs text-slate-300">
             Super-Admin Console
           </p>
         </div>
 
         {/* NAVIGATION */}
-        <nav className="flex-1 space-y-1 p-3">
+        <nav className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1">
           {/* OVERVIEW */}
           <button
             type="button"
@@ -1285,7 +1312,7 @@ const handleEditStaff = (staff) => {
             }`}
           >
             <Activity size={18} className="mr-3 inline-block align-[-3px]" />
-            Overview & Analytics
+            Overview & analytics
           </button>
 
           {/* INVENTORY */}
@@ -1321,7 +1348,7 @@ const handleEditStaff = (staff) => {
             }`}
           >
             <MapPinned size={18} className="mr-3 inline-block align-[-3px]" />
-            Libraries & Map
+            Libraries & map
           </button>
 
           {/* STAFF ACCOUNTS */}
@@ -1339,7 +1366,7 @@ const handleEditStaff = (staff) => {
             }`}
           >
             <ShieldCheck size={18} className="mr-3 inline-block align-[-3px]" />
-            Staff Accounts
+            Staff accounts
           </button>
 
           <button
@@ -1356,7 +1383,7 @@ const handleEditStaff = (staff) => {
             }`}
           >
             <UsersRound size={18} className="mr-3 inline-block align-[-3px]" />
-            Visitor Accounts
+            Visitor accounts
           </button>
 
           {/* REPORTS & SERVICES COLLAPSIBLE */}
@@ -1372,7 +1399,7 @@ const handleEditStaff = (staff) => {
             >
               <span className="flex items-center gap-3">
                 <FileSpreadsheet size={18} />
-                Reports & Services
+                Reports & services
               </span>
               {workspaceOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
@@ -1479,7 +1506,7 @@ const handleEditStaff = (staff) => {
             onClick={handleSuperAdminLogout}
             className="w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs transition hover:bg-white/20"
           >
-            Sign Out
+            Sign out
           </button>
         </div>
       </aside>
@@ -1652,6 +1679,11 @@ const handleEditStaff = (staff) => {
                   </label>
                 </div>
               </div>
+              {importTarget === 'books' && (
+                <p className="text-xs text-slate-600">
+                  Book imports require a <code>fine_rate</code> whole number from 1 to 100 pesos per overdue day. The supplied rate is saved and is not derived from category.
+                </p>
+              )}
               <div className="grid grid-cols-1 gap-4 pt-1 sm:grid-cols-2">
                 <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/50 p-3.5">
                   <div>
@@ -1659,23 +1691,23 @@ const handleEditStaff = (staff) => {
                       <BookOpen size={14} className="mr-1.5 inline-block align-[-2px]" aria-hidden="true" />
                        Master Library Catalog
                     </p>
-                    <p className="text-[11px] text-slate-500">Total Titles: {books.length}</p>
+                    <p className="text-xs text-slate-500">Total Titles: {books.length}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('books', 'xlsx')} className="rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-emerald-700">{exportingReport === 'books-xlsx' ? 'Exporting…' : 'Excel'}</button>
-                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('books', 'csv')} className="rounded bg-slate-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-slate-800">{exportingReport === 'books-csv' ? 'Exporting…' : 'CSV'}</button>
-                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('books', 'pdf')} className="rounded bg-rose-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-rose-800">{exportingReport === 'books-pdf' ? 'Exporting…' : 'PDF'}</button>
+                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('books', 'xlsx')} className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-700">{exportingReport === 'books-xlsx' ? 'Exporting…' : 'Excel'}</button>
+                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('books', 'csv')} className="rounded bg-slate-700 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-slate-800">{exportingReport === 'books-csv' ? 'Exporting…' : 'CSV'}</button>
+                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('books', 'pdf')} className="rounded bg-rose-700 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-rose-800">{exportingReport === 'books-pdf' ? 'Exporting…' : 'PDF'}</button>
                   </div>
                 </div>
                 <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/50 p-3.5">
                   <div>
                     <p className="text-xs font-bold text-slate-700"><Building2 size={14} className="mr-1.5 inline-block align-[-2px]" aria-hidden="true" />Multi-Branch Asset Allocation</p>
-                    <p className="text-[11px] text-slate-500">Institutional stock by branch</p>
+                    <p className="text-xs text-slate-500">Institutional stock by branch</p>
                   </div>
                   <div className="flex gap-2">
-                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('allocation', 'xlsx')} className="rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-emerald-700">Excel</button>
-                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('allocation', 'csv')} className="rounded bg-slate-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-slate-800">CSV</button>
-                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('allocation', 'pdf')} className="rounded bg-rose-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-rose-800">PDF</button>
+                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('allocation', 'xlsx')} className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-700">Excel</button>
+                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('allocation', 'csv')} className="rounded bg-slate-700 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-slate-800">CSV</button>
+                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('allocation', 'pdf')} className="rounded bg-rose-700 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-rose-800">PDF</button>
                   </div>
                 </div>
                 <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/50 p-3.5">
@@ -1684,12 +1716,12 @@ const handleEditStaff = (staff) => {
                       <Activity size={14} className="mr-1.5 inline-block align-[-2px]" aria-hidden="true" />
                       Total Attendance
                     </p>
-                    <p className="text-[11px] text-slate-500">Total Visits: {attendanceLogs.length}</p>
+                    <p className="text-xs text-slate-500">Total Visits: {attendanceLogs.length}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('attendance', 'xlsx')} className="rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-emerald-700">{exportingReport === 'attendance-xlsx' ? 'Exporting…' : 'Excel'}</button>
-                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('attendance', 'csv')} className="rounded bg-slate-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-slate-800">{exportingReport === 'attendance-csv' ? 'Exporting…' : 'CSV'}</button>
-                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('attendance', 'pdf')} className="rounded bg-rose-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-rose-800">{exportingReport === 'attendance-pdf' ? 'Exporting…' : 'PDF'}</button>
+                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('attendance', 'xlsx')} className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-700">{exportingReport === 'attendance-xlsx' ? 'Exporting…' : 'Excel'}</button>
+                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('attendance', 'csv')} className="rounded bg-slate-700 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-slate-800">{exportingReport === 'attendance-csv' ? 'Exporting…' : 'CSV'}</button>
+                    <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('attendance', 'pdf')} className="rounded bg-rose-700 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-rose-800">{exportingReport === 'attendance-pdf' ? 'Exporting…' : 'PDF'}</button>
                   </div>
                 </div>
               </div>
@@ -1720,7 +1752,7 @@ const handleEditStaff = (staff) => {
                   }}
                   className="rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#003568]"
                 >
-                  {showAddLibrary ? 'Cancel' : '+ Add Library'}
+                  {showAddLibrary ? 'Cancel' : '+ Add library'}
                 </button>
               </div>
             </div>
@@ -1840,7 +1872,7 @@ const handleEditStaff = (staff) => {
                             required
                           />
                         </div>
-                        <p className="text-[11px] text-slate-500 mt-1.5 leading-normal">
+                        <p className="text-xs text-slate-500 mt-1.5 leading-normal">
                           Enter the institutional domain used to verify visitor registration. Personal email providers such as Gmail are not allowed.
                         </p>
                       </div>
@@ -1933,7 +1965,7 @@ const handleEditStaff = (staff) => {
                         className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-center gap-1.5"
                       >
                         <MapPinned size={14} aria-hidden="true" />
-                        Use Current Location
+                        Use current location
                       </button>
                       <button
                         type="button"
@@ -1947,7 +1979,7 @@ const handleEditStaff = (staff) => {
                         disabled={savingLibrary}
                         className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
                       >
-                        {savingLibrary ? 'Adding...' : 'Add Library'}
+                        {savingLibrary ? 'Adding...' : 'Add library'}
                       </button>
                     </div>
                   </form>
@@ -2103,7 +2135,7 @@ const handleEditStaff = (staff) => {
                     className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
                     required={!editingStaffId}
                   />
-                  <p className="mt-1 text-[11px] text-slate-400">
+                  <p className="mt-1 text-xs text-slate-400">
                     {editingStaffId
                       ? 'Leave blank if you do not want to change the password.'
                       : 'Passwords are handled by Supabase Auth.'}
@@ -2128,8 +2160,8 @@ const handleEditStaff = (staff) => {
                 {staffLoading
                   ? 'Saving...'
                   : editingStaffId
-                    ? 'Save Changes'
-                    : 'Create Sub-Admin'}
+                    ? 'Save changes'
+                    : 'Create sub-admin'}
               </button>
 
               {editingStaffId && (
@@ -2149,7 +2181,7 @@ const handleEditStaff = (staff) => {
                   }}
                   className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
-                  Cancel Edit
+                  Cancel edit
                 </button>
               )}
             </div>
@@ -2241,15 +2273,15 @@ const handleEditStaff = (staff) => {
                     {visibleStaffAccounts.map((staff) => (
                       <tr key={staff.id} className="hover:bg-slate-50">
                         <td className="p-3 font-semibold text-slate-700">{staff.full_name}</td>
-                        <td className="p-3 text-xs font-mono text-slate-500">{staff.email}</td>
+                        <td className="p-3 text-xs tabular-nums wrap-anywhere text-slate-500">{staff.email}</td>
                         <td className="p-3">
-                          <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold ${staff.role === 'superadmin' ? 'bg-purple-100 text-purple-800' : staff.role === 'subadmin' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700'}`}>
+                          <span className={`inline-flex rounded-full px-2 py-1 text-xs font-bold ${staff.role === 'superadmin' ? 'bg-purple-100 text-purple-800' : staff.role === 'subadmin' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700'}`}>
                             {formatStaffRole(staff.role)}
                           </span>
                         </td>
                         <td className="p-3 text-xs text-slate-500">{getLibraryName(libraries, staff.library_id)}</td>
                         <td className="p-3">
-                          <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-bold ${staff.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                          <span className={`inline-flex rounded-full px-2 py-1 text-xs font-bold ${staff.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
                             {staff.is_active ? 'Active' : 'Disabled'}
                           </span>
                         </td>

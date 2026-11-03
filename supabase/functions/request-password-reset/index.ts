@@ -29,7 +29,7 @@ const CODE_TTL_MINUTES = 10;
 const MAX_CODE_ATTEMPTS = 5;
 
 const SENDER =
-  "SHELF ILMS <support@shelf-ilms.me>";
+  "SHELF <support@shelf-ilms.me>";
 
 // Must match the password policy used during visitor registration.
 const PASSWORD_MIN_LENGTH = 12;
@@ -479,7 +479,7 @@ Deno.serve(async (req: Request) => {
               from: SENDER,
               to: [email],
               subject:
-                "Your SHELF ILMS Verification Code",
+                "Your SHELF Verification Code",
               html: `
                 <div style="
                   font-family: Arial, sans-serif;
@@ -489,7 +489,7 @@ Deno.serve(async (req: Request) => {
                   color: #111827;
                 ">
                   <h2>
-                    SHELF ILMS Password Reset
+                    SHELF Password Reset
                   </h2>
 
                   <p style="text-align: left;">
@@ -499,7 +499,7 @@ Deno.serve(async (req: Request) => {
                   <p style="text-align: left;">
                     Use the verification code below to
                     choose a new password for your SHELF
-                    ILMS account.
+                    SHELF account.
                   </p>
 
                   <div style="
@@ -535,7 +535,7 @@ Deno.serve(async (req: Request) => {
 
                   <p style="text-align: left;">
                     Regards,<br />
-                    <strong>SHELF ILMS</strong>
+                    <strong>SHELF</strong>
                   </p>
                 </div>
               `,

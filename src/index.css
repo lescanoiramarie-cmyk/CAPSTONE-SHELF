@@ -1,5 +1,59 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Source Sans 3 Variable";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("@fontsource-variable/source-sans-3/files/source-sans-3-latin-wght-normal.woff2")
+    format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191,
+    U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Source Sans 3 Variable";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("@fontsource-variable/source-sans-3/files/source-sans-3-latin-ext-wght-normal.woff2")
+    format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+    U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF,
+    U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Source Serif 4 Variable";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("@fontsource-variable/source-serif-4/files/source-serif-4-latin-standard-normal.woff2")
+    format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191,
+    U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Source Serif 4 Variable";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("@fontsource-variable/source-serif-4/files/source-serif-4-latin-ext-standard-normal.woff2")
+    format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+    U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF,
+    U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root {
+  --font-system-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", "Noto Sans", Arial, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
 /* Smooth scrolling para sa Landing Page at In-page anchor links */
 html {
   scroll-behavior: smooth;
@@ -111,6 +165,17 @@ html {
   overflow-wrap: anywhere;
 }
 
+.landing-library-card,
+.landing-featured-card {
+  border-color: transparent;
+}
+
+.landing-library-card:hover,
+.landing-featured-card:hover,
+.landing-announcement-card:hover {
+  border-color: #93c5fd;
+}
+
 .landing-book-cover {
   min-height: 0;
 }
@@ -153,13 +218,80 @@ html {
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
+  --font-sans: "Source Sans 3 Variable", var(--font-system-sans);
+  --font-display: "Source Serif 4 Variable", Georgia, serif;
+  --font-serif: var(--font-display);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  --font-weight-bold: 600;
+  --font-weight-extrabold: 700;
+  --font-weight-black: 700;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.4;
+  --text-label: 0.8125rem;
+  --text-label--line-height: 1.35;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.5;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.55;
+  --text-lg: 1.0625rem;
+  --text-lg--line-height: 1.3;
+  --text-xl: 1.125rem;
+  --text-xl--line-height: 1.3;
+  --text-2xl: 1.375rem;
+  --text-2xl--line-height: 1.25;
+  --text-3xl: 1.5rem;
+  --text-3xl--line-height: 1.25;
+  --text-4xl: 2rem;
+  --text-4xl--line-height: 1.2;
+  --text-hero: clamp(2.25rem, 5vw, 3.5rem);
+  --text-hero--line-height: 1.1;
+  --text-page-title: clamp(1.5rem, 3.5vw, 2rem);
+  --text-page-title--line-height: 1.2;
+  --text-section-title: clamp(1.375rem, 2.5vw, 1.5rem);
+  --text-section-title--line-height: 1.25;
+  --text-card-title: clamp(1.0625rem, 1.2vw, 1.125rem);
+  --text-card-title--line-height: 1.3;
   --color-shelf-primary: #002046;
   --color-shelf-accent: #2563eb;
+  --color-shelf-focus-inverse: #bfdbfe;
   --color-shelf-bg: #f8fafc;
   --color-shelf-surface: #ffffff;
   --color-shelf-text: #0f172a;
   --color-shelf-muted: #64748b;
+  --color-shelf-muted-inverse: #a8b5c7;
   --color-shelf-border: #e2e8f0;
+  --color-shelf-hero-foreground: #bfdbfe;
+}
+
+@layer base {
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+  }
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  font-size: 15px;
+  font-weight: 400;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-shelf-muted);
+  opacity: 1;
+}
+
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 .book-card-grid {
@@ -211,7 +343,7 @@ html {
   align-items: stretch;
   gap: 1rem;
   padding: 1rem;
-  border: 1px solid var(--visitor-border, #dce3ec);
+  border: 1px solid transparent;
   border-radius: 1rem;
   background: var(--visitor-surface, #ffffff);
   color: inherit;
@@ -258,7 +390,7 @@ html {
   background: var(--visitor-surface-muted, #f1f5f9);
   padding: 0.3125rem 0.625rem;
   color: var(--visitor-ink, #0f2948);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 
@@ -268,9 +400,10 @@ html {
   margin-top: 0.5rem;
   overflow: hidden;
   color: var(--visitor-ink, #0f172a);
-  font-size: 0.9375rem;
-  font-weight: 700;
-  line-height: 1.4;
+  font-family: var(--font-display);
+  font-size: var(--text-card-title);
+  font-weight: 600;
+  line-height: var(--text-card-title--line-height);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -283,12 +416,12 @@ html {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--visitor-muted, #475569);
-  font-size: 0.8125rem;
+  font-size: var(--text-label);
 }
 
 .opac-book-card-isbn {
   color: #64748b;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -316,7 +449,7 @@ html {
   border: 1px solid transparent;
   border-radius: 999px;
   padding: 0.25rem 0.625rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   line-height: 1.25;
   text-align: center;
 }
@@ -490,9 +623,25 @@ html {
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: none;
+  outline: 2px solid var(--color-shelf-accent);
+  outline-offset: 2px;
   border-color: #64748b;
-  box-shadow: 0 0 0 3px rgb(15 23 42 / 10%);
+  box-shadow: none;
+}
+
+:is(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-shelf-accent);
+  outline-offset: 2px;
+}
+
+.visitor-dashboard aside :is(a, button):focus-visible,
+.subadmin-dashboard aside :is(a, button):focus-visible,
+.superadmin-dashboard aside :is(a, button):focus-visible {
+  outline-color: var(--color-shelf-focus-inverse);
+}
+
+.landing-page header :is(a, button):focus-visible {
+  outline-color: var(--color-shelf-focus-inverse);
 }
 
 .visitor-dashboard.theme-dark {
@@ -518,6 +667,170 @@ select:focus-visible {
   color: #e2e8f0;
 }
 
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.55;
+  font-optical-sizing: auto;
+  font-synthesis: none;
+  font-kerning: normal;
+  font-variant-numeric: lining-nums tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-optical-sizing: auto;
+  font-kerning: normal;
+  text-wrap: balance;
+  text-rendering: optimizeLegibility;
+}
+
+h1[class],
+h2[class],
+h3[class],
+h4[class],
+h5[class],
+h6[class] {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+h1[class],
+h1 {
+  font-size: var(--text-page-title);
+  line-height: var(--text-page-title--line-height);
+}
+
+h2[class],
+h2 {
+  font-size: var(--text-section-title);
+  line-height: var(--text-section-title--line-height);
+}
+
+h3[class],
+h4[class],
+h5[class],
+h6[class],
+h3,
+h4,
+h5,
+h6 {
+  font-size: var(--text-card-title);
+  line-height: var(--text-card-title--line-height);
+}
+
+p {
+  text-wrap: pretty;
+}
+
+p a {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+.landing-page .landing-hero-title {
+  font-family: var(--font-display);
+  font-size: var(--text-hero);
+  font-weight: 600;
+  line-height: var(--text-hero--line-height);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.landing-page .landing-hero-description {
+  max-width: 65ch;
+  margin-inline: auto;
+}
+
+.uppercase:not(.type-overline):not(.category-chip):not(.brand-wordmark):not(th):not([role="columnheader"]) {
+  letter-spacing: normal;
+  text-transform: lowercase;
+}
+
+.uppercase:not(.type-overline):not(.category-chip):not(.brand-wordmark):not(th):not([role="columnheader"])::first-letter {
+  text-transform: uppercase;
+}
+
+[class*="tracking-"]:not(.type-overline):not(.category-chip):not(.brand-wordmark):not(th):not([role="columnheader"]) {
+  letter-spacing: normal;
+}
+
+.brand-wordmark {
+  text-transform: uppercase;
+}
+
+.type-overline {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.category-chip {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: normal;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+:is(th, [role="columnheader"]) {
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+button {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+button.text-xs,
+button .text-xs,
+label.text-xs {
+  font-size: var(--text-sm);
+}
+
+label.text-xs {
+  font-size: var(--text-label);
+}
+
+:is(dialog, [role="dialog"]) :is(h1, h2, h3, h4, h5, h6) {
+  font-size: var(--text-card-title);
+  line-height: var(--text-card-title--line-height);
+}
+
+.opac-book-card-category {
+  text-transform: none;
+}
+
+.opac-book-card-isbn {
+  overflow-wrap: anywhere;
+}
+
+.wrap-anywhere {
+  overflow-wrap: anywhere;
+}
+
+.font-mono {
+  overflow-wrap: anywhere;
+}
+
+.shelf-loader {
+  font-family: var(--font-system-sans);
+}
+
 .visitor-dashboard.theme-dark .text-slate-600,
 .visitor-dashboard.theme-dark .text-slate-500,
 .visitor-dashboard.theme-dark .text-slate-400 {
@@ -531,16 +844,26 @@ select:focus-visible {
 .visitor-dashboard.theme-dark .border-slate-100,
 .visitor-dashboard.theme-dark .border-slate-200,
 .visitor-dashboard.theme-dark .border-slate-300 {
-  border-color: #334155;
+  border-color: var(--visitor-border);
 }
 
 .visitor-dashboard.theme-dark .divide-slate-100 > :not(:last-child) {
-  border-color: #334155;
+  border-color: var(--visitor-border);
 }
 
-.subadmin-dashboard .bg-white.rounded-xl {
-  border-color: #dbe3ed;
+.subadmin-dashboard main .bg-white.rounded-xl.shadow-sm,
+.superadmin-dashboard main .bg-white.rounded-xl.shadow-sm,
+.subadmin-dashboard main .bg-white.rounded-2xl.shadow-sm,
+.superadmin-dashboard main .bg-white.rounded-2xl.shadow-sm {
+  border-color: transparent;
   box-shadow: 0 1px 3px rgb(15 23 42 / 8%);
+}
+
+.subadmin-dashboard main .bg-white.rounded-xl.shadow-sm:hover,
+.superadmin-dashboard main .bg-white.rounded-xl.shadow-sm:hover,
+.subadmin-dashboard main .bg-white.rounded-2xl.shadow-sm:hover,
+.superadmin-dashboard main .bg-white.rounded-2xl.shadow-sm:hover {
+  border-color: #93c5fd;
 }
 
 /* Align admin main-content surfaces with the visitor dashboard without
@@ -566,17 +889,20 @@ select:focus-visible {
 }
 
 .subadmin-sidebar nav,
+.superadmin-sidebar nav,
 .subadmin-dashboard main {
   scrollbar-width: thin;
   scrollbar-color: rgb(148 163 184 / 55%) transparent;
 }
 
 .subadmin-sidebar nav::-webkit-scrollbar,
+.superadmin-sidebar nav::-webkit-scrollbar,
 .subadmin-dashboard main::-webkit-scrollbar {
   width: 8px;
 }
 
 .subadmin-sidebar nav::-webkit-scrollbar-thumb,
+.superadmin-sidebar nav::-webkit-scrollbar-thumb,
 .subadmin-dashboard main::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 9999px;
@@ -585,6 +911,7 @@ select:focus-visible {
 }
 
 .subadmin-sidebar nav::-webkit-scrollbar-thumb:hover,
+.superadmin-sidebar nav::-webkit-scrollbar-thumb:hover,
 .subadmin-dashboard main::-webkit-scrollbar-thumb:hover {
   background: rgb(148 163 184 / 80%);
   background-clip: padding-box;

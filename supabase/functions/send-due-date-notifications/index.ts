@@ -1,12 +1,25 @@
 import { createClient } from "@supabase/supabase-js";
+import {
+  getCurrentFine,
+  getFineNotificationCopy,
+  getFineOverdueDays,
+} from "./fineNotification.js";
+import {
+  formatNotificationDate,
+  getDueDateNotificationType,
+  getNotificationDateKey,
+} from "./notificationDate.js";
+import {
+  claimNotification,
+  releaseNotificationClaim,
+  sendWithNotificationClaim,
+} from "./notificationClaims.js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
-
-const FINE_PER_DAY = 10;
 
 function jsonResponse(
   body: Record<string, unknown>,
@@ -30,43 +43,9 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#039;");
 }
 
-function getDateOnly(value: string | Date) {
-  const date = new Date(value);
-
-  return new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate(),
-  );
-}
-
 function formatDate(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  return date.toLocaleDateString("en-PH", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
-
-function getOverdueDays(dueDate: string) {
-  const today = getDateOnly(new Date());
-  const due = getDateOnly(dueDate);
-
-  const difference =
-    today.getTime() - due.getTime();
-
-  return Math.max(
-    0,
-    Math.floor(
-      difference / (1000 * 60 * 60 * 24),
-    ),
-  );
+function formatDate(value: string) {
+  return formatNotificationDate(value);
 }
 
 Deno.serve(async (req: Request) => {
@@ -190,7 +169,7 @@ Deno.serve(async (req: Request) => {
 
       const { data: request, error: lookupError } = await supabaseAdmin
         .from("borrow_requests")
-        .select("id, visitor_id, book_id, book_title, status, due_date, return_date")
+        .select("id, visitor_id, book_id, book_title, status, due_date, return_date, fine_amount, fine_rate_snapshot")
         .eq("id", borrowRequestId)
         .maybeSingle();
       if (lookupError || !request) {
@@ -213,70 +192,117 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "This request is no longer an active loan." }, 409);
       }
 
-      const today = getDateOnly(new Date());
-      const dueDate = getDateOnly(request.due_date);
-      if (dueDate.getTime() > today.getTime()) {
+      const asOf = new Date();
+      const dueTime = new Date(request.due_date).getTime();
+      if (!Number.isFinite(dueTime) || dueTime >= asOf.getTime()) {
         return jsonResponse({ error: "This book is not due yet." }, 400);
       }
 
-      const notificationDate = today.toISOString().slice(0, 10);
-      const { error: claimError } = await supabaseAdmin
-        .from("due_date_notifications")
-        .insert({
-          borrow_request_id: request.id,
-          visitor_id: request.visitor_id,
-          notification_type: "follow_up",
-          notification_date: notificationDate,
-        });
-      if (claimError?.code === "23505") {
-        return jsonResponse({ error: "A follow-up was already sent for this loan today." }, 409);
+      const notificationDate = getNotificationDateKey(asOf);
+      const followUpClaim = {
+        borrow_request_id: request.id,
+        visitor_id: request.visitor_id,
+        notification_type: "follow_up",
+        notification_date: notificationDate,
+      };
+      // This table has no claimed/sent state; the row is an idempotency claim.
+      const claimResult = await claimNotification(
+        supabaseAdmin,
+        "due_date_notifications",
+        followUpClaim,
+      );
+      if (claimResult.status === "duplicate") {
+        return jsonResponse({ error: "A follow-up is already recorded for this loan today." }, 409);
       }
-      if (claimError) {
-        console.error("Follow-up notification claim failed:", claimError);
+      if (claimResult.status !== "claimed") {
+        console.error(
+          "Follow-up claim could not be confirmed; no email was attempted.",
+          claimResult.error?.code || claimResult.status,
+        );
         return jsonResponse({ error: "Unable to record the follow-up." }, 500);
       }
 
-      const { data: visitor, error: visitorError } = await supabaseAdmin
-        .from("visitors")
-        .select("email, full_name")
-        .eq("id", request.visitor_id)
-        .maybeSingle();
-      if (visitorError || !visitor?.email) {
-        await supabaseAdmin
-          .from("due_date_notifications")
-          .delete()
-          .eq("borrow_request_id", request.id)
-          .eq("notification_type", "follow_up")
-          .eq("notification_date", notificationDate);
+      let visitor: { email: string | null; full_name: string | null } | null = null;
+      let visitorLookupFailed = false;
+      try {
+        const { data, error } = await supabaseAdmin
+          .from("visitors")
+          .select("email, full_name")
+          .eq("id", request.visitor_id)
+          .maybeSingle();
+        visitor = data;
+        visitorLookupFailed = Boolean(error);
+      } catch {
+        visitorLookupFailed = true;
+      }
+      if (visitorLookupFailed || !visitor?.email) {
+        const cleanup = await releaseNotificationClaim(
+          supabaseAdmin,
+          "due_date_notifications",
+          {
+            borrow_request_id: request.id,
+            notification_type: "follow_up",
+            notification_date: notificationDate,
+          },
+        );
+        if (!cleanup.released) {
+          console.error(
+            "Follow-up claim cleanup failed after visitor lookup failure.",
+            cleanup.error?.code || "claim_not_removed",
+          );
+          return jsonResponse({ error: "Unable to clear the follow-up claim." }, 500);
+        }
+        if (visitorLookupFailed) {
+          console.error("Follow-up recipient lookup failed; claim cleared.");
+          return jsonResponse({ error: "Unable to retrieve the follow-up recipient." }, 500);
+        }
         return jsonResponse({ error: "The visitor email address could not be found." }, 404);
       }
 
-      const overdueDays = getOverdueDays(request.due_date);
+      const overdueDays = getFineOverdueDays(request.due_date, asOf);
+      const currentFine = getCurrentFine(request, asOf);
+      const fineCopy = getFineNotificationCopy(request, currentFine);
       const bookTitle = escapeHtml(request.book_title || "Library book");
       const firstName = escapeHtml(visitor.full_name?.split(" ")[0] || "Visitor");
       const dueLabel = formatDate(request.due_date);
-      const response = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${resendApiKey}`,
-          "Content-Type": "application/json",
+      const delivery = await sendWithNotificationClaim(
+        supabaseAdmin,
+        "due_date_notifications",
+        {
+          borrow_request_id: request.id,
+          notification_type: "follow_up",
+          notification_date: notificationDate,
         },
-        body: JSON.stringify({
-          from: "SHELF ILMS <support@shelf-ilms.me>",
-          to: [visitor.email],
-          subject: "SHELF ILMS: Follow-up for your overdue book",
-          html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px"><h2>Overdue book follow-up</h2><p>Hello ${firstName},</p><p>Please return <strong>${bookTitle}</strong>, which was due on <strong>${dueLabel}</strong>.</p><p>Overdue days: ${overdueDays}<br />Current fine: ₱${(overdueDays * FINE_PER_DAY).toFixed(2)}</p><p>Please contact the library if you have already returned this book.</p><p>Regards,<br /><strong>SHELF ILMS</strong></p></div>`,
+        () => fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${resendApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: "SHELF <support@shelf-ilms.me>",
+            to: [visitor.email],
+            subject: "SHELF: Follow-up for your overdue book",
+            html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px"><h2>Overdue book follow-up</h2><p>Hello ${firstName},</p><p>Please return <strong>${bookTitle}</strong>, which was due on <strong>${dueLabel}</strong>.</p><p>Overdue days: ${overdueDays ?? 'unavailable'}<br />${fineCopy.dailyRate}${fineCopy.fineAmount ? `<br />${fineCopy.fineAmount}` : `<br />${fineCopy.unavailable}`}</p><p>Please contact the library if you have already returned this book.</p><p>Regards,<br /><strong>SHELF</strong></p></div>`,
+          }),
         }),
-      });
-      const emailResult = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        await supabaseAdmin
-          .from("due_date_notifications")
-          .delete()
-          .eq("borrow_request_id", request.id)
-          .eq("notification_type", "follow_up")
-          .eq("notification_date", notificationDate);
-        console.error("Follow-up email failed:", emailResult);
+      );
+      if (delivery.status === "ambiguous") {
+        console.error(
+          "Follow-up provider outcome is ambiguous; claim retained and retry blocked for today.",
+          delivery.response?.status || "network_error",
+        );
+        return jsonResponse({ error: "Unable to confirm the follow-up email. The claim was retained to prevent a duplicate." }, 502);
+      }
+      if (delivery.status === "cleanup_failed") {
+        console.error(
+          "Follow-up provider rejection claim cleanup failed.",
+          delivery.error?.code || "claim_not_removed",
+        );
+        return jsonResponse({ error: "The email provider rejected the send, but the retry claim could not be cleared." }, 500);
+      }
+      if (delivery.status === "rejected") {
+        console.error("Follow-up email provider rejected the request:", delivery.response.status);
         return jsonResponse({ error: "Unable to send the follow-up email." }, 502);
       }
 
@@ -295,7 +321,9 @@ Deno.serve(async (req: Request) => {
         book_title,
         status,
         due_date,
-        return_date
+        return_date,
+        fine_amount,
+        fine_rate_snapshot
       `)
       .eq("status", "borrowed")
       .is("return_date", null)
@@ -318,41 +346,23 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      const today =
-        getDateOnly(new Date());
-
-      const dueDate =
-        getDateOnly(request.due_date);
-
-      const difference = Math.floor(
-        (
-          dueDate.getTime() -
-          today.getTime()
-        ) /
-          (1000 * 60 * 60 * 24),
+      const now = new Date();
+      const notificationType = getDueDateNotificationType(
+        request.due_date,
+        now,
       );
-
-      let notificationType:
-        | "due_soon"
-        | "due_today"
-        | "overdue"
-        | null = null;
-
-      if (difference === 2) {
-        notificationType = "due_soon";
-      } else if (difference === 0) {
-        notificationType = "due_today";
-      } else if (difference < 0) {
-        notificationType = "overdue";
-      }
 
       if (!notificationType) {
         skipped++;
         continue;
       }
 
-      const notificationDate =
-        today.toISOString().slice(0, 10);
+      const notificationDate = getNotificationDateKey(now);
+      if (!notificationDate) {
+        failed++;
+        console.error("Unable to derive the Manila notification date key.");
+        continue;
+      }
 
       const {
         data: existingNotification,
@@ -434,14 +444,14 @@ Deno.serve(async (req: Request) => {
           request.due_date,
         );
 
+      const asOf = new Date();
       const overdueDays =
-        getOverdueDays(
-          request.due_date,
-        );
+        getFineOverdueDays(request.due_date, asOf);
 
       const currentFine =
-        overdueDays *
-        FINE_PER_DAY;
+        getCurrentFine(request, asOf);
+      const fineCopy =
+        getFineNotificationCopy(request, currentFine);
 
       let subject = "";
       let heading = "";
@@ -453,7 +463,7 @@ Deno.serve(async (req: Request) => {
         "due_soon"
       ) {
         subject =
-          "SHELF ILMS: Your borrowed book is due soon";
+          "SHELF: Your borrowed book is due soon";
 
         heading =
           "Your book is due soon";
@@ -479,7 +489,7 @@ Deno.serve(async (req: Request) => {
         "due_today"
       ) {
         subject =
-          "SHELF ILMS: Your borrowed book is due today";
+          "SHELF: Your borrowed book is due today";
 
         heading =
           "Your book is due today";
@@ -505,7 +515,7 @@ Deno.serve(async (req: Request) => {
         "overdue"
       ) {
         subject =
-          "SHELF ILMS: Your borrowed book is overdue";
+          "SHELF: Your borrowed book is overdue";
 
         heading =
           "Your book is overdue";
@@ -524,15 +534,47 @@ Deno.serve(async (req: Request) => {
             <strong>Due date:</strong>
             ${formattedDueDate}<br />
             <strong>Overdue days:</strong>
-            ${overdueDays}<br />
-            <strong>Current fine:</strong>
-            ₱${currentFine.toFixed(2)}
+            ${overdueDays ?? "unavailable"}
+            ${fineCopy.fineAmount ? `<br /><strong>${fineCopy.fineAmount}</strong>` : `<br /><strong>${fineCopy.unavailable}</strong>`}
           </div>
         `;
       }
 
-      const resendResponse =
-        await fetch(
+      const notificationClaim = {
+        borrow_request_id: request.id,
+        visitor_id: request.visitor_id,
+        notification_type: notificationType,
+        notification_date: notificationDate,
+      };
+      // The current table has no separate claimed/sent state; this row is the
+      // atomic claim and is retained after provider acceptance or ambiguity.
+      const claimResult = await claimNotification(
+        supabaseAdmin,
+        "due_date_notifications",
+        notificationClaim,
+      );
+      if (claimResult.status === "duplicate") {
+        skipped++;
+        continue;
+      }
+      if (claimResult.status !== "claimed") {
+        console.error(
+          "Due-date notification claim could not be confirmed; no email was attempted.",
+          claimResult.error?.code || claimResult.status,
+        );
+        failed++;
+        continue;
+      }
+
+      const delivery = await sendWithNotificationClaim(
+        supabaseAdmin,
+        "due_date_notifications",
+        {
+          borrow_request_id: request.id,
+          notification_type: notificationType,
+          notification_date: notificationDate,
+        },
+        () => fetch(
           "https://api.resend.com/emails",
           {
             method: "POST",
@@ -544,7 +586,7 @@ Deno.serve(async (req: Request) => {
             },
             body: JSON.stringify({
               from:
-                "SHELF ILMS <support@shelf-ilms.me>",
+                "SHELF <support@shelf-ilms.me>",
               to: [visitor.email],
               subject,
               html: `
@@ -569,9 +611,7 @@ Deno.serve(async (req: Request) => {
                   ${noticeHtml}
 
                   <p>
-                    SHELF ILMS applies an
-                    overdue fine of
-                    <strong>₱10 per overdue day</strong>.
+                    ${fineCopy.dailyRate}
                   </p>
 
                   <p>
@@ -582,55 +622,40 @@ Deno.serve(async (req: Request) => {
 
                   <p>
                     Regards,<br />
-                    <strong>SHELF ILMS</strong>
+                    <strong>SHELF</strong>
                   </p>
                 </div>
               `,
             }),
           },
-        );
-
-      const resendData =
-        await resendResponse.json();
-
-      if (!resendResponse.ok) {
+        ),
+      );
+      if (delivery.status === "ambiguous") {
         console.error(
-          "Resend notification error:",
-          resendData,
+          "Due-date provider outcome is ambiguous; claim retained and retry blocked for today.",
+          delivery.response?.status || "network_error",
         );
-
+        failed++;
+        continue;
+      }
+      if (delivery.status === "cleanup_failed") {
+        console.error(
+          "Due-date provider rejection claim cleanup failed.",
+          delivery.error?.code || "claim_not_removed",
+        );
+        failed++;
+        continue;
+      }
+      if (delivery.status === "rejected") {
+        console.error(
+          "Due-date email provider rejected the request:",
+          delivery.response.status,
+        );
         failed++;
         continue;
       }
 
-      const {
-        error: insertError,
-      } = await supabaseAdmin
-        .from(
-          "due_date_notifications",
-        )
-        .insert({
-          borrow_request_id:
-            request.id,
-          visitor_id:
-            request.visitor_id,
-          notification_type:
-            notificationType,
-          notification_date:
-            notificationDate,
-          sent_at:
-            new Date().toISOString(),
-        });
-
-      if (insertError) {
-        console.error(
-          "Notification log error:",
-          insertError,
-        );
-
-        failed++;
-        continue;
-      }
+      const resendData = await delivery.response.json().catch(() => ({}));
 
       console.log(
         "Due-date notification sent:",
@@ -664,64 +689,49 @@ Deno.serve(async (req: Request) => {
       const {
         data: communityRequests,
         error: communityRequestsError,
-      } = await supabaseAdmin.rpc(
-        "fetch_my_community_book_requests",
-        {
-          p_requester_visitor_id: visitor.id,
-        },
-      );
+      } = await supabaseAdmin
+        .from("community_book_requests")
+        .select(
+          "id, requester_visitor_id, book_id, book_title, owner_name, status, due_date, return_date",
+        )
+        .eq("requester_visitor_id", visitor.id)
+        .eq("status", "borrowed")
+        .is("return_date", null)
+        .not("due_date", "is", null);
 
       if (communityRequestsError) {
         console.error(
           "Community due-date request lookup error:",
-          {
-            visitorId: visitor.id,
-            error: communityRequestsError,
-          },
+          communityRequestsError.message,
         );
         failed++;
         continue;
       }
 
       for (const request of communityRequests || []) {
-        if (
-          request.status !== "borrowed" ||
-          request.return_date ||
-          !request.due_date
-        ) {
+        if (request.requester_visitor_id !== visitor.id) {
           continue;
         }
 
         processed++;
 
-        const today = getDateOnly(new Date());
-        const dueDate = getDateOnly(request.due_date);
-        const difference = Math.floor(
-          (dueDate.getTime() - today.getTime()) /
-            (1000 * 60 * 60 * 24),
+        const now = new Date();
+        const notificationType = getDueDateNotificationType(
+          request.due_date,
+          now,
         );
-
-        let notificationType:
-          | "due_soon"
-          | "due_today"
-          | "overdue"
-          | null = null;
-
-        if (difference === 2) {
-          notificationType = "due_soon";
-        } else if (difference === 0) {
-          notificationType = "due_today";
-        } else if (difference < 0) {
-          notificationType = "overdue";
-        }
 
         if (!notificationType) {
           skipped++;
           continue;
         }
 
-        const notificationDate =
-          today.toISOString().slice(0, 10);
+        const notificationDate = getNotificationDateKey(now);
+        if (!notificationDate) {
+          failed++;
+          console.error("Unable to derive the Manila notification date key.");
+          continue;
+        }
 
         const {
           data: existingNotification,
@@ -748,6 +758,32 @@ Deno.serve(async (req: Request) => {
           continue;
         }
 
+        const notificationClaim = {
+          community_request_id: request.id,
+          visitor_id: visitor.id,
+          notification_type: notificationType,
+          notification_date: notificationDate,
+        };
+        // The table has no separate claimed/sent state; retain this atomic
+        // claim after acceptance or an ambiguous provider outcome.
+        const claimResult = await claimNotification(
+          supabaseAdmin,
+          "community_due_date_notifications",
+          notificationClaim,
+        );
+        if (claimResult.status === "duplicate") {
+          skipped++;
+          continue;
+        }
+        if (claimResult.status !== "claimed") {
+          console.error(
+            "Community due-date claim could not be confirmed; no email was attempted.",
+            claimResult.error?.code || claimResult.status,
+          );
+          failed++;
+          continue;
+        }
+
         const firstName = escapeHtml(
           visitor.full_name?.split(" ")[0] || "Visitor",
         );
@@ -767,82 +803,84 @@ Deno.serve(async (req: Request) => {
 
         if (notificationType === "due_soon") {
           subject =
-            "SHELF ILMS: Return your community book soon";
+            "SHELF: Return your community book soon";
           heading = "Your community book is due soon";
           message =
             `Please return <strong>${bookTitle}</strong> to ${ownerName} by <strong>${formattedDueDate}</strong>.`;
         } else if (notificationType === "due_today") {
           subject =
-            "SHELF ILMS: Your community book is due today";
+            "SHELF: Your community book is due today";
           heading = "Your community book is due today";
           message =
             `Please return <strong>${bookTitle}</strong> to ${ownerName} today, <strong>${formattedDueDate}</strong>.`;
         } else {
-          const overdueDays = getOverdueDays(
-            request.due_date,
-          );
+          const overdueDays = getFineOverdueDays(request.due_date, now);
           subject =
-            "SHELF ILMS: Your community book is overdue";
+            "SHELF: Your community book is overdue";
           heading = "Your community book is overdue";
           message =
-            `<strong>${bookTitle}</strong> was due to ${ownerName} on <strong>${formattedDueDate}</strong> and is now ${overdueDays} day${overdueDays === 1 ? "" : "s"} overdue. Please arrange its return with the owner as soon as possible.`;
+            `<strong>${bookTitle}</strong> was due to ${ownerName} on <strong>${formattedDueDate}</strong> and is now ${overdueDays ?? "an unknown number of"} day${overdueDays === 1 ? "" : "s"} overdue. Please arrange its return with the owner as soon as possible.`;
         }
 
-        const emailResponse = await fetch(
-          "https://api.resend.com/emails",
+        const delivery = await sendWithNotificationClaim(
+          supabaseAdmin,
+          "community_due_date_notifications",
           {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${resendApiKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              from: "SHELF ILMS <support@shelf-ilms.me>",
-              to: [visitor.email],
-              subject,
-              html: `
-                <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
-                  <h2>${heading}</h2>
-                  <p>Hello ${firstName},</p>
-                  <p>${message}</p>
-                  <p>This book is lent by a SHELF community member. Please coordinate the handover directly with the owner.</p>
-                  <p>Regards,<br /><strong>SHELF ILMS</strong></p>
-                </div>
-              `,
-            }),
-          },
-        );
-
-        const emailData = await emailResponse.json();
-
-        if (!emailResponse.ok) {
-          console.error(
-            "Community due-date email error:",
-            emailData,
-          );
-          failed++;
-          continue;
-        }
-
-        const {
-          error: insertError,
-        } = await supabaseAdmin
-          .from("community_due_date_notifications")
-          .insert({
             community_request_id: request.id,
-            visitor_id: visitor.id,
             notification_type: notificationType,
             notification_date: notificationDate,
-          });
-
-        if (insertError) {
+          },
+          () => fetch(
+            "https://api.resend.com/emails",
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${resendApiKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                from: "SHELF <support@shelf-ilms.me>",
+                to: [visitor.email],
+                subject,
+                html: `
+                  <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+                    <h2>${heading}</h2>
+                    <p>Hello ${firstName},</p>
+                    <p>${message}</p>
+                    <p>This book is lent by a SHELF community member. Please coordinate the handover directly with the owner.</p>
+                    <p>Regards,<br /><strong>SHELF</strong></p>
+                  </div>
+                `,
+              }),
+            },
+          ),
+        );
+        if (delivery.status === "ambiguous") {
           console.error(
-            "Community due-date notification log error:",
-            insertError,
+            "Community due-date provider outcome is ambiguous; claim retained and retry blocked for today.",
+            delivery.response?.status || "network_error",
           );
           failed++;
           continue;
         }
+        if (delivery.status === "cleanup_failed") {
+          console.error(
+            "Community due-date provider rejection claim cleanup failed.",
+            delivery.error?.code || "claim_not_removed",
+          );
+          failed++;
+          continue;
+        }
+        if (delivery.status === "rejected") {
+          console.error(
+            "Community due-date provider rejected the request:",
+            delivery.response.status,
+          );
+          failed++;
+          continue;
+        }
+
+        const emailData = await delivery.response.json().catch(() => ({}));
 
         console.log(
           "Community book due-date notification sent:",
@@ -857,7 +895,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return jsonResponse({
-      success: true,
+      success: failed === 0,
       processed,
       sent,
       skipped,

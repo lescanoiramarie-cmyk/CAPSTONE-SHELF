@@ -95,7 +95,7 @@ export default function BookRatingsChart({ books = [], fillHeight = false }) {
             <div key={row.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
               <div className="min-w-0">
                 <p className="truncate text-xs font-semibold text-slate-700" title={row.title}>
-                  <span className="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-[10px] font-bold text-amber-800">{index + 1}</span>
+                  <span className="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-xs font-bold text-amber-800">{index + 1}</span>
                   {row.title}
                 </p>
                 <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">

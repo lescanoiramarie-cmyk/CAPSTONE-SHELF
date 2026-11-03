@@ -21,6 +21,7 @@ import {
   getTimeframeRange,
 } from '../lib/analyticsDateRange.js';
 import { getForecastNarrative } from '../lib/forecastNarrative.js';
+import { formatBookCategory } from '../lib/bookCategory.js';
 
 ChartJS.register(
   CategoryScale,
@@ -990,7 +991,7 @@ export default function AdminWorkspace({
                 {(focusedNotificationRequest.dueDate || focusedNotificationRequest.due_date) && ` · Due ${new Date(focusedNotificationRequest.dueDate || focusedNotificationRequest.due_date).toLocaleString()}`}
                 {focusedNotificationRequest.pickupDeadline && ` · Pickup deadline ${new Date(focusedNotificationRequest.pickupDeadline).toLocaleString()}`}
               </p>
-              <p className="mt-2 text-[11px] text-amber-800">
+              <p className="mt-2 text-xs text-amber-800">
                 Request ID: {focusedNotificationRequest.id}
                 {focusedNotificationHandled && ' · This notification has already been handled or is no longer actionable.'}
               </p>
@@ -1010,7 +1011,7 @@ export default function AdminWorkspace({
             <div className="flex flex-col gap-4 border-b border-slate-100 bg-linear-to-r from-slate-50 to-white p-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-shelf-primary">
-                  SHELF ILMS
+                  SHELF
                 </p>
                 <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
                   Activity Reports
@@ -1228,7 +1229,7 @@ export default function AdminWorkspace({
                       </td>
                       <td className="px-5 py-4 font-bold text-slate-800">{row.person}</td>
                       <td className="px-5 py-4">
-                        <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                        <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${
                           row.dataClassification === 'Test data'
                             ? 'border border-amber-200 bg-amber-50 text-amber-900'
                             : 'border border-slate-200 bg-slate-50 text-slate-600'
@@ -1463,7 +1464,7 @@ export default function AdminWorkspace({
                   <div className="relative mt-4 min-h-72 min-w-0 w-full flex-1">
                     <Bar
                       data={{
-                        labels: categoryChartRows.map(([category]) => category),
+                        labels: categoryChartRows.map(([category]) => formatBookCategory(category)),
                         datasets: [{
                           label: 'Book requests',
                           data: categoryChartRows.map(([, count]) => count),
@@ -1507,7 +1508,7 @@ export default function AdminWorkspace({
                             className="h-2.5 w-2.5 shrink-0 rounded-sm"
                             style={{ backgroundColor: CATEGORY_CHART_COLORS[index % CATEGORY_CHART_COLORS.length] }}
                           />
-                          <span className="truncate">{category}</span>
+                          <span className="truncate">{formatBookCategory(category)}</span>
                         </span>
                         <span className="shrink-0 font-bold text-slate-800">{count} requests</span>
                       </li>
@@ -1546,7 +1547,7 @@ export default function AdminWorkspace({
                 <p className="mt-2 text-xs text-slate-500">
                   Uses daily visits from the selected range, then projects the following 7 days. At least 14 days of history are needed.
                 </p>
-                <p className="mt-1 text-[11px] text-slate-500">
+                <p className="mt-1 text-xs text-slate-500">
                   History available: {forecastHistoryDays} day{forecastHistoryDays === 1 ? '' : 's'}.
                 </p>
                 {forecast?.forecasts?.length ? (
@@ -1614,7 +1615,7 @@ export default function AdminWorkspace({
                     </ul>
                   </section>
                 </div>
-                <p className="mt-3 text-[11px] leading-5 text-slate-500">
+                <p className="mt-3 text-xs leading-5 text-slate-500">
                   Forecasts are estimates from the selected date range and filters, not guarantees. Use these insights with branch schedules and verified inventory before changing staffing, hours, or purchasing plans.
                 </p>
               </section>
@@ -1700,7 +1701,7 @@ export default function AdminWorkspace({
                 <div>
                   <p className="font-bold text-slate-900">{item.subject}</p>
                   <p className="text-xs text-slate-500 mt-1">
-                    {item.visitor_name} · {item.category} · {getLibraryName(libraries, item.library_id)} ·{' '}
+                    {item.visitor_name} · {formatBookCategory(item.category)} · {getLibraryName(libraries, item.library_id)} ·{' '}
                     {new Date(item.created_at).toLocaleString()}
                   </p>
                 </div>

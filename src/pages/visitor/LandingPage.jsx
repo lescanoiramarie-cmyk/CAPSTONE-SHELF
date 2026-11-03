@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/useAuth.js';
+import { getDashboardPath } from '../../routes/roleHome.js';
 import { useLibraryData } from '../../context/useLibrary.js';
 import { fetchPopularBorrowedBookCounts } from '../../data/store.js';
 import BookCover from '../../component/BookCover.jsx';
+import { formatBookCategory } from '../../lib/bookCategory.js';
 import { supabase } from '../../lib/supabaseClient.js';
 import { 
   Megaphone, 
@@ -192,6 +194,7 @@ const featuredBooks = books
   const isAuthenticated = Boolean(user?.id);
   const authenticatedName = user?.name || user?.fullName || user?.fullname || '';
   const authenticatedEmail = user?.email || '';
+  const navigateHome = () => navigate(user?.id ? getDashboardPath(user.role) : '/');
 
   const navigateToProtectedCatalog = (message) => {
     if (!isAuthenticated) {
@@ -224,6 +227,55 @@ const featuredBooks = books
 
   // STATE PARA SA SELECTED ANNOUNCEMENT MODAL
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
+
+  useEffect(() => {
+    if (!selectedAnnouncement && !signInPromptMessage) return undefined;
+
+    const dialog = selectedAnnouncement
+      ? document.querySelector('[aria-labelledby="announcement-modal-title"]')
+      : document.querySelector('[aria-labelledby="signin-required-title"]');
+    if (!dialog) return undefined;
+
+    const previousFocus = document.activeElement;
+    const focusableSelector =
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const focusables = () => [...dialog.querySelectorAll(focusableSelector)];
+    focusables()[0]?.focus();
+
+    const handleDialogKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        if (selectedAnnouncement) setSelectedAnnouncement(null);
+        else setSignInPromptMessage('');
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+      const items = focusables();
+      if (!items.length) {
+        event.preventDefault();
+        return;
+      }
+
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleDialogKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleDialogKeyDown);
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+        previousFocus.focus();
+      }
+    };
+  }, [selectedAnnouncement, signInPromptMessage]);
 
   useEffect(() => {
     let active = true;
@@ -311,17 +363,16 @@ const featuredBooks = books
           {/* BRAND LOGO WITH ICON */}
           <div
             className="flex items-center gap-2.5 cursor-pointer group"
-            onClick={() => navigate('/')}
+            onClick={navigateHome}
           >
-            <div className="w-9 h-9 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
-              <BookOpen size={20} />
-            </div>
+            <img
+              src="/shelf-logo.png"
+              alt=""
+              className="h-9 w-9 object-contain"
+            />
             <div className="flex items-center gap-1.5">
-              <span className="text-2xl font-black tracking-wider text-white group-hover:text-blue-400 transition-colors">
+              <span className="text-2xl font-black text-white group-hover:text-blue-400 transition-colors">
                 SHELF
-              </span>
-              <span className="text-[10px] bg-blue-600 px-2 py-0.5 rounded-md font-extrabold text-white uppercase tracking-wider shadow-sm">
-                ILMS
               </span>
             </div>
           </div>
@@ -367,14 +418,14 @@ const featuredBooks = books
               className="px-3.5 py-2 border border-slate-700 bg-slate-800/80 text-slate-200 hover:text-white hover:bg-slate-700 hover:border-slate-600 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 shadow-sm"
             >
               <Search size={14} className="text-blue-400" />
-              <span>Browse Catalog</span>
+              <span>Browse catalog</span>
             </button>
             <button
               onClick={() => navigate('/visitor-login')}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all duration-200 shadow-md shadow-blue-600/20 flex items-center gap-1.5 transform hover:-translate-y-0.5"
             >
               <LogIn size={14} />
-              <span>Sign In</span>
+              <span>Sign in</span>
             </button>
           </div>
 
@@ -419,7 +470,7 @@ const featuredBooks = books
                   className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-bold text-slate-200 transition hover:bg-slate-700"
                 >
                   <Search size={15} className="text-blue-400" aria-hidden="true" />
-                  Browse Catalog
+                  Browse catalog
                 </button>
                 <button
                   type="button"
@@ -427,7 +478,7 @@ const featuredBooks = books
                   className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-blue-500"
                 >
                   <LogIn size={15} aria-hidden="true" />
-                  Sign In
+                  Sign in
                 </button>
               </div>
             </nav>
@@ -449,16 +500,16 @@ const featuredBooks = books
           </div>
 
           {/* MAIN HEADLINE */}
-          <h1 className="text-[clamp(2.25rem,6vw,4.5rem)] font-black leading-[1.05] tracking-tight text-white">
+          <h1 className="landing-hero-title text-white">
             Discover & Borrow Books Across <br className="hidden sm:inline" />
-            <span className="text-transparent bg-clip-text bg-linear-to-r from-blue-300 to-blue-500">
+            <span className="text-shelf-hero-foreground">
               Campus Libraries
             </span>
           </h1>
 
           {/* SUB-TEXT */}
-          <p className="mx-auto max-w-2xl text-sm leading-relaxed text-slate-300 sm:text-base md:text-lg">
-            Welcome to SHELF ILMS — your gateway to physical and digital library collections, announcements, and campus learning resources.
+          <p className="landing-hero-description mx-auto max-w-2xl text-sm leading-relaxed text-slate-300 sm:text-base md:text-lg">
+            Welcome to SHELF — your gateway to physical and digital library collections, announcements, and campus learning resources.
           </p>
 
           {/* ACTION BUTTONS */}
@@ -470,7 +521,7 @@ const featuredBooks = books
               className="w-full sm:w-auto px-6 py-3.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-blue-600/30 transition-all duration-200 flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
             >
               <Search size={16} />
-              <span>Explore Public Catalog</span>
+              <span>Explore public catalog</span>
             </button>
 
             <button 
@@ -478,7 +529,7 @@ const featuredBooks = books
               className="w-full sm:w-auto px-6 py-3.5 bg-slate-800/90 hover:bg-slate-700/90 text-slate-200 hover:text-white border border-slate-700/80 text-sm font-bold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-sm backdrop-blur-sm"
             >
               <LogIn size={16} className="text-blue-400" />
-              <span>Visitor Sign In / Register</span>
+              <span>Visitor sign in / register</span>
             </button>
           </div>
 
@@ -511,9 +562,9 @@ const featuredBooks = books
         <div className="mx-auto max-w-7xl">
           <div className="mb-8 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-blue-700">SHELF network</p>
+              <p className="type-overline mb-2 text-blue-700">SHELF network</p>
               <h2 className="text-2xl font-bold text-slate-900 sm:text-3xl">Participating Libraries</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Explore libraries connected to SHELF ILMS and their available collections.</p>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Explore libraries connected to SHELF and their available collections.</p>
             </div>
             <button
               type="button"
@@ -550,7 +601,7 @@ const featuredBooks = books
             >
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider border flex items-center gap-1.5 ${
+                  <span className={`category-chip px-2.5 py-1 rounded-full border flex items-center gap-1.5 ${
                     isOpen
                       ? 'border-blue-200 bg-blue-50 text-blue-700'
                       : 'border-slate-200 bg-slate-100 text-slate-600'
@@ -567,14 +618,16 @@ const featuredBooks = books
                   {lib.name}
                 </h3>
                 {lib.campus && (
-                  <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+                  <p className="mt-2 flex items-center gap-1.5 text-xs font-normal text-slate-500">
                     <Building2 size={14} className="shrink-0 text-slate-400" aria-hidden="true" />
                     {lib.campus}
                   </p>
                 )}
                 <p className="text-xs text-slate-500 mt-2 flex items-center gap-1.5">
                   <MapPin size={14} className="text-slate-400 shrink-0" aria-hidden="true" />
-                  {lib.address || 'Library location available in SHELF'}
+                  <span className="font-normal">
+                    {lib.address || 'Library location available in SHELF'}
+                  </span>
                 </p>
               </div>
               <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
@@ -584,7 +637,7 @@ const featuredBooks = books
                       String(book.libraryId || book.library_id || '') === String(lib.id)
                   ).length} cataloged books
                 </span>
-                <span className="text-xs font-bold text-slate-400 group-hover:text-blue-600 transition-colors flex items-center gap-1">
+                <span className="text-xs font-bold text-shelf-muted group-hover:text-shelf-accent transition-colors flex items-center gap-1">
                   Explore <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" aria-hidden="true" />
                 </span>
               </div>
@@ -612,7 +665,7 @@ const featuredBooks = books
               }
               className="flex w-fit items-center gap-1 font-bold text-blue-600 transition hover:text-blue-800 group"
             >
-              View All Books <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" aria-hidden="true" />
+              View all books <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" aria-hidden="true" />
             </button>
           </div>
           {featuredBooks.length > 0 ? (
@@ -626,7 +679,6 @@ const featuredBooks = books
                     'Please sign in to view featured books in the OPAC.'
                   )
                 }
-                aria-label={`View ${book.title || 'featured book'} in the public catalog`}
                 className="landing-featured-card group flex min-w-0 flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary focus-visible:ring-offset-2"
               >
                 <div>
@@ -640,14 +692,14 @@ const featuredBooks = books
                     />
                   </div>
                  
-                  <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded uppercase tracking-wider">
-                    {book.category || 'Library Collection'}
+                  <span className="category-chip text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                    {formatBookCategory(book.category) || 'Library collection'}
                   </span>
                   <h4 title={book.title || 'Untitled Book'} className="mt-2 line-clamp-2 min-h-10 text-base font-bold text-slate-800 transition-colors group-hover:text-blue-600">
                     {book.title}
                   </h4>
-                  <p title={book.author || 'Unknown Author'} className="mt-1 line-clamp-2 min-h-8 wrap-break-word text-xs text-slate-500">By {book.author || 'Unknown Author'}</p>
-                  <span className="landing-availability-badge mt-4 inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] font-bold text-green-700">
+                  <p title={book.author || 'Unknown Author'} className="mt-1 line-clamp-2 min-h-8 wrap-break-word text-xs text-slate-500">By {book.author || 'Unknown author'}</p>
+                  <span className="landing-availability-badge mt-4 inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-bold text-green-700">
                     <span className="h-1.5 w-1.5 rounded-full bg-green-600" aria-hidden="true" />
                     {book.availableCopies} {Number(book.availableCopies) === 1 ? 'copy' : 'copies'} available
                   </span>
@@ -669,7 +721,7 @@ const featuredBooks = books
                 }
                 className="mt-4 rounded-lg bg-shelf-primary px-4 py-2 text-xs font-bold text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary focus-visible:ring-offset-2"
               >
-                Browse Catalog
+                Browse catalog
               </button>
             </div>
           )}
@@ -678,9 +730,9 @@ const featuredBooks = books
 
       {/* 3. ANNOUNCEMENTS SECTION (CLICKABLE WITH DETAILS MODAL) */}
       <section id="announcements" className="py-16 px-6 max-w-7xl mx-auto w-full space-y-8">
-        <div className="text-center space-y-2">
+        <div className="space-y-2 text-left">
           <h2 className="text-3xl font-bold text-slate-900">Library Announcements</h2>
-          <p className="text-slate-600 mt-2">Stay updated with the latest library news and holiday schedules.</p>
+          <p className="mt-2 text-left text-slate-600">Stay updated with the latest library news and holiday schedules.</p>
         </div>
         {/* ANNOUNCEMENT CARDS GRID */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -716,13 +768,12 @@ const featuredBooks = books
                 }}
                 role="button"
                 tabIndex={0}
-                aria-label={`Read announcement: ${announcement.title}`}
-                className="group relative bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl hover:border-blue-300 flex flex-col justify-between overflow-hidden cursor-pointer"
+                className="landing-announcement-card group relative bg-white rounded-2xl border border-transparent p-6 shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl hover:border-blue-300 flex flex-col justify-between overflow-hidden cursor-pointer"
               >
                 <div className="absolute top-0 left-0 right-0 h-1.5 bg-blue-600 transition-colors duration-300" />
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200/60 bg-blue-50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-blue-700">
+                    <span className="category-chip inline-flex items-center gap-1.5 rounded-full border border-blue-200/60 bg-blue-50 px-3 py-1 text-blue-700">
                       <IconComponent size={14} className="text-blue-600" />
                       {announcement.type}
                     </span>
@@ -731,17 +782,17 @@ const featuredBooks = books
                     <h3 className="text-lg font-bold text-slate-800 group-hover:text-blue-600 transition-colors duration-200 line-clamp-2">
                       {announcement.title}
                     </h3>
-                    <p className="mt-2 text-xs text-slate-600 leading-relaxed line-clamp-3">
+                    <p className="mt-2 text-sm text-slate-600 leading-relaxed line-clamp-3">
                       {announcement.shortContent}
                     </p>
                   </div>
                 </div>
-                <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+                <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-shelf-muted">
                   <div className="flex items-center gap-1.5">
-                    <Calendar size={13} className="text-slate-400" />
+                    <Calendar size={13} className="text-shelf-muted" />
                     <span>Posted on {announcement.date}</span>
                   </div>
-                  <div className="inline-flex items-center gap-1 font-bold text-blue-600 opacity-90 transform translate-x-0 transition-all duration-300 group-hover:translate-x-1">
+                  <div className="inline-flex items-center gap-1 font-bold text-shelf-accent transform translate-x-0 transition-all duration-300 group-hover:translate-x-1">
                     <span>Read details</span>
                     <ArrowRight size={14} />
                   </div>
@@ -759,7 +810,7 @@ const featuredBooks = books
           <div className="text-center space-y-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-full text-xs font-semibold uppercase tracking-wider">
               <MessageSquare size={13} />
-              We'd love to hear from you
+              We’d love to hear from you
             </span>
             <h2 className="text-3xl font-extrabold tracking-tight text-white">
               Feedback & Inquiries
@@ -840,7 +891,7 @@ const featuredBooks = books
                   className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 disabled:cursor-wait disabled:opacity-70 text-white font-bold rounded-xl transition shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 text-sm transform hover:-translate-y-0.5"
                 >
                   <Send size={16} />
-                  <span>{feedbackSubmitting ? 'Sending...' : 'Submit Feedback'}</span>
+                  <span>{feedbackSubmitting ? 'Sending...' : 'Submit feedback'}</span>
                 </button>
               </form>
             )}
@@ -849,7 +900,7 @@ const featuredBooks = books
       </section>
 
       {/* FOOTER */}
-      <footer className="bg-slate-950 text-slate-500 py-6 text-center text-xs border-t border-slate-800">
+      <footer className="bg-slate-950 text-shelf-muted-inverse py-6 text-center text-xs border-t border-slate-800">
         &copy; 2026 SHELF Integrated Library Management System. All rights reserved.
       </footer>
 
@@ -865,7 +916,7 @@ const featuredBooks = books
               type="button"
               onClick={() => setSignInPromptMessage('')}
               aria-label="Close sign-in prompt"
-              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-800"
+              className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-800"
             >
               <X size={18} aria-hidden="true" />
             </button>
@@ -892,7 +943,7 @@ const featuredBooks = books
   className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-shelf-primary px-4 py-3 text-sm font-bold text-white transition hover:opacity-90"
 >
   <LogIn size={16} aria-hidden="true" />
-  Sign In
+  Sign in
 </button>
           </section>
         </div>
@@ -901,14 +952,21 @@ const featuredBooks = books
       {/* ANNOUNCEMENT DETAILS MODAL POPUP */}
       {selectedAnnouncement && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white max-w-lg w-full rounded-2xl shadow-2xl border border-slate-200 overflow-hidden relative space-y-6 p-6 sm:p-8">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="announcement-modal-title"
+            className="bg-white max-w-lg w-full rounded-2xl shadow-2xl border border-slate-200 overflow-hidden relative space-y-6 p-6 sm:p-8"
+          >
            
             {/* CLOSE BUTTON */}
             <button
+              type="button"
               onClick={() => setSelectedAnnouncement(null)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center transition"
+              aria-label="Close announcement details"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 w-11 h-11 rounded-full bg-slate-100 flex items-center justify-center transition"
             >
-              <X size={18} />
+              <X size={18} aria-hidden="true" />
             </button>
             {/* CATEGORY BADGE */}
             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
@@ -918,10 +976,10 @@ const featuredBooks = books
             </span>
             {/* TITLE & DATE */}
             <div>
-              <h3 className="text-xl font-black text-slate-900 leading-snug">
+              <h3 id="announcement-modal-title" className="text-xl font-black text-slate-900 leading-snug">
                 {selectedAnnouncement.title}
               </h3>
-              <p className="text-xs text-slate-400 mt-2 flex items-center gap-1.5">
+              <p className="text-xs text-shelf-muted mt-2 flex items-center gap-1.5">
                 <Calendar size={13} />
                 <span>Posted on {selectedAnnouncement.date}</span>
               </p>

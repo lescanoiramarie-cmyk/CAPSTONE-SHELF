@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Line } from 'react-chartjs-2';
 import {
@@ -26,11 +27,13 @@ import {
   Bell,
   MessageSquare,
   Sparkles,
+  ArrowUpRight,
   Calendar,
   Clock
 } from 'lucide-react';
 import VisitorScanDetails from '../../component/VisitorScanDetails.jsx';
 import { useAuth } from '../../context/useAuth.js';
+import { getDashboardPath } from '../../routes/roleHome.js';
 import { useLibrary, useLibraryData } from '../../context/useLibrary.js';
 import AttendanceScanner from '../../component/AttendanceScanner.jsx';
 import BookTransactions from '../../component/BookTransactions.jsx';
@@ -39,6 +42,7 @@ import ReservationQueue from '../../component/ReservationQueue.jsx';
 import AdminWorkspace from '../../component/AdminWorkspace.jsx';
 import BookRatingsChart from '../../component/BookRatingsChart.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
+import DashboardDataBoundary from '../../component/DashboardDataBoundary.jsx';
 import { supabase } from '../../lib/supabaseClient.js';
 import { exportReport } from '../../lib/excelUtils.js';
 import Papa from 'papaparse';
@@ -147,13 +151,13 @@ function AttendanceTrendChart({ attendance = [] }) {
           <p className="mt-1 text-xs text-slate-500">Daily check-ins · {monthLabel}</p>
         </div>
         <div className="rounded-lg bg-slate-50 px-3 py-2 text-right">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Monthly total</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Monthly total</p>
           <p className="text-lg font-bold leading-tight tabular-nums text-slate-800">{attendanceTotal.toLocaleString()}</p>
         </div>
       </div>
       <div className="mt-4 grid grid-cols-7 gap-1.5" role="grid" aria-label={`Daily visitor check-ins for ${monthLabel}`}>
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((weekday) => (
-          <div key={weekday} role="columnheader" className="pb-1 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-400 sm:text-[11px]">
+          <div key={weekday} role="columnheader" className="pb-1 text-center text-xs font-semibold uppercase tracking-wide text-slate-400 sm:text-xs">
             {weekday}
           </div>
         ))}
@@ -165,14 +169,14 @@ function AttendanceTrendChart({ attendance = [] }) {
             aria-label={`${monthLabel} ${day.day}: ${day.count} check-ins`}
             className={`flex min-h-9 flex-col justify-between rounded-md border p-1 transition-colors sm:min-h-10 sm:p-1.5 ${getIntensityClass(day.count)}`}
           >
-            <span className="text-[10px] font-medium leading-none opacity-80">{day.day}</span>
+            <span className="text-xs font-medium leading-none opacity-80">{day.day}</span>
             <span className="text-xs font-bold leading-none tabular-nums sm:text-sm">{day.count}</span>
           </div>
         ) : (
           <div key={`empty-${index}`} aria-hidden="true" />
         ))}
       </div>
-      <div className="mt-4 flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-[10px] text-slate-500" aria-label="Attendance intensity legend">
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs text-slate-500" aria-label="Attendance intensity legend">
         <span className="mr-auto font-medium">Check-ins per day</span>
         <span className="flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm border border-slate-100 bg-slate-50" />0</span>
         <span className="flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm border border-blue-100 bg-blue-50" />Low</span>
@@ -237,9 +241,9 @@ function BorrowingActivityTrendChart({ requests = [] }) {
           <p className="mt-1 text-xs text-slate-500">Requests, borrows, and returns by week · {monthLabel}</p>
         </div>
         <div className="hidden shrink-0 gap-3 text-right sm:flex">
-          <div><p className="text-sm font-bold tabular-nums text-blue-700">{totals.requests}</p><p className="text-[10px] text-slate-500">Requests</p></div>
-          <div><p className="text-sm font-bold tabular-nums text-amber-600">{totals.borrows}</p><p className="text-[10px] text-slate-500">Borrows</p></div>
-          <div><p className="text-sm font-bold tabular-nums text-emerald-600">{totals.returns}</p><p className="text-[10px] text-slate-500">Returns</p></div>
+          <div><p className="text-sm font-bold tabular-nums text-blue-700">{totals.requests}</p><p className="text-xs text-slate-500">Requests</p></div>
+          <div><p className="text-sm font-bold tabular-nums text-amber-600">{totals.borrows}</p><p className="text-xs text-slate-500">Borrows</p></div>
+          <div><p className="text-sm font-bold tabular-nums text-emerald-600">{totals.returns}</p><p className="text-xs text-slate-500">Returns</p></div>
         </div>
       </div>
       {!hasActivity ? (
@@ -269,7 +273,7 @@ function BorrowingActivityTrendChart({ requests = [] }) {
             }}
             />
           </div>
-          <p className="mt-1 text-right text-[10px] text-slate-400">Weekly activity for {monthLabel}</p>
+          <p className="mt-1 text-right text-xs text-slate-400">Weekly activity for {monthLabel}</p>
         </div>
       )}
     </div>
@@ -321,7 +325,7 @@ function CustomDashboardWelcome({
           >
             <Bell size={18} />
             {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-extrabold rounded-full flex items-center justify-center shadow-sm">
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-extrabold rounded-full flex items-center justify-center shadow-sm">
                 {unreadCount}
               </span>
             )}
@@ -332,7 +336,7 @@ function CustomDashboardWelcome({
             <div className="absolute right-0 top-full z-50 mt-2 flex max-h-[min(70vh,32rem)] w-[min(20rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-2xl">
               <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 font-bold text-slate-800">
                 <span>Branch Notifications</span>
-                <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full text-[10px]">
+                <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full text-xs">
                   {unreadCount} Unread
                 </span>
               </div>
@@ -344,7 +348,7 @@ function CustomDashboardWelcome({
                     ...current,
                     ...notifications.map((notification) => notification.id),
                   ]))}
-                  className="mb-2 text-[10px] font-bold text-blue-700 hover:underline disabled:opacity-50"
+                  className="mb-2 text-xs font-bold text-blue-700 hover:underline disabled:opacity-50"
                 >
                   Mark all read
                 </button>
@@ -374,7 +378,7 @@ function CustomDashboardWelcome({
                       >
                         <span className="flex items-center justify-between gap-2">
                           <span className="font-bold text-slate-800">{n.title}</span>
-                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${
                             followUpSentIds.has(n.id)
                               ? 'bg-emerald-100 text-emerald-700'
                               : 'bg-amber-100 text-amber-800'
@@ -385,14 +389,14 @@ function CustomDashboardWelcome({
                           </span>
                         </span>
                         <span className="mt-0.5 block line-clamp-1 text-slate-500">{n.message}</span>
-                        <span className="mt-1 block text-[10px] text-slate-400">
+                        <span className="mt-1 block text-xs text-slate-400">
                           {n.timeLabel}{' · '}{readNotificationIds.has(n.id) ? 'Read' : 'Unread'}
                         </span>
                       </button>
 
                       {n.followUp && onNotificationFollowUp && (
                         <div className="mt-2 flex items-center justify-between gap-2">
-                          <p className="min-w-0 text-[10px] text-red-700" role="status">
+                          <p className="min-w-0 text-xs text-red-700" role="status">
                             {followUpErrorId === n.requestId
                               ? followUpError
                               : followUpSentIds.has(n.id)
@@ -425,7 +429,7 @@ function CustomDashboardWelcome({
                                 setFollowUpRequestId(null);
                               }
                             }}
-                            className="shrink-0 rounded-md border border-red-200 px-2 py-1 text-[10px] font-bold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="shrink-0 rounded-md border border-red-200 px-2 py-1 text-xs font-bold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {followUpRequestId === n.requestId
                               ? 'Sending...'
@@ -454,7 +458,7 @@ function CustomDashboardWelcome({
       <div className="space-y-3 max-w-2xl pr-28 sm:pr-0">
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold uppercase tracking-wider">
           <Sparkles size={13} className="text-amber-600" />
-          SHELF ILMS
+          SHELF
         </span>
 
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
@@ -481,7 +485,7 @@ function CustomDashboardWelcome({
       {/* QUICK ACTIONS BUTTONS */}
       {actions.length > 0 && (
         <div className="pt-4 border-t border-slate-100">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
             Quick Actions
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -502,8 +506,8 @@ function CustomDashboardWelcome({
                       {act.label}
                     </span>
                   </div>
-                  <span className="text-xs text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-transform">
-                    ↗
+                  <span className="text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-transform">
+                    <ArrowUpRight size={16} aria-hidden="true" />
                   </span>
                 </button>
               );
@@ -574,7 +578,7 @@ function QRBookBorrowing({
       const foundVisitor = await findVisitorByQr(qrValue, currentLibraryId);
       if (!foundVisitor) {
         throw new Error(
-          'Visitor not found. Please scan a valid SHELF ILMS visitor QR code.'
+          'Visitor not found. Please scan a valid SHELF visitor QR code.'
         );
       }
       const { data, error: requestError } = await supabase
@@ -816,7 +820,7 @@ function QRBookBorrowing({
               Book Borrowing &amp; Returning
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              Step 1 — scan the visitor's QR code or enter the QR value manually.
+              Step 1 — scan the visitor’s QR code or enter the QR value manually.
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -844,7 +848,7 @@ function QRBookBorrowing({
               disabled={scanning || loading}
               className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
             >
-              {scanning ? 'Scanner Active' : 'Scan with Camera'}
+              {scanning ? 'Scanner active' : 'Scan with camera'}
             </button>
           </div>
         </div>
@@ -897,7 +901,7 @@ function QRBookBorrowing({
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
                     Step 2 — Review requests for verified visitor
                   </p>
                 </div>
@@ -925,7 +929,7 @@ function QRBookBorrowing({
                     Books Ready for Pickup
                   </h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    Confirm the book only after checking the physical book and the visitor's identity.
+                    Confirm the book only after checking the physical book and the visitor’s identity.
                   </p>
                 </div>
                 {readyRequests.map((request) => {
@@ -938,7 +942,7 @@ function QRBookBorrowing({
                             <img src={request.bookCoverUrl} alt={`${request.bookTitle} cover`} className="h-20 w-14 shrink-0 rounded border border-slate-200 object-cover" />
                           )}
                           <div className="min-w-0">
-                            <p className="text-base font-extrabold text-slate-800">{request.bookTitle}</p>
+                            <p className="font-display text-lg font-semibold text-slate-800">{request.bookTitle}</p>
                             <div className="mt-2 space-y-1 text-xs text-slate-500">
                               {request.bookAuthor && <p>Author: {request.bookAuthor}</p>}
                               {request.bookIsbn && <p>ISBN: {request.bookIsbn}</p>}
@@ -960,7 +964,7 @@ function QRBookBorrowing({
                               disabled={confirming}
                               className="bg-blue-600 text-white px-5 py-2.5 rounded-lg text-xs font-bold hover:bg-blue-500 transition disabled:opacity-50"
                             >
-                              {confirming ? 'Confirming...' : 'Confirm Borrowing'}
+                              {confirming ? 'Confirming...' : 'Confirm borrowing'}
                             </button>
                           )}
                         </div>
@@ -983,7 +987,7 @@ function QRBookBorrowing({
                           <img src={request.bookCoverUrl} alt={`${request.bookTitle} cover`} className="h-20 w-14 shrink-0 rounded border border-blue-200 object-cover" />
                         )}
                         <div className="min-w-0">
-                          <p className="font-extrabold text-blue-900">{request.bookTitle}</p>
+                          <p className="font-display text-lg font-semibold text-blue-900">{request.bookTitle}</p>
                           {request.bookAuthor && <p className="mt-1 text-xs text-blue-700">Author: {request.bookAuthor}</p>}
                           {request.bookIsbn && <p className="text-xs text-blue-700">ISBN: {request.bookIsbn}</p>}
                           <p className="mt-1 text-xs font-semibold text-blue-700">Status: Borrowed</p>
@@ -992,7 +996,7 @@ function QRBookBorrowing({
                       </div>
                       <div className="flex flex-col items-start gap-2 md:items-end">
                         <div className="text-left md:text-right">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600">Due Date</p>
+                          <p className="text-xs font-bold uppercase tracking-wider text-blue-600">Due Date</p>
                           <p className="text-sm font-extrabold text-blue-900">{formatDateTime(request.dueDate)}</p>
                         </div>
                         <button
@@ -1001,7 +1005,7 @@ function QRBookBorrowing({
                           disabled={confirming}
                           className="rounded-lg bg-emerald-700 px-5 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
                         >
-                          {confirming ? 'Confirming...' : 'Confirm Return'}
+                          {confirming ? 'Confirming...' : 'Confirm return'}
                         </button>
                       </div>
                     </div>
@@ -1034,6 +1038,7 @@ function QRBookBorrowing({
 
 export default function SubAdminDashboard() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const { books, borrowRequests, attendanceLogs, libraries, visitors } = useLibraryData();
   const [section, setSection] = useState('overview');
   const [focusRequestId, setFocusRequestId] = useState(null);
@@ -1044,7 +1049,15 @@ export default function SubAdminDashboard() {
   const [showImportGuide, setShowImportGuide] = useState(false);
   const [feedbackPreview, setFeedbackPreview] = useState({ items: [], total: 0, newCount: 0, loading: false, error: '' });
   const [feedbackPreviewLibraryId, setFeedbackPreviewLibraryId] = useState('');
-  const { addBooksBulk, confirmPickup, confirmReturn } = useLibrary();
+  const {
+    addBooksBulk,
+    confirmPickup,
+    confirmReturn,
+    loading: libraryLoading,
+    initialDataReady,
+    connectionError,
+    refreshAll,
+  } = useLibrary();
 
   useEffect(() => {
     if (!focusRequestId || section === 'overview') return;
@@ -1363,16 +1376,16 @@ export default function SubAdminDashboard() {
         if (!Array.isArray(records)) {
           throw new Error('The file must contain a JSON array of book records.');
         }
-        const booksWithDerivedFineRates = validateImportedBookFineRates(records);
-        const booksToInsert = booksWithDerivedFineRates.map((record) => ({
+        const booksWithValidatedFineRates = validateImportedBookFineRates(records);
+        const booksToInsert = booksWithValidatedFineRates.map((record) => ({
           ...record,
           library_id: currentLibraryId,
         }));
         const { books, rateMismatches } = await addBooksBulk(booksToInsert);
         const mismatchMessage = rateMismatches.length
-          ? ` Existing categories and rates were kept; manual review required for: ${rateMismatches
-              .map(({ title, existingCategory, existingRate, importedCategory, importedRate }) =>
-                `${title} (existing "${existingCategory || 'Unclassified'}": ${existingRate ?? 'unassigned'}, imported "${importedCategory || 'Unclassified'}": ${importedRate ?? 'unassigned'})`
+          ? ` Existing fine rates were preserved; manual review required for: ${rateMismatches
+              .map(({ title, existingRate, importedRate }) =>
+                `${title} (existing ₱${existingRate ?? 'unassigned'}, imported ₱${importedRate ?? 'unassigned'})`
               )
               .join(', ')}.`
           : '';
@@ -1430,12 +1443,34 @@ export default function SubAdminDashboard() {
     );
   };
 
+  if (!initialDataReady) {
+    return (
+      <DashboardDataBoundary
+        loading={libraryLoading}
+        error={connectionError}
+        onRetry={() =>
+          refreshAll().catch((error) => {
+            console.error('SHELF initial dashboard retry failed:', error);
+          })
+        }
+      />
+    );
+  }
+
   return (
     <div className="subadmin-dashboard flex h-screen overflow-hidden bg-slate-100 text-slate-800">
       {/* SIDEBAR */}
       <aside className="subadmin-sidebar sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-slate-800 bg-[#0a192f] text-white shadow-lg">
         <div className="p-5 border-b border-white/10">
-          <p className="font-extrabold tracking-wider">SHELF ILMS</p>
+          <button
+            type="button"
+            onClick={() => navigate(getDashboardPath(user?.role))}
+            aria-label="Go to SHELF home"
+            className="flex items-center gap-2 text-left text-white"
+          >
+            <img src="/shelf-logo.png" alt="" className="h-9 w-9 object-contain" />
+            <p className="font-extrabold tracking-wider">SHELF</p>
+          </button>
           <p className="text-xs text-slate-400 mt-1">Sub-Admin Console</p>
         </div>
         <nav className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1">
@@ -1462,7 +1497,7 @@ export default function SubAdminDashboard() {
             aria-expanded={expandedGroups.reports}
             className="w-full flex items-center justify-between text-left text-sm px-3 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 transition"
           >
-            <span>Reports &amp; Services</span>
+            <span>Reports & services</span>
             <ChevronDown size={16} className={`transition-transform ${expandedGroups.reports ? 'rotate-180' : ''}`} />
           </button>
           {expandedGroups.reports && (
@@ -1531,7 +1566,7 @@ export default function SubAdminDashboard() {
             onClick={logout}
             className="w-full bg-white/10 hover:bg-white/20 text-xs px-3 py-2 rounded-lg border border-white/20 transition"
           >
-            Sign Out
+            Sign out
           </button>
         </div>
       </aside>
@@ -1628,13 +1663,13 @@ export default function SubAdminDashboard() {
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                             <p className="truncate text-sm font-semibold text-slate-800">{item.subject || 'Visitor feedback'}</p>
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize ${item.status === 'new' ? 'bg-amber-50 text-amber-800' : item.status === 'answered' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${item.status === 'new' ? 'bg-amber-50 text-amber-800' : item.status === 'answered' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                               {status}
                             </span>
                           </div>
                           <p className="mt-1 line-clamp-2 break-words text-xs text-slate-500">{item.visitor_name || 'Visitor'} · {item.message || ''}</p>
                         </div>
-                        <time className="shrink-0 text-[11px] text-slate-400" dateTime={item.created_at}>
+                        <time className="shrink-0 text-xs text-slate-400" dateTime={item.created_at}>
                           {item.created_at ? new Date(item.created_at).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : 'Date unavailable'}
                         </time>
                       </li>
@@ -1687,21 +1722,28 @@ export default function SubAdminDashboard() {
                           <span className="font-semibold text-rose-600">Required:</span>{' '}
                           <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">title</code>,{' '}
                           <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">author</code>,{' '}
-                          <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">ISBN</code>,{' '}
-                          <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">category</code>,{' '}
-                          <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">stock count</code>
+                          a positive whole-number{' '}
+                          <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">stock_count</code>
+                          , and <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">fine_rate</code>
                         </p>
                         <p>
                           <span className="font-semibold text-slate-600">Optional:</span>{' '}
+                          <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">isbn</code>,{' '}
+                          <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">category</code>,{' '}
                           <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">shelf_location</code>,{' '}
                           <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">summary</code>,{' '}
                           <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">cover_url</code>
                         </p>
                         <p>
-                          The fine rate is derived from the exact category name (case-insensitive, surrounding whitespace ignored). Unsupported or blank categories remain unclassified and cannot be checked out; any imported fine_rate value is ignored.
+                          You can also use <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">stock</code>,{' '}
+                          <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">total_copies</code>, or{' '}
+                          <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">copies</code> for stock. If supplied, ISBN must be valid ISBN-10 or ISBN-13.
                         </p>
-                        <p className="pt-1.5 text-[11px] text-sky-700 italic border-t border-sky-200/80 mt-2">
-                          Accepts .CSV format or JSON array files.
+                        <p>
+                          Enter <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">fine_rate</code> as a whole number from 1 to 100 pesos per overdue day. Fine rates are entered manually and are not derived from category. The selected branch is assigned automatically.
+                        </p>
+                        <p className="pt-1.5 text-xs text-sky-700 italic border-t border-sky-200/80 mt-2">
+                          Accepts CSV files with a header row or a JSON array of book records.
                         </p>
                       </div>
                     </div>
@@ -1721,14 +1763,14 @@ export default function SubAdminDashboard() {
                 <div className="p-3.5 border border-slate-100 bg-slate-50/50 rounded-lg flex items-center justify-between">
                   <div>
                     <p className="flex items-center gap-1.5 text-xs font-bold text-slate-700"><BookOpen size={14} aria-hidden="true" /> Branch Physical Shelf Audit</p>
-                    <p className="text-[11px] text-slate-500">Total Books: {branchBooks.length}</p>
+                    <p className="text-xs text-slate-500">Total Books: {branchBooks.length}</p>
                   </div>
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => exportBranchReport('books', 'xlsx')}
                       disabled={Boolean(exportingReport)}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded transition"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded transition"
                     >
                       {exportingReport === 'books-xlsx' ? 'Exporting…' : 'Excel'}
                     </button>
@@ -1736,7 +1778,7 @@ export default function SubAdminDashboard() {
                       type="button"
                       onClick={() => exportBranchReport('books', 'csv')}
                       disabled={Boolean(exportingReport)}
-                      className="bg-slate-700 hover:bg-slate-800 text-white text-[11px] font-bold px-3 py-1.5 rounded transition"
+                      className="bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold px-3 py-1.5 rounded transition"
                     >
                       {exportingReport === 'books-csv' ? 'Exporting…' : 'CSV'}
                     </button>
@@ -1744,7 +1786,7 @@ export default function SubAdminDashboard() {
                       type="button"
                       onClick={() => exportBranchReport('books', 'pdf')}
                       disabled={Boolean(exportingReport)}
-                      className="bg-rose-700 hover:bg-rose-800 text-white text-[11px] font-bold px-3 py-1.5 rounded transition"
+                      className="bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold px-3 py-1.5 rounded transition"
                     >
                       {exportingReport === 'books-pdf' ? 'Exporting…' : 'PDF'}
                     </button>
@@ -1755,14 +1797,14 @@ export default function SubAdminDashboard() {
                 <div className="p-3.5 border border-slate-100 bg-slate-50/50 rounded-lg flex items-center justify-between">
                   <div>
                     <p className="flex items-center gap-1.5 text-xs font-bold text-slate-700"><Activity size={14} aria-hidden="true" /> Branch Visitor Attendance</p>
-                    <p className="text-[11px] text-slate-500">Total Attendance Logs: {branchAttendance.length}</p>
+                    <p className="text-xs text-slate-500">Total Attendance Logs: {branchAttendance.length}</p>
                   </div>
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => exportBranchReport('attendance', 'xlsx')}
                       disabled={Boolean(exportingReport)}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded transition"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded transition"
                     >
                       {exportingReport === 'attendance-xlsx' ? 'Exporting…' : 'Excel'}
                     </button>
@@ -1770,7 +1812,7 @@ export default function SubAdminDashboard() {
                       type="button"
                       onClick={() => exportBranchReport('attendance', 'csv')}
                       disabled={Boolean(exportingReport)}
-                      className="bg-slate-700 hover:bg-slate-800 text-white text-[11px] font-bold px-3 py-1.5 rounded transition"
+                      className="bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold px-3 py-1.5 rounded transition"
                     >
                       {exportingReport === 'attendance-csv' ? 'Exporting…' : 'CSV'}
                     </button>
@@ -1778,7 +1820,7 @@ export default function SubAdminDashboard() {
                       type="button"
                       onClick={() => exportBranchReport('attendance', 'pdf')}
                       disabled={Boolean(exportingReport)}
-                      className="bg-rose-700 hover:bg-rose-800 text-white text-[11px] font-bold px-3 py-1.5 rounded transition"
+                      className="bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold px-3 py-1.5 rounded transition"
                     >
                       {exportingReport === 'attendance-pdf' ? 'Exporting…' : 'PDF'}
                     </button>

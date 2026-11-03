@@ -79,7 +79,7 @@ class FAQAnswer(BaseModel):
         return normalized
 
 
-app = FastAPI(title="SHELF ILMS Analytics", version="1.0.0")
+app = FastAPI(title="SHELF Analytics", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[

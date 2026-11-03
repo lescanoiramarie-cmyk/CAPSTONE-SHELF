@@ -57,7 +57,7 @@ export default function ReservationQueue({ user, focusRequestId = null }) {
                 >
                   <td className="p-3 font-semibold text-slate-700">{r.bookTitle}</td>
                   <td className="p-3 text-xs text-slate-500">{r.visitorName}</td>
-                  <td className="p-3 text-xs font-mono text-amber-700">{formatDateTime(r.pickupDeadline)}</td>
+                  <td className="p-3 text-xs tabular-nums text-amber-700">{formatDateTime(r.pickupDeadline)}</td>
                 </tr>
               ))}
             </tbody>

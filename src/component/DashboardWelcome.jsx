@@ -139,7 +139,7 @@ const markAllNotificationsRead = () => {
             {!visitorAppearance && (
               <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-amber-800 dark:bg-amber-400/10 dark:text-amber-300">
                 <Sparkles size={14} aria-hidden="true" />
-                SHELF ILMS
+                SHELF
               </div>
             )}
 
@@ -213,7 +213,7 @@ const markAllNotificationsRead = () => {
         <Bell size={20} aria-hidden="true" />
 
         {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-xs font-bold text-white">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
@@ -245,7 +245,7 @@ const markAllNotificationsRead = () => {
           <div className="min-h-0 max-h-[min(20rem,65vh)] flex-1 overflow-y-auto overscroll-contain">
             {notifications.length === 0 ? (
               <p className="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
-                You're all caught up. No current alerts.
+                You’re all caught up. No current alerts.
               </p>
             ) : (
               notifications.map((notification) => {
@@ -287,11 +287,11 @@ const markAllNotificationsRead = () => {
                           <span className="mt-1 block text-xs leading-5 text-slate-600 dark:text-slate-300">
                             {notification.message}
                           </span>
-                          <span className="mt-1 block text-[11px] font-medium text-slate-400">
+                          <span className="mt-1 block text-xs font-medium text-slate-400">
                             {notification.timeLabel}
                           </span>
                           {(notification.followUp || notification.status) && (
-                            <span className="mt-2 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                            <span className="mt-2 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
                               {notification.followUp
                                 ? followUpSentIds.has(notification.id)
                                   ? 'Followed up'
@@ -304,7 +304,7 @@ const markAllNotificationsRead = () => {
                     </button>
                     {notification.followUp && onNotificationFollowUp && (
                       <div className="flex items-center justify-between gap-3 px-4 pb-3 pl-9">
-                        <p className="min-w-0 text-[11px] text-red-700 dark:text-red-300" role="status">
+                        <p className="min-w-0 text-xs text-red-700 dark:text-red-300" role="status">
                           {followUpError && followUpErrorRequestId === notification.requestId
                             ? followUpError
                             : followUpSentIds.has(notification.id)

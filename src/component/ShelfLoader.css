@@ -1,47 +1,27 @@
 .shelf-loader {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 1.25rem;
 }
 
-.shelf-loader-art {
-  position: relative;
-  width: min(68vw, 43dvh, 23rem);
-  aspect-ratio: 606 / 611;
-  opacity: 0;
-  transform: scale(0.72);
-  animation: shelf-loader-logo-entrance 900ms cubic-bezier(0.2, 0.8, 0.2, 1)
-    forwards;
-}
-
-.shelf-loader-book {
-  position: absolute;
-  inset: 0;
-  animation:
-    shelf-loader-book-reveal 850ms cubic-bezier(0.2, 0.7, 0.2, 1) 350ms both,
-    shelf-loader-book-float 3.2s ease-in-out 1.2s infinite;
-}
-
-.shelf-loader-book-base,
-.shelf-loader-bookmark {
-  position: absolute;
-  inset: 0;
+.shelf-loader-indicator {
   display: block;
-  width: 100%;
-  height: 100%;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 3px solid rgb(37 99 235 / 18%);
+  border-top-color: #1638c8;
+  border-radius: 50%;
+  animation: shelf-loader-spin 900ms linear infinite;
+}
+
+.shelf-loader-logo {
+  display: block;
+  width: clamp(8rem, 26vw, 14rem);
+  aspect-ratio: 1;
   object-fit: contain;
-  user-select: none;
-  -webkit-user-drag: none;
-}
-
-.shelf-loader-book-base {
-  animation: shelf-loader-book-lift 850ms cubic-bezier(0.2, 0.7, 0.2, 1)
-    350ms both;
-}
-
-.shelf-loader-bookmark {
-  animation: shelf-loader-bookmark-drop 900ms cubic-bezier(0.3, 0.8, 0.25, 1)
-    450ms both;
+  animation: shelf-loader-logo-reveal 700ms ease-out both;
 }
 
 .shelf-loader-brand {
@@ -51,6 +31,13 @@
   align-items: center;
   margin-top: clamp(0.5rem, 3vh, 1.5rem);
   text-align: center;
+}
+
+.shelf-loader-loading {
+  color: #002046;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.5;
 }
 
 .shelf-loader-name {
@@ -105,7 +92,14 @@
   min-height: 100dvh;
   flex-direction: column;
   background:
-    radial-gradient(ellipse at 50% 42%, #ffffff 0%, #f8faff 54%, #eaf0ff 100%);
+    radial-gradient(
+      ellipse at 50% 42%,
+      rgb(255 255 255 / 82%) 0%,
+      rgb(248 250 252 / 76%) 54%,
+      rgb(234 240 255 / 82%) 100%
+    );
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   pointer-events: auto;
 }
 
@@ -114,86 +108,27 @@
   height: 2.75rem;
 }
 
-.shelf-loader-compact .shelf-loader-art {
-  width: 100%;
-  height: 100%;
-  animation: none;
-  opacity: 1;
-  transform: none;
+.shelf-loader-compact .shelf-loader-indicator {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-width: 2px;
 }
 
-.shelf-loader-compact .shelf-loader-book,
-.shelf-loader-compact .shelf-loader-book-base {
-  animation: none;
+@keyframes shelf-loader-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-.shelf-loader-compact .shelf-loader-bookmark {
-  animation: shelf-loader-bookmark-drop 900ms cubic-bezier(0.3, 0.8, 0.25, 1)
-    both;
-}
+@keyframes shelf-loader-logo-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.94);
+  }
 
-.shelf-loader-refresh {
-  position: fixed;
-  z-index: 100;
-  top: 0.75rem;
-  left: 50%;
-  transform: translateX(-50%);
-  pointer-events: none;
-}
-
-@keyframes shelf-loader-logo-entrance {
   to {
     opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes shelf-loader-book-reveal {
-  from {
-    transform: translateY(14px);
-  }
-
-  to {
-    transform: translateY(0);
-  }
-}
-
-@keyframes shelf-loader-book-lift {
-  from {
-    transform: translateY(10px);
-  }
-
-  to {
-    transform: translateY(-2px);
-  }
-}
-
-@keyframes shelf-loader-book-float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-3px);
-  }
-}
-
-@keyframes shelf-loader-bookmark-drop {
-  0% {
-    transform: translateY(-16px);
-  }
-
-  68% {
-    transform: translateY(3px);
-  }
-
-  84% {
-    transform: translateY(-2px);
-  }
-
-  100% {
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -224,10 +159,6 @@
 }
 
 @media (max-height: 600px) {
-  .shelf-loader-art {
-    width: min(40vw, 38dvh, 16rem);
-  }
-
   .shelf-loader-brand {
     margin-top: 0.35rem;
   }
@@ -238,28 +169,21 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .shelf-loader-art,
-  .shelf-loader-book,
-  .shelf-loader-book-base,
-  .shelf-loader-bookmark,
+  .shelf-loader-indicator,
+  .shelf-loader-logo,
   .shelf-loader-name,
   .shelf-loader-tagline,
+  .shelf-loader-loading,
   .shelf-loader-progress,
   .shelf-loader-progress-fill {
     animation: none;
   }
 
-  .shelf-loader-art,
   .shelf-loader-name,
   .shelf-loader-tagline,
+  .shelf-loader-loading,
   .shelf-loader-progress {
     opacity: 1;
-    transform: none;
-  }
-
-  .shelf-loader-book,
-  .shelf-loader-book-base,
-  .shelf-loader-bookmark {
     transform: none;
   }
 

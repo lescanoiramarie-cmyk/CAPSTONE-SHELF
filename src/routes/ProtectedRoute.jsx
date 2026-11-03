@@ -1,11 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/useAuth.js';
-
-const ROLE_HOME = {
-  visitor: '/visitor',
-  subadmin: '/subadmin',
-  superadmin: '/superadmin',
-};
+import { getDashboardPath } from './roleHome.js';
 
 const ProtectedRoute = ({
   children,
@@ -26,7 +21,7 @@ const ProtectedRoute = ({
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to={ROLE_HOME[user.role] || '/'} replace />;
+    return <Navigate to={getDashboardPath(user.role)} replace />;
   }
 
   return children;

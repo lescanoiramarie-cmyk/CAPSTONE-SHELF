@@ -16,6 +16,7 @@ import { normalizeBookCategory } from '../lib/bookCategory.js';
 import {
   buildDuplicateBookImportUpdate,
   getBookFineRate,
+  normalizeBookFineRate,
   validateImportedBookFineRates,
 } from '../lib/bookFineRate.js';
 import { invalidateVisitorAccountsCache } from './visitorAccounts.js';
@@ -363,8 +364,10 @@ const mapVisitor = (r) => ({
   registeredAt: r.registered_at,
 });
 
-const hasValidFineRateSnapshot = (request) =>
-  [10, 15, 20].includes(Number(request.fine_rate_snapshot));
+const hasValidFineRateSnapshot = (request) => {
+  const rate = Number(request.fine_rate_snapshot);
+  return Number.isInteger(rate) && rate >= 1 && rate <= 100;
+};
 
 export const isFineReviewRequired = (request) => {
   const status = String(request.status || '').trim().toLowerCase();
@@ -3330,7 +3333,7 @@ export async function mergeOrInsertLibraryBooks(incomingRows) {
   for (const source of incomingRows) {
     const row = { ...source };
     row.category = preserveBookCategory(row.category);
-    row.fine_rate = getBookFineRate(row.category);
+    row.fine_rate = normalizeBookFineRate(row.fine_rate);
 
     const title = normalizeText(row.title);
     const author = normalizeText(row.author);
@@ -3523,7 +3526,7 @@ export async function addBook(book) {
   const title = normalizeText(book?.title);
   const author = normalizeText(book?.author);
   const category = preserveBookCategory(book?.category);
-  const fineRate = getBookFineRate(category);
+  const fineRate = normalizeBookFineRate(book?.fine_rate);
   const libraryId = normalizeText(book?.libraryId);
   const totalCopies = Math.max(
     1,
@@ -4967,11 +4970,11 @@ export async function addBooksBulk(
     );
   }
 
-  const booksWithDerivedFineRates =
+  const booksWithValidatedFineRates =
     validateImportedBookFineRates(books);
 
   const rows =
-    booksWithDerivedFineRates.map(
+    booksWithValidatedFineRates.map(
       (book, index) => {
         const normalized =
           Object.fromEntries(
@@ -5054,7 +5057,7 @@ export async function addBooksBulk(
           category,
 
           fine_rate:
-            getBookFineRate(category),
+            normalizeBookFineRate(normalized.fine_rate),
 
           total_copies:
             stock,
@@ -5182,13 +5185,12 @@ export async function updateBook(
       author;
   }
 
-  if (patch?.fineRate !== undefined && patch?.category === undefined) {
-    throw new Error('Fine rate is derived from the book category.');
-  }
-
   if (patch?.category !== undefined) {
     dbPatch.category = preserveBookCategory(patch.category);
-    dbPatch.fine_rate = getBookFineRate(dbPatch.category);
+  }
+
+  if (patch?.fine_rate !== undefined) {
+    dbPatch.fine_rate = normalizeBookFineRate(patch.fine_rate);
   }
 
   if (

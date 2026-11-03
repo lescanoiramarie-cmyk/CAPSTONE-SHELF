@@ -116,7 +116,7 @@ function PasswordRequirement({ valid, children }) {
       }`}
     >
       <span
-        className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${
+        className={`flex h-4 w-4 items-center justify-center rounded-full text-xs font-bold ${
           valid ? 'bg-green-100' : 'bg-slate-100'
         }`}
       >
@@ -957,7 +957,7 @@ useEffect(() => {
         <ParticleConstellation />
         <div className="relative z-10 flex items-center gap-3">
           <span className="text-xl font-bold tracking-wider">
-            SHELF ILMS
+            SHELF
           </span>
         </div>
 
@@ -990,7 +990,7 @@ useEffect(() => {
               {view === 'register' && 'Visitor Registration'}
               {view === 'otp' && 'Verify Your Email'}
               {view === 'success' && 'Registration Successful'}
-              {view === 'login' && 'SHELF ILMS Login'}
+              {view === 'login' && 'SHELF Login'}
               {view === 'forgot' && 'Reset Your Password'}
             </h2>
 
@@ -1085,7 +1085,7 @@ useEffect(() => {
                   onClick={handleOpenForgotPassword}
                   className="text-xs font-semibold text-shelf-primary hover:underline"
                 >
-                  Forgot Password?
+                  Forgot password?
                 </button>
               </div>
 
@@ -1094,7 +1094,7 @@ useEffect(() => {
                 disabled={busy}
                 className="w-full rounded-lg bg-shelf-primary py-2.5 text-sm font-bold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {busy ? 'Signing In...' : 'Sign In'}
+                {busy ? 'Signing in...' : 'Sign in'}
               </button>
 
               <div className="space-y-2 border-t border-slate-200 pt-4">
@@ -1116,7 +1116,7 @@ useEffect(() => {
                   className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   <Camera size={17} />
-                  {showScanner ? 'Close QR Scanner' : 'Scan QR Pass'}
+                  {showScanner ? 'Close QR scanner' : 'Scan QR pass'}
                 </button>
 
                 <button
@@ -1125,7 +1125,7 @@ useEffect(() => {
                   disabled={busy}
                   className="w-full rounded-lg border border-slate-300 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
-                  Upload QR Image
+                  Upload QR image
                 </button>
 
                 <input
@@ -1152,14 +1152,14 @@ useEffect(() => {
                       }}
                       className="w-full text-sm font-semibold text-slate-500 hover:text-slate-800"
                     >
-                      Close Camera
+                      Close camera
                     </button>
                   </div>
                 )}
               </div>
 
               <p className="text-center text-sm text-slate-600">
-                Don't have an account?{' '}
+                Don’t have an account?{' '}
                 <button
                   type="button"
                   onClick={() => {
@@ -1211,7 +1211,7 @@ useEffect(() => {
 
                 <p
                   id="visitor-full-name-help"
-                  className="mt-1 text-[11px] text-slate-500"
+                  className="mt-1 text-xs text-slate-500"
                 >
                   Enter your first name and last name.
                 </p>
@@ -1260,7 +1260,7 @@ useEffect(() => {
 
                 <p
                   id="visitor-contact-help"
-                  className={`mt-1 text-[11px] ${
+                  className={`mt-1 text-xs ${
                     formData.contactNumber &&
                     !validateContactNumber(formData.contactNumber)
                       ? 'text-red-600'
@@ -1437,11 +1437,11 @@ useEffect(() => {
                 </div>
 
                 <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                  <p className="mb-2 text-[11px] font-semibold text-slate-700">
+                  <p className="mb-2 text-xs font-semibold text-slate-700">
                     Password requirements
                   </p>
 
-                  <ul className="space-y-1 text-[11px]">
+                  <ul className="space-y-1 text-xs">
                     <PasswordRequirement valid={passwordRequirements.minLength}>
                       At least 12 characters
                     </PasswordRequirement>
@@ -1523,7 +1523,7 @@ useEffect(() => {
 
                 {formData.confirmPassword.length > 0 && (
                   <p
-                    className={`mt-1.5 text-[11px] font-semibold ${
+                    className={`mt-1.5 text-xs font-semibold ${
                       passwordsMatch ? 'text-green-600' : 'text-red-600'
                     }`}
                   >
@@ -1555,7 +1555,7 @@ useEffect(() => {
                 }
                 className="h-10 w-full rounded-lg bg-shelf-primary px-4 text-sm font-bold text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
               >
-                {busy ? 'Processing...' : 'Send Verification Code'}
+                {busy ? 'Processing...' : 'Send verification code'}
               </button>
 
               {/* Back to Sign In */}
@@ -1564,7 +1564,7 @@ useEffect(() => {
                 onClick={resetToLogin}
                 className="h-10 w-full rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
               >
-                Back to Sign In
+                Back to sign in
               </button>
               </form>
               )}
@@ -1603,7 +1603,7 @@ useEffect(() => {
                 disabled={busy || otpInput.length !== 6}
                 className="w-full rounded-lg bg-shelf-primary py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
               >
-                {busy ? 'Verifying...' : 'Verify Email'}
+                {busy ? 'Verifying...' : 'Verify email'}
               </button>
 
               <button
@@ -1612,7 +1612,7 @@ useEffect(() => {
                 onClick={handleResendOtp}
                 className="w-full text-sm font-semibold text-shelf-primary hover:underline disabled:opacity-50"
               >
-                Resend Verification Code
+                Resend verification code
               </button>
 
               <button
@@ -1620,7 +1620,7 @@ useEffect(() => {
                 onClick={resetToLogin}
                 className="w-full text-sm font-semibold text-slate-600 hover:underline"
               >
-                Back to Sign In
+                Back to sign in
               </button>
             </form>
           )}
@@ -1699,7 +1699,7 @@ useEffect(() => {
                 disabled={busy}
                 className="w-full rounded-lg bg-shelf-primary py-2.5 text-sm font-bold text-white hover:opacity-95 disabled:opacity-60"
               >
-                {busy ? 'Signing in...' : 'Enter Library Portal'}
+                {busy ? 'Signing in...' : 'Enter library portal'}
               </button>
 
               <button
@@ -1707,7 +1707,7 @@ useEffect(() => {
                 onClick={resetToLogin}
                 className="w-full text-sm font-semibold text-slate-600 hover:underline"
               >
-                Back to Sign In
+                Back to sign in
               </button>
             </div>
           )}
@@ -1784,7 +1784,7 @@ useEffect(() => {
                     disabled={resetLoading || !resetEmail.trim()}
                     className="w-full rounded-lg bg-shelf-primary py-2.5 text-sm font-bold text-white disabled:opacity-50"
                   >
-                    {resetLoading ? 'Sending...' : 'Send Reset Code'}
+                    {resetLoading ? 'Sending...' : 'Send reset code'}
                   </button>
                 </>
               )}
@@ -1817,7 +1817,7 @@ useEffect(() => {
                     disabled={resetLoading || resetCode.length !== 6}
                     className="w-full rounded-lg bg-shelf-primary py-2.5 text-sm font-bold text-white disabled:opacity-50"
                   >
-                    {resetLoading ? 'Verifying...' : 'Verify Reset Code'}
+                    {resetLoading ? 'Verifying...' : 'Verify reset code'}
                   </button>
 
                   <button
@@ -1826,7 +1826,7 @@ useEffect(() => {
                     onClick={handleRequestResetCode}
                     className="w-full text-sm font-semibold text-shelf-primary hover:underline disabled:opacity-50"
                   >
-                    Resend Reset Code
+                    Resend reset code
                   </button>
                 </>
               )}
@@ -1941,7 +1941,7 @@ useEffect(() => {
                     }
                     className="w-full rounded-lg bg-shelf-primary py-2.5 text-sm font-bold text-white disabled:opacity-50"
                   >
-                    {resetLoading ? 'Updating Password...' : 'Reset Password'}
+                    {resetLoading ? 'Updating password...' : 'Reset password'}
                   </button>
                 </>
               )}
@@ -1957,7 +1957,7 @@ useEffect(() => {
                     onClick={handleResetBackToLogin}
                     className="w-full rounded-lg bg-shelf-primary py-2.5 text-sm font-bold text-white"
                   >
-                    Return to Sign In
+                    Return to sign in
                   </button>
                 </div>
               )}
@@ -1969,7 +1969,7 @@ useEffect(() => {
                   onClick={handleResetBackToLogin}
                   className="w-full text-sm font-semibold text-slate-600 hover:text-shelf-primary hover:underline disabled:opacity-50"
                 >
-                  Back to Sign In
+                  Back to sign in
                 </button>
               )}
             </form>
