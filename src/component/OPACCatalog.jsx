@@ -40,6 +40,7 @@ import { formatBookCategory } from '../lib/bookCategory.js';
 import {
   calculateOverdueFine,
   getBookFineRate,
+  normalizeBookFineRate,
 } from '../lib/bookFineRate.js';
 
 // =========================================================
@@ -88,6 +89,14 @@ function createPersonalCoverPath(visitorId, filename) {
 // =========================================================
 // FINE CALCULATION
 // =========================================================
+function getValidStoredFineRate(value) {
+  try {
+    return normalizeBookFineRate(value);
+  } catch {
+    return null;
+  }
+}
+
 function calculateCurrentFine(request) {
   if (!request) return 0;
   if (request.status === 'returned') {
@@ -1434,7 +1443,7 @@ export default function OPACCatalog({
       );
       return;
     }
-    if (getBookFineRate(bookEntry.category ?? selectedBook?.category) == null) {
+    if (getValidStoredFineRate(bookEntry.fineRate) == null) {
       setNotice('Unclassified — checkout unavailable.');
       return;
     }
@@ -3936,8 +3945,8 @@ export default function OPACCatalog({
                     </p>
                   ) : (
                     getPartnerLibraryEntries(selectedBook).map((entry) => {
-                      const entryFineRate = getBookFineRate(
-                        entry.category ?? selectedBook.category
+                      const entryFineRate = getValidStoredFineRate(
+                        entry.fineRate
                       );
                       return (
                         <div
@@ -4168,7 +4177,7 @@ export default function OPACCatalog({
               ) : (
                 <>
                   Borrowed items are due {BORROW_PERIOD_DAYS} days after pickup.
-                  Holds must be picked up within {PICKUP_WINDOW_HOURS} hours or they’re released automatically. Overdue fines use each book’s assigned rate of ₱10, ₱15, or ₱20 per day.
+                  Holds must be picked up within {PICKUP_WINDOW_HOURS} hours or they’re released automatically. Overdue fines use each book’s assigned rate per day.
                 </>
               )}
             </p>
