@@ -492,53 +492,89 @@ async function fetchAllRowsInPages(buildQuery, resourceName) {
   }
 }
 
-async function fetchAllBorrowRequestRows(signal) {
-  const rangeStarts = [
-    '00000000-0000-0000-0000-000000000000',
-    '20000000-0000-0000-0000-000000000000',
-    '40000000-0000-0000-0000-000000000000',
-    '60000000-0000-0000-0000-000000000000',
-    '80000000-0000-0000-0000-000000000000',
-    'a0000000-0000-0000-0000-000000000000',
-    'c0000000-0000-0000-0000-000000000000',
-    'e0000000-0000-0000-0000-000000000000',
-  ];
-
-  const rangeRows = await Promise.all(rangeStarts.map(async (rangeStart, index) => {
-    const rangeEnd = rangeStarts[index + 1] || null;
-    const rows = [];
-    let cursor = rangeStart;
-
-    for (;;) {
-      let query = supabase
-        .from('borrow_requests')
-        .select('*')
-        .gte('id', rangeStart)
-        .order('id', { ascending: true })
-        .limit(FETCH_PAGE_SIZE);
-
-      if (cursor !== rangeStart) query = query.gt('id', cursor);
-      if (rangeEnd) query = query.lt('id', rangeEnd);
-
-      if (signal) query = query.abortSignal(signal);
-      const { data, error } = await query;
-      if (error) {
-        throw cleanErr(error, 'Unable to fetch all borrow requests.');
-      }
-
-      const pageRows = data || [];
-      rows.push(...pageRows);
-      if (pageRows.length < FETCH_PAGE_SIZE) return rows;
-      cursor = pageRows[pageRows.length - 1].id;
-    }
-  }));
-
-  return rangeRows.flat();
-}
-
 async function getBorrowRequestsForSession(loadRows) {
   const rows = await loadRows();
   return rows.map(mapBorrowRequest);
+}
+
+const BORROW_DASHBOARD_ACTIVE_STATUSES = [
+  'pending',
+  'queued',
+  'ready_for_pickup',
+  'borrowed',
+];
+const BORROW_DASHBOARD_RECENT_DAYS = 35;
+const BORROW_REQUEST_DASHBOARD_SELECT =
+  'id, book_id, book_title, visitor_id, visitor_name, status, request_date, pickup_deadline, queue_position, borrow_date, due_date, return_date, fine_amount, confirmed_by, return_confirmed_by, fine_rate_snapshot, fine_review_required';
+
+async function fetchStaffBorrowRequestRows(authenticatedUserId, signal) {
+  let staffQuery = supabase
+    .from('staff_profiles')
+    .select('id, role, library_id, is_active')
+    .eq('id', authenticatedUserId)
+    .maybeSingle();
+  if (signal) staffQuery = staffQuery.abortSignal(signal);
+  const { data: staff, error: staffError } = await staffQuery;
+
+  if (staffError) {
+    throw cleanErr(staffError, 'Unable to verify staff access to borrowing history.');
+  }
+  if (!staff?.is_active || !['subadmin', 'superadmin'].includes(staff.role)) {
+    throw new Error('An active staff account is required to load borrowing history.');
+  }
+
+  let branchBookIds = null;
+  if (staff.role === 'subadmin') {
+    if (!staff.library_id) {
+      throw new Error('Your staff account has no assigned library branch.');
+    }
+
+    let booksQuery = supabase
+      .from('books')
+      .select('id')
+      .eq('library_id', staff.library_id)
+      .eq('book_type', 'library');
+    if (signal) booksQuery = booksQuery.abortSignal(signal);
+    const { data: books, error: booksError } = await booksQuery;
+    if (booksError) {
+      throw cleanErr(booksError, 'Unable to load books for your assigned branch.');
+    }
+    branchBookIds = (books || []).map((book) => book.id).filter(Boolean);
+    if (!branchBookIds.length) return [];
+  }
+
+  const recentStart = new Date();
+  recentStart.setDate(recentStart.getDate() - BORROW_DASHBOARD_RECENT_DAYS);
+  const recentStartIso = recentStart.toISOString();
+  const buildQuery = () => {
+    let query = supabase
+      .from('borrow_requests')
+      .select(BORROW_REQUEST_DASHBOARD_SELECT);
+    if (branchBookIds) query = query.in('book_id', branchBookIds);
+    return query;
+  };
+  const pageRows = async (buildScopedQuery, label) =>
+    fetchAllRowsInPages(() => {
+      let query = buildScopedQuery()
+        .order('request_date', { ascending: false })
+        .order('id', { ascending: true });
+      if (signal) query = query.abortSignal(signal);
+      return query;
+    }, label);
+
+  const [recentRows, activeRows] = await Promise.all([
+    pageRows(
+      () => buildQuery().gte('request_date', recentStartIso),
+      'recent borrowing history'
+    ),
+    pageRows(
+      () => buildQuery().in('status', BORROW_DASHBOARD_ACTIVE_STATUSES),
+      'active borrowing requests'
+    ),
+  ]);
+  return Array.from(
+    new Map([...recentRows, ...activeRows].map((row) => [String(row.id), row])).values()
+  );
 }
 
 // ============================================================================
@@ -944,6 +980,28 @@ export async function fetchVisitors(visitorId = null, knownVisitor = null) {
   return data.map(mapVisitor);
 }
 
+export async function fetchVisitorCount() {
+  const scope = await getAuthenticatedDataScope();
+  if (scope.type === 'anonymous') return 0;
+
+  let query = supabase
+    .from('visitors')
+    .select('id', { count: 'exact', head: true });
+
+  if (scope.type === 'subadmin') {
+    if (!scope.libraryId) {
+      throw new Error('Your staff account has no assigned library branch.');
+    }
+    query = query.eq('library_id', scope.libraryId);
+  } else if (scope.type === 'visitor') {
+    query = query.eq('id', scope.visitorId);
+  }
+
+  const { count, error } = await query;
+  if (error) throw cleanErr(error, 'Unable to count registered visitors.');
+  return Number(count) || 0;
+}
+
 // ============================================================================
 // FETCH ALL REQUESTS AND BORROWS
 // ----------------------------------------------------------------------------
@@ -1188,29 +1246,12 @@ export async function fetchBorrowRequests({
         });
       } else {
         if (skipVisitorResolution) {
-          let staffQuery = supabase
-            .from('staff_profiles')
-            .select('id, is_active')
-            .eq('id', authenticatedUserId)
-            .maybeSingle();
-          if (signal) staffQuery = staffQuery.abortSignal(signal);
-          const { data: staff, error: staffError } = await staffQuery;
-
-          if (staffError) {
-            throw cleanErr(
-              staffError,
-              'Unable to verify staff access to borrowing history.'
-            );
-          }
-
-          normalRequests = staff?.is_active
-            ? await getBorrowRequestsForSession(() =>
-                fetchAllBorrowRequestRows(signal)
-              )
-            : [];
+          normalRequests = await getBorrowRequestsForSession(() =>
+            fetchStaffBorrowRequestRows(authenticatedUserId, signal)
+          );
         } else {
-          normalRequests = await getBorrowRequestsForSession(
-            () => fetchAllBorrowRequestRows(signal)
+          throw new Error(
+            'Unable to resolve the signed-in visitor profile. Borrowing history was not loaded.'
           );
         }
       }

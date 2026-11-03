@@ -21,6 +21,13 @@ const visitorBorrowIndexMigration = readFileSync(
   ),
   'utf8'
 );
+const activeBorrowDashboardIndexMigration = readFileSync(
+  new URL(
+    '../../supabase/migrations/20261210000000_index_active_borrow_dashboard_queries.sql',
+    import.meta.url
+  ),
+  'utf8'
+);
 
 test('restoring the saved auth user does not dispatch a duplicate initial data refresh', () => {
   assert.match(
@@ -66,11 +73,7 @@ test('library refresh does not fetch requester community requests twice', () => 
   );
 });
 
-test('staff borrowing history loads after the main dashboard refresh', () => {
-  assert.match(
-    libraryContextSource,
-    /currentVisitorId\s*\?\s*Promise\.resolve\(\[\]\)\s*:\s*Promise\.resolve\(\[\]\)/
-  );
+test('staff borrowing history is branch-scoped and limited to recent or active requests', () => {
   assert.match(
     libraryContextSource,
     /void loadVisitorBorrowRequests\(currentVisitorId\)/
@@ -83,6 +86,22 @@ test('staff borrowing history loads after the main dashboard refresh', () => {
     libraryContextSource,
     /store\.fetchBorrowRequests\(\{[\s\S]*?skipVisitorResolution:\s*true,[\s\S]*?signal:\s*controller\.signal/
   );
+  const staffHistoryStart = storeSource.indexOf(
+    'async function fetchStaffBorrowRequestRows('
+  );
+  const staffHistoryEnd = storeSource.indexOf(
+    '// FETCH LIBRARIES',
+    staffHistoryStart
+  );
+  assert.ok(staffHistoryStart >= 0 && staffHistoryEnd > staffHistoryStart);
+  const staffHistorySource = storeSource.slice(staffHistoryStart, staffHistoryEnd);
+  assert.match(staffHistorySource, /staff\.role === 'subadmin'/);
+  assert.match(staffHistorySource, /\.eq\('library_id',\s*staff\.library_id\)/);
+  assert.match(staffHistorySource, /\.in\('book_id',\s*branchBookIds\)/);
+  assert.match(staffHistorySource, /BORROW_DASHBOARD_RECENT_DAYS/);
+  assert.match(staffHistorySource, /\.in\('status',\s*BORROW_DASHBOARD_ACTIVE_STATUSES\)/);
+  assert.doesNotMatch(staffHistorySource, /\.select\('\*'\)/);
+  assert.doesNotMatch(storeSource, /fetchAllBorrowRequestRows/);
   assert.match(
     libraryContextSource,
     /void loadAllBorrowRequests\(\)/
@@ -106,21 +125,22 @@ test('staff borrowing history loads after the main dashboard refresh', () => {
   assert.match(libraryContextSource, /borrowRequestsScopeRef\.current = scope/);
 });
 
-test('unresolved visitor sessions do not fall back to loading all borrow requests', () => {
-  const missingVisitorBranch = storeSource.match(
-    /if\s*\(skipVisitorResolution\)\s*\{[\s\S]*?normalRequests\s*=\s*staff\?\.is_active[\s\S]*?:\s*\[\];/
-  );
-  assert.ok(
-    missingVisitorBranch,
-    'Expected missing visitor IDs to load borrow history only for an active staff account.'
+test('staff and visitor dashboards do not load every visitor profile into shared state', () => {
+  assert.match(
+    storeSource,
+    /export async function fetchVisitorCount\(\)[\s\S]*?select\('id',\s*\{\s*count:\s*'exact',\s*head:\s*true\s*\}\)/
   );
   assert.match(
-    missingVisitorBranch[0],
-    /\.from\('staff_profiles'\)[\s\S]*?\.eq\('id',\s*authenticatedUserId\)/
+    libraryContextSource,
+    /currentVisitorId\s*\?\s*waitForData\([\s\S]*?store\.fetchVisitors\([\s\S]*?\)\s*:\s*Promise\.resolve\(\[\]\)/
   );
   assert.match(
-    missingVisitorBranch[0],
-    /getBorrowRequestsForSession\(\(\)\s*=>\s*fetchAllBorrowRequestRows\(signal\)\s*\)/
+    libraryContextSource,
+    /store\.fetchVisitorCount\(\)/
+  );
+  assert.match(
+    libraryContextSource,
+    /visitorCount:\s*Number\(data\.visitorCount\)\s*\|\|\s*0/
   );
 });
 
@@ -174,6 +194,20 @@ test('visitor dashboard loads only the signed-in visitor profile', () => {
   );
 });
 
+test('staff session resolution skips visitor-profile lookup', () => {
+  const visitorResolver = libraryContextSource.match(
+    /const\s+getCurrentVisitorId\s*=\s*useCallback\(async\s+\(role\)\s*=>\s*\{([\s\S]*?)\n\s*\},\s*\[\]\);/
+  );
+  assert.ok(visitorResolver, 'Expected a role-aware visitor resolver.');
+  assert.match(visitorResolver[1], /if\s*\(role\s*!==\s*'visitor'\)\s*return\s+null/);
+  assert.ok(
+    visitorResolver[1].indexOf("role !== 'visitor'") <
+      visitorResolver[1].indexOf('store.getVisitor(authUserId)'),
+    'Staff sessions must skip the visitor-table lookup.'
+  );
+  assert.match(libraryContextSource, /getCurrentVisitorId\(user\?\.role\)/);
+});
+
 test('visitor borrow RPC lookup has a matching request-date index migration', () => {
   assert.match(
     visitorBorrowIndexMigration,
@@ -182,5 +216,20 @@ test('visitor borrow RPC lookup has a matching request-date index migration', ()
   assert.match(
     visitorBorrowIndexMigration,
     /ON public\.borrow_requests\s*\(visitor_id,\s*request_date DESC\)/i
+  );
+});
+
+test('active and queued staff requests have a partial dashboard index', () => {
+  assert.match(
+    activeBorrowDashboardIndexMigration,
+    /CREATE INDEX IF NOT EXISTS borrow_requests_active_status_date_idx/i
+  );
+  assert.match(
+    activeBorrowDashboardIndexMigration,
+    /ON public\.borrow_requests\s*\(status,\s*request_date DESC,\s*id ASC\)/i
+  );
+  assert.match(
+    activeBorrowDashboardIndexMigration,
+    /WHERE status IN\s*\('pending',\s*'queued',\s*'ready_for_pickup',\s*'borrowed'\)/i
   );
 });

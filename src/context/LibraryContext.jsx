@@ -39,6 +39,7 @@ const emptyData = {
   externalCatalogBooks: [],
   libraries: [],
   visitors: [],
+  visitorCount: 0,
   borrowRequests: [],
   attendanceLogs: [],
   personalBooks: [],
@@ -98,7 +99,7 @@ export function LibraryProvider({ children }) {
   // identity for private RPCs or transaction history.
   // ==========================================================================
 
-  const getCurrentVisitorId = useCallback(async () => {
+  const getCurrentVisitorId = useCallback(async (role) => {
     currentVisitorProfileRef.current = null;
     currentAuthUserIdRef.current = null;
     // Community-request RPCs are granted to authenticated visitors only.
@@ -145,6 +146,8 @@ export function LibraryProvider({ children }) {
 
       currentAuthUserIdRef.current = authUserId;
       lastResolvedAuthUserIdRef.current = authUserId;
+      if (role !== 'visitor') return null;
+
       const visitor = await store.getVisitor(authUserId);
       currentVisitorProfileRef.current = visitor;
       return visitor?.id || null;
@@ -379,7 +382,7 @@ export function LibraryProvider({ children }) {
       // ----------------------------------------------------------------------
 
       const currentVisitorId = await waitForData(
-        getCurrentVisitorId(),
+        getCurrentVisitorId(user?.role),
         'Visitor account data'
       );
 
@@ -397,6 +400,7 @@ export function LibraryProvider({ children }) {
         externalCatalogResult,
         libraries,
         visitors,
+        visitorCount,
         normalBorrowRequests,
         attendanceResult,
         communityBooksResult,
@@ -408,13 +412,18 @@ export function LibraryProvider({ children }) {
           []
         ),
         waitForData(store.fetchLibraries(), 'Library list'),
-        waitForData(
-          store.fetchVisitors(
-            currentVisitorId,
-            currentVisitorProfileRef.current
-          ),
-          'Visitor profiles'
-        ),
+        currentVisitorId
+          ? waitForData(
+              store.fetchVisitors(
+                currentVisitorId,
+                currentVisitorProfileRef.current
+              ),
+              'Visitor profile'
+            )
+          : Promise.resolve([]),
+        user?.role === 'subadmin' || user?.role === 'superadmin'
+          ? waitForData(store.fetchVisitorCount(), 'Visitor count')
+          : Promise.resolve(currentVisitorId ? 1 : 0),
         currentVisitorId
           ? Promise.resolve([])
           : Promise.resolve([]),
@@ -741,6 +750,8 @@ fineReviewRequired:
             ? visitors
             : [],
 
+        visitorCount,
+
         borrowRequests: currentVisitorId
           ? [
               ...currentData.borrowRequests.filter(
@@ -790,6 +801,7 @@ fineReviewRequired:
         books,
         libraries,
         visitors,
+        visitorCount,
 
         borrowRequests:
           uniqueBorrowRequests,
@@ -827,10 +839,10 @@ fineReviewRequired:
         setLoading(false);
       }
     }
-  }, [getCurrentVisitorId, loadAllBorrowRequests, loadVisitorBorrowRequests]);
+  }, [getCurrentVisitorId, loadAllBorrowRequests, loadVisitorBorrowRequests, user?.role]);
 
   const retryBorrowRequests = useCallback(async () => {
-    const visitorId = await getCurrentVisitorId();
+    const visitorId = await getCurrentVisitorId(user?.role);
 
     if (!visitorId) {
       setBorrowRequestsLoadError(
@@ -840,7 +852,7 @@ fineReviewRequired:
     }
 
     await loadVisitorBorrowRequests(visitorId);
-  }, [getCurrentVisitorId, loadVisitorBorrowRequests]);
+  }, [getCurrentVisitorId, loadVisitorBorrowRequests, user?.role]);
 
   // ==========================================================================
   // VISITOR LOCAL SESSION CHANGES
@@ -1436,6 +1448,8 @@ fineReviewRequired:
           ? data.visitors
           : [],
 
+      visitorCount: Number(data.visitorCount) || 0,
+
       borrowRequests:
         Array.isArray(data.borrowRequests)
           ? data.borrowRequests
@@ -1703,7 +1717,7 @@ fineReviewRequired:
       {children}
       {!splashElapsed && <ShelfLoader screen label="Loading SHELF..." />}
       {loading && initialDataReady && (
-        <div className="pointer-events-none fixed right-4 top-4 z-[190] flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-3 py-2 text-sm font-semibold text-slate-700 shadow-lg">
+        <div className="pointer-events-none fixed right-4 top-4 z-190 flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-3 py-2 text-sm font-semibold text-slate-700 shadow-lg">
           <ShelfLoader compact label="Refreshing dashboard data..." />
           <span>Refreshing…</span>
         </div>

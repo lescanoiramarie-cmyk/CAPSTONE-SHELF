@@ -193,7 +193,7 @@ export default function SuperAdminDashboard() {
 
   const {
     books,
-    visitors,
+    visitorCount,
     borrowRequests,
     attendanceLogs,
     libraries,
@@ -1541,7 +1541,7 @@ const handleEditStaff = (staff) => {
         {section === 'overview' && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-              <StatCard label="Registered Visitors" value={visitors.length} tone="blue" />
+              <StatCard label="Registered Visitors" value={visitorCount} tone="blue" />
               <StatCard label="Titles in Catalog" value={books.length} />
               <StatCard label="Active Borrows" value={activeBorrows} />
               <StatCard label="Overdue Items" value={overdue} tone="red" />
@@ -1552,7 +1552,7 @@ const handleEditStaff = (staff) => {
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <h3 className="mb-3 text-sm font-bold text-slate-800">Visits & Borrows — Last Month · {trendData.monthLabel}</h3>
-                <div className="h-[330px]">
+                <div className="h-82.5">
                   <Line
                     data={{
                       labels: trendData.labels,
@@ -1581,7 +1581,7 @@ const handleEditStaff = (staff) => {
                 {categoryData.labels.length === 0 ? (
                   <p className="text-xs text-slate-500">No books in the catalog yet.</p>
                 ) : (
-                  <div className="h-[330px]">
+                  <div className="h-82.5">
                     <Bar
                       data={{
                         labels: categoryData.labels,
@@ -1632,7 +1632,7 @@ const handleEditStaff = (staff) => {
                 {branchActivityData.labels.length === 0 ? (
                   <p className="py-8 text-center text-sm text-slate-500">No branch check-ins or book transactions were recorded in the last 7 days.</p>
                 ) : (
-                  <div className="h-[320px]">
+                  <div className="h-80">
                     <Bar
                       data={{
                         labels: branchActivityData.labels,
@@ -2376,7 +2376,6 @@ const handleEditStaff = (staff) => {
             user={user}
             libraries={libraries}
             books={books}
-            visitors={visitors}
             borrowRequests={borrowRequests}
             attendanceLogs={attendanceLogs}
             focusedNotificationRequestId={focusedNotificationRequestId}
@@ -2392,7 +2391,6 @@ const handleEditStaff = (staff) => {
             user={user}
             libraries={libraries}
             books={books}
-            visitors={visitors}
             borrowRequests={borrowRequests}
             attendanceLogs={attendanceLogs}
           />

@@ -13,7 +13,7 @@ be exercised in the deployed application with test accounts.
 - [x] Confirm the public frontend serves the analytics URL correction: the
   production JavaScript bundle contains the active Render service hostname.
 - [x] Confirm the linked database has all local migrations applied through
-  `20261209000000`.
+  `20261210000000` (rechecked 2026-11-03; no pending local migrations).
 
 ## Public landing and navigation
 
@@ -247,11 +247,11 @@ be exercised in the deployed application with test accounts.
 - [ ] Resolve the remaining 14 moderate advisories (nine in the production
   dependency tree); do not apply the proposed breaking downgrade without
   compatibility review.
-- [ ] Authenticated visitor/staff transactions, live account recovery,
-  borrowing/return mutations, production RLS denials, and real notification
-  delivery remain untested; no staging project is currently available, so
-  dedicated non-production accounts must be set up first. No test records or
-  production mutations were created.
+- [ ] Full authenticated transaction flows, live account recovery, production
+  RLS denials, and real notification delivery remain untested. The live role
+  smoke test below exercised dashboards and a reversible reading-list action,
+  but did not submit a borrow, process a pickup/return, or change staff,
+  inventory, or account records.
 - [x] Applied and verified migration `20261209000000` in Supabase. Community
   pickup now uses the established category rate only when `books.fine_rate` is
   NULL; an explicitly saved rate still takes precedence and is snapshotted at
@@ -262,13 +262,59 @@ be exercised in the deployed application with test accounts.
 - [x] All 49 available JavaScript regression tests pass after the community
   legacy fine-rate fix; `npm run lint` and `npm run build` pass.
 - [x] Local FastAPI smoke tests pass for `/health`, valid forecast responses,
-  FAQ out-of-scope handling, and invalid forecast input. The public Render
-  service works on its active hostname. Production health reports
-  `geminiConfigured: false`: numeric forecasts work with fallback insights,
-  while the Gemini FAQ endpoint returns 503 and the frontend falls back to
-  built-in FAQ responses.
+  FAQ out-of-scope handling, and invalid forecast input. On 2026-11-03, after
+  the user configured the Render secret, production `/health` reported
+  `geminiConfigured: true`; `/faq/answer` and a valid `/forecast` request both
+  returned 200, with the forecast reporting `analyticsSource: gemini`.
 - [x] The frontend analytics URL correction is deployed. Its shared URL
   resolver maps the retired Render hostname to
   `https://shelf-analytics-q24u.onrender.com`, and defaults to that active host.
   The Vercel project environment variable was not inspected; the deployed
   bundle itself was verified to include the active hostname.
+- [x] On 2026-11-03, authenticated production smoke tests were run using
+  visitor, sub-admin, and super-admin accounts. Visitor dashboard tabs,
+  catalog search (an exact-title search returned one result), book details,
+  announcements, profile/history, and reading-list add/remove were exercised.
+  The temporary reading-list entry was removed and the UI confirmed removal.
+  Sub-admin overview, visitor accounts, attendance, book transactions,
+  inventory, reservation queue, branch map, reports, analytics, feedback, and
+  announcements rendered. Super-admin overview, inventory, libraries/map,
+  staff accounts, visitor accounts, reports, analytics, feedback, and
+  announcements rendered. No staff, inventory, or account data was changed.
+- [ ] During repeated authenticated dashboard navigation on 2026-11-03,
+  Supabase returned HTTP 500/statement-timeout errors for borrowing-history
+  and library-data loads; the UI displayed “Unable to load library data” and
+  a retry action. The same borrowing-history timeout appeared in both staff
+  dashboards. This confirms the known broad borrowing-history query is an
+  active production reliability issue. Do not retry repeatedly until the
+  query is scoped/paginated and benchmarked.
+- [ ] A full visitor-to-staff borrow/pickup/return transaction was not run:
+  the available visitor and sub-admin test accounts were assigned to different
+  branches, and no matching branch test-account pair was available. QR camera
+  scanning, attendance mutations, feedback submission, staff CRUD, inventory
+  CRUD, fines/returns, account recovery, notification delivery, and direct
+  production RLS/RPC denial tests remain unverified.
+- [x] A sub-admin session attempting to open `/superadmin` was redirected to
+  `/subadmin`; after sign-out, protected routes did not retain the prior
+  authenticated dashboard.
+- [ ] The sub-admin analytics forecast was correctly unavailable because only
+  3 days of branch history were available; the UI requires at least 14 days.
+
+### Release-readiness recheck on 2026-11-03
+
+- [x] Fresh `npm run lint`, `npm run build`, and all 51 Node tests passed.
+- [x] `npx supabase migration list --linked` reports local and remote migration
+  ledgers matching through `20261210000000`; do not apply that migration again.
+- [ ] Production borrowing-history timeouts remain an observed reliability
+  issue; the scoped query changes have not been deployed and verified against
+  the production frontend.
+- [ ] Full authenticated borrowing, pickup/return, attendance, inventory/staff
+  CRUD, account recovery, notification delivery, and direct RLS denials remain
+  unverified with role-matched disposable data.
+- [ ] `npm audit --omit=dev` reports 9 moderate advisories. The suggested forced
+  remediation downgrades ExcelJS to 3.4.0; do not apply it without compatibility
+  review.
+- [ ] The worktree has a modified tracked `.env`, untracked `supabase/.branches/`,
+  and an untracked migration source file already present in the remote ledger.
+  Exclude `.env` and local metadata from commits; retain the migration source
+  file in version control for history.

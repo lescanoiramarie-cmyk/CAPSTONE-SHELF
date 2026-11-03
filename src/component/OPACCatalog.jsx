@@ -1080,7 +1080,7 @@ export default function OPACCatalog({
     const newReview = {
       book_id: String(selectedBook.id),
       visitor_id: String(user.id),
-      visitor_name: user?.full_name || user?.name || user?.email || 'Anonymous Visitor',
+      visitor_name: user?.full_name || user?.name || 'Anonymous Visitor',
       rating: Number(userRating),
       comment: userComment.trim(),
     };
@@ -2696,7 +2696,7 @@ export default function OPACCatalog({
                                 <Users size={13} aria-hidden="true" />
                                 Community book request
                               </span>
-                              <h4 className="mt-1 break-words text-base font-bold text-slate-900 dark:text-slate-100">
+                              <h4 className="mt-1 wrap-break-words text-base font-bold text-slate-900 dark:text-slate-100">
                                 {request.bookTitle || 'Untitled Book'}
                               </h4>
                             </div>
@@ -2744,7 +2744,7 @@ export default function OPACCatalog({
                               <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                                 Owner response
                               </p>
-                              <p className="mt-1 break-words text-xs leading-5 text-slate-600 dark:text-slate-300">
+                              <p className="mt-1 wrap-break-words text-xs leading-5 text-slate-600 dark:text-slate-300">
                                 {request.ownerResponse}
                               </p>
                             </div>
@@ -2970,7 +2970,7 @@ export default function OPACCatalog({
                       >
                         <td data-label="Book Title" className="p-4 font-bold text-slate-900 dark:text-white">
                           <div className="flex flex-col gap-1">
-                            <span className="break-words">{request.bookTitle || 'Untitled Book'}</span>
+                            <span className="wrap-break-words">{request.bookTitle || 'Untitled Book'}</span>
                             {isCommunityRequest && (
                               <span className="w-fit rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-100">
                                 Community Book

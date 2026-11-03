@@ -251,7 +251,7 @@ function BorrowingActivityTrendChart({ requests = [] }) {
           No borrowing activity recorded for {monthLabel}.
         </p>
       ) : (
-        <div className="mt-4 flex min-h-[220px] flex-1 flex-col">
+        <div className="mt-4 flex min-h-55 flex-1 flex-col">
           <div className="relative min-h-0 flex-1">
             <Line
             data={{
@@ -865,7 +865,7 @@ function QRBookBorrowing({
                 <button type="button" onClick={stopScanner} className="text-xs font-bold text-red-600 hover:text-red-800">Close</button>
               </div>
               <div className="p-4">
-                <div className="mx-auto aspect-[4/3] w-full max-w-96 overflow-hidden rounded-lg border border-slate-300 bg-black">
+                <div className="mx-auto aspect-4/3 w-full max-w-96 overflow-hidden rounded-lg border border-slate-300 bg-black">
                   <div
                     id="book-borrowing-qr-reader"
                     className="h-full w-full [&_video]:h-full [&_video]:w-full [&_video]:object-cover [&_canvas]:h-full [&_canvas]:w-full"
@@ -1039,7 +1039,7 @@ function QRBookBorrowing({
 export default function SubAdminDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const { books, borrowRequests, attendanceLogs, libraries, visitors } = useLibraryData();
+  const { books, borrowRequests, attendanceLogs, libraries, visitorCount } = useLibraryData();
   const [section, setSection] = useState('overview');
   const [focusRequestId, setFocusRequestId] = useState(null);
   const [focusNotificationType, setFocusNotificationType] = useState(null);
@@ -1108,13 +1108,6 @@ export default function SubAdminDashboard() {
       (a) => a.libraryId === currentLibraryId || a.library_id === currentLibraryId
     );
   }, [attendanceLogs, currentLibraryId]);
-
-  const branchVisitors = useMemo(() => {
-    if (!currentLibraryId) return [];
-    return visitors.filter(
-      (visitor) => visitor.libraryId === currentLibraryId || visitor.library_id === currentLibraryId
-    );
-  }, [visitors, currentLibraryId]);
 
   const branchBookIds = useMemo(
     () => new Set(branchBooks.map((book) => String(book.id))),
@@ -1426,7 +1419,7 @@ export default function SubAdminDashboard() {
   };
 
   const [locallyConfirmedPickups, setLocallyConfirmedPickups] = useState([]);
-  const registeredVisitors = branchVisitors.length;
+  const registeredVisitors = visitorCount;
   const pendingPickups = branchBorrowRequests.filter(
     (r) => r.status === 'ready_for_pickup' && !locallyConfirmedPickups.includes(r.id)
   ).length;
@@ -1667,7 +1660,7 @@ export default function SubAdminDashboard() {
                               {status}
                             </span>
                           </div>
-                          <p className="mt-1 line-clamp-2 break-words text-xs text-slate-500">{item.visitor_name || 'Visitor'} · {item.message || ''}</p>
+                          <p className="mt-1 line-clamp-2 wrap-break-words text-xs text-slate-500">{item.visitor_name || 'Visitor'} · {item.message || ''}</p>
                         </div>
                         <time className="shrink-0 text-xs text-slate-400" dateTime={item.created_at}>
                           {item.created_at ? new Date(item.created_at).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : 'Date unavailable'}
