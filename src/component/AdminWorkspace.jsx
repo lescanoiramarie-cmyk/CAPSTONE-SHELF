@@ -1853,6 +1853,11 @@ export default function AdminWorkspace({
             <h2 className="font-bold text-slate-800">
               {editingAnnouncementId ? 'Edit announcement' : 'New announcement'}
             </h2>
+            {isSubAdmin && (
+              <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-normal text-sky-800">
+                Sub-admin announcements appear on visitor dashboards only, not on the public landing page.
+              </p>
+            )}
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
               Title
               <input
