@@ -44,7 +44,6 @@ function escapeHtml(value: string) {
 }
 
 function formatDate(value: string) {
-function formatDate(value: string) {
   return formatNotificationDate(value);
 }
 
