@@ -126,7 +126,7 @@
 ## Known Testing Blockers
 
 - Production borrowing-history and library-data loads have returned statement-timeout/HTTP 500 errors. Avoid repeated production retries until the scoped query path is deployed and benchmarked.
-- The staff visitor-resolution guard is currently a local source change; the live Vercel bundle must be redeployed before the production behavior changes.
+- Commit `1fd6160` containing the staff visitor-resolution guard and scoped staff borrowing query is pushed, and the live Vercel frontend serves a new bundle. A live sub-admin dashboard load cleared without a timeout, but no `borrow_requests` request was observed in the browser/log capture; keep query-level verification pending.
 - The local `.env` points to the current Supabase project. Local UI testing can therefore mutate live data; do not use it for additional write tests without designated disposable records.
 - The linked Supabase migration ledger was rechecked on 2026-11-03 and matches through `20261210000000`; no migration is pending. Keep the untracked migration source in Git history, but do not apply it again.
 - A local visitor reading-list add/remove was exercised and the temporary item was absent after reload. No borrowing, attendance, inventory, or staff records were changed in that check.

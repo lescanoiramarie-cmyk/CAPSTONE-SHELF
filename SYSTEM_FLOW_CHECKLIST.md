@@ -305,9 +305,11 @@ be exercised in the deployed application with test accounts.
 - [x] Fresh `npm run lint`, `npm run build`, and all 51 Node tests passed.
 - [x] `npx supabase migration list --linked` reports local and remote migration
   ledgers matching through `20261210000000`; do not apply that migration again.
-- [ ] Production borrowing-history timeouts remain an observed reliability
-  issue; the scoped query changes have not been deployed and verified against
-  the production frontend.
+- [ ] Production borrowing-history timeouts were previously observed. Commit
+  `1fd6160` is now pushed, and Vercel serves the new frontend bundle. One live
+  sub-admin dashboard load cleared without a timeout, but the browser/log check
+  did not observe a `borrow_requests` request, so the scoped query itself still
+  needs an authenticated request-level verification.
 - [ ] Full authenticated borrowing, pickup/return, attendance, inventory/staff
   CRUD, account recovery, notification delivery, and direct RLS denials remain
   unverified with role-matched disposable data.
