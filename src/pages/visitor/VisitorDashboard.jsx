@@ -1761,7 +1761,7 @@ function VisitorDashboardContent() {
                                         Borrowed:{' '}
                                       </span>
 
-                                      <span className="min-w-0 break-words text-right text-slate-500 dark:text-slate-300">
+                                      <span className="min-w-0 wrap-break-word text-right text-slate-500 dark:text-slate-300">
                                         {formatDateTime(
                                           transaction.borrowDate
                                         )}
@@ -1777,7 +1777,7 @@ function VisitorDashboardContent() {
                                         Due:{' '}
                                       </span>
 
-                                      <span className="min-w-0 break-words text-right text-slate-500 dark:text-slate-300">
+                                      <span className="min-w-0 wrap-break-word text-right text-slate-500 dark:text-slate-300">
                                         {formatDateTime(
                                           transaction.dueDate
                                         )}
@@ -1793,7 +1793,7 @@ function VisitorDashboardContent() {
                                         Returned:{' '}
                                       </span>
 
-                                      <span className="min-w-0 break-words text-right text-slate-500 dark:text-slate-300">
+                                      <span className="min-w-0 wrap-break-word text-right text-slate-500 dark:text-slate-300">
                                         {formatDateTime(
                                           transaction.returnDate
                                         )}
