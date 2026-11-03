@@ -65,10 +65,11 @@ In Authentication → URL Configuration, set the Site URL to
 `https://shelf-system.vercel.app` and add that origin to the allowed redirect
 URLs. Keep any local development URLs needed for testing.
 
-Allow the production frontend origin for the `visitor-qr-login` Edge Function:
+Allow the current and legacy production frontend origins for the
+`visitor-qr-login` Edge Function:
 
 ```bash
-supabase secrets set APP_ORIGINS="https://shelf-system.vercel.app"
+supabase secrets set APP_ORIGINS="https://shelf-system.vercel.app,https://capstone-shelf.vercel.app"
 supabase functions deploy visitor-qr-login
 ```
 
