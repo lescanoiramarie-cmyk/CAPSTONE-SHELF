@@ -10,9 +10,8 @@ be exercised in the deployed application with test accounts.
 - [x] Repository ESLint check passes.
 - [x] Focused lending and registration regression tests pass.
 - [x] Database migration dry-run targets only the three SHELF changes.
-- [ ] Confirm the deployed frontend is serving the pushed release; the public
-  site was smoke-tested, but its deployed commit was not matched to this
-  workspace.
+- [x] Confirm the public frontend serves the analytics URL correction: the
+  production JavaScript bundle contains the active Render service hostname.
 - [x] Confirm the linked database has all local migrations applied through
   `20261209000000`.
 
@@ -260,7 +259,7 @@ be exercised in the deployed application with test accounts.
   and zero approved community requests lacking a category fallback. No active
   community loans are missing a rate snapshot; 20 already-returned legacy
   loans remain flagged for manual fine review.
-- [x] All 46 available JavaScript regression tests pass after the community
+- [x] All 49 available JavaScript regression tests pass after the community
   legacy fine-rate fix; `npm run lint` and `npm run build` pass.
 - [x] Local FastAPI smoke tests pass for `/health`, valid forecast responses,
   FAQ out-of-scope handling, and invalid forecast input. The public Render
@@ -268,8 +267,8 @@ be exercised in the deployed application with test accounts.
   `geminiConfigured: false`: numeric forecasts work with fallback insights,
   while the Gemini FAQ endpoint returns 503 and the frontend falls back to
   built-in FAQ responses.
-- [ ] Deploy the frontend analytics URL correction. The local frontend now
-  maps the retired Render hostname to `https://shelf-analytics-q24u.onrender.com`
-  and defaults to that active host. The Vercel dashboard account currently
-  selected has no project listed, so its production environment variable and
-  deployment could not be updated or verified.
+- [x] The frontend analytics URL correction is deployed. Its shared URL
+  resolver maps the retired Render hostname to
+  `https://shelf-analytics-q24u.onrender.com`, and defaults to that active host.
+  The Vercel project environment variable was not inspected; the deployed
+  bundle itself was verified to include the active hostname.
