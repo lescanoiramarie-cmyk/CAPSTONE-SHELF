@@ -9,6 +9,7 @@ import {
   LoaderCircle,
 } from 'lucide-react';
 import { FAQS, findFAQResponse } from '../data/faqData.js';
+import { getAnalyticsApiUrl } from '../lib/analyticsApi.js';
 
 const INITIAL_MESSAGE = {
   role: 'bot',
@@ -46,8 +47,9 @@ export default function FAQ() {
     setAsking(true);
 
     try {
-      const apiUrl = import.meta.env.VITE_ANALYTICS_API_URL ||
-        'https://shelf-analytics.onrender.com';
+      const apiUrl = getAnalyticsApiUrl(
+        import.meta.env.VITE_ANALYTICS_API_URL
+      );
 
       const faqCorpus = FAQS.flatMap((group) =>
         group.questions.map((item) => ({

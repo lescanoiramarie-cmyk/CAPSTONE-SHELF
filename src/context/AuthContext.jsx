@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import * as store from '../data/store.js';
 import { AuthContext } from './authContext.js';
 import { supabase } from '../lib/supabaseClient.js';
 
 const SESSION_KEY = 'shelf_ilms_session_v1';
+const SESSION_ACTIVITY_KEY = 'shelf_ilms_last_activity_v1';
+const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+const IDLE_WARNING_TIMEOUT_MS = 5 * 60 * 1000;
 
 const notifyVisitorSessionChanged = () => {
   try {
@@ -55,6 +58,30 @@ export const AuthProvider = ({ children }) => {
     }
   });
   const persistedUserSnapshotRef = useRef(JSON.stringify(user));
+  const [idleSecondsRemaining, setIdleSecondsRemaining] = useState(null);
+  const resetIdleTimerRef = useRef(null);
+  const idleWarningActiveRef = useRef(false);
+
+  const logout = useCallback(async () => {
+    setIdleSecondsRemaining(null);
+    try {
+      if (supabase?.auth) {
+        await supabase.auth.signOut();
+      }
+    } catch (error) {
+      console.error('Supabase logout error:', error);
+    }
+    setUser(null);
+    try {
+      globalThis.localStorage.removeItem(SESSION_KEY);
+      globalThis.sessionStorage.clear();
+    } catch (error) {
+      console.error(
+        'Failed to clear SHELF browser session:',
+        error
+      );
+    }
+  }, []);
 
   useEffect(() => {
     if (!supabase?.auth) return undefined;
@@ -69,6 +96,109 @@ export const AuthProvider = ({ children }) => {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) return undefined;
+
+    let idleTimeout;
+    let warningTimeout;
+    let countdownInterval;
+    let lastActivityAt = 0;
+    let lastBroadcastAt = 0;
+
+    const clearWarning = (updateState = true) => {
+      window.clearTimeout(warningTimeout);
+      window.clearInterval(countdownInterval);
+      warningTimeout = undefined;
+      countdownInterval = undefined;
+      idleWarningActiveRef.current = false;
+      if (updateState) {
+        setIdleSecondsRemaining(null);
+      }
+    };
+
+    const markActivity = (broadcast = true) => {
+      lastActivityAt = Date.now();
+      clearWarning();
+      window.clearTimeout(idleTimeout);
+      idleTimeout = window.setTimeout(() => {
+        idleWarningActiveRef.current = true;
+        const deadline = Date.now() + IDLE_WARNING_TIMEOUT_MS;
+        setIdleSecondsRemaining(
+          Math.ceil(IDLE_WARNING_TIMEOUT_MS / 1000)
+        );
+        countdownInterval = window.setInterval(() => {
+          setIdleSecondsRemaining(
+            Math.max(0, Math.ceil((deadline - Date.now()) / 1000))
+          );
+        }, 1000);
+        warningTimeout = window.setTimeout(() => {
+          void logout();
+        }, IDLE_WARNING_TIMEOUT_MS);
+      }, IDLE_TIMEOUT_MS);
+
+      if (broadcast && Date.now() - lastBroadcastAt >= 1000) {
+        lastBroadcastAt = Date.now();
+        try {
+          window.localStorage.setItem(
+            SESSION_ACTIVITY_KEY,
+            String(lastBroadcastAt)
+          );
+        } catch (error) {
+          console.error('Failed to sync SHELF session activity:', error);
+        }
+      }
+    };
+
+    const handleActivity = (event) => {
+      if (
+        idleWarningActiveRef.current &&
+        event?.target?.closest?.('[data-idle-session-warning]')
+      ) {
+        return;
+      }
+      if (
+        event?.type === 'pointermove' &&
+        Date.now() - lastActivityAt < 1000
+      ) {
+        return;
+      }
+      if (!idleWarningActiveRef.current) {
+        markActivity();
+      }
+    };
+
+    const handleStorage = (event) => {
+      if (event.key !== SESSION_ACTIVITY_KEY) return;
+      const activityAt = Number(event.newValue);
+      if (Number.isFinite(activityAt) && activityAt > lastActivityAt) {
+        markActivity(false);
+      }
+    };
+
+    const stayLoggedIn = () => markActivity();
+    resetIdleTimerRef.current = stayLoggedIn;
+    window.addEventListener('pointerdown', handleActivity, { passive: true });
+    window.addEventListener('pointerdown', handleActivity, { passive: true });
+    window.addEventListener('pointermove', handleActivity, { passive: true });
+    window.addEventListener('keydown', handleActivity);
+    window.addEventListener('touchstart', handleActivity, { passive: true });
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('storage', handleStorage);
+    markActivity();
+
+    return () => {
+      window.clearTimeout(idleTimeout);
+      clearWarning(false);
+      resetIdleTimerRef.current = null;
+      window.removeEventListener('pointerdown', handleActivity);
+      window.removeEventListener('pointermove', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+      window.removeEventListener('touchstart', handleActivity);
+      window.removeEventListener('scroll', handleActivity);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [user?.id, user?.role, logout]);
 
   useEffect(() => {
     if (user?.role !== 'visitor' || !user.id) return undefined;
@@ -144,29 +274,6 @@ export const AuthProvider = ({ children }) => {
       );
     }
   }, [user]);
-
-  // =========================================================
-  // LOGOUT
-  // =========================================================
-  const logout = async () => {
-    try {
-      if (supabase?.auth) {
-        await supabase.auth.signOut();
-      }
-    } catch (error) {
-      console.error('Supabase logout error:', error);
-    }
-    setUser(null);
-    try {
-      globalThis.localStorage.removeItem(SESSION_KEY);
-      globalThis.sessionStorage.clear();
-    } catch (error) {
-      console.error(
-        'Failed to clear SHELF browser session:',
-        error
-      );
-    }
-  };
 
   // =========================================================
   // VISITOR REGISTRATION WITH STRICT DOMAIN CHECKING
@@ -555,6 +662,55 @@ export const AuthProvider = ({ children }) => {
       }}
     >
       {children}
+      {user && idleSecondsRemaining !== null && (
+        <div
+          className="fixed inset-0 z-[9999] grid place-items-center bg-slate-950/60 p-4"
+          data-idle-session-warning
+        >
+          <section
+            aria-labelledby="idle-session-title"
+            aria-describedby="idle-session-description"
+            aria-modal="true"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+            role="dialog"
+          >
+            <h2
+              className="text-xl font-semibold text-slate-900"
+              id="idle-session-title"
+            >
+              Are you still there?
+            </h2>
+            <p
+              className="mt-2 text-sm leading-6 text-slate-600"
+              id="idle-session-description"
+            >
+              You have been inactive for 5 minutes. You will be logged out in{' '}
+              <span className="font-semibold tabular-nums">
+                {Math.floor(idleSecondsRemaining / 60)}:
+                {String(idleSecondsRemaining % 60).padStart(2, '0')}
+              </span>{' '}
+              unless you choose to stay logged in.
+            </p>
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500"
+                onClick={() => void logout()}
+                type="button"
+              >
+                Log out
+              </button>
+              <button
+                autoFocus
+                className="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+                onClick={() => resetIdleTimerRef.current?.()}
+                type="button"
+              >
+                Stay logged in
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </AuthContext.Provider>
   );
 };

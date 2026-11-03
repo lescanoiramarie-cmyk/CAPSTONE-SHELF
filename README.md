@@ -55,7 +55,7 @@ Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and
 `VITE_ANALYTICS_API_URL` in the Vercel project's Production environment, then
 redeploy after changing them. `VITE_ANALYTICS_API_URL` must be the public HTTPS
 base URL of the analytics service (currently
-`https://shelf-analytics.onrender.com`).
+`https://shelf-analytics-q24u.onrender.com`).
 
 Vercel's SPA rewrite is configured in `vercel.json`.
 

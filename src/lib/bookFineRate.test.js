@@ -26,7 +26,14 @@ const fineRateMigration = readFileSync(
 );
 const manualFineRateMigration = readFileSync(
   new URL(
-    '../../supabase/migrations/20261207000000_manual_book_fine_rates.sql',
+    '../../supabase/migrations/20261208000000_manual_book_fine_rates.sql',
+    import.meta.url
+  ),
+  'utf8'
+);
+const communityLegacyFineRateMigration = readFileSync(
+  new URL(
+    '../../supabase/migrations/20261209000000_community_legacy_fine_rate_fallback.sql',
     import.meta.url
   ),
   'utf8'
@@ -170,6 +177,29 @@ test('checkout RPC contracts preserve staff signatures and community lending beh
   assert.match(communityPickup, /b\.lending_enabled/i);
   assert.match(communityPickup, /due_date = now\(\) \+ interval '7 days'/i);
   assert.match(communityPickup, /fine_rate_snapshot\s*=\s*v_fine_rate/i);
+});
+
+test('legacy community books use category rates only when no manual rate is saved', () => {
+  assert.match(
+    communityLegacyFineRateMigration,
+    /COALESCE\(b\.fine_rate, public\.get_category_fine_rate\(b\.category\)\)/i
+  );
+  assert.match(
+    communityLegacyFineRateMigration,
+    /fine_rate_snapshot = v_fine_rate/i
+  );
+  assert.match(
+    communityLegacyFineRateMigration,
+    /v_fine_rate NOT BETWEEN 1 AND 100/i
+  );
+  assert.match(
+    communityLegacyFineRateMigration,
+    /replacement_count <> 1/
+  );
+  assert.doesNotMatch(
+    communityLegacyFineRateMigration,
+    /UPDATE public\.books\s+SET/i
+  );
 });
 
 test('library pickup does not depend on the personal-book lending flag', () => {

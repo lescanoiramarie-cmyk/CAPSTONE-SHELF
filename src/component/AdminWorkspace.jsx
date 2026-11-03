@@ -21,6 +21,7 @@ import {
   getTimeframeRange,
 } from '../lib/analyticsDateRange.js';
 import { getForecastNarrative } from '../lib/forecastNarrative.js';
+import { getAnalyticsApiUrl } from '../lib/analyticsApi.js';
 import { formatBookCategory } from '../lib/bookCategory.js';
 
 ChartJS.register(
@@ -862,11 +863,9 @@ export default function AdminWorkspace({
   };
 
   const runForecast = async () => {
-    const endpoint = import.meta.env.VITE_ANALYTICS_API_URL;
-    if (!endpoint) {
-      setError('Set VITE_ANALYTICS_API_URL to the Python analytics service URL.');
-      return;
-    }
+    const endpoint = getAnalyticsApiUrl(
+      import.meta.env.VITE_ANALYTICS_API_URL
+    );
     if (!analyticsWindow.valid) {
       setError(analyticsWindow.error || 'Please select a valid date range.');
       return;

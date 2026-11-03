@@ -10,10 +10,11 @@ be exercised in the deployed application with test accounts.
 - [x] Repository ESLint check passes.
 - [x] Focused lending and registration regression tests pass.
 - [x] Database migration dry-run targets only the three SHELF changes.
-- [ ] Confirm the deployed frontend is serving the pushed release; only the
-  local development preview was tested.
-- [x] Confirm the linked database has all migrations through
-  `20261206000000`.
+- [ ] Confirm the deployed frontend is serving the pushed release; the public
+  site was smoke-tested, but its deployed commit was not matched to this
+  workspace.
+- [x] Confirm the linked database has all local migrations applied through
+  `20261209000000`.
 
 ## Public landing and navigation
 
@@ -181,3 +182,94 @@ be exercised in the deployed application with test accounts.
   and Gemini service availability were not tested in this local browser run.
 - Python syntax validation could not be run in this environment because the
   `python` command is unavailable.
+
+### Repeat verification on 2026-11-03
+
+- [x] Production build and repository ESLint pass after applying compatible
+  dependency security updates.
+- [x] All 45 available Node regression tests pass.
+- [x] Analytics API Python source syntax passes `py -3` AST parsing.
+- [x] Linked Supabase migration list matches local migrations through
+  `20261208000000`; no pending local migrations were reported.
+- [x] Read-only production database checks report approximately 615 MB by
+  `pg_database_size`; largest relations are `book_reviews` (266 MB),
+  `borrow_requests` (164 MB), `audit_logs` (112 MB), and `attendance_logs`
+  (34 MB). The dashboard screenshot reports 660/500 MB, so its metric differs
+  from SQL by about 45 MB. Estimated dead-row counts are negligible; no data
+  was deleted.
+- [x] Public production landing and registration pages rendered at a 390px
+  viewport. Visitor registration loaded 14 partner choices and the
+  location lists; unauthenticated catalog/staff routes redirected. No failed
+  browser responses or uncaught page errors were observed.
+- [x] Read-only RLS inspection found `borrowed_book_counts` has RLS disabled,
+  but `anon` and `authenticated` have no table privileges.
+- [x] Read-only query plans use the visitor-history, attendance-history,
+  audit-log, and review book-id indexes. The review query still sorts matching
+  rows by `created_at`; a replacement index would consume additional space.
+- [ ] Review two small index candidates before any schema change:
+  `attendance_logs_branch_time_idx` (~4.5 MB) overlaps the used composite
+  attendance index, and `borrow_requests_popular_book_counts_idx` (~3.5 MB)
+  currently reports zero scans. The statistics reset time is unknown, and the
+  combined possible saving (~8 MB) is far below the ~160 MB plan overage.
+- [ ] Optimize broad borrowing-history reads: staff paths can paginate through
+  all `borrow_requests`; database stats show ~34,384 sequential scans and
+  ~93.8 million sequentially read tuples, but stats have no known reset window.
+  Explore scoped reads/summary RPCs and benchmark before changing behavior.
+- [x] On 2026-11-03, after explicit user confirmation to proceed without a
+  backup, deleted reviews beyond the 50 newest per book in batches. This
+  permanently removed 816,060 reviews; no backup was created, so the deleted
+  review history cannot be restored from this operation.
+- [x] Verified 89,650 reviews remain across 1,793 books (exactly 50 per book),
+  with zero rating-aggregate mismatches. The review-summary RPC returned 50
+  reviews and a rating for a sampled book. `VACUUM (FULL, ANALYZE)` reclaimed
+  table space: `book_reviews` fell from 266 MB to 23 MB, and the database from
+  615 MB to 379 MB, below the 500 MB free-tier database cap. This confirms the
+  review path, not every system flow; organization billing metrics may take
+  time to refresh.
+- [x] After the user reported rotating the database password, the linked
+  read-only database-size query and deployed public homepage still succeeded.
+  No new password was requested or recorded; direct-connection integrations
+  still need their own credential update if they use the old password.
+- [ ] Resolve review privacy: authenticated users can read all review rows,
+  including `visitor_id` and `visitor_name` (`anon` has no SELECT grant).
+  New reviews no longer fall back to email for display names; decide whether
+  historical names/IDs should be masked before changing policies or records.
+- [x] Resolved the analytics endpoint mismatch on 2026-11-03. The active
+  Render service uses `https://shelf-analytics-q24u.onrender.com`; the old
+  `shelf-analytics.onrender.com` hostname returned 404. Updated Render CORS
+  configuration for `https://shelf-system.vercel.app`; production `/health`,
+  `/openapi.json`, `/docs`, and `/forecast` respond successfully, and the
+  production-origin CORS preflight returns 200.
+- [ ] One active deployed Edge Function (`smart-responder`) is not present in
+  local function configuration/source; confirm whether it is intentional and
+  review its code before retaining or removing it.
+- [x] `npm audit fix` removed the reported critical and high advisories without
+  force-upgrading packages.
+- [ ] Resolve the remaining 14 moderate advisories (nine in the production
+  dependency tree); do not apply the proposed breaking downgrade without
+  compatibility review.
+- [ ] Authenticated visitor/staff transactions, live account recovery,
+  borrowing/return mutations, production RLS denials, and real notification
+  delivery remain untested; no staging project is currently available, so
+  dedicated non-production accounts must be set up first. No test records or
+  production mutations were created.
+- [x] Applied and verified migration `20261209000000` in Supabase. Community
+  pickup now uses the established category rate only when `books.fine_rate` is
+  NULL; an explicitly saved rate still takes precedence and is snapshotted at
+  pickup. Read-only production checks found zero personal books missing a rate
+  and zero approved community requests lacking a category fallback. No active
+  community loans are missing a rate snapshot; 20 already-returned legacy
+  loans remain flagged for manual fine review.
+- [x] All 46 available JavaScript regression tests pass after the community
+  legacy fine-rate fix; `npm run lint` and `npm run build` pass.
+- [x] Local FastAPI smoke tests pass for `/health`, valid forecast responses,
+  FAQ out-of-scope handling, and invalid forecast input. The public Render
+  service works on its active hostname. Production health reports
+  `geminiConfigured: false`: numeric forecasts work with fallback insights,
+  while the Gemini FAQ endpoint returns 503 and the frontend falls back to
+  built-in FAQ responses.
+- [ ] Deploy the frontend analytics URL correction. The local frontend now
+  maps the retired Render hostname to `https://shelf-analytics-q24u.onrender.com`
+  and defaults to that active host. The Vercel dashboard account currently
+  selected has no project listed, so its production environment variable and
+  deployment could not be updated or verified.
