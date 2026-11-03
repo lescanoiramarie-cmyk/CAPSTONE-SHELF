@@ -5,6 +5,7 @@ import { useAuth } from '../context/useAuth.js';
 import { supabase } from '../lib/supabaseClient';
 import { normalizeBookFineRate } from '../lib/bookFineRate.js';
 import { formatBookCategory } from '../lib/bookCategory.js';
+import { getBookInventoryScope } from '../lib/bookInventoryScope.js';
 
 export default function BookInventory() {
   const { user } = useAuth();
@@ -17,6 +18,12 @@ export default function BookInventory() {
     loading,
     error
   } = useLibrary();
+  const {
+    books: inventoryBooks,
+    libraries: inventoryLibraries,
+    assignedLibraryId,
+    isSubAdmin,
+  } = getBookInventoryScope(books, libraries, user);
 
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('title-asc');
@@ -205,7 +212,7 @@ export default function BookInventory() {
   const getLibraryDisplayName = (libId) => {
     if (!libId) return 'Personal Collection';
 
-    const found = libraries?.find(
+    const found = inventoryLibraries?.find(
       (library) => String(library.id) === String(libId)
     );
 
@@ -224,7 +231,7 @@ export default function BookInventory() {
       category: '',
       fine_rate: '',
       copies: 1,
-      libraryId: libraries?.[0]?.id || '',
+      libraryId: inventoryLibraries?.[0]?.id || '',
       coverUrl: '',
       summary: ''
     });
@@ -264,6 +271,13 @@ export default function BookInventory() {
     setMutationError('');
 
     try {
+      if (
+        isSubAdmin &&
+        (!assignedLibraryId || String(form.libraryId) !== assignedLibraryId)
+      ) {
+        throw new Error('You can only manage inventory for your assigned branch.');
+      }
+
       const fineRate = normalizeBookFineRate(form.fine_rate);
       let coverUrl = form.coverUrl;
 
@@ -325,7 +339,7 @@ export default function BookInventory() {
     }
   };
 
-  const filteredBooks = (books || [])
+  const filteredBooks = inventoryBooks
     .filter((book) => {
       const q = search.toLowerCase();
 
@@ -705,13 +719,16 @@ export default function BookInventory() {
                   onChange={(e) =>
                     setForm({ ...form, libraryId: e.target.value })
                   }
+                  disabled={isSubAdmin}
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="">
-                    Personal Collection / Main Branch
-                  </option>
+                  {!isSubAdmin && (
+                    <option value="">
+                      Personal Collection / Main Branch
+                    </option>
+                  )}
 
-                  {(libraries || []).map((lib) => (
+                  {inventoryLibraries.map((lib) => (
                     <option key={lib.id} value={lib.id}>
                       {lib.name}
                     </option>
