@@ -1170,8 +1170,9 @@
     min-height: 0;
   }
 
-  .visitor-dashboard .visitor-community-book-card .visitor-book-card-meta {
-    gap: 0.5rem 0.75rem;
+  .visitor-dashboard .visitor-community-book-card .visitor-book-card-meta,
+  .visitor-dashboard .visitor-community-book-card .visitor-book-card-footer {
+    display: none;
   }
 
   .visitor-dashboard .visitor-community-book-card .visitor-book-card-footer:not(.visitor-reading-list-footer),
