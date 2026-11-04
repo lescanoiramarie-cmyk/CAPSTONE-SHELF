@@ -53,6 +53,7 @@ import VisitorTermsContent, {
   VISITOR_TERMS_VERSION,
 } from '../../component/VisitorTermsContent.jsx';
 import DashboardDataBoundary from '../../component/DashboardDataBoundary.jsx';
+import VisitorProfilePhotoCropDialog from '../../component/VisitorProfilePhotoCropDialog.jsx';
 
 function formatDateTime(iso) {
   if (!iso) {
@@ -250,6 +251,7 @@ function VisitorDashboardContent() {
   });
   const [profileImageFile, setProfileImageFile] = useState(null);
   const [profileImagePreview, setProfileImagePreview] = useState('');
+  const [pendingProfileImageFile, setPendingProfileImageFile] = useState(null);
   const [removeProfileImage, setRemoveProfileImage] = useState(false);
   const [failedProfileImageSrc, setFailedProfileImageSrc] = useState('');
   const [signedProfileImage, setSignedProfileImage] = useState({
@@ -702,8 +704,13 @@ function VisitorDashboardContent() {
 
     setProfileError('');
     setProfileMessage('');
+    setPendingProfileImageFile(file);
+  };
+
+  const handleProfileImageCrop = (file) => {
     setProfileImageFile(file);
     setProfileImagePreview(URL.createObjectURL(file));
+    setPendingProfileImageFile(null);
     setRemoveProfileImage(false);
     setFailedProfileImageSrc('');
   };
@@ -715,6 +722,7 @@ function VisitorDashboardContent() {
     });
     setProfileImageFile(null);
     setProfileImagePreview('');
+    setPendingProfileImageFile(null);
     setRemoveProfileImage(false);
     setFailedProfileImageSrc('');
     setProfileError('');
@@ -1828,7 +1836,7 @@ function VisitorDashboardContent() {
                             className="sr-only"
                           />
                           <span className="mt-1 block text-xs font-normal text-slate-500 dark:text-slate-400">
-                            JPG, PNG, or WEBP up to 2 MB
+                            JPG, PNG, or WEBP up to 2 MB. You can crop it before saving.
                           </span>
                         </label>
                         {(profileImageSrc || visitorDetails?.profileImagePath) && (
@@ -1863,7 +1871,7 @@ function VisitorDashboardContent() {
                         </button>
                         <button
                           type="submit"
-                          disabled={isSavingProfile}
+                          disabled={isSavingProfile || Boolean(pendingProfileImageFile)}
                           className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-shelf-primary px-3 py-2 text-sm font-bold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <Save size={15} aria-hidden="true" />
@@ -2281,6 +2289,13 @@ function VisitorDashboardContent() {
             </div>
           </aside>
         </div>
+      )}
+      {pendingProfileImageFile && (
+          <VisitorProfilePhotoCropDialog
+            file={pendingProfileImageFile}
+            onCancel={() => setPendingProfileImageFile(null)}
+            onApply={handleProfileImageCrop}
+          />
       )}
 
       {isTermsReviewOpen && (

@@ -28,6 +28,17 @@ const activeBorrowDashboardIndexMigration = readFileSync(
   ),
   'utf8'
 );
+const visitorProfileImageStorageMigration = readFileSync(
+  new URL(
+    '../../supabase/migrations/20261213000000_fix_visitor_profile_image_upload_rls.sql',
+    import.meta.url
+  ),
+  'utf8'
+);
+const visitorProfilePhotoCropSource = readFileSync(
+  new URL('../component/VisitorProfilePhotoCropDialog.jsx', import.meta.url),
+  'utf8'
+);
 
 test('restoring the saved auth user does not dispatch a duplicate initial data refresh', () => {
   assert.match(
@@ -255,4 +266,23 @@ test('active and queued staff requests have a partial dashboard index', () => {
     activeBorrowDashboardIndexMigration,
     /WHERE status IN\s*\('pending',\s*'queued',\s*'ready_for_pickup',\s*'borrowed'\)/i
   );
+});
+
+test('visitor profile photo storage upload is owner-scoped and relies on bucket file limits', () => {
+  const insertPolicy = visitorProfileImageStorageMigration.match(
+    /create policy "Visitors can upload own profile images"[\s\S]*?for insert[\s\S]*?with check \(([\s\S]*?)\n\);/i
+  );
+  assert.ok(insertPolicy, 'Expected a visitor-owned storage insert policy.');
+  assert.match(insertPolicy[1], /bucket_id = 'visitor-profile-images'/);
+  assert.match(insertPolicy[1], /visitor\.auth_user_id = auth\.uid\(\)/);
+  assert.match(insertPolicy[1], /visitor\.otp_verified/);
+  assert.match(insertPolicy[1], /visitor\.is_active/);
+  assert.doesNotMatch(insertPolicy[1], /metadata/i);
+});
+
+test('visitor profile photo selection opens a draggable square crop workflow', () => {
+  assert.match(visitorProfilePhotoCropSource, /Crop profile photo/);
+  assert.match(visitorProfilePhotoCropSource, /onPointerMove/);
+  assert.match(visitorProfilePhotoCropSource, /type="range"/);
+  assert.match(visitorProfilePhotoCropSource, /OUTPUT_SIZE = 512/);
 });
