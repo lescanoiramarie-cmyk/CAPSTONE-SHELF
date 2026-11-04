@@ -964,7 +964,7 @@ function VisitorDashboardContent() {
       />
 
       <section
-        className="absolute right-0 z-50 mt-3 w-[min(92vw,380px)] overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-800 shadow-2xl dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+        className="visitor-notifications-panel absolute right-0 z-50 mt-3 w-[min(92vw,380px)] overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-800 shadow-2xl dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
         aria-label="Community book notifications"
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">

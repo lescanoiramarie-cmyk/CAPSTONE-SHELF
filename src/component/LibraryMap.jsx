@@ -270,7 +270,7 @@ export default function LibraryMap({
             className={
               isMapFullscreen
                 ? 'fixed inset-0 z-9999 h-screen w-screen overflow-hidden bg-white'
-                : 'relative isolate z-0 h-[380px] min-w-0 w-full overflow-hidden rounded-xl border border-slate-200 shadow-sm sm:h-[480px] md:h-[540px] lg:h-[640px]'
+                : 'relative isolate z-0 h-[320px] min-w-0 w-full overflow-hidden rounded-xl border border-slate-200 shadow-sm sm:h-[480px] md:h-[540px] lg:h-[640px]'
             }
           >
             <button
@@ -432,7 +432,7 @@ export default function LibraryMap({
         <div
           className={
             showMap
-              ? 'h-[380px] min-w-0 space-y-2 overflow-y-auto overscroll-contain pr-2 sm:h-[480px] md:h-[540px] lg:h-[640px]'
+              ? 'min-w-0 space-y-2 sm:h-[480px] sm:overflow-y-auto sm:overscroll-contain sm:pr-2 md:h-[540px] lg:h-[640px]'
               : 'min-w-0 space-y-2'
           }
         >

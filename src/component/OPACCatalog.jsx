@@ -2524,7 +2524,7 @@ export default function OPACCatalog({
                 </p>
               </div>
             ) : (
-              <div className="opac-book-grid book-card-grid visitor-book-collection-grid">
+              <div className="opac-book-grid book-card-grid visitor-book-collection-grid visitor-community-book-grid">
                 {filteredCommunityBooks.map(renderCommunityBookCard)}
               </div>
             )}
@@ -3143,7 +3143,11 @@ export default function OPACCatalog({
                             </span>
                           )}
                         </td>
-                        <td data-label="Action" className="p-4 pl-6 text-right">
+                        <td
+                          data-label="Action"
+                          data-has-action={canCancel}
+                          className="p-4 pl-6 text-right"
+                        >
                           {canCancel && (
                             <button
                               type="button"
