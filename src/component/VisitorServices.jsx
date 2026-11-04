@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Bell,
   CheckCircle2,
@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient.js';
 import { findFAQResponse } from '../data/faqData.js';
+import { useProgressiveList } from '../hooks/useProgressiveList.js';
+import ProgressiveListFooter from './ProgressiveListFooter.jsx';
 
 const emptyForm = {
   category: 'Question',
@@ -34,6 +36,8 @@ export default function VisitorServices({ user, libraries = [] }) {
   const [loadError, setLoadError] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [announcementSearch, setAnnouncementSearch] = useState('');
+  const [replySearch, setReplySearch] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -86,6 +90,20 @@ export default function VisitorServices({ user, libraries = [] }) {
   }, [user?.email, user?.id]);
 
   const faqMatch = findFAQResponse(`${form.subject} ${form.message}`);
+  const filteredAnnouncements = useMemo(() => {
+    const term = announcementSearch.trim().toLowerCase();
+    return announcements.filter((item) =>
+      !term || `${item.title || ''} ${item.message || ''}`.toLowerCase().includes(term)
+    );
+  }, [announcementSearch, announcements]);
+  const announcementList = useProgressiveList(filteredAnnouncements, 8);
+  const filteredReplies = useMemo(() => {
+    const term = replySearch.trim().toLowerCase();
+    return replies.filter((reply) =>
+      !term || `${reply.subject || ''} ${reply.admin_reply || ''}`.toLowerCase().includes(term)
+    );
+  }, [replySearch, replies]);
+  const replyList = useProgressiveList(filteredReplies, 8);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -139,6 +157,18 @@ export default function VisitorServices({ user, libraries = [] }) {
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Updates and notices from the library team</p>
           </div>
         </div>
+        {announcements.length > 0 && (
+          <label className="mb-4 block">
+            <span className="sr-only">Search announcements</span>
+            <input
+              type="search"
+              value={announcementSearch}
+              onChange={(event) => setAnnouncementSearch(event.target.value)}
+              placeholder="Search announcements"
+              className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+            />
+          </label>
+        )}
 
         {loading && (
           <div className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500 dark:bg-slate-900/60 dark:text-slate-400">
@@ -152,8 +182,13 @@ export default function VisitorServices({ user, libraries = [] }) {
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">No announcements are currently published.</p>
           </div>
         )}
+        {!loading && announcements.length > 0 && filteredAnnouncements.length === 0 && (
+          <p className="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-600 dark:text-slate-400">
+            No announcements match your search.
+          </p>
+        )}
         <div className="space-y-3">
-          {announcements.map((item) => (
+          {announcementList.visibleItems.map((item) => (
             <article key={item.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/40">
               <div className="flex items-start justify-between gap-3">
                 <h3 className="min-w-0 break-words font-semibold text-slate-900 dark:text-slate-100">{item.title}</h3>
@@ -166,6 +201,14 @@ export default function VisitorServices({ user, libraries = [] }) {
               </time>
             </article>
           ))}
+          <ProgressiveListFooter
+            noun="announcements"
+            totalCount={filteredAnnouncements.length}
+            visibleCount={announcementList.visibleCount}
+            hasMore={announcementList.hasMore}
+            loadMore={announcementList.loadMore}
+            sentinelRef={announcementList.sentinelRef}
+          />
         </div>
       </section>
 
@@ -244,13 +287,29 @@ export default function VisitorServices({ user, libraries = [] }) {
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Responses from the library team will appear here.</p>
           </div>
         </div>
+        {replies.length > 0 && (
+          <label className="mb-4 block">
+            <span className="sr-only">Search replies to your feedback</span>
+            <input
+              type="search"
+              value={replySearch}
+              onChange={(event) => setReplySearch(event.target.value)}
+              placeholder="Search your feedback replies"
+              className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+            />
+          </label>
+        )}
         {replies.length === 0 && !loadError ? (
           <div className="flex min-h-28 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-center dark:border-slate-600 dark:bg-slate-900/40">
             <p className="text-sm text-slate-500 dark:text-slate-400">No replies yet. We will let you know when the library team responds.</p>
           </div>
+        ) : replies.length > 0 && filteredReplies.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-600 dark:text-slate-400">
+            No replies match your search.
+          </p>
         ) : replies.length > 0 ? (
           <div className="grid gap-3 md:grid-cols-2">
-            {replies.map((reply) => (
+            {replyList.visibleItems.map((reply) => (
               <article key={reply.id} className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/40">
                 <h3 className="break-words text-sm font-semibold text-slate-900 dark:text-slate-100">{reply.subject}</h3>
                 <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-600 dark:text-slate-300">{reply.admin_reply}</p>
@@ -262,6 +321,15 @@ export default function VisitorServices({ user, libraries = [] }) {
                 )}
               </article>
             ))}
+            <ProgressiveListFooter
+              noun="replies"
+              totalCount={filteredReplies.length}
+              visibleCount={replyList.visibleCount}
+              hasMore={replyList.hasMore}
+              loadMore={replyList.loadMore}
+              sentinelRef={replyList.sentinelRef}
+              className="md:col-span-2"
+            />
           </div>
         ) : null}
       </section>

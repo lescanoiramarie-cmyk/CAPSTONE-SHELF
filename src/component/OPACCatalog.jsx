@@ -42,6 +42,8 @@ import {
   getBookFineRate,
   normalizeBookFineRate,
 } from '../lib/bookFineRate.js';
+import { useProgressiveList } from '../hooks/useProgressiveList.js';
+import ProgressiveListFooter from './ProgressiveListFooter.jsx';
 
 // =========================================================
 // DATE HELPERS
@@ -290,6 +292,12 @@ export default function OPACCatalog({
   // =========================================================
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [personalBookSearch, setPersonalBookSearch] = useState('');
+  const [personalBookVisibilityFilter, setPersonalBookVisibilityFilter] = useState('all');
+  const [readingListSearch, setReadingListSearch] = useState('');
+  const [myRequestSearch, setMyRequestSearch] = useState('');
+  const [myRequestStatus, setMyRequestStatus] = useState('all');
+  const [ownerCommunityRequestSearch, setOwnerCommunityRequestSearch] = useState('');
   const [sortBy, setSortBy] = useState('title-asc');
   const [catalogPage, setCatalogPage] = useState(1);
   const catalogPageSize = 20;
@@ -421,19 +429,24 @@ export default function OPACCatalog({
   const loadingOwnerCommunityRequests =
     libraryLoading && ownerCommunityRequests.length === 0;
   const filteredOwnerCommunityRequests = useMemo(() => {
-    if (ownerCommunityRequestFilter === 'all') {
-      return ownerCommunityRequests;
-    }
     const selectedFilter = OWNER_COMMUNITY_REQUEST_FILTERS.find(
       (filter) => filter.key === ownerCommunityRequestFilter
     );
-    return selectedFilter?.status
-      ? ownerCommunityRequests.filter(
-          (request) =>
-            getOwnerCommunityRequestStatus(request) === selectedFilter.status
-        )
-      : ownerCommunityRequests;
-  }, [ownerCommunityRequestFilter, ownerCommunityRequests]);
+    const term = ownerCommunityRequestSearch.trim().toLowerCase();
+    return ownerCommunityRequests.filter((request) => {
+      const matchesStatus =
+        ownerCommunityRequestFilter === 'all' ||
+        !selectedFilter?.status ||
+        getOwnerCommunityRequestStatus(request) === selectedFilter.status;
+      const matchesSearch =
+        !term ||
+        `${request.bookTitle || ''} ${request.requesterName || ''}`
+          .toLowerCase()
+          .includes(term);
+      return matchesStatus && matchesSearch;
+    });
+  }, [ownerCommunityRequestFilter, ownerCommunityRequestSearch, ownerCommunityRequests]);
+  const ownerRequestList = useProgressiveList(filteredOwnerCommunityRequests, 8);
   const [showAddPersonalBook, setShowAddPersonalBook] = useState(false);
   const [editingPersonalBook, setEditingPersonalBook] = useState(null);
   const [savingPersonalBook, setSavingPersonalBook] = useState(false);
@@ -1376,6 +1389,21 @@ export default function OPACCatalog({
     user?.fullName,
     user?.full_name,
   ]);
+  const filteredMyRequests = useMemo(() => {
+    const term = myRequestSearch.trim().toLowerCase();
+    return myRequests.filter((request) => {
+      const matchesStatus =
+        myRequestStatus === 'all' ||
+        String(request.status || '').toLowerCase() === myRequestStatus;
+      const matchesSearch =
+        !term ||
+        `${request.bookTitle || ''} ${request.ownerName || ''}`
+          .toLowerCase()
+          .includes(term);
+      return matchesStatus && matchesSearch;
+    });
+  }, [myRequestSearch, myRequestStatus, myRequests]);
+  const myRequestList = useProgressiveList(filteredMyRequests, 12);
   useEffect(() => {
     if (
       !focusRequestId ||
@@ -1398,16 +1426,22 @@ export default function OPACCatalog({
   // SEARCH FILTERS FOR PERSONAL & COMMUNITY
   // =========================================================
   const filteredPersonalBooks = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    if (!term) return personalBooks;
-    return personalBooks.filter(
-      (book) =>
-        String(book.title || '').toLowerCase().includes(term) ||
-        String(book.author || '').toLowerCase().includes(term) ||
-        String(book.category || '').toLowerCase().includes(term) ||
-        String(book.isbn || '').toLowerCase().includes(term)
-    );
-  }, [personalBooks, searchTerm]);
+    const term = personalBookSearch.trim().toLowerCase();
+    return personalBooks.filter((book) => {
+      const matchesSearch =
+        !term ||
+        `${book.title || ''} ${book.author || ''} ${book.category || ''} ${book.isbn || ''}`
+          .toLowerCase()
+          .includes(term);
+      const matchesVisibility =
+        personalBookVisibilityFilter === 'all' ||
+        (personalBookVisibilityFilter === 'public' && Boolean(book.isPublic)) ||
+        (personalBookVisibilityFilter === 'private' && !book.isPublic) ||
+        (personalBookVisibilityFilter === 'lending' && Boolean(book.lendingEnabled)) ||
+        (personalBookVisibilityFilter === 'not-lending' && !book.lendingEnabled);
+      return matchesSearch && matchesVisibility;
+    });
+  }, [personalBookSearch, personalBookVisibilityFilter, personalBooks]);
   const filteredCommunityBooks = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     if (!term) return communityBooks;
@@ -1419,6 +1453,17 @@ export default function OPACCatalog({
         String(book.isbn || '').toLowerCase().includes(term)
     );
   }, [communityBooks, searchTerm]);
+  const personalBookList = useProgressiveList(filteredPersonalBooks, 12);
+  const readingListFilteredBooks = useMemo(() => {
+    const term = readingListSearch.trim().toLowerCase();
+    if (!term) return readingListBooks;
+    return readingListBooks.filter((book) =>
+      `${book.title || ''} ${book.author || ''} ${book.category || ''} ${book.isbn || ''}`
+        .toLowerCase()
+        .includes(term)
+    );
+  }, [readingListBooks, readingListSearch]);
+  const readingList = useProgressiveList(readingListFilteredBooks, 12);
 
   // =========================================================
   // BORROW / RESERVE HANDLER (WITH GUEST MODAL CHECK)
@@ -2396,6 +2441,18 @@ export default function OPACCatalog({
                 </p>
               </div>
             </div>
+            {readingListBooks.length > 0 && (
+              <label className="block">
+                <span className="sr-only">Search your reading list</span>
+                <input
+                  type="search"
+                  value={readingListSearch}
+                  onChange={(event) => setReadingListSearch(event.target.value)}
+                  placeholder="Search title, author, category, or ISBN"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                />
+              </label>
+            )}
             {readingListLoading ? (
               <div className="rounded-xl border border-slate-200 bg-white p-10 text-center">
                 <p className="text-sm text-slate-500">
@@ -2412,9 +2469,20 @@ export default function OPACCatalog({
                   Save books you want to revisit later from the catalog or book details.
                 </p>
               </div>
+            ) : readingListFilteredBooks.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center dark:border-slate-700 dark:bg-slate-800">
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">No saved books match that search.</p>
+                <button
+                  type="button"
+                  onClick={() => setReadingListSearch('')}
+                  className="mt-3 min-h-11 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-100"
+                >
+                  Clear search
+                </button>
+              </div>
             ) : (
               <div className="visitor-book-collection-grid">
-                {readingListBooks.map((book) => (
+                {readingList.visibleItems.map((book) => (
                   <article
                     key={book.id}
                     className="visitor-book-card visitor-reading-list-card"
@@ -2481,6 +2549,15 @@ export default function OPACCatalog({
                     </div>
                   </article>
                 ))}
+                <ProgressiveListFooter
+                  noun="books"
+                  totalCount={readingListFilteredBooks.length}
+                  visibleCount={readingList.visibleCount}
+                  hasMore={readingList.hasMore}
+                  loadMore={readingList.loadMore}
+                  sentinelRef={readingList.sentinelRef}
+                  className="col-span-full w-full"
+                />
               </div>
             )}
           </section>
@@ -2551,11 +2628,37 @@ export default function OPACCatalog({
                   resetPersonalBookForm();
                   setShowAddPersonalBook(true);
                 }}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white hover:opacity-90"
+                className="visitor-add-personal-book-button inline-flex items-center justify-center gap-2 rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white hover:opacity-90"
               >
                 <Plus size={16} aria-hidden="true" />
                 Add personal book
               </button>
+            </div>
+            <div className="order-2 grid w-full min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,auto)]">
+              <label>
+                <span className="sr-only">Search personal books</span>
+                <input
+                  type="search"
+                  value={personalBookSearch}
+                  onChange={(event) => setPersonalBookSearch(event.target.value)}
+                  placeholder="Search title, author, category, or ISBN"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                />
+              </label>
+              <label>
+                <span className="sr-only">Filter personal books</span>
+                <select
+                  value={personalBookVisibilityFilter}
+                  onChange={(event) => setPersonalBookVisibilityFilter(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                >
+                  <option value="all">All personal books</option>
+                  <option value="public">Public</option>
+                  <option value="private">Private</option>
+                  <option value="lending">Available for lending</option>
+                  <option value="not-lending">Not for lending</option>
+                </select>
+              </label>
             </div>
             <div className="order-3 w-full min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
               <div className="border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-700 dark:bg-slate-900/60">
@@ -2606,6 +2709,20 @@ export default function OPACCatalog({
                   >
                     <X size={16} aria-hidden="true" />
                   </button>
+                </div>
+              )}
+              {ownerCommunityRequests.length > 0 && (
+                <div className="px-4 pt-4 sm:px-5">
+                  <label className="block">
+                    <span className="sr-only">Search community book requests</span>
+                    <input
+                      type="search"
+                      value={ownerCommunityRequestSearch}
+                      onChange={(event) => setOwnerCommunityRequestSearch(event.target.value)}
+                      placeholder="Search by book or requester"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                    />
+                  </label>
                 </div>
               )}
               {!loadingOwnerCommunityRequests && ownerCommunityRequests.length > 0 && (
@@ -2676,11 +2793,11 @@ export default function OPACCatalog({
                 </div>
               ) : filteredOwnerCommunityRequests.length === 0 ? (
                 <div className="p-6 text-center text-xs text-slate-500">
-                  No requests in this category.
+                  No requests match your selected status or search.
                 </div>
               ) : (
                 <div className="grid gap-3 p-4 sm:p-5">
-                  {filteredOwnerCommunityRequests.map((request) => {
+                  {ownerRequestList.visibleItems.map((request) => {
                     const status = getOwnerCommunityRequestStatus(request);
                     const isProcessing = processingCommunityRequestId === request.id;
                     return (
@@ -2830,6 +2947,16 @@ export default function OPACCatalog({
                   })}
                 </div>
               )}
+              {!loadingOwnerCommunityRequests && filteredOwnerCommunityRequests.length > 0 && (
+                <ProgressiveListFooter
+                  noun="requests"
+                  totalCount={filteredOwnerCommunityRequests.length}
+                  visibleCount={ownerRequestList.visibleCount}
+                  hasMore={ownerRequestList.hasMore}
+                  loadMore={ownerRequestList.loadMore}
+                  sentinelRef={ownerRequestList.sentinelRef}
+                />
+              )}
             </div>
             {personalBookError && (
               <div className="order-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
@@ -2841,6 +2968,20 @@ export default function OPACCatalog({
                 <p className="text-sm text-slate-500 dark:text-slate-400">
                   Loading your personal books...
                 </p>
+              </div>
+            ) : filteredPersonalBooks.length === 0 && personalBooks.length > 0 ? (
+              <div className="order-2 w-full min-w-0 rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center dark:border-slate-700 dark:bg-slate-800">
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">No personal books match your search or filter.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPersonalBookSearch('');
+                    setPersonalBookVisibilityFilter('all');
+                  }}
+                  className="mt-3 min-h-11 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-100"
+                >
+                  Clear filters
+                </button>
               </div>
             ) : filteredPersonalBooks.length === 0 ? (
               <div className="order-2 w-full min-w-0 rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center dark:border-slate-700 dark:bg-slate-800">
@@ -2867,7 +3008,16 @@ export default function OPACCatalog({
               </div>
             ) : (
               <div className="personal-book-card-grid visitor-book-collection-grid order-2 w-full min-w-0">
-                {filteredPersonalBooks.map(renderPersonalBookCard)}
+                {personalBookList.visibleItems.map(renderPersonalBookCard)}
+                <ProgressiveListFooter
+                  noun="books"
+                  totalCount={filteredPersonalBooks.length}
+                  visibleCount={personalBookList.visibleCount}
+                  hasMore={personalBookList.hasMore}
+                  loadMore={personalBookList.loadMore}
+                  sentinelRef={personalBookList.sentinelRef}
+                  className="col-span-full w-full"
+                />
               </div>
             )}
           </section>
@@ -2891,6 +3041,41 @@ export default function OPACCatalog({
                 </button>
               </div>
             )}
+            {myRequests.length > 0 && (
+              <div className="grid gap-3 border-b border-slate-200 p-4 dark:border-slate-700 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,auto)]">
+                <label>
+                  <span className="sr-only">Search requests and borrows</span>
+                  <input
+                    type="search"
+                    value={myRequestSearch}
+                    onChange={(event) => setMyRequestSearch(event.target.value)}
+                    placeholder="Search by book or owner"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  />
+                </label>
+                <label>
+                  <span className="sr-only">Filter requests by status</span>
+                  <select
+                    value={myRequestStatus}
+                    onChange={(event) => setMyRequestStatus(event.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  >
+                    <option value="all">All statuses</option>
+                    {[...new Set(myRequests.map((request) => String(request.status || '').toLowerCase()))]
+                      .filter(Boolean)
+                      .sort()
+                      .map((status) => (
+                        <option key={status} value={status}>
+                          {STATUS_LABELS[status] || status.replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase())}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <p className="text-xs text-slate-500 dark:text-slate-400 sm:col-span-2" aria-live="polite">
+                  {filteredMyRequests.length} {filteredMyRequests.length === 1 ? 'request' : 'requests'} found
+                </p>
+              </div>
+            )}
             {myRequests.length === 0 && borrowRequestsLoading ? null : myRequests.length === 0 && borrowRequestsLoadError ? (
               <p className="p-6 text-sm text-slate-500">
                 Your request list will appear here when the borrowing history can be loaded.
@@ -2899,7 +3084,22 @@ export default function OPACCatalog({
               <p className="p-6 text-sm text-slate-500">
                 You have no borrow requests yet. Browse the catalog to get started.
               </p>
+            ) : filteredMyRequests.length === 0 ? (
+              <div className="p-6 text-center">
+                <p className="text-sm text-slate-600 dark:text-slate-300">No requests match your search or status filter.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMyRequestSearch('');
+                    setMyRequestStatus('all');
+                  }}
+                  className="mt-3 min-h-11 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-100"
+                >
+                  Clear filters
+                </button>
+              </div>
             ) : (
+              <>
               <table className="visitor-requests-table-content w-full text-left text-sm">
                 <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase tracking-wider">
                   <tr>
@@ -2911,7 +3111,7 @@ export default function OPACCatalog({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {myRequests.map((request) => {
+                  {myRequestList.visibleItems.map((request) => {
                     const currentFine = calculateCurrentFine(request);
                     const isCommunityRequest =
                       request?.isCommunityBook === true ||
@@ -3164,6 +3364,15 @@ export default function OPACCatalog({
                   })}
                 </tbody>
               </table>
+              <ProgressiveListFooter
+                noun="requests"
+                totalCount={filteredMyRequests.length}
+                visibleCount={myRequestList.visibleCount}
+                hasMore={myRequestList.hasMore}
+                loadMore={myRequestList.loadMore}
+                sentinelRef={myRequestList.sentinelRef}
+              />
+              </>
             )}
           </div>
         )}
