@@ -39,6 +39,13 @@ const visitorProfilePhotoCropSource = readFileSync(
   new URL('../component/VisitorProfilePhotoCropDialog.jsx', import.meta.url),
   'utf8'
 );
+const visitorAddressReadOnlyMigration = readFileSync(
+  new URL(
+    '../../supabase/migrations/20261214000000_keep_visitor_address_read_only.sql',
+    import.meta.url
+  ),
+  'utf8'
+);
 
 test('restoring the saved auth user does not dispatch a duplicate initial data refresh', () => {
   assert.match(
@@ -285,4 +292,20 @@ test('visitor profile photo selection opens a draggable square crop workflow', (
   assert.match(visitorProfilePhotoCropSource, /onPointerMove/);
   assert.match(visitorProfilePhotoCropSource, /type="range"/);
   assert.match(visitorProfilePhotoCropSource, /OUTPUT_SIZE = 512/);
+});
+
+test('visitor address is read-only in the profile editor and database update path', () => {
+  const updateProfileFunction = storeSource.match(
+    /export async function updateVisitorProfile\([\s\S]*?\n\}/
+  );
+  assert.ok(updateProfileFunction, 'Expected the visitor profile update function.');
+  assert.doesNotMatch(updateProfileFunction[0], /normalizedAddress|\baddress\s*:/);
+  assert.match(visitorAddressReadOnlyMigration, /revoke update \(address\)/i);
+
+  const visitorProfileEditor = readFileSync(
+    new URL('../pages/visitor/VisitorDashboard.jsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(visitorProfileEditor, /Edit profile[\s\S]*?Contact number/);
+  assert.doesNotMatch(visitorProfileEditor, /profileForm\.address|Address\s*<textarea/);
 });

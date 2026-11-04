@@ -245,10 +245,7 @@ function VisitorDashboardContent() {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profileMessage, setProfileMessage] = useState('');
-  const [profileForm, setProfileForm] = useState({
-    contactNumber: '',
-    address: '',
-  });
+  const [profileForm, setProfileForm] = useState({ contactNumber: '' });
   const [profileImageFile, setProfileImageFile] = useState(null);
   const [profileImagePreview, setProfileImagePreview] = useState('');
   const [pendingProfileImageFile, setPendingProfileImageFile] = useState(null);
@@ -718,7 +715,6 @@ function VisitorDashboardContent() {
   const cancelProfileEdit = () => {
     setProfileForm({
       contactNumber: visitorDetails?.contactNumber || '',
-      address: visitorDetails?.address || '',
     });
     setProfileImageFile(null);
     setProfileImagePreview('');
@@ -734,13 +730,8 @@ function VisitorDashboardContent() {
     if (isSavingProfile) return;
 
     const contactNumber = profileForm.contactNumber.trim();
-    const address = profileForm.address.trim();
     if (contactNumber.length > 50) {
       setProfileError('Contact number must not exceed 50 characters.');
-      return;
-    }
-    if (address.length > 1000) {
-      setProfileError('Address must not exceed 1,000 characters.');
       return;
     }
     if (!visitorDetails?.id) {
@@ -784,7 +775,6 @@ function VisitorDashboardContent() {
       const savedProfile = await updateVisitorProfile({
         visitorId: visitorDetails.id,
         contactNumber,
-        address,
         profileImagePath,
       });
 
@@ -1808,19 +1798,6 @@ function VisitorDashboardContent() {
                             className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                           />
                         </label>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
-                          Address
-                          <textarea
-                            rows={3}
-                            maxLength={1000}
-                            value={profileForm.address}
-                            onChange={(event) => setProfileForm((current) => ({
-                              ...current,
-                              address: event.target.value,
-                            }))}
-                            className="mt-1 w-full resize-y border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                          />
-                        </label>
                       </section>
 
                       <section className="space-y-2">
@@ -1890,7 +1867,6 @@ function VisitorDashboardContent() {
                           onClick={() => {
                             setProfileForm({
                               contactNumber: visitorDetails?.contactNumber || '',
-                              address: visitorDetails?.address || '',
                             });
                             setProfileError('');
                             setProfileMessage('');

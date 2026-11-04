@@ -1735,7 +1735,6 @@ export async function getVisitor(
 export async function updateVisitorProfile({
   visitorId,
   contactNumber,
-  address,
   profileImagePath,
 }) {
   if (!supabase) {
@@ -1744,7 +1743,6 @@ export async function updateVisitorProfile({
 
   const normalizedVisitorId = normalizeText(visitorId);
   const normalizedContactNumber = normalizeText(contactNumber);
-  const normalizedAddress = normalizeText(address);
   const normalizedProfileImagePath = normalizeText(profileImagePath);
 
   if (!normalizedVisitorId || !isValidVisitorId(normalizedVisitorId)) {
@@ -1752,9 +1750,6 @@ export async function updateVisitorProfile({
   }
   if (normalizedContactNumber.length > 50) {
     throw new Error('Contact number must not exceed 50 characters.');
-  }
-  if (normalizedAddress.length > 1000) {
-    throw new Error('Address must not exceed 1,000 characters.');
   }
   if (normalizedProfileImagePath.length > 2048) {
     throw new Error('Profile image path is too long.');
@@ -1775,7 +1770,6 @@ export async function updateVisitorProfile({
     .from('visitors')
     .update({
       contact_number: normalizedContactNumber || null,
-      address: normalizedAddress || null,
       profile_image_path: normalizedProfileImagePath || null,
     })
     .eq('id', normalizedVisitorId)
@@ -1794,7 +1788,6 @@ export async function updateVisitorProfile({
       .from('visitors')
       .update({
         contact_number: normalizedContactNumber || null,
-        address: normalizedAddress || null,
       })
       .eq('id', normalizedVisitorId)
       .eq('auth_user_id', authenticatedUser.id)
