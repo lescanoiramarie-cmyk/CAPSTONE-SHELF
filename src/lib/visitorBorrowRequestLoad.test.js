@@ -46,6 +46,13 @@ const visitorAddressReadOnlyMigration = readFileSync(
   ),
   'utf8'
 );
+const visitorBookCoverStorageMigration = readFileSync(
+  new URL(
+    '../../supabase/migrations/20261215000000_fix_visitor_book_cover_upload_rls.sql',
+    import.meta.url
+  ),
+  'utf8'
+);
 
 test('restoring the saved auth user does not dispatch a duplicate initial data refresh', () => {
   assert.match(
@@ -308,4 +315,17 @@ test('visitor address is read-only in the profile editor and database update pat
   );
   assert.match(visitorProfileEditor, /Edit profile[\s\S]*?Contact number/);
   assert.doesNotMatch(visitorProfileEditor, /profileForm\.address|Address\s*<textarea/);
+});
+
+test('visitor community book cover uploads use owner-scoped RLS without storage metadata checks', () => {
+  const insertPolicy = visitorBookCoverStorageMigration.match(
+    /create policy "Visitors can upload personal book covers"[\s\S]*?for insert[\s\S]*?with check \(([\s\S]*?)\n\);/i
+  );
+  assert.ok(insertPolicy, 'Expected a visitor-owned book cover insert policy.');
+  assert.match(insertPolicy[1], /bucket_id = 'book-covers'/);
+  assert.match(insertPolicy[1], /visitor\.id::text = \(storage\.foldername\(name\)\)\[1\]/);
+  assert.match(insertPolicy[1], /visitor\.auth_user_id = auth\.uid\(\)/);
+  assert.match(insertPolicy[1], /visitor\.otp_verified/);
+  assert.match(insertPolicy[1], /visitor\.is_active/);
+  assert.doesNotMatch(insertPolicy[1], /metadata/i);
 });
