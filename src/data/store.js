@@ -227,6 +227,25 @@ const isValidUuid = (value) =>
 const isValidVisitorId = (value) =>
   Boolean(normalizeText(value));
 
+const VISITOR_PROFILE_COLUMNS =
+  'id, full_name, contact_number, email, address, profile_image_path, otp_verified, qr_code, registered_at, library_id';
+const LEGACY_VISITOR_PROFILE_COLUMNS =
+  'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at, library_id';
+
+function isMissingVisitorProfileImageColumn(error) {
+  const message = normalizeText(error?.message || error);
+  return (
+    (error?.code === '42703' || /column .* does not exist/i.test(message)) &&
+    /visitors\.profile_image_path|profile_image_path/i.test(message)
+  );
+}
+
+function warnVisitorProfileMigrationRequired() {
+  console.warn(
+    'SHELF visitor profile photos are unavailable because profile_image_path is missing. Apply migration 20261212000000_visitor_profile_images_and_self_update.sql.'
+  );
+}
+
 const isValidShelfQr = (value) =>
   /^SHELF-QR-(?:[0-9]{6}|[0-9A-F]{32})$/i.test(
     normalizeText(value)
@@ -358,6 +377,7 @@ const mapVisitor = (r) => ({
   contactNumber: r.contact_number,
   email: r.email,
   address: r.address,
+  profileImagePath: r.profile_image_path || null,
   libraryId: r.library_id ?? null,
   otpVerified: r.otp_verified,
   qrCode: r.qr_code,
@@ -938,17 +958,22 @@ export async function fetchVisitors(visitorId = null, knownVisitor = null) {
       return [knownVisitor];
     }
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('visitors')
-      .select(
-        'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at, library_id'
-      )
+      .select(VISITOR_PROFILE_COLUMNS)
       .eq('id', normalizedVisitorId)
       .maybeSingle();
 
-    if (error) {
-      throw cleanErr(error, 'Unable to fetch your visitor profile.');
+    if (isMissingVisitorProfileImageColumn(error)) {
+      warnVisitorProfileMigrationRequired();
+      ({ data, error } = await supabase
+        .from('visitors')
+        .select(LEGACY_VISITOR_PROFILE_COLUMNS)
+        .eq('id', normalizedVisitorId)
+        .maybeSingle());
     }
+
+    if (error) throw cleanErr(error, 'Unable to fetch your visitor profile.');
 
     return data ? [mapVisitor(data)] : [];
   }
@@ -956,13 +981,10 @@ export async function fetchVisitors(visitorId = null, knownVisitor = null) {
   const scope = await getAuthenticatedDataScope();
   if (scope.type === 'anonymous') return [];
 
-  const data = await fetchAllRowsInPages(
-    () => {
+  const buildQuery = (columns) => {
       let query = supabase
         .from('visitors')
-        .select(
-          'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at, library_id'
-        )
+        .select(columns)
         .order('registered_at', { ascending: false })
         .order('id', { ascending: true });
 
@@ -973,9 +995,21 @@ export async function fetchVisitors(visitorId = null, knownVisitor = null) {
       }
 
       return query;
-    },
-    'visitor profiles'
-  );
+  };
+  let data;
+  try {
+    data = await fetchAllRowsInPages(
+      () => buildQuery(VISITOR_PROFILE_COLUMNS),
+      'visitor profiles'
+    );
+  } catch (error) {
+    if (!isMissingVisitorProfileImageColumn(error)) throw error;
+    warnVisitorProfileMigrationRequired();
+    data = await fetchAllRowsInPages(
+      () => buildQuery(LEGACY_VISITOR_PROFILE_COLUMNS),
+      'visitor profiles'
+    );
+  }
 
   return data.map(mapVisitor);
 }
@@ -1672,20 +1706,22 @@ export async function getVisitor(
     );
   }
 
-  let visitorQuery = supabase
+  const buildQuery = (columns) => {
+    let query = supabase
     .from('visitors')
-    .select(
-      'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at, library_id'
-    );
+    .select(columns);
 
-  visitorQuery = isValidUuid(normalizedVisitorId)
-    ? visitorQuery.eq('auth_user_id', normalizedVisitorId)
-    : visitorQuery.eq('id', normalizedVisitorId);
+    query = isValidUuid(normalizedVisitorId)
+      ? query.eq('auth_user_id', normalizedVisitorId)
+      : query.eq('id', normalizedVisitorId);
+    return query;
+  };
 
-  const {
-    data,
-    error,
-  } = await visitorQuery.maybeSingle();
+  let { data, error } = await buildQuery(VISITOR_PROFILE_COLUMNS).maybeSingle();
+  if (isMissingVisitorProfileImageColumn(error)) {
+    warnVisitorProfileMigrationRequired();
+    ({ data, error } = await buildQuery(LEGACY_VISITOR_PROFILE_COLUMNS).maybeSingle());
+  }
 
   if (error) {
     throw cleanErr(error);
@@ -1694,6 +1730,83 @@ export async function getVisitor(
   return data
     ? mapVisitor(data)
     : null;
+}
+
+export async function updateVisitorProfile({
+  visitorId,
+  contactNumber,
+  address,
+  profileImagePath,
+}) {
+  if (!supabase) {
+    throw new Error('Supabase is not configured.');
+  }
+
+  const normalizedVisitorId = normalizeText(visitorId);
+  const normalizedContactNumber = normalizeText(contactNumber);
+  const normalizedAddress = normalizeText(address);
+  const normalizedProfileImagePath = normalizeText(profileImagePath);
+
+  if (!normalizedVisitorId || !isValidVisitorId(normalizedVisitorId)) {
+    throw new Error('Invalid visitor ID.');
+  }
+  if (normalizedContactNumber.length > 50) {
+    throw new Error('Contact number must not exceed 50 characters.');
+  }
+  if (normalizedAddress.length > 1000) {
+    throw new Error('Address must not exceed 1,000 characters.');
+  }
+  if (normalizedProfileImagePath.length > 2048) {
+    throw new Error('Profile image path is too long.');
+  }
+
+  const {
+    data: { user: authenticatedUser },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError) {
+    throw cleanErr(authError, 'Unable to verify your visitor account.');
+  }
+  if (!authenticatedUser?.id) {
+    throw new Error('Sign in again before updating your profile.');
+  }
+
+  let { data, error } = await supabase
+    .from('visitors')
+    .update({
+      contact_number: normalizedContactNumber || null,
+      address: normalizedAddress || null,
+      profile_image_path: normalizedProfileImagePath || null,
+    })
+    .eq('id', normalizedVisitorId)
+    .eq('auth_user_id', authenticatedUser.id)
+    .select(VISITOR_PROFILE_COLUMNS)
+    .single();
+
+  if (isMissingVisitorProfileImageColumn(error)) {
+    if (normalizedProfileImagePath) {
+      throw new Error(
+        'Profile photo upload is not available until migration 20261212000000_visitor_profile_images_and_self_update.sql is applied.'
+      );
+    }
+    warnVisitorProfileMigrationRequired();
+    ({ data, error } = await supabase
+      .from('visitors')
+      .update({
+        contact_number: normalizedContactNumber || null,
+        address: normalizedAddress || null,
+      })
+      .eq('id', normalizedVisitorId)
+      .eq('auth_user_id', authenticatedUser.id)
+      .select(LEGACY_VISITOR_PROFILE_COLUMNS)
+      .single());
+  }
+
+  if (error) {
+    throw cleanErr(error, 'Unable to update your visitor profile.');
+  }
+
+  return mapVisitor(data);
 }
 
 export const resolveVisitorAuthUserId = async (

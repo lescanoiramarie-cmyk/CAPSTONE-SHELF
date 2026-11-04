@@ -4,6 +4,7 @@ CREATE TABLE "public"."visitors" (
   "contact_number"    character varying(50),
   "email"             character varying(255)   NOT NULL,
   "address"           text,
+  "profile_image_path" text,
   "library_id"        uuid,
   "otp"               character varying(10),
   "otp_verified"      boolean                  DEFAULT false,

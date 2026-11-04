@@ -85,6 +85,7 @@ create table if not exists visitors (
   contact_number text,
   email text unique not null,
   address text,
+  profile_image_path text,
   auth_user_id uuid unique references auth.users(id) on delete cascade,
   otp text,
   otp_expires_at timestamptz,

@@ -328,6 +328,7 @@ def answer_faq(request: FAQAnswerRequest):
 def forecast(
     request: ForecastRequest,
     timeframe: Literal[
+        "all",
         "today",
         "7d",
         "this_week",

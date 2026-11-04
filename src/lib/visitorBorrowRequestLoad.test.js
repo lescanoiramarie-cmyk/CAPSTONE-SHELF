@@ -106,6 +106,10 @@ test('staff borrowing history is branch-scoped and limited to recent or active r
     libraryContextSource,
     /void loadAllBorrowRequests\(\)/
   );
+  assert.match(
+    libraryContextSource,
+    /if\s*\(currentVisitorId\)\s*\{\s*void loadVisitorBorrowRequests\(currentVisitorId\);\s*\}\s*else if\s*\(user\?\.role === 'visitor'\)\s*\{[\s\S]*?setBorrowRequestsLoadError\([\s\S]*?\);\s*\}\s*else\s*\{\s*void loadAllBorrowRequests\(\);/
+  );
   const refreshStart = libraryContextSource.match(
     /const refreshAll = useCallback\(async \(\) => \{([\s\S]*?)setLoading\(true\);/
   );
@@ -191,6 +195,25 @@ test('visitor dashboard loads only the signed-in visitor profile', () => {
   assert.match(
     libraryContextSource,
     /currentVisitorProfileRef\.current = visitor/
+  );
+});
+
+test('visitor profiles remain readable before the profile-photo migration is applied', () => {
+  assert.match(
+    storeSource,
+    /function isMissingVisitorProfileImageColumn\(error\)[\s\S]*?profile_image_path/
+  );
+  assert.match(
+    storeSource,
+    /export async function getVisitor\([\s\S]*?isMissingVisitorProfileImageColumn\(error\)[\s\S]*?LEGACY_VISITOR_PROFILE_COLUMNS/
+  );
+  assert.match(
+    storeSource,
+    /export async function fetchVisitors\([\s\S]*?isMissingVisitorProfileImageColumn\(error\)[\s\S]*?LEGACY_VISITOR_PROFILE_COLUMNS/
+  );
+  assert.match(
+    storeSource,
+    /visitor profile photos are unavailable because profile_image_path is missing/i
   );
 });
 

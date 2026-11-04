@@ -793,6 +793,19 @@ fineReviewRequired:
       setInitialDataReady(true);
       if (currentVisitorId) {
         void loadVisitorBorrowRequests(currentVisitorId);
+      } else if (user?.role === 'visitor') {
+        borrowRequestsAbortControllerRef.current?.abort();
+        allBorrowRequestsAbortControllerRef.current?.abort();
+        borrowRequestsScopeRef.current = null;
+        borrowRequestsLoadSequenceRef.current += 1;
+        setData((currentData) => ({
+          ...currentData,
+          borrowRequests: [],
+        }));
+        setBorrowRequestsLoading(false);
+        setBorrowRequestsLoadError(
+          'Unable to verify your visitor account. Please sign in again and retry.'
+        );
       } else {
         void loadAllBorrowRequests();
       }
@@ -839,7 +852,12 @@ fineReviewRequired:
         setLoading(false);
       }
     }
-  }, [getCurrentVisitorId, loadAllBorrowRequests, loadVisitorBorrowRequests, user?.role]);
+  }, [
+    getCurrentVisitorId,
+    loadAllBorrowRequests,
+    loadVisitorBorrowRequests,
+    user?.role,
+  ]);
 
   const retryBorrowRequests = useCallback(async () => {
     const visitorId = await getCurrentVisitorId(user?.role);

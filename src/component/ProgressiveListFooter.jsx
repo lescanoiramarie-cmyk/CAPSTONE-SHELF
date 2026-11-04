@@ -12,7 +12,7 @@ export default function ProgressiveListFooter({
   return (
     <div
       ref={sentinelRef}
-      className={`flex flex-col items-center justify-center gap-2 py-4 text-center ${className}`}
+      className={`progressive-list-footer flex flex-col items-center justify-center gap-2 py-4 text-center ${className}`}
     >
       <p className="text-xs text-slate-500 dark:text-slate-400" aria-live="polite">
         Showing {visibleCount} of {totalCount} {noun}

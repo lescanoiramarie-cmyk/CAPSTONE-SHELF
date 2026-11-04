@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, Line } from 'react-chartjs-2';
 import {
   BarElement,
@@ -176,6 +176,7 @@ export default function AdminWorkspace({
   const [feedbackReply, setFeedbackReply] = useState({});
   const [forecast, setForecast] = useState(null);
   const [forecastLoading, setForecastLoading] = useState(false);
+  const exportLockRef = useRef(false);
 
   const booksById = useMemo(
     () => new Map(books.map((book) => [book.id, book])),
@@ -478,7 +479,15 @@ export default function AdminWorkspace({
 
   const forecastHistoryBuckets = useMemo(() => {
     if (!analyticsWindow.valid) return [];
-    return getTimeframeBuckets('custom', analyticsWindow).slice(-366);
+    const earliestForecastDate = new Date(analyticsWindow.endExclusive);
+    earliestForecastDate.setDate(earliestForecastDate.getDate() - 366);
+    const start = analyticsWindow.start > earliestForecastDate
+      ? analyticsWindow.start
+      : earliestForecastDate;
+    return getTimeframeBuckets('custom', {
+      ...analyticsWindow,
+      start,
+    }).slice(-366);
   }, [analyticsWindow]);
 
   const forecastHistoryDays = forecastHistoryBuckets.length;
@@ -593,6 +602,8 @@ export default function AdminWorkspace({
       setError(analyticsWindow.error);
       return;
     }
+    if (exportLockRef.current) return;
+    exportLockRef.current = true;
     setExporting(true);
     setError('');
     setMessage('');
@@ -628,6 +639,7 @@ export default function AdminWorkspace({
     } catch {
       setError('The report could not be exported. Please try again.');
     } finally {
+      exportLockRef.current = false;
       setExporting(false);
     }
   };
@@ -637,6 +649,8 @@ export default function AdminWorkspace({
       setError(analyticsWindow.error);
       return;
     }
+    if (exportLockRef.current) return;
+    exportLockRef.current = true;
     setExporting(true);
     setError('');
     setMessage('');
@@ -693,6 +707,7 @@ export default function AdminWorkspace({
     } catch {
       setError('The report could not be exported. Please try again.');
     } finally {
+      exportLockRef.current = false;
       setExporting(false);
     }
   };

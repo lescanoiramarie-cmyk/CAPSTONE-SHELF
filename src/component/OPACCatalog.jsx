@@ -852,21 +852,15 @@ export default function OPACCatalog({
             }));
         } catch (error) {
           console.error('Personal book cover upload error:', error);
-          setCoverError(
-            'The cover could not be uploaded. Please retry, or remove the cover and save without it.'
-          );
           throw new Error(
-            'The cover could not be uploaded. Please retry, or remove the cover and save without it.',
+            `The cover could not be uploaded: ${error.message || 'storage request failed'}. Check your connection and try again.`,
             { cause: error }
           );
         }
         if (uploadError) {
           console.error('Personal book cover upload error:', uploadError);
-          setCoverError(
-            'The cover could not be uploaded. Please retry, or remove the cover and save without it.'
-          );
           throw new Error(
-            'The cover could not be uploaded. Please retry, or remove the cover and save without it.'
+            `The cover could not be uploaded: ${uploadError.message || 'storage request failed'}. Check your connection and try again.`
           );
         }
         setCoverUploading(false);
@@ -3674,6 +3668,11 @@ export default function OPACCatalog({
                         {coverUrlInput && !isPersonalCoverUrlValid && (
                           <p className="text-xs text-red-700 dark:text-red-300">
                             Enter a valid image URL beginning with http:// or https://.
+                          </p>
+                        )}
+                        {coverMode === 'url' && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            Use a public link that opens the image itself. Web pages and image-search links may not load; upload the image if the preview fails.
                           </p>
                         )}
                       </div>

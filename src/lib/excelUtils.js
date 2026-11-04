@@ -319,10 +319,14 @@ const getPdfColumnStyles = (columns, body, pageWidth) => {
   const maximumWidth = 44;
   const widths = columns.map((column, index) => {
     if (isLongTextColumn(column)) return 48;
-    const longest = Math.max(
-      column.label.length,
-      ...body.map((row) => String(row[index] ?? '').split(/\r?\n/)[0].length)
-    );
+    let longest = column.label.length;
+    for (const row of body) {
+      longest = Math.max(
+        longest,
+        String(row[index] ?? '').split(/\r?\n/)[0].length
+      );
+      if (longest >= Math.ceil((maximumWidth - 8) / 1.45)) break;
+    }
     return Math.min(maximumWidth, Math.max(minimumWidth, 8 + longest * 1.45));
   });
   const total = widths.reduce((sum, width) => sum + width, 0);
@@ -349,7 +353,7 @@ const getPdfColumnStyles = (columns, body, pageWidth) => {
 };
 
 const generatedAt = () => new Date();
-const yieldToUI = () => new Promise((resolve) => window.requestAnimationFrame(resolve));
+const yieldToUI = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const makeSummaryRows = (options) => [
   ['System', 'SHELF'],
@@ -511,7 +515,11 @@ const createChartImage = async (chartSpec) => {
 
 const createPdfAnalytics = async (analytics) => {
   if (!analytics?.charts?.length) return [];
-  return Promise.all(analytics.charts.map(createChartImage));
+  const images = [];
+  for (const chart of analytics.charts) {
+    images.push(await createChartImage(chart));
+  }
+  return images;
 };
 
 const addAttendanceSummaryWorksheet = (workbook, options) => {
@@ -752,7 +760,6 @@ export const exportToPDF = async (data = [], fileName, options = {}) => {
   ]);
   const rows = Array.isArray(data) ? data : [];
   const columns = getColumns(rows, options);
-  const formattedRows = outputRows(rows, columns, options, 'pdf');
   const orientation = options.orientation || (options.pdfAnalytics || columns.length > 6 ? 'landscape' : 'portrait');
   const document = new jsPDF({ orientation, format: 'a4', unit: 'mm' });
   const pageWidth = document.internal.pageSize.getWidth();
@@ -852,11 +859,20 @@ export const exportToPDF = async (data = [], fileName, options = {}) => {
    });
   }
 
-   const body = formattedRows.length
-     ? formattedRows.map((row) => columns.map((column) =>
-       String(pdfTextValue(row[column.label] ?? MISSING, column))
-     ))
-    : [['No records found for the selected filters']];
+   const body = [];
+   for (let offset = 0; offset < rows.length; offset += 250) {
+     const chunk = rows.slice(offset, offset + 250);
+     chunk.forEach((row) => {
+       body.push(columns.map((column) => String(pdfTextValue(
+         valueFor(row, column, options, 'pdf') ?? MISSING,
+         column
+       ))));
+     });
+     if (offset + chunk.length < rows.length) await yieldToUI();
+   }
+   if (!body.length) {
+     body.push(['No records found for the selected filters']);
+   }
   const headers = columns.length
     ? columns.map((column) => column.label)
     : ['Result'];
@@ -864,7 +880,7 @@ export const exportToPDF = async (data = [], fileName, options = {}) => {
      columns.flatMap((column, index) => {
        const numeric =
          ['currency', 'number'].includes(fieldType(column)) ||
-         formattedRows.some((row) => typeof row[column.label] === 'number');
+         rows.some((row) => typeof valueFor(row, column, options, 'pdf') === 'number');
        return numeric ? [[index, { halign: 'right' }]] : [];
      })
    );
@@ -875,11 +891,11 @@ export const exportToPDF = async (data = [], fileName, options = {}) => {
        ...numericColumnStyles[index],
      }])
    );
-  for (let offset = 0; offset < body.length; offset += 500) {
+  for (let offset = 0; offset < body.length; offset += 250) {
     autoTable(document, {
       startY: tableStartY,
       head: [headers],
-      body: body.slice(offset, offset + 500),
+      body: body.slice(offset, offset + 250),
       margin: { top: 15, right: 15, bottom: 17, left: 15 },
       styles: {
         font: 'helvetica',
@@ -908,7 +924,7 @@ export const exportToPDF = async (data = [], fileName, options = {}) => {
       didDrawCell: (cellData) => drawPdfCurrencyText(document, cellData.cell),
     });
     tableStartY = document.lastAutoTable.finalY + 1;
-    if (offset + 500 < body.length) await yieldToUI();
+    if (offset + 250 < body.length) await yieldToUI();
   }
   const pageCount = document.internal.getNumberOfPages();
   for (let page = 1; page <= pageCount; page += 1) {
@@ -929,7 +945,7 @@ export const exportToPDF = async (data = [], fileName, options = {}) => {
 export const exportReport = async (data, format, options = {}) => {
   const extension = format === 'xlsx' ? 'xlsx' : format;
   const filename = options.fileName || buildReportFilename(options, extension);
-  await new Promise((resolve) => window.requestAnimationFrame(resolve));
+  await yieldToUI();
   if (format === 'pdf') return exportToPDF(data, filename, options);
   if (format === 'xlsx') return exportToExcel(data, filename, options);
   if (format === 'csv') return exportToCSV(data, filename, options);

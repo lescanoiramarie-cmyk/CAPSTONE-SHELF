@@ -207,8 +207,11 @@ export default function SuperAdminDashboard() {
   const [exportingReport, setExportingReport] = useState('');
   const [exportMessage, setExportMessage] = useState('');
   const [exportError, setExportError] = useState('');
+  const exportLockRef = useRef(false);
 
   const exportSystemReport = async (report, format) => {
+    if (exportLockRef.current) return;
+    exportLockRef.current = true;
     const reportKey = `${report}-${format}`;
     setExportingReport(reportKey);
     setExportMessage('');
@@ -297,6 +300,7 @@ export default function SuperAdminDashboard() {
     } catch {
       setExportError('The report could not be exported. Please try again.');
     } finally {
+      exportLockRef.current = false;
       setExportingReport('');
     }
   };

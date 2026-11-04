@@ -22,12 +22,14 @@ import {
   LogOut,
   Mail,
   MapPinned,
+  Pencil,
   Megaphone,
   MessageCircle,
   Moon,
   MapPin,
   Phone,
   QrCode,
+  Save,
   Search,
   Sun,
   UserRound,
@@ -39,6 +41,7 @@ import { useAuth } from '../../context/useAuth.js';
 import { getDashboardPath } from '../../routes/roleHome.js';
 import { useLibrary, useLibraryData } from '../../context/useLibrary.js';
 import { supabase } from '../../lib/supabaseClient.js';
+import { updateVisitorProfile } from '../../data/store.js';
 
 import OPACCatalog from '../../component/OPACCatalog.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
@@ -118,6 +121,29 @@ function getStatusClass(status) {
     default:
       return 'visitor-status visitor-status-neutral';
   }
+}
+
+const MAX_VISITOR_PROFILE_IMAGE_SIZE = 2 * 1024 * 1024;
+const VISITOR_PROFILE_IMAGE_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
+
+function getVisitorProfileImageStoragePath(url, visitorId) {
+  const path = String(url || '').trim();
+  const [ownerId, filename] = path.split('/');
+  return ownerId === String(visitorId) && filename ? path : null;
+}
+
+function getVisitorInitials(name) {
+  return String(name || 'Visitor')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
 }
 
 function getCommunityReturnReminder(dueDate) {
@@ -214,10 +240,73 @@ function VisitorDashboardContent() {
   const [termsAcceptedAt, setTermsAcceptedAt] = useState(null);
   const [termsError, setTermsError] = useState('');
   const [isAcceptingTerms, setIsAcceptingTerms] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [profileMessage, setProfileMessage] = useState('');
+  const [profileForm, setProfileForm] = useState({
+    contactNumber: '',
+    address: '',
+  });
+  const [profileImageFile, setProfileImageFile] = useState(null);
+  const [profileImagePreview, setProfileImagePreview] = useState('');
+  const [removeProfileImage, setRemoveProfileImage] = useState(false);
+  const [failedProfileImageSrc, setFailedProfileImageSrc] = useState('');
+  const [signedProfileImage, setSignedProfileImage] = useState({
+    path: '',
+    url: '',
+  });
   const avatarMenuRef = useRef(null);
   const avatarButtonRef = useRef(null);
 
   const { isDarkAppearance, setIsDarkAppearance } = useTheme();
+  const profileImageSrc = profileImagePreview ||
+    (removeProfileImage || signedProfileImage.path !== visitorDetails?.profileImagePath
+      ? ''
+      : signedProfileImage.url);
+  const profileImageFailed = Boolean(
+    profileImageSrc && failedProfileImageSrc === profileImageSrc
+  );
+
+  useEffect(() => {
+    const path = visitorDetails?.profileImagePath;
+    if (!path || !supabase) return undefined;
+
+    let active = true;
+    let refreshTimer;
+    const refreshSignedUrl = async () => {
+      try {
+        const { data, error } = await supabase.storage
+          .from('visitor-profile-images')
+          .createSignedUrl(path, 60 * 60);
+        if (error) throw error;
+        if (active) {
+          setSignedProfileImage({ path, url: data.signedUrl });
+          refreshTimer = window.setTimeout(
+            refreshSignedUrl,
+            55 * 60 * 1000
+          );
+        }
+      } catch (error) {
+        if (active) {
+          console.error('Unable to load visitor profile photo:', error);
+          setSignedProfileImage({ path, url: '' });
+        }
+      }
+    };
+
+    void refreshSignedUrl();
+    return () => {
+      active = false;
+      window.clearTimeout(refreshTimer);
+    };
+  }, [visitorDetails?.id, visitorDetails?.profileImagePath]);
+
+  useEffect(() => () => {
+    if (profileImagePreview.startsWith('blob:')) {
+      URL.revokeObjectURL(profileImagePreview);
+    }
+  }, [profileImagePreview]);
 
   useEffect(() => {
     activeVisitorNavTabRef.current?.scrollIntoView({
@@ -594,6 +683,153 @@ function VisitorDashboardContent() {
       alert('Unable to save the QR code as an image. Please try again.');
     } finally {
       setIsSavingQr(false);
+    }
+  };
+
+  const handleProfileImageChange = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (!VISITOR_PROFILE_IMAGE_TYPES.has(file.type)) {
+      setProfileError('Choose a JPG, PNG, or WEBP image for your profile photo.');
+      return;
+    }
+    if (file.size > MAX_VISITOR_PROFILE_IMAGE_SIZE) {
+      setProfileError('Profile photos must be 2 MB or smaller.');
+      return;
+    }
+
+    setProfileError('');
+    setProfileMessage('');
+    setProfileImageFile(file);
+    setProfileImagePreview(URL.createObjectURL(file));
+    setRemoveProfileImage(false);
+    setFailedProfileImageSrc('');
+  };
+
+  const cancelProfileEdit = () => {
+    setProfileForm({
+      contactNumber: visitorDetails?.contactNumber || '',
+      address: visitorDetails?.address || '',
+    });
+    setProfileImageFile(null);
+    setProfileImagePreview('');
+    setRemoveProfileImage(false);
+    setFailedProfileImageSrc('');
+    setProfileError('');
+    setIsEditingProfile(false);
+  };
+
+  const handleSaveVisitorProfile = async (event) => {
+    event.preventDefault();
+    if (isSavingProfile) return;
+
+    const contactNumber = profileForm.contactNumber.trim();
+    const address = profileForm.address.trim();
+    if (contactNumber.length > 50) {
+      setProfileError('Contact number must not exceed 50 characters.');
+      return;
+    }
+    if (address.length > 1000) {
+      setProfileError('Address must not exceed 1,000 characters.');
+      return;
+    }
+    if (!visitorDetails?.id) {
+      setProfileError('Your visitor profile is still loading. Please try again.');
+      return;
+    }
+
+    setIsSavingProfile(true);
+    setProfileError('');
+    setProfileMessage('');
+    let uploadedImagePath = null;
+    try {
+      let profileImagePath = removeProfileImage
+        ? null
+        : visitorDetails.profileImagePath || null;
+
+      if (profileImageFile) {
+        if (!supabase) {
+          throw new Error('Profile photo upload is unavailable because Supabase is not configured.');
+        }
+        const extensionByType = {
+          'image/jpeg': 'jpg',
+          'image/png': 'png',
+          'image/webp': 'webp',
+        };
+        uploadedImagePath = `${visitorDetails.id}/${crypto.randomUUID()}.${extensionByType[profileImageFile.type]}`;
+        const { error: uploadError } = await supabase.storage
+          .from('visitor-profile-images')
+          .upload(uploadedImagePath, profileImageFile, {
+            cacheControl: '3600',
+            contentType: profileImageFile.type,
+            upsert: false,
+          });
+        if (uploadError) {
+          throw new Error(`Profile photo upload failed: ${uploadError.message}`);
+        }
+
+        profileImagePath = uploadedImagePath;
+      }
+
+      const savedProfile = await updateVisitorProfile({
+        visitorId: visitorDetails.id,
+        contactNumber,
+        address,
+        profileImagePath,
+      });
+
+      const previousImagePath = getVisitorProfileImageStoragePath(
+        visitorDetails.profileImagePath,
+        visitorDetails.id
+      );
+      const savedImagePath = getVisitorProfileImageStoragePath(
+        savedProfile.profileImagePath,
+        visitorDetails.id
+      );
+      if (previousImagePath && previousImagePath !== savedImagePath) {
+        try {
+          const { error: removeError } = await supabase.storage
+            .from('visitor-profile-images')
+            .remove([previousImagePath]);
+          if (removeError) {
+            console.error('Unable to remove the replaced visitor profile photo:', removeError);
+          }
+        } catch (removeError) {
+          console.error('Unable to remove the replaced visitor profile photo:', removeError);
+        }
+      }
+
+      setProfileImageFile(null);
+      setProfileImagePreview('');
+      setRemoveProfileImage(false);
+      setIsEditingProfile(false);
+      setProfileMessage('Your profile was updated successfully.');
+      try {
+        await refreshAll();
+      } catch (refreshError) {
+        console.error('Visitor profile saved, but dashboard refresh failed:', refreshError);
+        setProfileMessage('Your profile was saved. Refresh the dashboard to see the latest information.');
+      }
+    } catch (error) {
+      if (uploadedImagePath && supabase) {
+        try {
+          const { error: cleanupError } = await supabase.storage
+            .from('visitor-profile-images')
+            .remove([uploadedImagePath]);
+          if (cleanupError) {
+            console.error('Unable to clean up an unsaved visitor profile photo:', cleanupError);
+          }
+        } catch (cleanupError) {
+          console.error('Unable to clean up an unsaved visitor profile photo:', cleanupError);
+        }
+      }
+      setProfileError(
+        error instanceof Error ? error.message : 'Unable to update your profile. Please try again.'
+      );
+    } finally {
+      setIsSavingProfile(false);
     }
   };
 
@@ -1062,14 +1298,17 @@ function VisitorDashboardContent() {
                 aria-expanded={isAvatarMenuOpen}
                 title="Account menu"
               >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/15 text-xs font-bold">
-                  {(user?.name || visitorDetails?.fullName || 'Visitor')
-                    .trim()
-                    .split(/\s+/)
-                    .slice(0, 2)
-                    .map((part) => part[0])
-                    .join('')
-                    .toUpperCase()}
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/15 text-xs font-bold">
+                  {profileImageSrc && !profileImageFailed ? (
+                    <img
+                      src={profileImageSrc}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      onError={() => setFailedProfileImageSrc(profileImageSrc)}
+                    />
+                  ) : (
+                    getVisitorInitials(user?.name || visitorDetails?.fullName)
+                  )}
                 </span>
                 <span className="hidden max-w-24 truncate text-xs font-semibold md:inline">
                   {(user?.name || visitorDetails?.fullName || 'Visitor')
@@ -1502,14 +1741,17 @@ function VisitorDashboardContent() {
               {menuSection === 'profile' && (
                 <div className="space-y-6">
                   <section className="visitor-profile-summary flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/60">
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-shelf-primary text-sm font-bold text-white">
-                      {(visitorDetails?.fullName || user?.name || 'Visitor')
-                        .trim()
-                        .split(/\s+/)
-                        .slice(0, 2)
-                        .map((part) => part[0])
-                        .join('')
-                        .toUpperCase()}
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-shelf-primary text-sm font-bold text-white">
+                      {profileImageSrc && !profileImageFailed ? (
+                        <img
+                          src={profileImageSrc}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          onError={() => setFailedProfileImageSrc(profileImageSrc)}
+                        />
+                      ) : (
+                        getVisitorInitials(visitorDetails?.fullName || user?.name)
+                      )}
                     </span>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold text-slate-900 dark:text-white">
@@ -1521,52 +1763,157 @@ function VisitorDashboardContent() {
                     </div>
                   </section>
 
-                  {/* PERSONAL INFORMATION */}
+                  {profileMessage && (
+                    <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+                      {profileMessage}
+                    </p>
+                  )}
 
-                  <section>
-                    <h3 className="mb-3 text-sm font-bold text-slate-900 dark:text-white">
-                      Personal Information
-                    </h3>
+                  {isEditingProfile ? (
+                    <form onSubmit={handleSaveVisitorProfile} className="space-y-4">
+                      <section className="space-y-3">
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                          Edit profile
+                        </h3>
+                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+                          Email
+                          <input
+                            type="email"
+                            value={visitorDetails?.email || user?.email || ''}
+                            readOnly
+                            className="mt-1 w-full cursor-not-allowed border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-normal text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                          />
+                          <span className="mt-1 block text-xs font-normal text-slate-500 dark:text-slate-400">
+                            Email address cannot be changed here.
+                          </span>
+                        </label>
+                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+                          Contact number
+                          <input
+                            type="tel"
+                            maxLength={50}
+                            value={profileForm.contactNumber}
+                            onChange={(event) => setProfileForm((current) => ({
+                              ...current,
+                              contactNumber: event.target.value,
+                            }))}
+                            className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                          />
+                        </label>
+                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+                          Address
+                          <textarea
+                            rows={3}
+                            maxLength={1000}
+                            value={profileForm.address}
+                            onChange={(event) => setProfileForm((current) => ({
+                              ...current,
+                              address: event.target.value,
+                            }))}
+                            className="mt-1 w-full resize-y border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                          />
+                        </label>
+                      </section>
 
-                    <dl className="divide-y divide-slate-100 dark:divide-slate-700 border-y border-slate-100 dark:border-slate-700 text-sm">
-                      {[
-                        [
-                          UserRound,
-                          'Full name',
-                          visitorDetails?.fullName || user?.name,
-                        ],
-                        [
-                          Mail,
-                          'Email',
-                          visitorDetails?.email || user?.email,
-                        ],
-                        [
-                          Phone,
-                          'Contact number',
-                          visitorDetails?.contactNumber,
-                        ],
-                        [
-                          MapPin,
-                          'Address',
-                          visitorDetails?.address,
-                        ],
-                      ].map(([Icon, label, value]) => (
-                        <div
-                          key={label}
-                          className="grid grid-cols-[7rem_1fr] gap-3 py-2.5"
+                      <section className="space-y-2">
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                          Profile photo
+                        </h3>
+                        <label className="block cursor-pointer rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-center text-sm font-semibold text-slate-700 hover:border-shelf-primary dark:border-slate-600 dark:bg-slate-900/60 dark:text-slate-200">
+                          <span>{profileImageFile?.name || 'Choose a photo to upload'}</span>
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            onChange={handleProfileImageChange}
+                            className="sr-only"
+                          />
+                          <span className="mt-1 block text-xs font-normal text-slate-500 dark:text-slate-400">
+                            JPG, PNG, or WEBP up to 2 MB
+                          </span>
+                        </label>
+                        {(profileImageSrc || visitorDetails?.profileImagePath) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProfileImageFile(null);
+                              setProfileImagePreview('');
+                              setRemoveProfileImage(true);
+                              setProfileError('');
+                            }}
+                            className="text-xs font-semibold text-red-700 hover:underline dark:text-red-300"
+                          >
+                            Remove profile photo
+                          </button>
+                        )}
+                      </section>
+
+                      {profileError && (
+                        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+                          {profileError}
+                        </p>
+                      )}
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={cancelProfileEdit}
+                          disabled={isSavingProfile}
+                          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
                         >
-                          <dt className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-                            <Icon size={14} aria-hidden="true" />
-                            {label}
-                          </dt>
-
-                          <dd className="wrap-break-word font-medium text-slate-800 dark:text-slate-200">
-                            {value || '—'}
-                          </dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </section>
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isSavingProfile}
+                          className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-shelf-primary px-3 py-2 text-sm font-bold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Save size={15} aria-hidden="true" />
+                          {isSavingProfile ? 'Saving…' : 'Save profile'}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <section>
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                          Personal Information
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProfileForm({
+                              contactNumber: visitorDetails?.contactNumber || '',
+                              address: visitorDetails?.address || '',
+                            });
+                            setProfileError('');
+                            setProfileMessage('');
+                            setIsEditingProfile(true);
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                        >
+                          <Pencil size={14} aria-hidden="true" />
+                          Edit profile
+                        </button>
+                      </div>
+                      <dl className="divide-y divide-slate-100 border-y border-slate-100 text-sm dark:divide-slate-700 dark:border-slate-700">
+                        {[
+                          [UserRound, 'Full name', visitorDetails?.fullName || user?.name],
+                          [Mail, 'Email', visitorDetails?.email || user?.email],
+                          [Phone, 'Contact number', visitorDetails?.contactNumber],
+                          [MapPin, 'Address', visitorDetails?.address],
+                        ].map(([Icon, label, value]) => (
+                          <div key={label} className="grid grid-cols-[7rem_1fr] gap-3 py-2.5">
+                            <dt className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                              <Icon size={14} aria-hidden="true" />
+                              {label}
+                            </dt>
+                            <dd className="wrap-break-word font-medium text-slate-800 dark:text-slate-200">
+                              {value || '—'}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </section>
+                  )}
 
                   {/* =================================================
                       QR PASS
