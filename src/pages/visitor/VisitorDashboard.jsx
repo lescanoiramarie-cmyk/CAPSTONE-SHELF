@@ -46,7 +46,9 @@ import FAQ from '../../component/FAQ.jsx';
 import VisitorServices from '../../component/VisitorServices.jsx';
 import AIRecommendations from '../../component/AIRecommendations.jsx';
 import DashboardWelcome from '../../component/DashboardWelcome.jsx';
-import VisitorTermsContent from '../../component/VisitorTermsContent.jsx';
+import VisitorTermsContent, {
+  VISITOR_TERMS_VERSION,
+} from '../../component/VisitorTermsContent.jsx';
 import DashboardDataBoundary from '../../component/DashboardDataBoundary.jsx';
 
 function formatDateTime(iso) {
@@ -274,7 +276,7 @@ function VisitorDashboardContent() {
 
       if (!sessionData?.session) {
         const acceptedAt = globalThis.localStorage.getItem(
-          `shelf_visitor_terms_accepted_${user.id}`
+          `shelf_visitor_terms_accepted_${user.id}_${VISITOR_TERMS_VERSION}`
         );
         setTermsAcceptedAt(acceptedAt || null);
         setTermsStatus(acceptedAt ? 'accepted' : 'required');
@@ -353,7 +355,7 @@ function VisitorDashboardContent() {
       } else {
         const acceptedAt = new Date().toISOString();
         globalThis.localStorage.setItem(
-          `shelf_visitor_terms_accepted_${user.id}`,
+          `shelf_visitor_terms_accepted_${user.id}_${VISITOR_TERMS_VERSION}`,
           acceptedAt
         );
         setTermsAcceptedAt(acceptedAt);
@@ -727,6 +729,9 @@ function VisitorDashboardContent() {
               </h2>
               <p className="mt-1 text-sm text-slate-200">
                 Please review these terms before using your visitor account.
+              </p>
+              <p className="mt-1 text-xs text-slate-300">
+                Version {VISITOR_TERMS_VERSION}
               </p>
             </div>
 

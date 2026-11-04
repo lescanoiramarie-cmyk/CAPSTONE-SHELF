@@ -2,7 +2,7 @@ CREATE OR REPLACE FUNCTION public.accept_visitor_terms()
   RETURNS timestamp WITH time zone
   LANGUAGE plpgsql
   SECURITY DEFINER
-  SET search_path TO 'public'
+  SET search_path TO 'public', 'pg_temp'
   AS $function$
 declare
   accepted_at timestamptz;
@@ -12,7 +12,8 @@ begin
   end if;
 
   update public.visitors visitor
-  set terms_accepted_at = coalesce(visitor.terms_accepted_at, now())
+  set terms_accepted_at = now(),
+      terms_version = '2026-11-04-v2'
   where visitor.auth_user_id = auth.uid()
     and visitor.otp_verified
     and visitor.is_active
@@ -28,4 +29,4 @@ $function$;
 
 GRANT EXECUTE ON FUNCTION "public"."accept_visitor_terms"() TO "authenticated", "postgres", "service_role";
 
-REVOKE ALL ON FUNCTION "public"."accept_visitor_terms"() FROM PUBLIC;
+REVOKE ALL ON FUNCTION "public"."accept_visitor_terms"() FROM PUBLIC, anon;

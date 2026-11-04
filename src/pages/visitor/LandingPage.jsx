@@ -317,8 +317,12 @@ const featuredBooks = books
   const handleFeedbackSubmit = async (e) => {
     e.preventDefault();
     if (feedbackSubmitting) return;
-    if (!isAuthenticated) {
-      setSignInPromptMessage('Please sign in to send feedback or suggestions.');
+    if (!isAuthenticated || user?.role !== 'visitor') {
+      setSignInPromptMessage(
+        isAuthenticated
+          ? 'Only visitor accounts can send feedback or suggestions.'
+          : 'Please sign in to send feedback or suggestions.'
+      );
       return;
     }
     if (!e.currentTarget.reportValidity()) return;
@@ -331,7 +335,7 @@ const featuredBooks = books
     setFeedbackError('');
     try {
       const { error } = await supabase.from('visitor_feedback').insert({
-        visitor_id: null,
+        visitor_id: user.id,
         library_id: null,
         visitor_name: authenticatedName.trim(),
         visitor_email: authenticatedEmail.trim(),
@@ -614,7 +618,7 @@ const featuredBooks = books
                     <Building2 size={20} aria-hidden="true" />
                   </div>
                 </div>
-                <h3 className="break-words text-lg font-bold leading-snug text-slate-800 transition-colors group-hover:text-blue-600">
+                <h3 className="wrap-break-words text-lg font-bold leading-snug text-slate-800 transition-colors group-hover:text-blue-600">
                   {lib.name}
                 </h3>
                 {lib.campus && (
@@ -985,7 +989,7 @@ const featuredBooks = books
               </p>
             </div>
             {/* FULL CONTENT */}
-            <p className="whitespace-pre-wrap break-words text-sm text-slate-600 leading-relaxed border-t border-slate-100 pt-4">
+            <p className="whitespace-pre-wrap wrap-break-words text-sm text-slate-600 leading-relaxed border-t border-slate-100 pt-4">
               {selectedAnnouncement.fullContent}
             </p>
             {/* MODAL FOOTER BUTTON */}

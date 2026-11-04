@@ -29,9 +29,14 @@ import {
   Sparkles,
   ArrowUpRight,
   Calendar,
-  Clock
+  Clock,
+  FileText,
+  X,
 } from 'lucide-react';
 import VisitorScanDetails from '../../component/VisitorScanDetails.jsx';
+import SubAdminTermsContent, {
+  SUBADMIN_TERMS_VERSION,
+} from '../../component/SubAdminTermsContent.jsx';
 import { useAuth } from '../../context/useAuth.js';
 import { getDashboardPath } from '../../routes/roleHome.js';
 import { useLibrary, useLibraryData } from '../../context/useLibrary.js';
@@ -105,6 +110,16 @@ function StatCard({ label, value, tone = 'default' }) {
       </div>
     </div>
   );
+}
+
+function getSubAdminTermsErrorMessage(error, action) {
+  if (['PGRST202', '42883', '42P01'].includes(error?.code)) {
+    return 'The terms acknowledgment setup is not available yet. Please ask your system administrator to apply the terms acknowledgment database migration.';
+  }
+
+  return action === 'verify'
+    ? 'We could not verify your terms acceptance. Please try again or contact your system administrator.'
+    : 'We could not save your acceptance. Please check your connection and try again.';
 }
 
 function AttendanceTrendChart({ attendance = [] }) {
@@ -1047,6 +1062,11 @@ export default function SubAdminDashboard() {
   const [expandedGroups, setExpandedGroups] = useState({ reports: true, communication: false });
   const [workspaceTab, setWorkspaceTab] = useState('reports');
   const [showImportGuide, setShowImportGuide] = useState(false);
+  const [showSubAdminTerms, setShowSubAdminTerms] = useState(false);
+  const [subAdminTermsStatus, setSubAdminTermsStatus] = useState('loading');
+  const [subAdminTermsAcceptedAt, setSubAdminTermsAcceptedAt] = useState(null);
+  const [subAdminTermsError, setSubAdminTermsError] = useState('');
+  const [isAcceptingSubAdminTerms, setIsAcceptingSubAdminTerms] = useState(false);
   const [feedbackPreview, setFeedbackPreview] = useState({ items: [], total: 0, newCount: 0, loading: false, error: '' });
   const [feedbackPreviewLibraryId, setFeedbackPreviewLibraryId] = useState('');
   const {
@@ -1058,6 +1078,99 @@ export default function SubAdminDashboard() {
     connectionError,
     refreshAll,
   } = useLibrary();
+
+  const loadSubAdminTermsAcceptance = useCallback(async () => {
+    setSubAdminTermsStatus('loading');
+    setSubAdminTermsError('');
+    try {
+      if (!supabase) {
+        throw new Error('Terms acceptance cannot be verified because Supabase is unavailable.');
+      }
+
+      const { data: sessionData, error: sessionError } =
+        await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!sessionData?.session?.user?.id) {
+        throw new Error('A signed-in staff session is required to verify terms acceptance.');
+      }
+
+      const { data, error } = await supabase.rpc(
+        'get_subadmin_terms_accepted_at'
+      );
+      if (error) throw error;
+
+      setSubAdminTermsAcceptedAt(data || null);
+      setSubAdminTermsStatus(data ? 'accepted' : 'required');
+    } catch (error) {
+      console.error('Unable to verify sub-admin terms acceptance:', error);
+      setSubAdminTermsError(getSubAdminTermsErrorMessage(error, 'verify'));
+      setSubAdminTermsStatus('error');
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void loadSubAdminTermsAcceptance();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [loadSubAdminTermsAcceptance]);
+
+  const closeSubAdminTerms = useCallback(async () => {
+    if (isAcceptingSubAdminTerms) return;
+
+    if (subAdminTermsStatus === 'accepted') {
+      setShowSubAdminTerms(false);
+      return;
+    }
+
+    await logout();
+    navigate('/', { replace: true });
+  }, [
+    isAcceptingSubAdminTerms,
+    logout,
+    navigate,
+    subAdminTermsStatus,
+  ]);
+
+  useEffect(() => {
+    if (subAdminTermsStatus === 'accepted' && !showSubAdminTerms) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        void closeSubAdminTerms();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [closeSubAdminTerms, showSubAdminTerms, subAdminTermsStatus]);
+
+  const handleAcceptSubAdminTerms = async () => {
+    if (isAcceptingSubAdminTerms) return;
+
+    setIsAcceptingSubAdminTerms(true);
+    setSubAdminTermsError('');
+    try {
+      if (!supabase) {
+        throw new Error('Terms acceptance cannot be saved because Supabase is unavailable.');
+      }
+      const { data, error } = await supabase.rpc('accept_subadmin_terms');
+      if (error) throw error;
+      if (!data) {
+        throw new Error('The system did not confirm that your acceptance was saved.');
+      }
+
+      setSubAdminTermsAcceptedAt(data);
+      setSubAdminTermsStatus('accepted');
+      setShowSubAdminTerms(false);
+    } catch (error) {
+      console.error('Unable to save sub-admin terms acceptance:', error);
+      setSubAdminTermsError(getSubAdminTermsErrorMessage(error, 'save'));
+    } finally {
+      setIsAcceptingSubAdminTerms(false);
+    }
+  };
 
   useEffect(() => {
     if (!focusRequestId || section === 'overview') return;
@@ -1561,6 +1674,14 @@ export default function SubAdminDashboard() {
           >
             Sign out
           </button>
+          <button
+            type="button"
+            onClick={() => setShowSubAdminTerms(true)}
+            className="flex w-full items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-left text-xs transition hover:bg-white/20"
+          >
+            <FileText size={15} aria-hidden="true" />
+            Terms and Conditions
+          </button>
         </div>
       </aside>
 
@@ -1907,6 +2028,96 @@ export default function SubAdminDashboard() {
           />
         )}
       </main>
+      {(subAdminTermsStatus !== 'accepted' || showSubAdminTerms) && (
+        <div
+          className="fixed inset-0 z-110 flex items-center justify-center bg-slate-950/70 p-0 sm:p-4"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              void closeSubAdminTerms();
+            }
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="subadmin-terms-title"
+            className="flex h-full max-h-full w-full max-w-2xl flex-col overflow-hidden border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800 sm:h-auto sm:max-h-[90vh] sm:rounded-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex shrink-0 items-start justify-between gap-4 bg-shelf-primary px-5 py-5 text-white sm:px-6">
+              <div>
+                <h2 id="subadmin-terms-title" className="text-lg font-extrabold">
+                  Terms and Conditions
+                </h2>
+                <p className="mt-1 text-sm text-slate-200">
+                  Responsibilities for accessing branch and visitor information.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void closeSubAdminTerms()}
+                disabled={isAcceptingSubAdminTerms}
+                aria-label={
+                  subAdminTermsStatus === 'accepted'
+                    ? 'Close Terms and Conditions'
+                    : 'Close and sign out'
+                }
+                className="rounded-lg p-2 text-white transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5 text-sm leading-6 text-slate-700 dark:text-slate-200 sm:px-6">
+              {subAdminTermsStatus === 'loading' ? (
+                <p role="status">Verifying terms acceptance…</p>
+              ) : subAdminTermsStatus === 'error' ? (
+                <div role="alert" className="space-y-3">
+                  <p>{subAdminTermsError}</p>
+                  <button
+                    type="button"
+                    onClick={() => void loadSubAdminTermsAcceptance()}
+                    className="font-bold text-shelf-primary underline"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    Version {SUBADMIN_TERMS_VERSION}
+                    {subAdminTermsAcceptedAt && (
+                      <> · Acknowledged {formatDateTime(subAdminTermsAcceptedAt)}</>
+                    )}
+                  </p>
+                  <SubAdminTermsContent />
+                  {subAdminTermsError && (
+                    <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                      {subAdminTermsError}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+            {subAdminTermsStatus === 'required' && (
+              <div className="shrink-0 border-t border-slate-200 px-5 py-4 dark:border-slate-700 sm:px-6">
+                <p className="mb-3 text-center text-xs text-slate-500 dark:text-slate-400">
+                  Closing these terms before agreeing will sign you out.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleAcceptSubAdminTerms}
+                  disabled={isAcceptingSubAdminTerms}
+                  className="min-h-11 w-full rounded-lg bg-shelf-primary px-5 py-3 text-sm font-bold text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isAcceptingSubAdminTerms
+                    ? 'Saving…'
+                    : 'I Agree to the Terms and Conditions'}
+                </button>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 }

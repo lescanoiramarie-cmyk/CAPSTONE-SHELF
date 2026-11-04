@@ -15,6 +15,7 @@ CREATE TABLE "public"."visitors" (
   "otp_attempts"      integer                  NOT NULL DEFAULT 0,
   "otp_last_sent_at"  timestamp with time zone,
   "terms_accepted_at" timestamp with time zone,
+  "terms_version"    text,
   CONSTRAINT "visitors_auth_user_id_fkey" FOREIGN KEY (auth_user_id) REFERENCES auth.users(id) ON DELETE CASCADE,
   CONSTRAINT "visitors_library_id_fkey" FOREIGN KEY (library_id) REFERENCES public.libraries(id) ON DELETE SET NULL,
   CONSTRAINT "visitors_auth_user_id_key" UNIQUE (auth_user_id),
