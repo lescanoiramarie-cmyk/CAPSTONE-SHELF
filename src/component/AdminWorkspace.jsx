@@ -139,9 +139,7 @@ export default function AdminWorkspace({
   }, [mode]);
 
   const [analyticsLibraryId, setAnalyticsLibraryId] = useState('');
-  const [timeframe, setTimeframe] = useState(
-    user?.role === 'superadmin' ? 'all' : 'this_month'
-  );
+  const [timeframe, setTimeframe] = useState('last_month');
   const [activityTypeFilter, setActivityTypeFilter] = useState('all');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
