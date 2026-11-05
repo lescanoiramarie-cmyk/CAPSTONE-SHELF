@@ -41,7 +41,10 @@ import { useAuth } from '../../context/useAuth.js';
 import { getDashboardPath } from '../../routes/roleHome.js';
 import { useLibrary, useLibraryData } from '../../context/useLibrary.js';
 import { supabase } from '../../lib/supabaseClient.js';
-import { updateVisitorProfile } from '../../data/store.js';
+import {
+  fetchAttendanceLogsPage,
+  updateVisitorProfile,
+} from '../../data/store.js';
 
 import OPACCatalog from '../../component/OPACCatalog.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
@@ -80,6 +83,51 @@ function formatDate(iso) {
     : date.toLocaleDateString('en-PH', {
         dateStyle: 'medium',
       });
+}
+
+const ATTENDANCE_PERIOD_FILTERS = [
+  { value: 'this-week', label: 'This Week' },
+  { value: 'last-week', label: 'Last Week' },
+  { value: 'this-month', label: 'This Month' },
+  { value: 'last-month', label: 'Last Month' },
+  { value: 'all-time', label: 'All Time' },
+];
+
+function getAttendancePeriodBounds(period) {
+  if (period === 'all-time') return { fromTime: null, beforeTime: null };
+
+  const now = new Date();
+  const startOfThisWeek = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() - ((now.getDay() + 6) % 7)
+  );
+  const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  let start;
+  let end;
+
+  switch (period) {
+    case 'this-week':
+      start = startOfThisWeek;
+      end = new Date(startOfThisWeek.getFullYear(), startOfThisWeek.getMonth(), startOfThisWeek.getDate() + 7);
+      break;
+    case 'last-week':
+      start = new Date(startOfThisWeek.getFullYear(), startOfThisWeek.getMonth(), startOfThisWeek.getDate() - 7);
+      end = startOfThisWeek;
+      break;
+    case 'this-month':
+      start = startOfThisMonth;
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      break;
+    case 'last-month':
+      start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      end = startOfThisMonth;
+      break;
+    default:
+      return { fromTime: null, beforeTime: null };
+  }
+
+  return { fromTime: start.toISOString(), beforeTime: end.toISOString() };
 }
 
 function formatStatus(status) {
@@ -188,7 +236,6 @@ function VisitorDashboardContent() {
   const navigate = useNavigate();
 
   const {
-  attendanceLogs = [],
   borrowRequests = [],
   libraries = [],
   visitors = [],
@@ -221,7 +268,20 @@ function VisitorDashboardContent() {
   const [isSavingQr, setIsSavingQr] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [menuSection, setMenuSection] = useState('profile');
-  const [showAllTransactions, setShowAllTransactions] = useState(false);
+  const [attendanceHistory, setAttendanceHistory] = useState([]);
+  const [attendanceHistoryLoading, setAttendanceHistoryLoading] = useState(false);
+  const [attendanceHistoryError, setAttendanceHistoryError] = useState('');
+  const [attendanceHistoryHasMore, setAttendanceHistoryHasMore] = useState(false);
+  const [attendanceHistoryScrollTop, setAttendanceHistoryScrollTop] = useState(0);
+  const [attendanceHistoryTotal, setAttendanceHistoryTotal] = useState(null);
+  const [attendancePeriod, setAttendancePeriod] = useState('all-time');
+  const [attendanceLibraryFilter, setAttendanceLibraryFilter] = useState('all');
+  const attendanceHistoryContainerRef = useRef(null);
+  const attendanceHistorySentinelRef = useRef(null);
+  const attendanceHistoryCursorRef = useRef(null);
+  const attendanceHistoryHasMoreRef = useRef(false);
+  const attendanceHistoryLoadingRef = useRef(false);
+  const attendanceHistoryGenerationRef = useRef(0);
   const [dismissedReminderIds, setDismissedReminderIds] = useState(() => new Set());
   const [isFaqOpen, setIsFaqOpen] = useState(false);
   const faqDragRef = useRef(null);
@@ -266,6 +326,103 @@ function VisitorDashboardContent() {
   const profileImageFailed = Boolean(
     profileImageSrc && failedProfileImageSrc === profileImageSrc
   );
+
+  const loadAttendanceHistory = useCallback(async (reset = false) => {
+    if (String(user?.role || '').toLowerCase() !== 'visitor') return;
+
+    if (
+      !reset &&
+      (attendanceHistoryLoadingRef.current ||
+        !attendanceHistoryHasMoreRef.current)
+    ) return;
+
+    if (reset) {
+      attendanceHistoryGenerationRef.current += 1;
+      attendanceHistoryLoadingRef.current = false;
+      attendanceHistoryCursorRef.current = null;
+      attendanceHistoryHasMoreRef.current = false;
+      setAttendanceHistory([]);
+      setAttendanceHistoryHasMore(false);
+      setAttendanceHistoryTotal(null);
+      setAttendanceHistoryScrollTop(0);
+      if (attendanceHistoryContainerRef.current) {
+        attendanceHistoryContainerRef.current.scrollTop = 0;
+      }
+      setAttendanceHistoryError('');
+    }
+
+    const generation = attendanceHistoryGenerationRef.current;
+    if (attendanceHistoryLoadingRef.current) return;
+    attendanceHistoryLoadingRef.current = true;
+    setAttendanceHistoryLoading(true);
+    setAttendanceHistoryError('');
+
+    try {
+      const page = await fetchAttendanceLogsPage({
+        cursor: reset ? null : attendanceHistoryCursorRef.current,
+        pageSize: 30,
+        ...getAttendancePeriodBounds(attendancePeriod),
+        libraryId: attendanceLibraryFilter === 'all'
+          ? null
+          : attendanceLibraryFilter,
+      });
+      if (generation !== attendanceHistoryGenerationRef.current) return;
+
+      setAttendanceHistory((current) => {
+        const next = reset ? page.logs : [...current, ...page.logs];
+        const seen = new Set();
+        return next.filter((log) => {
+          const key = String(log.id);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      });
+      attendanceHistoryCursorRef.current = page.nextCursor;
+      attendanceHistoryHasMoreRef.current = page.hasMore;
+      setAttendanceHistoryHasMore(page.hasMore);
+      if (page.totalCount !== null) setAttendanceHistoryTotal(page.totalCount);
+    } catch (error) {
+      if (generation === attendanceHistoryGenerationRef.current) {
+        setAttendanceHistoryError(
+          error instanceof Error ? error.message : 'Unable to load attendance history. Please retry.'
+        );
+      }
+    } finally {
+      if (generation === attendanceHistoryGenerationRef.current) {
+        attendanceHistoryLoadingRef.current = false;
+        setAttendanceHistoryLoading(false);
+      }
+    }
+  }, [attendancePeriod, attendanceLibraryFilter, user?.role]);
+
+  useEffect(() => {
+    if (String(user?.role || '').toLowerCase() !== 'visitor') return undefined;
+    void loadAttendanceHistory(true);
+    return () => {
+      attendanceHistoryGenerationRef.current += 1;
+      attendanceHistoryLoadingRef.current = false;
+      setAttendanceHistoryLoading(false);
+    };
+  }, [loadAttendanceHistory, user?.role]);
+
+  useEffect(() => {
+    const root = attendanceHistoryContainerRef.current;
+    const sentinel = attendanceHistorySentinelRef.current;
+    if (
+      !root || !sentinel || !attendanceHistoryHasMore ||
+      attendanceHistoryLoading || attendanceHistoryError ||
+      typeof IntersectionObserver === 'undefined'
+    ) return undefined;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        void loadAttendanceHistory(false);
+      }
+    }, { root, rootMargin: '120px' });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [attendanceHistoryHasMore, attendanceHistoryError, attendanceHistoryLoading, loadAttendanceHistory]);
 
   useEffect(() => {
     const path = visitorDetails?.profileImagePath;
@@ -835,9 +992,21 @@ function VisitorDashboardContent() {
   // VISITOR ATTENDANCE
   // =========================================================
 
-  const myVisits = attendanceLogs
-    .filter((attendance) => attendance.visitorId === user?.id)
-    .sort((a, b) => new Date(b.timeIn) - new Date(a.timeIn));
+  const myVisits = attendanceHistory;
+  const attendanceRowHeight = 44;
+  const attendanceOverscan = 5;
+  const attendanceVisibleStart = Math.max(
+    0,
+    Math.floor(attendanceHistoryScrollTop / attendanceRowHeight) - attendanceOverscan
+  );
+  const attendanceVisibleEnd = Math.min(
+    myVisits.length,
+    attendanceVisibleStart + 18 + attendanceOverscan * 2
+  );
+  const visibleAttendanceVisits = myVisits.slice(
+    attendanceVisibleStart,
+    attendanceVisibleEnd
+  );
 
   // =========================================================
   // VISITOR TRANSACTION HISTORY
@@ -850,37 +1019,6 @@ function VisitorDashboardContent() {
         new Date(b.requestDate || 0) -
         new Date(a.requestDate || 0)
     );
-
-  const pastTransactionStatuses = new Set([
-    'returned',
-    'cancelled',
-    'expired',
-    'rejected',
-  ]);
-  const transactionGroups = [
-    {
-      label: 'Active',
-      entries: myTransactions.filter(
-        (transaction) =>
-          !pastTransactionStatuses.has(
-            String(transaction.status || '').toLowerCase()
-          )
-      ),
-    },
-    {
-      label: 'Past',
-      entries: myTransactions.filter((transaction) =>
-        pastTransactionStatuses.has(
-          String(transaction.status || '').toLowerCase()
-        )
-      ),
-    },
-  ];
-  const visibleTransactionIds = new Set(
-    myTransactions
-      .slice(0, showAllTransactions ? myTransactions.length : 5)
-      .map((transaction) => String(transaction.id))
-  );
 
   const communityReturnReminders = myTransactions
     .filter(
@@ -1969,307 +2107,101 @@ function VisitorDashboardContent() {
                       Attendance History
                     </h3>
 
-                    {myVisits.length ? (
-                      <ul className="divide-y divide-slate-100 dark:divide-slate-700 border-y border-slate-100 dark:border-slate-700">
-                        {myVisits.slice(0, 10).map((visit) => (
-                          <li
-                            key={visit.id}
-                            className="flex justify-between gap-3 py-2.5 text-xs"
-                          >
-                            <span className="font-medium text-slate-700 dark:text-slate-300">
-                              {libraryName(visit.libraryId)}
-                            </span>
-
-                            <time className="shrink-0 text-slate-500 dark:text-slate-400">
-                              {formatDateTime(visit.timeIn)}
-                            </time>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <div className="rounded-lg border border-dashed border-slate-300 px-4 py-5 text-center dark:border-slate-600">
-                        <CalendarDays size={20} className="mx-auto text-slate-600 dark:text-slate-300" aria-hidden="true" />
-                        <p className="mt-2 text-xs text-slate-700 dark:text-slate-200">
-                          No attendance history yet.
-                        </p>
-                      </div>
-                    )}
-                  </section>
-
-                  {/* =================================================
-                      TRANSACTION HISTORY
-                  ================================================== */}
-
-                  <section>
-                    <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
-                      <ClipboardList size={16} aria-hidden="true" />
-                      Transaction History
-                    </h3>
-
-                    {myTransactions.length ? (
-                      <div className="space-y-4">
-                        {transactionGroups.map((group) => {
-                          const visibleEntries = group.entries.filter(
-                            (transaction) =>
-                              visibleTransactionIds.has(
-                                String(transaction.id)
-                              )
-                          );
-                          if (!visibleEntries.length) return null;
-
-                          return (
-                            <section key={group.label} className="space-y-2">
-                              <h4 className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-200">
-                                <span>{group.label}</span>
-                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700 dark:bg-slate-700 dark:text-slate-200">
-                                  {group.entries.length}
-                                </span>
-                              </h4>
-                              {visibleEntries.map((transaction) => {
-                            const status = String(
-                              transaction.status || ''
-                            ).toLowerCase();
-
-                            const statusLabel = formatStatus(
-                              transaction.status
-                            );
-
-                            const statusClass = getStatusClass(
-                              transaction.status
-                            );
-
-                            const fineAmount = Number(
-                              transaction.fineAmount
-                            );
-                            const StatusIcon =
-                              status === 'returned'
-                                ? CheckCircle2
-                                : status === 'rejected' || status === 'overdue'
-                                  ? AlertTriangle
-                                  : status === 'pending' ||
-                                      status === 'queued' ||
-                                      status === 'ready_for_pickup'
-                                    ? Clock3
-                                    : BookOpen;
-                            const transactionType =
-                              transaction.isCommunityBook === true ||
-                              transaction.requestType === 'community'
-                                ? 'Community book'
-                                : 'Library book';
-
-                            return (
-                              <article
-                                key={transaction.id}
-                                className="visitor-transaction-row rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-700/50"
-                              >
-                                {/* BOOK + STATUS */}
-
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <h4
-                                      title={transaction.bookTitle || 'Book transaction'}
-                                      className="truncate text-xs font-bold text-slate-900 dark:text-white"
-                                    >
-                                      {transaction.bookTitle ||
-                                        'Book transaction'}
-                                    </h4>
-
-                                    <p className="mt-1 text-xs text-slate-700 dark:text-slate-200">
-                                      {transactionType}
-                                      {transaction.requestDate
-                                        ? ` · ${new Date(
-                                            transaction.requestDate
-                                          ).toLocaleDateString('en-PH', {
-                                            month: 'short',
-                                            day: 'numeric',
-                                            year: 'numeric',
-                                          })}`
-                                        : ''}
-                                    </p>
-                                  </div>
-
-                                  <span
-                                    className={`shrink-0 ${statusClass}`}
-                                  >
-                                    <StatusIcon size={12} aria-hidden="true" />
-                                    {statusLabel || 'Unknown'}
-                                  </span>
-                                </div>
-
-                                {/* TRANSACTION DETAILS */}
-
-                                <div className="mt-3 grid grid-cols-1 gap-1.5 text-xs sm:grid-cols-2">
-                                  {/* BORROW DATE */}
-
-                                  {transaction.borrowDate && (
-                                    <div className="flex min-w-0 items-start justify-between gap-2">
-                                      <span className="shrink-0 font-semibold text-slate-600 dark:text-slate-400">
-                                        Borrowed:{' '}
-                                      </span>
-
-                                      <span className="min-w-0 wrap-break-word text-right text-slate-500 dark:text-slate-300">
-                                        {formatDateTime(
-                                          transaction.borrowDate
-                                        )}
-                                      </span>
-                                    </div>
-                                  )}
-
-                                  {/* DUE DATE */}
-
-                                  {transaction.dueDate && (
-                                    <div className="flex min-w-0 items-start justify-between gap-2">
-                                      <span className="shrink-0 font-semibold text-slate-600 dark:text-slate-400">
-                                        Due:{' '}
-                                      </span>
-
-                                      <span className="min-w-0 wrap-break-word text-right text-slate-500 dark:text-slate-300">
-                                        {formatDateTime(
-                                          transaction.dueDate
-                                        )}
-                                      </span>
-                                    </div>
-                                  )}
-
-                                  {/* RETURN DATE */}
-
-                                  {transaction.returnDate && (
-                                    <div className="flex min-w-0 items-start justify-between gap-2">
-                                      <span className="shrink-0 font-semibold text-slate-600 dark:text-slate-400">
-                                        Returned:{' '}
-                                      </span>
-
-                                      <span className="min-w-0 wrap-break-word text-right text-slate-500 dark:text-slate-300">
-                                        {formatDateTime(
-                                          transaction.returnDate
-                                        )}
-                                      </span>
-                                    </div>
-                                  )}
-
-                                  {/* FINE */}
-
-                                  {!Number.isNaN(fineAmount) &&
-                                    fineAmount > 0 && (
-                                      <div className="flex min-w-0 items-center justify-between gap-3 border-t border-slate-200 pt-2 sm:col-span-2 dark:border-slate-600">
-                                        <span className="shrink-0 text-xs font-semibold text-red-600 dark:text-red-400">
-                                          Fine
-                                        </span>
-
-                                        <span className="shrink-0 whitespace-nowrap text-sm font-bold text-red-600 dark:text-red-400">
-                                          ₱<span className="tabular-nums">{fineAmount.toFixed(2)}</span>
-                                        </span>
-                                      </div>
-                                    )}
-
-                                  {transaction.fineReviewRequired && (
-                                    <p
-                                      role="status"
-                                      className="text-xs font-semibold text-amber-700 dark:text-amber-300 sm:col-span-2"
-                                    >
-                                      Manual fine review required. Any assessed amount is preserved; no rate was guessed.
-                                    </p>
-                                  )}
-                                </div>
-
-                                {/* PICKUP DEADLINE */}
-
-                                {transaction.pickupDeadline &&
-                                  status !== 'cancelled' && (
-                                    <p className="mt-2 flex items-center gap-1 text-xs text-slate-700 dark:text-slate-200">
-                                      <Clock3 size={13} aria-hidden="true" />
-                                      <span className="font-semibold">Pickup deadline:</span>
-
-                                      {formatDateTime(
-                                        transaction.pickupDeadline
-                                      )}
-                                    </p>
-                                  )}
-
-                                {/* QUEUE POSITION */}
-
-                                {status === 'queued' &&
-                                  transaction.queuePosition !== null &&
-                                  transaction.queuePosition !==
-                                    undefined && (
-                                    <p className="visitor-status visitor-status-neutral mt-2 w-fit">
-                                      Queue #
-                                      {transaction.queuePosition}
-                                    </p>
-                                  )}
-
-                                {/* CANCELLATION REASON */}
-
-                                {status === 'cancelled' &&
-                                  transaction.cancelReason && (
-                                    <p className="mt-2 text-xs text-red-600 dark:text-red-400">
-                                      <span className="font-semibold">
-                                        Cancellation reason:{' '}
-                                      </span>
-
-                                      {transaction.cancelReason}
-                                    </p>
-                                  )}
-
-                                {/* STAFF CONFIRMATION */}
-
-                                {transaction.confirmedBy && (
-                                  <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
-                                    Pickup confirmed by:{' '}
-                                    {transaction.confirmedBy}
-                                  </p>
-                                )}
-                              </article>
-                            );
-                              })}
-                            </section>
-                          );
-                        })}
-                        {myTransactions.length > 5 && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setShowAllTransactions((show) => !show)
-                            }
-                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-800 transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700"
-                          >
-                            {showAllTransactions ? 'Show less' : 'Show more'}
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        No transaction history found.
-                      </p>
-                    )}
-                  </section>
-                  <section>
-                    <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
-                      <FileText size={16} aria-hidden="true" />
-                      Legal
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        setIsTermsReviewOpen(true);
-                      }}
-                      className="flex min-h-16 w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left transition hover:border-slate-300 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:border-slate-600 dark:hover:bg-slate-700"
-                    >
-                      <FileText size={18} className="shrink-0 text-slate-700 dark:text-slate-200" aria-hidden="true" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-semibold text-slate-900 dark:text-white">
-                          Terms and conditions
-                        </span>
-                        {termsAcceptedAt && (
-                          <span className="mt-1 block text-xs text-slate-600 dark:text-slate-300">
-                            Accepted on {formatDate(termsAcceptedAt)}
-                          </span>
-                        )}
+                    <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Attendance date filter">
+                      {ATTENDANCE_PERIOD_FILTERS.map((filter) => (
+                        <button
+                          key={filter.value}
+                          type="button"
+                          onClick={() => setAttendancePeriod(filter.value)}
+                          aria-pressed={attendancePeriod === filter.value}
+                          className={`rounded-full border px-2.5 py-1.5 text-[11px] font-semibold transition ${
+                            attendancePeriod === filter.value
+                              ? 'border-shelf-primary bg-shelf-primary text-white'
+                              : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+                          }`}
+                        >
+                          {filter.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mb-2 flex items-center justify-between gap-3 text-xs">
+                      <span className="font-semibold text-slate-600 dark:text-slate-300">Total attendance</span>
+                      <span className="tabular-nums font-bold text-slate-900 dark:text-white" aria-live="polite">
+                        {attendanceHistoryTotal === null ? '—' : attendanceHistoryTotal}
                       </span>
-                      <ChevronRight size={18} className="shrink-0 text-slate-500 dark:text-slate-300" aria-hidden="true" />
-                    </button>
+                    </div>
+                    <div className="mb-3">
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                        Library
+                        <select
+                          value={attendanceLibraryFilter}
+                          onChange={(event) => setAttendanceLibraryFilter(event.target.value)}
+                          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                        >
+                          <option value="all">All libraries</option>
+                          {libraries.map((library) => (
+                            <option key={library.id} value={library.id}>{library.name}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <div
+                      ref={attendanceHistoryContainerRef}
+                      onScroll={(event) => setAttendanceHistoryScrollTop(event.currentTarget.scrollTop)}
+                      className="max-h-72 overflow-y-auto overscroll-contain pr-1"
+                      aria-label="Attendance history records"
+                    >
+                      {myVisits.length > 0 && (
+                        <ul
+                          aria-label={`Attendance history, ${attendanceHistoryTotal ?? myVisits.length} total records; ${myVisits.length} loaded`}
+                          className="divide-y divide-slate-100 border-y border-slate-100 dark:divide-slate-700 dark:border-slate-700"
+                          style={{
+                            paddingTop: attendanceVisibleStart * attendanceRowHeight,
+                            paddingBottom: (myVisits.length - attendanceVisibleEnd) * attendanceRowHeight,
+                          }}
+                        >
+                          {visibleAttendanceVisits.map((visit, index) => (
+                            <li
+                              key={visit.id}
+                              aria-posinset={attendanceVisibleStart + index + 1}
+                              aria-setsize={attendanceHistoryTotal ?? myVisits.length}
+                              className="flex h-11 items-center justify-between gap-3 overflow-hidden py-2.5 text-xs"
+                            >
+                              <span className="min-w-0 truncate font-medium text-slate-700 dark:text-slate-300">
+                                {libraryName(visit.libraryId)}
+                              </span>
+                              <time className="shrink-0 text-slate-500 dark:text-slate-400">
+                                {formatDateTime(visit.timeIn)}
+                              </time>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {attendanceHistoryLoading && (
+                        <p role="status" className="py-3 text-center text-xs text-slate-500 dark:text-slate-400">Loading attendance history...</p>
+                      )}
+                      {!attendanceHistoryLoading && !attendanceHistoryError && myVisits.length === 0 && (
+                        <div className="rounded-lg border border-dashed border-slate-300 px-4 py-5 text-center dark:border-slate-600">
+                          <CalendarDays size={20} className="mx-auto text-slate-600 dark:text-slate-300" aria-hidden="true" />
+                          <p className="mt-2 text-xs text-slate-700 dark:text-slate-200">No attendance history for these filters.</p>
+                        </div>
+                      )}
+                      {attendanceHistoryError && (
+                        <div role="alert" className="mt-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+                          <p>{attendanceHistoryError}</p>
+                          <button type="button" onClick={() => void loadAttendanceHistory(myVisits.length === 0)} className="mt-2 font-bold underline">Retry</button>
+                        </div>
+                      )}
+                      <div ref={attendanceHistorySentinelRef} aria-hidden="true" className="h-1" />
+                      {attendanceHistoryHasMore && typeof IntersectionObserver === 'undefined' && (
+                        <button type="button" onClick={() => void loadAttendanceHistory(false)} disabled={attendanceHistoryLoading} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200">Load more attendance</button>
+                      )}
+                      {!attendanceHistoryHasMore && myVisits.length > 0 && !attendanceHistoryLoading && (
+                        <p className="py-2 text-center text-[11px] text-slate-400">You have reached the end of your attendance history.</p>
+                      )}
+                    </div>
                   </section>
+
                 </div>
               )}
             </div>

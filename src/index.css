@@ -335,6 +335,7 @@ textarea::placeholder {
 }
 
 .opac-book-card {
+  position: relative;
   display: flex;
   box-sizing: border-box;
   min-width: 0;
@@ -348,7 +349,7 @@ textarea::placeholder {
   background: var(--visitor-surface, #ffffff);
   color: inherit;
   text-align: left;
-  box-shadow: var(--visitor-shadow-card, 0 2px 5px rgb(15 23 42 / 6%));
+  box-shadow: var(--visitor-shadow-card, 0 1px 3px 0 rgb(0 0 0 / 10%), 0 1px 2px -1px rgb(0 0 0 / 10%));
   transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
 }
 
@@ -364,8 +365,9 @@ textarea::placeholder {
 }
 
 .opac-book-card-cover {
-  width: 5.75rem;
-  height: 8.5rem;
+  align-self: center;
+  width: 4.25rem;
+  height: 6.25rem;
   flex: 0 0 auto;
   border: 0;
   border-radius: 0.625rem;
@@ -378,6 +380,7 @@ textarea::placeholder {
   min-width: 0;
   flex: 1;
   flex-direction: column;
+  padding-top: 1.75rem;
 }
 
 .opac-book-card-category {
@@ -426,32 +429,42 @@ textarea::placeholder {
 }
 
 .opac-book-card-availability {
-  display: flex;
-  flex-direction: column;
-  margin-top: auto;
-  padding-top: 0.625rem;
-}
-
-.opac-book-card-availability .visitor-status {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 1;
   display: inline-flex;
   box-sizing: border-box;
-  width: fit-content;
-  min-width: 0;
-  max-width: 100%;
-  align-self: flex-end;
+  max-width: calc(100% - 1.5rem);
   align-items: center;
   justify-content: center;
-  gap: 0.25rem;
-  flex-wrap: nowrap;
-  overflow-wrap: normal;
-  white-space: normal;
-  text-wrap: balance;
+  overflow: hidden;
   border: 1px solid transparent;
   border-radius: 999px;
   padding: 0.25rem 0.625rem;
   font-size: var(--text-xs);
   line-height: 1.25;
   text-align: center;
+}
+
+.opac-book-card-view-details {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--visitor-border, #dce3ec);
+  color: var(--shelf-primary, #164e8a);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.opac-book-card-view-details > span {
+  display: flex;
+  width: auto;
+  align-items: center;
 }
 
 .opac-book-card-availability-label {
@@ -462,13 +475,13 @@ textarea::placeholder {
   text-wrap: balance;
 }
 
-.opac-book-card-availability .visitor-status-success {
+.opac-book-card-availability.visitor-status-success {
   border-color: #86efac;
   background: #dcfce7;
   color: #166534;
 }
 
-.opac-book-card-availability .visitor-status-neutral {
+.opac-book-card-availability.visitor-status-neutral {
   border-color: #cbd5e1;
   background: #f1f5f9;
   color: #475569;
@@ -482,13 +495,13 @@ textarea::placeholder {
   --visitor-border: #475569;
 }
 
-.dark .opac-book-card-availability .visitor-status-success {
+.dark .opac-book-card-availability.visitor-status-success {
   border-color: #4ade80;
   background: rgb(34 197 94 / 18%);
   color: #bbf7d0;
 }
 
-.dark .opac-book-card-availability .visitor-status-neutral {
+.dark .opac-book-card-availability.visitor-status-neutral {
   border-color: #475569;
   background: #334155;
   color: #e2e8f0;
@@ -518,8 +531,8 @@ textarea::placeholder {
 
 @media (min-width: 640px) and (max-width: 1023px) {
   .opac-book-card-cover {
-    width: 5.25rem;
-    height: 7.75rem;
+    width: 4.25rem;
+    height: 6.25rem;
   }
 }
 
@@ -581,27 +594,6 @@ textarea::placeholder {
     -webkit-line-clamp: 1;
   }
 
-  .opac-book-card-availability {
-    box-sizing: border-box;
-    align-items: center;
-    min-height: 48px;
-    padding-top: 8px;
-  }
-
-  .opac-book-card-availability .visitor-status {
-    align-self: center;
-    padding-right: 0.5rem;
-    padding-left: 0.5rem;
-    text-align: center;
-  }
-}
-
-@media (min-width: 768px) and (max-width: 1279px) {
-  .opac-book-card-availability {
-    box-sizing: border-box;
-    min-height: 48px;
-    padding-top: 8px;
-  }
 }
 
 .personal-book-card-grid {

@@ -427,11 +427,13 @@ export function LibraryProvider({ children }) {
         currentVisitorId
           ? Promise.resolve([])
           : Promise.resolve([]),
-        loadOptionalData(
-          'Attendance records',
-          store.fetchAttendanceLogs(),
-          []
-        ),
+        currentVisitorId || String(user?.role || '').toLowerCase() === 'visitor'
+          ? Promise.resolve({ data: [], error: '' })
+          : loadOptionalData(
+              'Attendance records',
+              store.fetchAttendanceLogs(),
+              []
+            ),
         loadOptionalData(
           'Community books',
           store.fetchCommunityBooks(),

@@ -1,11 +1,9 @@
 import BookCover from './BookCover.jsx';
+import { ChevronRight } from 'lucide-react';
 import { formatBookCategory } from '../lib/bookCategory.js';
 
-/**
- * Shared institutional OPAC card used by both the public catalog and the
- * catalog embedded in the visitor dashboard.
- */
-export default function OPACBookCard({ book, onSelect }) {
+/** Shared book card used by the catalog and community books views. */
+export default function OPACBookCard({ book, onSelect, community = false }) {
   const title = book?.title || 'Untitled Book';
   const author = book?.author || 'Unknown Author';
   const category = formatBookCategory(book?.category);
@@ -16,7 +14,7 @@ export default function OPACBookCard({ book, onSelect }) {
       type="button"
       onClick={() => onSelect(book)}
       aria-label={`View details for ${title}`}
-      className="opac-book-card"
+      className={`opac-book-card${community ? ' opac-community-book-card' : ''}`}
     >
       <BookCover
         src={book?.coverUrl}
@@ -24,22 +22,28 @@ export default function OPACBookCard({ book, onSelect }) {
         imageFit="contain"
         className="opac-book-card-cover"
       />
+      <span
+        className={`opac-book-card-availability visitor-status ${
+          availableCopies > 0 ? 'visitor-status-success' : 'visitor-status-neutral'
+        }`}
+      >
+        <span className="opac-book-card-availability-label">
+          {availableCopies > 0 ? `${availableCopies} copies available` : 'Unavailable'}
+        </span>
+      </span>
       <div className="opac-book-card-details">
         <span className="opac-book-card-category category-chip">
           {category || 'Uncategorized'}
         </span>
         <h3 title={title}>{title}</h3>
-        <p className="opac-book-card-author" title={author}>{author}</p>
+        <p className="opac-book-card-author" title={author}>By {author}</p>
         <p className="opac-book-card-isbn">
           ISBN: {book?.isbn || '—'}
         </p>
-        <div className="opac-book-card-availability">
-          <span className={`visitor-status ${availableCopies > 0 ? 'visitor-status-success' : 'visitor-status-neutral'}`}>
-            <span className="opac-book-card-availability-label">
-              {availableCopies > 0 ? `${availableCopies} Copies Available` : 'Unavailable'}
-            </span>
-          </span>
-        </div>
+        <span className="opac-book-card-view-details">
+          <span>View book details</span>
+          <ChevronRight size={15} aria-hidden="true" />
+        </span>
       </div>
     </button>
   );

@@ -1249,7 +1249,7 @@ export default function OPACCatalog({
           );
         case 'author-desc':
           return String(b.author || '').localeCompare(
-            String(b.author || ''),
+            String(a.author || ''),
             undefined,
             { sensitivity: 'base' }
           );
@@ -1397,6 +1397,36 @@ export default function OPACCatalog({
       return matchesStatus && matchesSearch;
     });
   }, [myRequestSearch, myRequestStatus, myRequests]);
+  const requestAnalytics = useMemo(() => {
+    const waitingStatuses = new Set([
+      'pending',
+      'pending_approval',
+      'queued',
+      'ready_for_pickup',
+      'approved',
+      'to_confirm',
+    ]);
+    const waiting = myRequests.filter((request) =>
+      waitingStatuses.has(String(request.status || '').toLowerCase())
+    ).length;
+    const borrowed = myRequests.filter(
+      (request) => String(request.status || '').toLowerCase() === 'borrowed'
+    );
+    const returned = myRequests.filter(
+      (request) => String(request.status || '').toLowerCase() === 'returned'
+    ).length;
+    const overdue = borrowed.filter(
+      (request) => calculateCurrentFine(request) > 0
+    ).length;
+
+    return {
+      total: myRequests.length,
+      waiting,
+      borrowed: borrowed.length,
+      returned,
+      overdue,
+    };
+  }, [myRequests]);
   const myRequestList = useProgressiveList(filteredMyRequests, 12);
   useEffect(() => {
     if (
@@ -1438,8 +1468,13 @@ export default function OPACCatalog({
   }, [personalBookSearch, personalBookVisibilityFilter, personalBooks]);
   const filteredCommunityBooks = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    if (!term) return communityBooks;
-    return communityBooks.filter(
+    const safeCommunityBooks = Array.isArray(communityBooks)
+      ? communityBooks.filter(
+          (book) => book && typeof book === 'object' && book.id != null
+        )
+      : [];
+    if (!term) return safeCommunityBooks;
+    return safeCommunityBooks.filter(
       (book) =>
         String(book.title || '').toLowerCase().includes(term) ||
         String(book.author || '').toLowerCase().includes(term) ||
@@ -1506,9 +1541,9 @@ export default function OPACCatalog({
           : null;
       if (status === 'ready_for_pickup') {
         setNotice(
-          `"${bookEntry.title}" is ready for pickup at ${libraryName(
+          `“${bookEntry.title}” is ready to collect at ${libraryName(
             bookEntry.libraryId
-          )}. Please visit within ${PICKUP_WINDOW_HOURS} hours to scan your QR pass.`
+          )}. Visit within ${PICKUP_WINDOW_HOURS} hours and show your visitor QR pass to library staff.`
         );
       } else if (status === 'queued') {
         if (Number.isFinite(queuePosition)) {
@@ -1521,7 +1556,7 @@ export default function OPACCatalog({
           );
         }
       } else {
-        setNotice(`"${bookEntry.title}" borrow request was created successfully.`);
+        setNotice(`“${bookEntry.title}” was added to your borrow requests.`);
       }
       setSelectedBook(null);
       onViewChange('myBorrows');
@@ -1985,79 +2020,46 @@ export default function OPACCatalog({
     );
   };
   const renderCommunityBookCard = (book) => (
-    <button
+    <OPACBookCard
       key={book.id}
-      type="button"
-      onClick={() => setSelectedBook(book)}
-      className="visitor-book-card visitor-community-book-card"
-    >
-      <div className="visitor-book-card-inner">
-        <div className="visitor-book-card-badge-row">
-          <span className="visitor-book-card-badge visitor-book-card-badge-primary">Community book</span>
-          <span
-            className={`visitor-book-card-badge ${
-              getPersonalBookCopyAvailability(book).availableCopies > 0
-                ? 'visitor-book-card-badge-success'
-                : 'visitor-book-card-badge-warning'
-            }`}
-          >
-            {getPersonalBookAvailabilityLabel(book)}
-          </span>
-        </div>
-
-        <div className="visitor-book-card-header">
-          <BookCover
-            key={`${book.id}-${book.coverUrl || book.title}`}
-            src={book.coverUrl}
-            title={book.title}
-            className="visitor-book-cover"
-          />
-          <div className="visitor-book-card-text">
-            <h3 title={book.title || 'Untitled Book'}>{book.title || 'Untitled book'}</h3>
-            <p title={book.author || 'Unknown Author'}>By {book.author || 'Unknown author'}</p>
-          </div>
-        </div>
-
-        <div className="visitor-book-card-meta">
-          <div className="visitor-book-card-meta-item">
-            <span className="visitor-book-card-meta-label">Category</span>
-            <span className="visitor-book-card-meta-value" title={book.category || '—'}>{formatBookCategory(book.category) || '—'}</span>
-          </div>
-          <div className="visitor-book-card-meta-item">
-            <span className="visitor-book-card-meta-label">Condition</span>
-            <span className="visitor-book-card-meta-value" title={book.condition || '—'}>{book.condition || '—'}</span>
-          </div>
-          <div className="visitor-book-card-meta-item">
-            <span className="visitor-book-card-meta-label">Lending period</span>
-            <span className="visitor-book-card-meta-value">{book.lendingPeriodDays || 7} days</span>
-          </div>
-          <div className="visitor-book-card-meta-item">
-            <span className="visitor-book-card-meta-label">ISBN</span>
-            <span className="visitor-book-card-meta-value" title={book.isbn || '—'}>{book.isbn || '—'}</span>
-          </div>
-          <div className="visitor-book-card-meta-item">
-            <span className="visitor-book-card-meta-label">Copies</span>
-            <span className="visitor-book-card-meta-value">{getPersonalBookAvailabilityLabel(book)}</span>
-          </div>
-        </div>
-
-        <div className="visitor-book-card-footer">
-          <div className="visitor-book-card-handover">
-            <MapPin size={14} aria-hidden="true" />
-            <span>Handover: arrange with owner</span>
-          </div>
-          <div className="visitor-book-card-approval-note">
-            <CircleAlert size={14} aria-hidden="true" />
-            <span>Borrowing requires owner approval.</span>
-          </div>
-        </div>
-      </div>
-    </button>
+      book={book}
+      onSelect={setSelectedBook}
+      community
+    />
   );
 
   // =========================================================
   // RENDER MAIN OPAC LAYOUT
   // =========================================================
+  const normalizedNotice = String(notice || '').toLowerCase();
+  const noticeIsError = /unable|failed|cannot|could not|not available|required|must be|invalid/.test(
+    normalizedNotice
+  );
+  const noticeIsSuccess = /successfully|thank you|was added|was removed|is now /.test(
+    normalizedNotice
+  );
+  const noticeTitle =
+    normalizedNotice.includes('ready for') ||
+    normalizedNotice.includes('ready to collect')
+    ? 'Pickup ready'
+    : normalizedNotice.includes('queue')
+      ? 'Reservation update'
+      : noticeIsError
+        ? 'Unable to complete action'
+        : noticeIsSuccess
+          ? 'Action completed'
+          : 'Library update';
+  const noticeTone = noticeIsError
+    ? 'border-red-200 border-l-red-700 bg-red-50 text-red-950 dark:border-red-900 dark:border-l-red-400 dark:bg-red-950/40 dark:text-red-100'
+    : noticeIsSuccess
+      ? 'border-emerald-200 border-l-emerald-700 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:border-l-emerald-400 dark:bg-emerald-950/40 dark:text-emerald-100'
+      : 'border-slate-200 border-l-shelf-primary bg-slate-50 text-shelf-primary dark:border-slate-700 dark:border-l-blue-300 dark:bg-slate-800 dark:text-slate-100';
+  const noticeIconTone = noticeIsError
+    ? 'bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-200'
+    : noticeIsSuccess
+      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200'
+      : 'bg-blue-100 text-shelf-primary dark:bg-slate-700 dark:text-blue-200';
+
   return (
     <div className={`font-sans ${embedded ? 'text-inherit' : 'min-h-screen bg-slate-50 text-slate-800'}`}>
       
@@ -2086,7 +2088,7 @@ export default function OPACCatalog({
               onClick={() => navigate('/')} 
               className="text-xs font-semibold text-slate-300 hover:text-white transition px-3 py-1.5 rounded-lg hover:bg-slate-800"
             >
-              ← Back to home
+              â† Back to home
             </button>
             <button
               type="button"
@@ -2103,15 +2105,22 @@ export default function OPACCatalog({
       <main className={`${embedded ? 'mx-auto max-w-7xl space-y-6 px-0 py-0' : 'mx-auto max-w-7xl space-y-6 px-3 pt-6 pb-12 sm:px-4 md:px-6'}`}>
         
         {notice && (
-          <div role="status" aria-live="polite" className="visitor-feedback visitor-feedback-info flex items-start justify-between gap-3 rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
-            <span className="visitor-feedback-icon" aria-hidden="true">
-              <CircleAlert size={16} />
+          <div
+            role={noticeIsError ? 'alert' : 'status'}
+            aria-live={noticeIsError ? 'assertive' : 'polite'}
+            className={`visitor-feedback flex items-start gap-3 rounded-xl border border-l-4 px-4 py-3 shadow-sm ${noticeTone}`}
+          >
+            <span className={`mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${noticeIconTone}`} aria-hidden="true">
+              {noticeIsSuccess ? <CheckCircle2 size={18} /> : <CircleAlert size={18} />}
             </span>
-            <span>{notice}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-bold">{noticeTitle}</span>
+              <span className="mt-0.5 block text-sm leading-6">{notice}</span>
+            </span>
             <button
               type="button"
               onClick={() => setNotice('')}
-              className="font-bold text-blue-400 hover:text-blue-700"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-current/70 transition hover:bg-black/5 hover:text-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-accent dark:hover:bg-white/10"
               aria-label="Close notification"
             >
               <X size={16} aria-hidden="true" />
@@ -2219,10 +2228,10 @@ export default function OPACCatalog({
                 aria-label="Sort catalog books"
                 className="w-full min-w-0 px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none cursor-pointer md:w-auto md:min-w-40"
               >
-                <option value="title-asc">Title (A–Z)</option>
-                <option value="title-desc">Title (Z–A)</option>
-                <option value="author-asc">Author (A–Z)</option>
-                <option value="author-desc">Author (Z–A)</option>
+                <option value="title-asc">Title (A-Z)</option>
+                <option value="title-desc">Title (Z-A)</option>
+                <option value="author-asc">Author (A-Z)</option>
+                <option value="author-desc">Author (Z-A)</option>
                 <option value="newest">Newest First</option>
                 <option value="oldest">Oldest First</option>
                 <option value="available">Most Available</option>
@@ -2266,7 +2275,7 @@ export default function OPACCatalog({
             {searchTerm && (
               <div className="flex items-center justify-between text-xs text-slate-500">
                 <span>
-                  Search results for: <strong className="text-slate-800">“{searchTerm}”</strong>
+                  Search results for: <strong className="text-slate-800">"{searchTerm}"</strong>
                 </span>
                 <span>
                   {filteredBooks.length} {filteredBooks.length === 1 ? 'book' : 'books'} found
@@ -2475,52 +2484,45 @@ export default function OPACCatalog({
                 </button>
               </div>
             ) : (
-              <div className="visitor-book-collection-grid">
+              <div className="visitor-book-collection-grid visitor-reading-list-grid">
                 {readingList.visibleItems.map((book) => (
                   <article
                     key={book.id}
                     className="visitor-book-card visitor-reading-list-card"
                   >
-                    <div className="visitor-book-card-inner">
-                      <div className="visitor-book-card-badge-row">
-                        <span className="visitor-book-card-badge visitor-book-card-badge-neutral category-chip">
-                          {formatBookCategory(book.category) || 'Uncategorized'}
-                        </span>
-                      </div>
-
-                      <div className="visitor-book-card-header">
+                    <span
+                      className={`opac-book-card-availability visitor-status ${
+                        Number(book.availableCopies || 0) > 0
+                          ? 'visitor-status-success'
+                          : 'visitor-status-neutral'
+                      }`}
+                    >
+                      {Number(book.availableCopies || 0) > 0
+                        ? `${book.availableCopies} copies available`
+                        : 'Unavailable'}
+                    </span>
+                    <div className="visitor-book-card-inner visitor-reading-list-inner">
+                      <div className="visitor-reading-list-main">
                         <BookCover
                           src={book.coverUrl}
                           title={book.title || 'Untitled Book'}
                           className="visitor-book-cover"
                         />
-                        <div className="visitor-book-card-text">
+                        <div className="visitor-reading-list-details">
+                          <span className="visitor-book-card-badge visitor-book-card-badge-neutral category-chip">
+                            {formatBookCategory(book.category) || 'Uncategorized'}
+                          </span>
                           <h3 title={book.title || 'Untitled Book'}>
                             {book.title || 'Untitled Book'}
                           </h3>
                           <p title={book.author || 'Unknown Author'}>
                             By {book.author || 'Unknown Author'}
                           </p>
+                          <p className="visitor-reading-list-isbn tabular-nums">
+                            ISBN: {book.isbn || '—'}
+                          </p>
                         </div>
                       </div>
-
-                      <div className="visitor-book-card-meta">
-                        <div className="visitor-book-card-meta-item">
-                          <span className="visitor-book-card-meta-label">Availability</span>
-                          <span className="visitor-book-card-meta-value">
-                            {Number(book.availableCopies || 0) > 0
-                              ? `${book.availableCopies} available`
-                              : 'Unavailable'}
-                          </span>
-                        </div>
-                        <div className="visitor-book-card-meta-item">
-                          <span className="visitor-book-card-meta-label">ISBN</span>
-                          <span className="visitor-book-card-meta-value tabular-nums">
-                            {book.isbn || '—'}
-                          </span>
-                        </div>
-                      </div>
-
                       <div className="visitor-book-card-footer visitor-reading-list-footer">
                         <div className="visitor-book-card-reading-actions">
                           <button
@@ -3021,6 +3023,40 @@ export default function OPACCatalog({
             )}
           </section>
         ) : (
+          <>
+          {!borrowRequestsLoading && !borrowRequestsLoadError && (
+            <section
+              aria-labelledby="my-request-analytics-title"
+              className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800"
+            >
+              <div className="mb-3">
+                <h2 id="my-request-analytics-title" className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                  Your borrowing activity
+                </h2>
+                <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                  {requestAnalytics.total === 0
+                    ? 'Your request and borrowing summary will appear here when you start borrowing.'
+                    : `${requestAnalytics.waiting} waiting for the next step, ${requestAnalytics.borrowed} currently borrowed, and ${requestAnalytics.returned} returned.`}
+                  {requestAnalytics.overdue > 0 &&
+                    ` ${requestAnalytics.overdue} borrowed ${requestAnalytics.overdue === 1 ? 'book is' : 'books are'} overdue; please check the due dates below.`}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                {[
+                  { label: 'Total requests', value: requestAnalytics.total, tone: 'text-shelf-primary' },
+                  { label: 'Waiting', value: requestAnalytics.waiting, tone: 'text-amber-700 dark:text-amber-300' },
+                  { label: 'Borrowed', value: requestAnalytics.borrowed, tone: 'text-blue-700 dark:text-blue-300' },
+                  { label: 'Returned', value: requestAnalytics.returned, tone: 'text-emerald-700 dark:text-emerald-300' },
+                  { label: 'Overdue', value: requestAnalytics.overdue, tone: requestAnalytics.overdue ? 'text-red-700 dark:text-red-300' : 'text-slate-600 dark:text-slate-300' },
+                ].map((metric) => (
+                  <div key={metric.label} className="rounded-lg bg-slate-50 px-3 py-2.5 dark:bg-slate-700/60">
+                    <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-300">{metric.label}</p>
+                    <p className={`mt-1 text-xl font-extrabold tabular-nums ${metric.tone}`}>{metric.value}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
           <div className="visitor-requests-table rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
             {borrowRequestsLoading && (
               <p role="status" className="border-b border-slate-200 p-4 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
@@ -3375,6 +3411,7 @@ export default function OPACCatalog({
               </>
             )}
           </div>
+          </>
         )}
       </main>
 

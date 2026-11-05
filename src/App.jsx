@@ -1,9 +1,16 @@
 import { lazy, Suspense, useRef, useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+} from 'react-router-dom';
 import { BadgeCheck, ShieldCheck } from 'lucide-react';
 
 import { AuthProvider } from './context/AuthContext.jsx';
 import { LibraryProvider } from './context/LibraryContext.jsx';
+import { useAuth } from './context/useAuth.js';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 import ShelfLoader from './component/ShelfLoader.jsx';
 
@@ -115,7 +122,9 @@ function getMajorActionConfirmation(button) {
   return '';
 }
 
-export default function App() {
+function AppRouter() {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
   const [pendingConfirmation, setPendingConfirmation] = useState(null);
   const approvedButtonRef = useRef(null);
   const approvedFormRef = useRef(null);
@@ -132,12 +141,20 @@ export default function App() {
 
     const message = getMajorActionConfirmation(button);
     if (!message) return;
+    const isSignOut = /\b(log out|logout|sign out)\b/.test(
+      (button.getAttribute('aria-label') || button.textContent || '').toLowerCase()
+    );
 
     event.preventDefault();
     event.stopPropagation();
     setPendingConfirmation({
       message,
-      onConfirm: () => {
+      onConfirm: async () => {
+        if (isSignOut) {
+          await logout();
+          navigate('/', { replace: true });
+          return;
+        }
         approvedButtonRef.current = button;
         button.click();
       },
@@ -181,10 +198,7 @@ export default function App() {
   };
 
   return (
-    <AuthProvider>
-      <LibraryProvider>
-        <BrowserRouter>
-          <div
+    <div
             onClickCapture={confirmMajorButtonAction}
             onSubmitCapture={confirmMajorFormAction}
           >
@@ -283,6 +297,15 @@ export default function App() {
               </div>
             )}
           </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <LibraryProvider>
+        <BrowserRouter>
+          <AppRouter />
         </BrowserRouter>
       </LibraryProvider>
     </AuthProvider>

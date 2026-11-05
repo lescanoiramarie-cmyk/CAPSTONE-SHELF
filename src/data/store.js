@@ -1,5 +1,5 @@
 // ============================================================================
-// SHELF ILMS â€” data & business-logic layer (Supabase-backed)
+// SHELF ILMS — data & business-logic layer (Supabase-backed)
 // ----------------------------------------------------------------------------
 // Data modules in this directory own Supabase access. Components and contexts
 // call the data layer and never import the Supabase client directly.
@@ -1084,7 +1084,7 @@ export async function fetchBorrowRequests({
     }
   } catch (storageError) {
     console.error(
-      'SHELF â€” unable to read local session:',
+      'SHELF — unable to read local session:',
       storageError
     );
   }
@@ -1163,7 +1163,7 @@ export async function fetchBorrowRequests({
             );
 
           console.log(
-            'SHELF â€” resolved visitor from Supabase Auth:',
+            'SHELF — resolved visitor from Supabase Auth:',
             {
               authUserId,
               visitorId:
@@ -1173,7 +1173,7 @@ export async function fetchBorrowRequests({
         }
       } catch (visitorLookupError) {
         console.warn(
-          'SHELF â€” unable to resolve Auth user to visitor:',
+          'SHELF — unable to resolve Auth user to visitor:',
           visitorLookupError
         );
         throw visitorLookupError;
@@ -1217,7 +1217,7 @@ export async function fetchBorrowRequests({
           );
 
         console.log(
-          'SHELF â€” resolved visitor from local session:',
+          'SHELF — resolved visitor from local session:',
           {
             visitorId:
               normalizedVisitorId,
@@ -1228,14 +1228,14 @@ export async function fetchBorrowRequests({
 
   } catch (visitorResolveError) {
     console.error(
-      'SHELF â€” VISITOR ID RESOLUTION ERROR:',
+      'SHELF — VISITOR ID RESOLUTION ERROR:',
       visitorResolveError
     );
     throw visitorResolveError;
   }
 
   console.log(
-    'SHELF â€” FINAL VISITOR ID FOR REQUESTS:',
+    'SHELF — FINAL VISITOR ID FOR REQUESTS:',
     normalizedVisitorId
   );
 
@@ -1307,7 +1307,7 @@ export async function fetchBorrowRequests({
       throw normalError;
     }
     console.error(
-      'SHELF â€” NORMAL BORROW REQUESTS ERROR:',
+      'SHELF — NORMAL BORROW REQUESTS ERROR:',
       normalError
     );
     throw normalError;
@@ -1613,7 +1613,7 @@ export async function fetchBorrowRequests({
   // ==========================================================================
 
   console.log(
-    'SHELF â€” FINAL REQUEST LIST:',
+    'SHELF — FINAL REQUEST LIST:',
     {
       visitorId:
         normalizedVisitorId,
@@ -1684,6 +1684,58 @@ export async function fetchAttendanceLogs() {
   }
 
   return data.map(mapAttendance);
+}
+
+export async function fetchAttendanceLogsPage({
+  cursor = null,
+  pageSize = 30,
+  fromTime = null,
+  beforeTime = null,
+  libraryId = null,
+} = {}) {
+  const scope = await getAuthenticatedDataScope();
+  if (scope.type !== 'visitor' || !scope.visitorId) {
+    return { logs: [], nextCursor: null, hasMore: false, totalCount: 0 };
+  }
+
+  const safePageSize = Math.min(100, Math.max(1, Math.trunc(Number(pageSize) || 30)));
+  let query = supabase
+    .from('attendance_logs')
+    .select(
+      'id, visitor_id, visitor_name, library_id, time_in, checked_out_at',
+      cursor ? undefined : { count: 'exact' }
+    )
+    .eq('visitor_id', scope.visitorId)
+    .order('time_in', { ascending: false })
+    .order('id', { ascending: true });
+
+  if (libraryId) query = query.eq('library_id', libraryId);
+  if (fromTime) query = query.gte('time_in', fromTime);
+  if (beforeTime) query = query.lt('time_in', beforeTime);
+  if (cursor?.timeIn && cursor?.id) {
+    query = query.or(
+      `time_in.lt.${cursor.timeIn},and(time_in.eq.${cursor.timeIn},id.gt.${cursor.id})`
+    );
+  }
+
+  const { data, error, count } = await query.limit(safePageSize + 1);
+  if (error) {
+    throw cleanErr(error, 'Unable to load your attendance history.');
+  }
+
+  const rows = data || [];
+  const hasMore = rows.length > safePageSize;
+  const pageRows = rows.slice(0, safePageSize);
+  const lastRow = pageRows.at(-1);
+
+  return {
+    logs: pageRows.map(mapAttendance),
+    nextCursor: hasMore && lastRow
+      ? { timeIn: lastRow.time_in, id: lastRow.id }
+      : null,
+    hasMore,
+    totalCount: cursor ? null : count ?? 0,
+  };
 }
 
 // ============================================================================
@@ -3677,7 +3729,7 @@ export async function mergeOrInsertLibraryBooks(incomingRows) {
 
 
 // ============================================================================
-// BOOK INVENTORY â€” ADD LIBRARY BOOK
+// BOOK INVENTORY — ADD LIBRARY BOOK
 // ============================================================================
 
 
@@ -3736,7 +3788,7 @@ export async function addBook(book) {
 
 
 // ============================================================================
-// PERSONAL BOOK â€” ADD
+// PERSONAL BOOK — ADD
 // ============================================================================
 
 export async function addPersonalBook({
@@ -4390,7 +4442,7 @@ export async function requestCommunityBook(
 }
 
 // ============================================================================
-// FETCH COMMUNITY BOOK REQUESTS â€” OWNER
+// FETCH COMMUNITY BOOK REQUESTS — OWNER
 // ============================================================================
 //
 // Loads requests made by other visitors for books owned by this visitor.
@@ -4553,7 +4605,7 @@ export async function fetchOwnerCommunityBookRequests(
 }
 
 // ============================================================================
-// FETCH COMMUNITY BOOK REQUESTS â€” REQUESTER
+// FETCH COMMUNITY BOOK REQUESTS — REQUESTER
 // ============================================================================
 //
 // Loads requests submitted by the current visitor.
@@ -5800,7 +5852,7 @@ export async function fetchExternalCatalogBooks() {
 }
 
 // ============================================================================
-// BORROW REQUEST â€” LIBRARY BOOKS
+// BORROW REQUEST — LIBRARY BOOKS
 // ============================================================================
 
 export async function requestBorrow(

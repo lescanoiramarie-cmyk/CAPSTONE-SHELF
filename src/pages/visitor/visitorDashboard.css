@@ -25,7 +25,7 @@
   --visitor-space-4: 1rem;
   --visitor-space-6: 1.5rem;
   --visitor-space-8: 2rem;
-  --visitor-shadow-card: 0 1px 3px rgb(15 23 42 / 8%);
+  --visitor-shadow-card: 0 1px 3px 0 rgb(0 0 0 / 10%), 0 1px 2px -1px rgb(0 0 0 / 10%);
   overflow-x: clip;
   background-color: var(--visitor-page);
   color: var(--visitor-ink);
@@ -339,6 +339,74 @@
 .visitor-dashboard .visitor-book-collection-grid > .progressive-list-footer {
   height: auto;
   align-self: start;
+}
+
+.visitor-dashboard .visitor-reading-list-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  align-items: start;
+  gap: 1rem;
+}
+
+.visitor-dashboard .visitor-reading-list-grid > * {
+  height: auto;
+}
+
+.visitor-dashboard .visitor-book-card.visitor-reading-list-card {
+  position: relative;
+  min-height: 0;
+  height: auto;
+}
+
+.visitor-dashboard .visitor-reading-list-card .visitor-book-card-inner {
+  padding: 0.875rem;
+}
+
+.visitor-dashboard .visitor-reading-list-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.visitor-dashboard .visitor-book-card.visitor-reading-list-card .visitor-book-cover {
+  width: 4.25rem;
+  height: 6.25rem;
+  flex: 0 0 auto;
+}
+
+.visitor-dashboard .visitor-reading-list-details {
+  min-width: 0;
+  flex: 1;
+  padding-top: 1.5rem;
+  text-align: left;
+}
+
+.visitor-dashboard .visitor-reading-list-details h3 {
+  display: -webkit-box;
+  margin: 0.375rem 0 0;
+  overflow: hidden;
+  color: var(--visitor-ink);
+  font-family: var(--font-display);
+  font-size: var(--text-card-title);
+  font-weight: 600;
+  line-height: var(--text-card-title--line-height);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.visitor-dashboard .visitor-reading-list-details p {
+  margin-top: 0.25rem;
+  overflow: hidden;
+  color: var(--visitor-muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visitor-dashboard .visitor-reading-list-card .visitor-reading-list-footer {
+  margin-top: 0.625rem;
+  padding-top: 0.625rem;
 }
 
 .visitor-dashboard .visitor-book-card {
@@ -1052,6 +1120,29 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.visitor-dashboard .opac-book-grid.visitor-community-book-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  width: 100%;
+  justify-content: stretch;
+  align-items: stretch;
+  gap: 1rem;
+}
+
+.visitor-dashboard .opac-book-grid.visitor-community-book-grid > * {
+  height: 100%;
+}
+
+.visitor-dashboard .opac-book-grid.visitor-community-book-grid > .opac-community-book-card {
+  box-sizing: border-box;
+  height: 13.5rem;
+  min-height: 13.5rem;
+  max-height: 13.5rem;
+}
+
+.visitor-dashboard .opac-community-book-card .opac-book-card-cover {
+  align-self: center;
+}
+
 @media (min-width: 768px) {
   .visitor-dashboard .opac-book-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1148,44 +1239,10 @@
     margin-top: 0;
   }
 
-  .visitor-dashboard .visitor-community-book-grid {
+  .visitor-dashboard .opac-book-grid.visitor-community-book-grid {
     grid-template-columns: minmax(0, 1fr);
+    justify-content: stretch;
     gap: 0.75rem;
-  }
-
-  .visitor-dashboard .visitor-community-book-card {
-    min-height: 0;
-  }
-
-  .visitor-dashboard .visitor-community-book-card .visitor-book-card-inner {
-    padding: 0.875rem;
-  }
-
-  .visitor-dashboard .visitor-community-book-card .visitor-book-card-badge-row {
-    flex-wrap: wrap;
-    white-space: normal;
-  }
-
-  .visitor-dashboard .visitor-community-book-card .visitor-book-cover:not(.opac-book-card-cover) {
-    width: 3.5rem;
-    height: 5rem;
-  }
-
-  .visitor-dashboard .visitor-community-book-card .visitor-book-card-text h3 {
-    min-height: 0;
-  }
-
-  .visitor-dashboard .visitor-community-book-card .visitor-book-card-meta,
-  .visitor-dashboard .visitor-community-book-card .visitor-book-card-footer {
-    display: none;
-  }
-
-  .visitor-dashboard .visitor-community-book-card .visitor-book-card-footer:not(.visitor-reading-list-footer),
-  .visitor-dashboard .visitor-community-book-card .visitor-book-card-footer:not(.visitor-reading-list-footer) .visitor-book-card-handover,
-  .visitor-dashboard .visitor-community-book-card .visitor-book-card-footer:not(.visitor-reading-list-footer) .visitor-book-card-approval-note {
-    align-items: flex-start;
-    justify-content: flex-start;
-    text-align: left;
   }
 
   .visitor-dashboard .visitor-book-modal-body {
@@ -1352,5 +1409,19 @@
   .visitor-dashboard .visitor-modal-community-action {
     margin-inline: -1.25rem;
     padding-inline: 1.25rem;
+  }
+}
+
+@media (max-width: 767px) {
+  .visitor-dashboard .opac-community-book-card {
+    flex-direction: row;
+    gap: 0.75rem;
+  }
+
+  .visitor-dashboard .opac-community-book-card .opac-book-card-cover {
+    width: 4.25rem;
+    height: 6.25rem;
+    aspect-ratio: auto;
+    margin-inline: 0;
   }
 }

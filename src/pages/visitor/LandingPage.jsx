@@ -601,7 +601,7 @@ const featuredBooks = books
                   'Please sign in to explore the participating libraries.'
                 )
               }
-              className="landing-library-card group flex h-full min-w-0 flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-md transition-all duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 sm:p-6"
+              className="landing-library-card group flex h-full min-w-0 flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 sm:p-6"
             >
               <div>
                 <div className="flex items-center justify-between mb-4">
