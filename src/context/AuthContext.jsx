@@ -602,6 +602,18 @@ export const AuthProvider = ({ children }) => {
       console.error('VISITOR LOGIN ATTEMPT FAILED:', error);
     }
 
+    // Email/password authentication is shared by visitor and staff accounts.
+    // If it failed, trying the staff path repeats the same request and counts
+    // as another failed attempt against the same lockout record.
+    const visitorLoginMessage = String(visitorError?.message || '').trim();
+    if (
+      /invalid email or password|too many failed login attempts|unable to (?:process|complete) login/i.test(
+        visitorLoginMessage
+      )
+    ) {
+      throw visitorError;
+    }
+
     // 2. TRY STAFF LOGIN
     try {
       const staff = await loginStaffAccount(
