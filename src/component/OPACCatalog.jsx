@@ -2870,6 +2870,7 @@ export default function OPACCatalog({
                           <div className="mt-4 flex flex-col gap-2 border-t border-slate-200 pt-4 sm:flex-row sm:justify-end dark:border-slate-700">
                             <button
                               type="button"
+                              data-confirm-message="Are you sure you want to approve this community book request?"
                               disabled={Boolean(processingCommunityRequestId)}
                               onClick={() => handleApproveCommunityRequest(request)}
                               className="min-h-10 rounded-lg bg-shelf-primary px-5 py-2.5 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2900,6 +2901,7 @@ export default function OPACCatalog({
                             <button
                               type="button"
                               data-confirm-borrowing
+                              data-confirm-message="Are you sure you want to confirm that you handed this book to the requester?"
                               disabled={Boolean(processingCommunityRequestId)}
                               onClick={() => handleConfirmCommunityBookPickup(request)}
                               className="mt-4 min-h-11 w-full rounded-lg bg-shelf-primary px-5 py-3 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2919,6 +2921,7 @@ export default function OPACCatalog({
                             <button
                               type="button"
                               data-confirm-return
+                              data-confirm-message="Are you sure you want to confirm that the requester returned this book?"
                               disabled={Boolean(processingCommunityRequestId)}
                               onClick={() => handleConfirmCommunityBookReturn(request)}
                               className="mt-4 min-h-11 w-full rounded-lg bg-shelf-primary px-5 py-3 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -3347,6 +3350,7 @@ export default function OPACCatalog({
                           {canCancel && (
                             <button
                               type="button"
+                              data-confirm-message="Are you sure you want to cancel this borrow request?"
                               disabled={Boolean(cancellingRequestId)}
                               onClick={() => handleCancel(request.id)}
                               className="bg-red-50 text-red-600 text-xs px-3 py-1.5 rounded-lg font-bold hover:bg-red-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
@@ -3947,6 +3951,11 @@ export default function OPACCatalog({
                 <button
                   type="submit"
                   disabled={savingPersonalBook}
+                  data-confirm-message={
+                    editingPersonalBook
+                      ? 'Are you sure you want to save your personal book changes?'
+                      : 'Are you sure you want to add this personal book?'
+                  }
                   className="min-h-11 px-5 py-2.5 rounded-lg bg-shelf-primary text-white text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {savingPersonalBook
@@ -4206,6 +4215,11 @@ export default function OPACCatalog({
                             <button
                               type="button"
                               disabled={submittingBorrow || entryFineRate == null}
+                              data-confirm-message={
+                                Number(entry.availableCopies || 0) > 0
+                                  ? 'Are you sure you want to borrow this book?'
+                                  : 'Are you sure you want to reserve this book?'
+                              }
                               onClick={() => handleBorrowOrReserve(entry)}
                               className="px-3 py-1.5 bg-shelf-primary text-white rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
                             >
@@ -4237,6 +4251,7 @@ export default function OPACCatalog({
                 </div>
                 <button
                   type="button"
+                  data-confirm-message="Are you sure you want to request this community book?"
                   onClick={() => handleRequestCommunityBook(selectedBook)}
                   disabled={
                     submittingCommunityRequest ||

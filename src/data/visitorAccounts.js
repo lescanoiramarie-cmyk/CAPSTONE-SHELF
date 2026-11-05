@@ -22,6 +22,20 @@ export function invalidateVisitorAccountsCache() {
   visitorAccountsCache.clear();
 }
 
+export async function setVisitorActive(visitorId, isActive) {
+  const { error } = await supabase.rpc('set_visitor_active', {
+    p_visitor_id: visitorId,
+    p_is_active: isActive,
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Unable to update visitor account status.');
+  }
+
+  invalidateVisitorAccountsCache();
+  return isActive;
+}
+
 export async function fetchVisitorAccounts({
   libraryId,
   page = 1,

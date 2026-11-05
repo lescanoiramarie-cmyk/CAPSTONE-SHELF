@@ -49,6 +49,18 @@ function getMajorActionConfirmation(button) {
   const path = window.location.pathname;
   const isAdminModule = path === '/subadmin' || path === '/superadmin';
 
+  const customMessage = button.getAttribute('data-confirm-message');
+  if (customMessage) return customMessage;
+  if (button.hasAttribute('data-confirm-borrow')) {
+    return 'Are you sure you want to submit this borrow request?';
+  }
+  if (button.hasAttribute('data-confirm-return')) {
+    return 'Are you sure you want to confirm this book return?';
+  }
+  if (button.hasAttribute('data-confirm-borrowing')) {
+    return 'Are you sure you want to confirm this book borrowing?';
+  }
+
   if (
     !normalizedLabel ||
     /\b(qr|image|download|upload|scan|close|cancel)\b/.test(
@@ -98,16 +110,6 @@ function getMajorActionConfirmation(button) {
     return normalizedLabel.includes('add')
       ? 'Are you sure you want to add this personal book?'
       : 'Are you sure you want to save this personal book?';
-  }
-
-  if (button.hasAttribute('data-confirm-borrow')) {
-    return 'Are you sure you want to submit this borrow request?';
-  }
-  if (button.hasAttribute('data-confirm-return')) {
-    return 'Are you sure you want to confirm this book return?';
-  }
-  if (button.hasAttribute('data-confirm-borrowing')) {
-    return 'Are you sure you want to confirm this book borrowing?';
   }
 
   return '';

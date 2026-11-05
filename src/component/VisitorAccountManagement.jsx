@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Search, ChevronLeft, ChevronRight, UsersRound } from 'lucide-react';
-import { fetchVisitorAccounts } from '../data/visitorAccounts.js';
+import {
+  fetchVisitorAccounts,
+  setVisitorActive,
+} from '../data/visitorAccounts.js';
 
 const PAGE_SIZE = 10;
 
@@ -30,6 +33,9 @@ export default function VisitorAccountManagement({
   const [total, setTotal] = useState(0);
   const [error, setError] = useState('');
   const [loadedRequestKey, setLoadedRequestKey] = useState('');
+  const [updatingVisitorId, setUpdatingVisitorId] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [actionMessage, setActionMessage] = useState('');
   const isSuperAdmin = mode === 'superadmin';
   const missingBranch = !isSuperAdmin && !libraryId;
 
@@ -105,6 +111,34 @@ export default function VisitorAccountManagement({
       : '';
   const visibleVisitors = loadedRequestKey === requestKey ? visitors : [];
 
+  const handleToggleVisitor = async (visitor) => {
+    if (!visitor?.id || updatingVisitorId) return;
+
+    const nextIsActive = !visitor.isActive;
+    setUpdatingVisitorId(visitor.id);
+    setActionError('');
+    setActionMessage('');
+
+    try {
+      await setVisitorActive(visitor.id, nextIsActive);
+      setVisitors((current) =>
+        current.map((item) =>
+          item.id === visitor.id ? { ...item, isActive: nextIsActive } : item
+        )
+      );
+      setActionMessage(
+        `Visitor account ${nextIsActive ? 'enabled' : 'disabled'} successfully.`
+      );
+    } catch (updateError) {
+      console.error('Visitor account status update failed:', updateError);
+      setActionError(
+        updateError.message || 'Unable to update visitor account status.'
+      );
+    } finally {
+      setUpdatingVisitorId('');
+    }
+  };
+
   return (
     <section className="min-w-0 space-y-5">
       <header>
@@ -173,6 +207,16 @@ export default function VisitorAccountManagement({
           {visibleError}
         </div>
       )}
+      {actionError && (
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {actionError}
+        </div>
+      )}
+      {actionMessage && (
+        <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {actionMessage}
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
@@ -183,7 +227,7 @@ export default function VisitorAccountManagement({
                 <th className="px-4 py-3 font-semibold">Email</th>
                 <th className="px-4 py-3 font-semibold">Library</th>
                 <th className="px-4 py-3 font-semibold">Registration Date</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
+                <th className="px-4 py-3 font-semibold">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -219,15 +263,24 @@ export default function VisitorAccountManagement({
                     </td>
                     <td className="px-4 py-3 text-slate-600">{formatDate(visitor.registeredAt)}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                        visitor.isActive
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : 'bg-slate-100 text-slate-600'
-                      }`}>
-                        {visitor.isActive ? 'Active' : 'Inactive'}
-                      </span>
+                      <button
+                        type="button"
+                        data-confirm-message={`Are you sure you want to ${visitor.isActive ? 'disable' : 'enable'} this visitor account?`}
+                        onClick={() => void handleToggleVisitor(visitor)}
+                        disabled={Boolean(updatingVisitorId)}
+                        className={`rounded-md border px-3 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                          visitor.isActive
+                            ? 'border-red-200 text-red-700 hover:bg-red-50'
+                            : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                        }`}
+                      >
+                        {updatingVisitorId === visitor.id
+                          ? 'Updating...'
+                          : visitor.isActive
+                            ? 'Disable'
+                            : 'Enable'}
+                      </button>
                     </td>
-
                   </tr>
                 ))
               )}
