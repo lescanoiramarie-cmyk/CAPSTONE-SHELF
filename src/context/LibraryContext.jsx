@@ -1735,9 +1735,11 @@ fineReviewRequired:
       {children}
       {!splashElapsed && <ShelfLoader screen label="Loading SHELF..." />}
       {loading && initialDataReady && (
-        <div className="pointer-events-none fixed right-4 top-4 z-190 flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-3 py-2 text-sm font-semibold text-slate-700 shadow-lg">
-          <ShelfLoader compact label="Refreshing dashboard data..." />
-          <span>Refreshing…</span>
+        <div className="pointer-events-none fixed inset-0 z-190 grid place-items-center">
+          <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-4 py-3 text-sm font-semibold text-slate-700 shadow-lg dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-100">
+            <ShelfLoader compact label="Refreshing dashboard data..." />
+            <span>Refreshing…</span>
+          </div>
         </div>
       )}
     </LibraryContext.Provider>

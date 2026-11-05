@@ -957,16 +957,26 @@ function VisitorDashboardContent() {
             aria-labelledby="visitor-terms-title"
             className="flex h-full max-h-full w-full max-w-2xl flex-col overflow-hidden border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800 sm:h-auto sm:max-h-[90vh] sm:rounded-2xl"
           >
-            <div className="shrink-0 bg-shelf-primary px-5 py-5 text-white sm:px-6">
-              <h2 id="visitor-terms-title" className="text-lg font-extrabold">
-                Terms and Conditions
-              </h2>
-              <p className="mt-1 text-sm text-slate-200">
-                Please review these terms before using your visitor account.
-              </p>
-              <p className="mt-1 text-xs text-slate-300">
-                Version {VISITOR_TERMS_VERSION}
-              </p>
+            <div className="flex shrink-0 items-start justify-between gap-4 bg-shelf-primary px-5 py-5 text-white sm:px-6">
+              <div>
+                <h2 id="visitor-terms-title" className="text-lg font-extrabold">
+                  Terms and Conditions
+                </h2>
+                <p className="mt-1 text-sm text-slate-200">
+                  Please review these terms before using your visitor account.
+                </p>
+                <p className="mt-1 text-xs text-slate-300">
+                  Version {VISITOR_TERMS_VERSION}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void logout()}
+                aria-label="Close Terms and Conditions and sign out"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                <X size={20} aria-hidden="true" />
+              </button>
             </div>
 
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5 text-sm leading-6 text-slate-700 dark:text-slate-200 sm:px-6">

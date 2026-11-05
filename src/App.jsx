@@ -124,7 +124,7 @@ export default function App() {
     const target = event.target;
     const button = target instanceof Element ? target.closest('button') : null;
 
-    if (!button || button.type === 'submit') return;
+    if (!button || (button.type === 'submit' && button.closest('form'))) return;
     if (approvedButtonRef.current === button) {
       approvedButtonRef.current = null;
       return;
