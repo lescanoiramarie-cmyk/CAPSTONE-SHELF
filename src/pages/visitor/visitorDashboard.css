@@ -343,21 +343,25 @@
 
 .visitor-dashboard .visitor-reading-list-grid {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
-  align-items: start;
+  align-items: stretch;
   gap: 1rem;
 }
 
 .visitor-dashboard .visitor-reading-list-grid > * {
-  height: auto;
+  height: 100%;
 }
 
 .visitor-dashboard .visitor-book-card.visitor-reading-list-card {
   position: relative;
-  min-height: 0;
-  height: auto;
+  min-height: 13.25rem;
+  height: 100%;
 }
 
 .visitor-dashboard .visitor-reading-list-card .visitor-book-card-inner {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
   padding: 0.875rem;
 }
 
@@ -405,7 +409,7 @@
 }
 
 .visitor-dashboard .visitor-reading-list-card .visitor-reading-list-footer {
-  margin-top: 0.625rem;
+  margin-top: auto;
   padding-top: 0.625rem;
 }
 
