@@ -2099,7 +2099,7 @@ export async function registerVisitor({
   // ---------------------------------------------------------
 
   const otpDeliveryError =
-    readFunctionError(
+    await readFunctionError(
       emailError,
       emailData
     );
@@ -2167,22 +2167,34 @@ async function abortVisitorRegistration(
 // ============================================================================
 // EDGE FUNCTION ERROR EXTRACTION
 //
-// supabase.functions.invoke returns a non-2xx response through
-// the `error` slot, so the edge function's own `error` field is
-// never read from `data`. Pull it from both places and fall
-// back to a generic message.
+// supabase.functions.invoke returns non-2xx payloads through
+// error.context. Read that response as well as successful data
+// so the UI can show the edge function's actionable message.
 // ============================================================================
 
-function readFunctionError(
+async function readFunctionError(
   error,
   data
 ) {
+  let responseData = data;
+  if (
+    !responseData &&
+    typeof error?.context?.json === 'function'
+  ) {
+    try {
+      responseData = await error.context.json();
+    } catch (responseError) {
+      console.warn('Unable to read Edge Function error details:', responseError);
+      responseData = null;
+    }
+  }
+
   const dataMessage =
-    data &&
-    typeof data === 'object' &&
-    data.success === false
+    responseData &&
+    typeof responseData === 'object' &&
+    responseData.success === false
       ? normalizeText(
-          data.error || data.message
+          responseData.error || responseData.message
         )
       : '';
 
@@ -2275,7 +2287,7 @@ export async function resendOtp(
     );
 
   const otpDeliveryError =
-    readFunctionError(
+    await readFunctionError(
       emailError,
       emailData
     );
@@ -2508,7 +2520,7 @@ export async function requestPasswordResetCode(
     );
 
   const failure =
-    readFunctionError(
+    await readFunctionError(
       error,
       data
     );
@@ -2576,7 +2588,7 @@ export async function verifyPasswordResetCode(
     );
 
   const failure =
-    readFunctionError(
+    await readFunctionError(
       error,
       data
     );
@@ -2649,7 +2661,7 @@ export async function applyPasswordReset({
     );
 
   const failure =
-    readFunctionError(
+    await readFunctionError(
       error,
       data
     );

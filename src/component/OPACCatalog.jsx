@@ -2899,6 +2899,7 @@ export default function OPACCatalog({
                             </p>
                             <button
                               type="button"
+                              data-confirm-borrowing
                               disabled={Boolean(processingCommunityRequestId)}
                               onClick={() => handleConfirmCommunityBookPickup(request)}
                               className="mt-4 min-h-11 w-full rounded-lg bg-shelf-primary px-5 py-3 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2917,6 +2918,7 @@ export default function OPACCatalog({
                             </p>
                             <button
                               type="button"
+                              data-confirm-return
                               disabled={Boolean(processingCommunityRequestId)}
                               onClick={() => handleConfirmCommunityBookReturn(request)}
                               className="mt-4 min-h-11 w-full rounded-lg bg-shelf-primary px-5 py-3 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -3510,7 +3512,7 @@ export default function OPACCatalog({
                 <X size={20} aria-hidden="true" />
               </button>
             </div>
-            <form onSubmit={handleSavePersonalBook} className="flex min-h-0 flex-1 flex-col overflow-hidden text-slate-700 dark:text-slate-200">
+            <form data-personal-book-form onSubmit={handleSavePersonalBook} className="flex min-h-0 flex-1 flex-col overflow-hidden text-slate-700 dark:text-slate-200">
               <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-6">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
                   Book Information

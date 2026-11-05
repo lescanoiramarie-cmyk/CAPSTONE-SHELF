@@ -330,12 +330,10 @@ export default function BookInventory() {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this book?')) {
-      try {
-        await deleteBook(id);
-      } catch (err) {
-        alert(err.message || 'Failed to delete book');
-      }
+    try {
+      await deleteBook(id);
+    } catch (err) {
+      alert(err.message || 'Failed to delete book');
     }
   };
 

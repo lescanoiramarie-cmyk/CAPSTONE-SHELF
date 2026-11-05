@@ -683,13 +683,6 @@ const handleToggleStaff = async (staff) => {
   }
 
   const nextIsActive = !staff.is_active;
-  const action = nextIsActive ? 'enable' : 'disable';
-
-  const confirmed = window.confirm(
-    `Are you sure you want to ${action} ${staff.full_name}'s account?`
-  );
-
-  if (!confirmed) return;
 
   try {
     setStaffLoading(true);
@@ -749,12 +742,6 @@ const handleEditStaff = (staff) => {
       setStaffError('Super-admin accounts are protected.');
       return;
     }
-
-    const confirmed = window.confirm(
-      `Permanently delete the Sub-admin account for ${staff.full_name}?`
-    );
-
-    if (!confirmed) return;
 
     try {
       setStaffLoading(true);
@@ -1001,12 +988,6 @@ const handleEditStaff = (staff) => {
   // DELETE LIBRARY
   // ============================================================
   const handleDeleteLibrary = async (library) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete "${library.name}"? This action cannot be undone.`
-    );
-
-    if (!confirmed) return;
-
     try {
       setLibraryMessage('');
       await deleteLibrary(library.id);

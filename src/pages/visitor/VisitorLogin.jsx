@@ -137,6 +137,7 @@ export default function VisitorLogin({ initialView = 'login' }) {
 
   const [view, setView] = useState(initialView);
   const [error, setError] = useState('');
+  const [qrScanNotice, setQrScanNotice] = useState('');
   const [libraries, setLibraries] = useState([]);
   const [librariesLoading, setLibrariesLoading] = useState(true);
   const [libraryLoadError, setLibraryLoadError] = useState('');
@@ -646,6 +647,9 @@ useEffect(() => {
         identifier: qrCode.toUpperCase(),
       }));
       setError('');
+      setQrScanNotice(
+        'QR pass scanned successfully. Enter your password to sign in.'
+      );
     },
     []
   );
@@ -655,6 +659,7 @@ useEffect(() => {
   // START / STOP CAMERA SCANNER
   const startScanner = useCallback(() => {
     setError('');
+    setQrScanNotice('');
     setShowScanner(true);
   }, []);
 
@@ -970,6 +975,7 @@ useEffect(() => {
     if (loginRequestLockRef.current) return;
 
     setError('');
+    setQrScanNotice('');
     setCanResendVisitorOtp(false);
 
     const identifier =
@@ -2389,7 +2395,7 @@ setOtpResendRemaining(
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Email Address
+                  School email address
                 </label>
 
                 <input
@@ -2918,14 +2924,14 @@ setOtpResendRemaining(
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
-                      Email or visitor QR pass
+                      School email address or visitor QR pass
                     </label>
 
                     <input
                       type="text"
                       name="visitor_login_identifier"
                       required
-                      autoComplete="off"
+                      autoComplete="username"
                       placeholder="email@example.com or SHELF-QR-123456"
                       value={
                         loginData.identifier
@@ -2934,6 +2940,7 @@ setOtpResendRemaining(
                         setCanResendVisitorOtp(
                           false
                         );
+                        setQrScanNotice('');
 
                         setLoginData({
                           ...loginData,
@@ -2943,6 +2950,15 @@ setOtpResendRemaining(
                       }}
                       className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                     />
+                    {qrScanNotice && (
+                      <p
+                        role="status"
+                        aria-live="polite"
+                        className="mt-2 text-xs font-medium text-emerald-700"
+                      >
+                        {qrScanNotice}
+                      </p>
+                    )}
                   </div>
 
                   {/* LOGIN PASSWORD */}
@@ -2961,12 +2977,8 @@ setOtpResendRemaining(
                         }
                         name="visitor_login_password"
                         required
-                        autoComplete="new-password"
-                        onCopy={preventPasswordClipboard}
-                        onCut={preventPasswordClipboard}
-                        onPaste={preventPasswordClipboard}
-                        onDrop={preventPasswordClipboard}
-                        placeholder="••••••••"
+                        autoComplete="current-password"
+                        placeholder="Enter password"
                         value={
                           loginData.password
                         }
@@ -2977,7 +2989,7 @@ setOtpResendRemaining(
                               event.target.value,
                           })
                         }
-                        className="w-full px-4 py-2.5 pr-12 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
+                        className="w-full px-4 py-2.5 pr-12 border border-slate-300 rounded-lg text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                       />
 
                       <button
@@ -3136,7 +3148,7 @@ setOtpResendRemaining(
                   <>
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
-                        Email address
+                        School email address
                       </label>
 
                       <input

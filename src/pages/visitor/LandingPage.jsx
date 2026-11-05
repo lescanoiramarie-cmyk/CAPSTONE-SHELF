@@ -202,7 +202,7 @@ const featuredBooks = books
       return;
     }
 
-    navigate('/catalog');
+    navigate(user.role === 'visitor' ? '/visitor' : '/catalog');
   };
 
   useEffect(() => {
@@ -491,7 +491,7 @@ const featuredBooks = books
       </header>
 
       {/* HERO SECTION WITH ANIMATED INTERCONNECTED DOTS */}
-      <section className="shelf-landing-backdrop relative overflow-hidden border-b border-slate-800 px-4 py-20 text-white sm:px-6 sm:py-24">
+      <section className="shelf-landing-backdrop relative overflow-hidden border-b border-slate-800 px-4 py-16 text-white sm:px-6 sm:py-20">
         
         {/* ANIMATED CONSTELLATION CANVAS */}
         <ParticleConstellation />
@@ -562,7 +562,7 @@ const featuredBooks = books
       </section>
 
       {/* 1. PARTICIPATING LIBRARIES SECTION */}
-      <section id="libraries" className="landing-section bg-slate-50 px-4 py-16 sm:px-6 lg:py-20">
+      <section id="libraries" className="landing-section bg-slate-50 px-4 py-12 sm:px-6 lg:py-16">
         <div className="mx-auto max-w-7xl">
           <div className="mb-8 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -601,7 +601,7 @@ const featuredBooks = books
                   'Please sign in to explore the participating libraries.'
                 )
               }
-              className="landing-library-card group flex h-full min-w-0 flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 sm:p-6"
+              className="landing-library-card group flex h-full min-w-0 flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-md transition-all duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 sm:p-6"
             >
               <div>
                 <div className="flex items-center justify-between mb-4">
@@ -653,7 +653,7 @@ const featuredBooks = books
       </section>
 
       {/* 2. FEATURED RESOURCES SECTION */}
-      <section id="featured" className="py-16 px-6 bg-slate-100 border-y border-slate-200">
+      <section id="featured" className="py-12 px-6 bg-slate-100 border-y border-slate-200">
         <div className="max-w-7xl mx-auto">
           <div className="mb-8 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -733,7 +733,7 @@ const featuredBooks = books
       </section>
 
       {/* 3. ANNOUNCEMENTS SECTION (CLICKABLE WITH DETAILS MODAL) */}
-      <section id="announcements" className="py-16 px-6 max-w-7xl mx-auto w-full space-y-8">
+      <section id="announcements" className="py-12 px-6 max-w-7xl mx-auto w-full space-y-6">
         <div className="space-y-2 text-left">
           <h2 className="text-3xl font-bold text-slate-900">Library Announcements</h2>
           <p className="mt-2 text-left text-slate-600">Stay updated with the latest library news and holiday schedules.</p>
@@ -808,7 +808,7 @@ const featuredBooks = books
       </section>
 
       {/* 4. ENHANCED FEEDBACK & INQUIRIES SECTION */}
-      <section id="feedback" className="py-20 px-6 bg-slate-900 text-white relative overflow-hidden border-t border-slate-800">
+      <section id="feedback" className="py-14 px-6 bg-slate-900 text-white relative overflow-hidden border-t border-slate-800">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-125 h-125 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
         <div className="max-w-2xl mx-auto relative z-10 space-y-8">
           <div className="text-center space-y-2">
@@ -939,7 +939,7 @@ const featuredBooks = books
     navigate('/visitor-login', {
       state: {
         from: {
-          pathname: '/catalog',
+          pathname: '/visitor',
         },
       },
     })

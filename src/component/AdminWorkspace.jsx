@@ -813,8 +813,6 @@ export default function AdminWorkspace({
       setError('Supabase connection is unavailable.');
       return;
     }
-    if (!globalThis.confirm('Delete this announcement?')) return;
-
     setError('');
     setMessage('');
     try {
