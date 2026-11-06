@@ -41,7 +41,6 @@ import { useAuth } from '../../context/useAuth.js';
 import { getDashboardPath } from '../../routes/roleHome.js';
 import { useLibrary, useLibraryData } from '../../context/useLibrary.js';
 import AttendanceScanner from '../../component/AttendanceScanner.jsx';
-import BookTransactions from '../../component/BookTransactions.jsx';
 import BookInventory from '../../component/BookInventory.jsx';
 import ReservationQueue from '../../component/ReservationQueue.jsx';
 import AdminWorkspace from '../../component/AdminWorkspace.jsx';
@@ -692,11 +691,10 @@ function QRBookBorrowing({
         await scanner.start(
           { facingMode: 'environment' },
           {
-            fps: 10,
+            fps: 15,
+            videoConstraints: { width: { ideal: 1280 }, height: { ideal: 960 } },
             qrbox: (viewfinderWidth, viewfinderHeight) => {
-              const size = Math.floor(
-                Math.min(viewfinderWidth, viewfinderHeight, 280) * 0.8
-              );
+              const size = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.92);
               return { width: size, height: size };
             },
           },
@@ -827,19 +825,53 @@ function QRBookBorrowing({
 
   return (
     <div className="space-y-6">
+      <header className="flex flex-col gap-2 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-700">Circulation</p>
+          <h2 className="mt-1 text-2xl font-bold tracking-tight text-shelf-primary">Book transactions</h2>
+          <p className="mt-1 max-w-2xl text-sm text-slate-600">Review visitor requests and record book pickups and returns.</p>
+        </div>
+        <span className="inline-flex w-fit items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">{visitor ? 'Visitor verified' : 'Ready to scan'}</span>
+      </header>
+
       {/* QR BORROWING HEADER */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 bg-slate-50/70 p-5">
           <div>
-            <h2 className="text-lg font-extrabold text-slate-800">
-              Book Borrowing &amp; Returning
-            </h2>
-            <p className="text-xs text-slate-500 mt-1">
-              Step 1 — scan the visitor’s QR code or enter the QR value manually.
-            </p>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">Borrowing and returns</p>
+            <h3 className="mt-1 text-lg font-semibold text-slate-900">Start with the visitor's QR pass</h3>
+            <p className="mt-1 text-sm leading-5 text-slate-600">Scan the pass to find what they can pick up or return.</p>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <form onSubmit={handleManualQrSubmit} className="flex gap-2">
+          <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50/80 p-5 sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-start gap-4">
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-shelf-primary text-white"><QrCode size={24} aria-hidden="true" /></span>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">Step 1 of 3</p>
+                  <h3 className="mt-1 text-xl font-semibold leading-7 text-slate-900">Scan the visitor's QR pass</h3>
+                  <p className="mt-1 max-w-xl text-sm leading-5 text-slate-600">This loads the visitor's ready pickups and active loans.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={startScanner}
+                disabled={scanning || loading}
+                className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-shelf-primary px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-blue-900 focus:outline-none focus:ring-4 focus:ring-blue-300/60 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <QrCode size={20} aria-hidden="true" />
+                {scanning ? 'Camera is shown below' : 'Scan visitor QR with camera'}
+              </button>
+            </div>
+            <ol className="mt-5 grid gap-3 border-t border-blue-200 pt-4 text-sm sm:grid-cols-3">
+              <li className="flex items-start gap-2.5"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white text-xs font-bold text-blue-800">1</span><span className="leading-5 text-slate-700">Scan the visitor pass.</span></li>
+              <li className="flex items-start gap-2.5"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white text-xs font-bold text-blue-800">2</span><span className="leading-5 text-slate-700">Check the visitor and their book requests.</span></li>
+              <li className="flex items-start gap-2.5"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white text-xs font-bold text-blue-800">3</span><span className="leading-5 text-slate-700">Confirm pickup or return after checking the book.</span></li>
+            </ol>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-sm font-semibold text-slate-700">Or enter the visitor QR value manually</p>
+            <form onSubmit={handleManualQrSubmit} className="mt-3 flex min-w-0 flex-col gap-2 sm:flex-row">
               <label className="sr-only" htmlFor="subadmin-visitor-qr">Visitor QR value</label>
               <input
                 id="subadmin-visitor-qr"
@@ -847,40 +879,32 @@ function QRBookBorrowing({
                 onChange={(event) => setManualQrValue(event.target.value)}
                 placeholder="Enter visitor QR value"
                 autoComplete="off"
-                className="min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               />
               <button
                 type="submit"
                 disabled={loading || !manualQrValue.trim()}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-500 disabled:opacity-50"
+                className="rounded-lg bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-50"
               >
-                {loading ? 'Checking...' : 'Submit'}
+                {loading ? 'Checking...' : 'Find visitor'}
               </button>
             </form>
-            <button
-              type="button"
-              onClick={startScanner}
-              disabled={scanning || loading}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
-            >
-              {scanning ? 'Scanner active' : 'Scan with camera'}
-            </button>
           </div>
         </div>
 
         {/* CAMERA SCANNER */}
         {showScanner && (
-          <div className="p-5 bg-slate-50 border-b border-slate-200">
-            <div className="max-w-md mx-auto bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+          <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/75 p-4 backdrop-blur-sm">
+            <div className="max-h-[94vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-blue-200 bg-white shadow-2xl">
               <div className="p-4 border-b border-slate-200 flex items-center justify-between">
                 <div>
                   <p className="text-sm font-bold text-slate-800">Scan Visitor QR Code</p>
-                  <p className="text-xs text-slate-500 mt-1">Position the visitor QR code inside the box.</p>
+                  <p className="text-sm text-slate-600 mt-1">Hold the visitor pass in front of the camera. It will scan automatically.</p>
                 </div>
                 <button type="button" onClick={stopScanner} className="text-xs font-bold text-red-600 hover:text-red-800">Close</button>
               </div>
               <div className="p-4">
-                <div className="mx-auto aspect-4/3 w-full max-w-96 overflow-hidden rounded-lg border border-slate-300 bg-black">
+                <div className="mx-auto aspect-4/3 w-full max-w-3xl overflow-hidden rounded-xl border-2 border-shelf-primary bg-black">
                   <div
                     id="book-borrowing-qr-reader"
                     className="h-full w-full [&_video]:h-full [&_video]:w-full [&_video]:object-cover [&_canvas]:h-full [&_canvas]:w-full"
@@ -1037,16 +1061,8 @@ function QRBookBorrowing({
             )}
           </div>
         )}
-      </div>
+      </section>
 
-      {/* EXISTING BOOK TRANSACTIONS */}
-      <div>
-        <div className="mb-3">
-          <h2 className="text-lg font-extrabold text-slate-800">Transaction Records</h2>
-          <p className="text-xs text-slate-500 mt-1">View and manage existing book transaction records.</p>
-        </div>
-        <BookTransactions />
-      </div>
     </div>
   );
 }
@@ -1056,6 +1072,7 @@ export default function SubAdminDashboard() {
   const navigate = useNavigate();
   const { books, borrowRequests, attendanceLogs, libraries, visitorCount } = useLibraryData();
   const [section, setSection] = useState('overview');
+  const mainContentRef = useRef(null);
   const [focusRequestId, setFocusRequestId] = useState(null);
   const [focusNotificationType, setFocusNotificationType] = useState(null);
   const [notificationTargetMessage, setNotificationTargetMessage] = useState('');
@@ -1182,6 +1199,10 @@ export default function SubAdminDashboard() {
     });
     return () => cancelAnimationFrame(frame);
   }, [focusRequestId, section]);
+
+  useEffect(() => {
+    if (mainContentRef.current) mainContentRef.current.scrollTop = 0;
+  }, [section]);
 
   const navigateToSection = (nextSection) => {
     setFocusRequestId(null);
@@ -1564,9 +1585,9 @@ export default function SubAdminDashboard() {
   }
 
   return (
-    <div className="subadmin-dashboard flex h-screen overflow-hidden bg-slate-100 text-slate-800">
+    <div className="subadmin-dashboard flex h-dvh min-h-0 w-full overflow-hidden bg-shelf-bg text-slate-800">
       {/* SIDEBAR */}
-      <aside className="subadmin-sidebar sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-slate-800 bg-[#0a192f] text-white shadow-lg">
+      <aside className="subadmin-sidebar sticky top-0 flex h-full w-60 shrink-0 flex-col border-r border-white/10 bg-shelf-primary text-white shadow-lg">
         <div className="p-5 border-b border-white/10">
           <button
             type="button"
@@ -1577,7 +1598,10 @@ export default function SubAdminDashboard() {
             <img src="/shelf-logo.png" alt="" className="h-9 w-9 object-contain" />
             <p className="font-extrabold tracking-wider">SHELF</p>
           </button>
-          <p className="text-xs text-slate-400 mt-1">Sub-Admin Console</p>
+          <div className="mt-4 border-l-[3px] border-blue-400 pl-3">
+            <p className="text-base font-bold leading-tight tracking-wide text-white">Sub-admin</p>
+            <p className="mt-1 text-xs font-medium text-blue-100/75">Library console</p>
+          </div>
         </div>
         <nav className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1">
           {NAV.map(({ Icon, ...item }) => (
@@ -1587,7 +1611,7 @@ export default function SubAdminDashboard() {
               onClick={() => navigateToSection(item.id)}
               className={`w-full text-left text-sm px-3 py-2.5 rounded-lg transition ${
                 section === item.id
-                  ? 'bg-blue-600/30 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
+                  ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
                   : 'text-slate-300 hover:bg-white/5'
               }`}
             >
@@ -1615,7 +1639,7 @@ export default function SubAdminDashboard() {
                   onClick={() => { setWorkspaceTab(item.id); navigateToSection('workspace'); }}
                   className={`w-full text-left text-sm px-3 py-2 rounded-lg transition ${
                     section === 'workspace' && workspaceTab === item.id
-                      ? 'bg-blue-600/30 font-bold text-amber-300'
+                      ? 'bg-blue-500/25 font-bold text-white shadow-[inset_2px_0_0_0_#93c5fd]'
                       : 'text-slate-300 hover:bg-white/5'
                   }`}
                 >
@@ -1644,7 +1668,7 @@ export default function SubAdminDashboard() {
                   onClick={() => { setWorkspaceTab(item.id); navigateToSection('workspace'); }}
                   className={`w-full text-left text-sm px-3 py-2 rounded-lg transition ${
                     section === 'workspace' && workspaceTab === item.id
-                      ? 'bg-blue-600/30 font-bold text-amber-300'
+                      ? 'bg-blue-500/25 font-bold text-white shadow-[inset_2px_0_0_0_#93c5fd]'
                       : 'text-slate-300 hover:bg-white/5'
                   }`}
                 >
@@ -1662,7 +1686,6 @@ export default function SubAdminDashboard() {
             <div className="mt-1 flex items-start gap-2">
               <Building2 size={14} className="mt-0.5 shrink-0 text-amber-300" />
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-amber-300">Sub-Admin</p>
                 <p className="text-xs text-slate-300 wrap-break-words">{currentBranchName || 'Branch not found'}</p>
               </div>
             </div>
@@ -1686,10 +1709,10 @@ export default function SubAdminDashboard() {
       </aside>
 
       {/* MAIN CONTENT */}
-      <main className="h-screen min-w-0 flex-1 space-y-6 overflow-y-auto p-4 sm:p-6 lg:p-8">
+      <main ref={mainContentRef} className="min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto p-4 sm:p-6 lg:p-8">
         
-        {/* CUSTOMIZED WELCOME HERO WITH UPPER RIGHT NOTIFICATIONS */}
-        <CustomDashboardWelcome
+        {/* Keep the welcome panel on the overview so other sections start at the top. */}
+        {section === 'overview' && <CustomDashboardWelcome
           name={user?.name?.split(' ')[0]}
           description={`Manage circulation, reservations, and inventory${currentBranchName ? ` for ${currentBranchName}` : ' for your assigned branch'}.`}
           notifications={branchNotifications}
@@ -1713,7 +1736,7 @@ export default function SubAdminDashboard() {
             { label: 'Open Inventory', Icon: BookOpen, onClick: () => navigateToSection('inventory') },
             { label: 'Review Queue', Icon: Clock3, onClick: () => navigateToSection('queue') },
           ]}
-        />
+        />}
 
         {/* OVERVIEW SECTION */}
         {section === 'overview' && (

@@ -1835,6 +1835,7 @@ export default function AdminWorkspace({
                     </button>
                     <button
                       type="button"
+                      data-confirm-message={`Delete announcement "${item.title || 'this announcement'}"? This cannot be undone.`}
                       onClick={() => handleAnnouncementDelete(item.id)}
                       className="text-xs font-bold text-red-600 hover:underline"
                     >
@@ -1987,6 +1988,7 @@ export default function AdminWorkspace({
               )}
               <button
                 type="submit"
+                data-confirm-message={editingAnnouncementId ? undefined : `Publish announcement "${announcementForm.title || 'Untitled announcement'}" for visitors now?`}
                 className="bg-shelf-primary px-4 py-2 text-sm font-bold text-white rounded-lg transition hover:opacity-90"
               >
                 {editingAnnouncementId ? 'Save changes' : 'Publish announcement'}

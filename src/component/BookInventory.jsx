@@ -26,6 +26,7 @@ export default function BookInventory() {
   } = getBookInventoryScope(books, libraries, user);
 
   const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [sortBy, setSortBy] = useState('title-asc');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -269,6 +270,7 @@ export default function BookInventory() {
 
     setSaving(true);
     setMutationError('');
+    setMutationNotice('');
 
     try {
       if (
@@ -306,7 +308,7 @@ export default function BookInventory() {
       setMutationNotice(
         savedBook?.fineRateMismatch
           ? `Copies were added, but the existing fine rate for "${savedBook.title}" was preserved at ₱${savedBook.fineRateMismatch.existingRate ?? 'unassigned'} per overdue day. The import supplied ₱${savedBook.fineRateMismatch.importedRate ?? 'unassigned'}.`
-          : ''
+          : `Book "${savedBook?.title || form.title}" ${editingId ? 'updated' : 'added'} successfully.`
       );
 
       setSelectedCoverFile(null);
@@ -330,23 +332,39 @@ export default function BookInventory() {
   };
 
   const handleDelete = async (id) => {
+    const deletedBookTitle = inventoryBooks.find((book) => String(book.id) === String(id))?.title;
+    setMutationNotice('');
+    setMutationError('');
     try {
       await deleteBook(id);
+      setMutationNotice(`Book "${deletedBookTitle || 'Book'}" deleted successfully.`);
     } catch (err) {
-      alert(err.message || 'Failed to delete book');
+      setMutationError(err.message || 'Failed to delete book. Please try again.');
     }
   };
+
+  const inventoryCategories = Array.from(
+    new Map(
+      inventoryBooks
+        .map((book) => String(book.category || '').trim())
+        .filter(Boolean)
+        .map((category) => [category.toLocaleLowerCase(), category])
+    ).values()
+  ).sort((a, b) => formatBookCategory(a).localeCompare(formatBookCategory(b)));
 
   const filteredBooks = inventoryBooks
     .filter((book) => {
       const q = search.toLowerCase();
-
-      return (
+      const matchesSearch = (
         book.title?.toLowerCase().includes(q) ||
         book.author?.toLowerCase().includes(q) ||
         book.isbn?.toLowerCase().includes(q) ||
         book.category?.toLowerCase().includes(q)
       );
+      const matchesCategory = categoryFilter === 'all' ||
+        String(book.category || '').trim().toLocaleLowerCase() === categoryFilter;
+
+      return matchesSearch && matchesCategory;
     })
     .sort((a, b) => {
       if (sortBy === 'title-asc') {
@@ -391,7 +409,7 @@ export default function BookInventory() {
 
         <button
           onClick={handleOpenAdd}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition"
+          className="px-4 py-2 bg-shelf-primary hover:bg-[#003568] text-white rounded-lg text-sm font-semibold transition"
         >
           + Add new book
         </button>
@@ -406,9 +424,14 @@ export default function BookInventory() {
       {mutationNotice && (
         <div
           role="status"
-          className="p-3 bg-amber-50 text-amber-800 rounded-lg text-sm"
+          className={`p-3 rounded-lg text-sm ${mutationNotice.startsWith('Copies were added') ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-800'}`}
         >
           {mutationNotice}
+        </div>
+      )}
+      {mutationError && !showForm && (
+        <div role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          {mutationError}
         </div>
       )}
 
@@ -421,7 +444,7 @@ export default function BookInventory() {
             placeholder="Search by title, author, ISBN, category..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-9 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full pl-9 pr-9 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
           />
 
           {search && (
@@ -437,10 +460,29 @@ export default function BookInventory() {
         </div>
 
         <div className="w-full sm:w-48">
+          <label htmlFor="book-inventory-category-filter" className="sr-only">Filter books by category</label>
           <select
+            id="book-inventory-category-filter"
+            value={categoryFilter}
+            onChange={(event) => setCategoryFilter(event.target.value)}
+            className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+          >
+            <option value="all">All categories</option>
+            {inventoryCategories.map((category) => (
+              <option key={category.toLocaleLowerCase()} value={category.toLocaleLowerCase()}>
+                {formatBookCategory(category)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="w-full sm:w-48">
+          <label htmlFor="book-inventory-sort" className="sr-only">Sort books</label>
+          <select
+            id="book-inventory-sort"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
           >
             <option value="title-asc">Title (A-Z)</option>
             <option value="title-desc">Title (Z-A)</option>
@@ -478,7 +520,7 @@ export default function BookInventory() {
                 filteredBooks.map((book) => (
                   <tr
                     key={book.id}
-                    className="group hover:bg-indigo-50/50 hover:shadow-inner transition-all duration-150 cursor-pointer"
+                    className="group hover:bg-blue-50/60 hover:shadow-inner transition-all duration-150 cursor-pointer"
                   >
                     <td className="p-4 flex items-center gap-3.5">
                       {book.coverUrl ? (
@@ -494,7 +536,7 @@ export default function BookInventory() {
                       )}
 
                       <div className="min-w-0">
-                        <div className="font-bold text-slate-800 text-sm group-hover:text-indigo-900 transition-colors truncate">
+                        <div className="font-bold text-slate-800 text-sm group-hover:text-shelf-primary transition-colors truncate">
                           {book.title}
                         </div>
 
@@ -531,7 +573,7 @@ export default function BookInventory() {
                     </td>
 
                     <td className="p-4 align-middle text-center">
-                      <span className="inline-flex items-center justify-center font-extrabold text-slate-800 text-sm px-2.5 py-1 rounded-full bg-slate-100 group-hover:bg-indigo-100 group-hover:text-indigo-800 transition-colors">
+                      <span className="inline-flex items-center justify-center font-extrabold text-slate-800 text-sm px-2.5 py-1 rounded-full bg-slate-100 group-hover:bg-blue-100 group-hover:text-blue-800 transition-colors">
                         {getBookCopies(book)}
                       </span>
                     </td>
@@ -539,11 +581,12 @@ export default function BookInventory() {
                     <td className="p-4 align-middle text-right space-x-2">
                       <button
                         type="button"
+                        data-confirm-message={`Delete "${book.title || 'this book'}" from the inventory? This cannot be undone.`}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleOpenEdit(book);
                         }}
-                        className="px-2.5 py-1 text-xs text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 rounded-md font-bold transition-colors"
+                        className="px-2.5 py-1 text-xs text-blue-700 hover:bg-blue-100 hover:text-blue-800 rounded-md font-bold transition-colors"
                       >
                         Edit
                       </button>
@@ -600,7 +643,7 @@ export default function BookInventory() {
                   onChange={(e) =>
                     setForm({ ...form, title: e.target.value })
                   }
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
 
@@ -617,7 +660,7 @@ export default function BookInventory() {
                     onChange={(e) =>
                       setForm({ ...form, author: e.target.value })
                     }
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
 
@@ -633,7 +676,7 @@ export default function BookInventory() {
                     onChange={(e) =>
                       setForm({ ...form, isbn: e.target.value })
                     }
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
               </div>
@@ -654,7 +697,7 @@ export default function BookInventory() {
                     onChange={(e) =>
                       setForm({ ...form, category: e.target.value })
                     }
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
 
@@ -674,7 +717,7 @@ export default function BookInventory() {
                         copies: parseInt(e.target.value, 10) || 1
                       })
                     }
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
               </div>
@@ -699,7 +742,7 @@ export default function BookInventory() {
                     setForm({ ...form, fine_rate: e.target.value })
                   }
                   aria-describedby="book-fine-rate-help"
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
                 <p id="book-fine-rate-help" className="mt-1 text-slate-500">
                   Enter a whole number from ₱1 to ₱100.
@@ -718,7 +761,7 @@ export default function BookInventory() {
                     setForm({ ...form, libraryId: e.target.value })
                   }
                   disabled={isSubAdmin}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
                 >
                   {!isSubAdmin && (
                     <option value="">
@@ -769,8 +812,8 @@ export default function BookInventory() {
                   }
                   className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition ${
                     isDraggingCover
-                      ? 'border-indigo-500 bg-indigo-50'
-                      : 'border-slate-300 hover:border-indigo-400 hover:bg-slate-50'
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-slate-300 hover:border-blue-400 hover:bg-slate-50'
                   }`}
                 >
                   {coverPreview || form.coverUrl ? (
@@ -827,7 +870,7 @@ export default function BookInventory() {
                   onChange={(e) =>
                     setForm({ ...form, summary: e.target.value })
                   }
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
 
@@ -846,7 +889,7 @@ export default function BookInventory() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold disabled:opacity-50"
+                  className="px-4 py-2 bg-shelf-primary hover:bg-[#003568] text-white rounded-lg font-semibold disabled:opacity-50"
                 >
                   {saving
                     ? 'Saving...'

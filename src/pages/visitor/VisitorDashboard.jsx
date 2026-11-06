@@ -1,7 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Draggable from 'react-draggable';
 import { QRCodeSVG } from 'qrcode.react';
+import { Bar } from 'react-chartjs-2';
+import {
+  BarElement,
+  CategoryScale,
+  Chart as ChartJS,
+  LinearScale,
+  Tooltip,
+} from 'chart.js';
 import { ThemeProvider } from '../../context/ThemeContext.jsx';
 import { useTheme } from '../../context/useTheme.js';
 import './visitorDashboard.css';
@@ -57,6 +65,8 @@ import VisitorTermsContent, {
 } from '../../component/VisitorTermsContent.jsx';
 import DashboardDataBoundary from '../../component/DashboardDataBoundary.jsx';
 import VisitorProfilePhotoCropDialog from '../../component/VisitorProfilePhotoCropDialog.jsx';
+
+ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip);
 
 function formatDateTime(iso) {
   if (!iso) {
@@ -266,6 +276,8 @@ function VisitorDashboardContent() {
   const [catalogResetKey, setCatalogResetKey] = useState(0);
   const [libraryFilter, setLibraryFilter] = useState(null);
   const [isSavingQr, setIsSavingQr] = useState(false);
+  const [qrSaveMessage, setQrSaveMessage] = useState('');
+  const [qrSaveError, setQrSaveError] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [menuSection, setMenuSection] = useState('profile');
   const [attendanceHistory, setAttendanceHistory] = useState([]);
@@ -289,6 +301,23 @@ function VisitorDashboardContent() {
   const [announcements, setAnnouncements] = useState([]);
   const [announcementIndex, setAnnouncementIndex] = useState(0);
   const [isAnnouncementOpen, setIsAnnouncementOpen] = useState(false);
+  const markAnnouncementRead = (announcement) => {
+    if (!announcement || !user?.id) return;
+    const storageKey = `shelf_visitor_dismissed_announcements_${user.id}`;
+    try {
+      const dismissed = JSON.parse(globalThis.localStorage.getItem(storageKey) || '[]');
+      const dismissedIds = new Set(Array.isArray(dismissed) ? dismissed.map(String) : []);
+      dismissedIds.add(String(announcement.id));
+      globalThis.localStorage.setItem(storageKey, JSON.stringify([...dismissedIds]));
+    } catch {
+      // The announcement can still be dismissed for the current session.
+    }
+  };
+  const dismissCurrentAnnouncement = () => {
+    const currentAnnouncement = announcements[announcementIndex];
+    markAnnouncementRead(currentAnnouncement);
+    setIsAnnouncementOpen(false);
+  };
 
   const [isNotificationsOpen, setIsNotificationsOpen] =
   useState(false);
@@ -360,7 +389,7 @@ function VisitorDashboardContent() {
     try {
       const page = await fetchAttendanceLogsPage({
         cursor: reset ? null : attendanceHistoryCursorRef.current,
-        pageSize: 30,
+        pageSize: 100,
         ...getAttendancePeriodBounds(attendancePeriod),
         libraryId: attendanceLibraryFilter === 'all'
           ? null
@@ -458,11 +487,16 @@ function VisitorDashboardContent() {
     };
   }, [visitorDetails?.id, visitorDetails?.profileImagePath]);
 
-  useEffect(() => () => {
-    if (profileImagePreview.startsWith('blob:')) {
-      URL.revokeObjectURL(profileImagePreview);
+  useEffect(() => {
+    if (!profileImageFile) {
+      setProfileImagePreview('');
+      return undefined;
     }
-  }, [profileImagePreview]);
+
+    const previewUrl = URL.createObjectURL(profileImageFile);
+    setProfileImagePreview(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [profileImageFile]);
 
   useEffect(() => {
     activeVisitorNavTabRef.current?.scrollIntoView({
@@ -641,7 +675,7 @@ function VisitorDashboardContent() {
         let active = true;
 
         async function loadAnnouncements() {
-          if (!supabase) return;
+          if (!supabase || !user?.id) return;
 
           try {
             const { data, error } = await supabase
@@ -659,7 +693,18 @@ function VisitorDashboardContent() {
               return;
             }
 
-            const items = data || [];
+            let dismissedIds = new Set();
+            try {
+              const dismissed = JSON.parse(globalThis.localStorage.getItem(
+                `shelf_visitor_dismissed_announcements_${user.id}`
+              ) || '[]');
+              dismissedIds = new Set(Array.isArray(dismissed) ? dismissed.map(String) : []);
+            } catch {
+              dismissedIds = new Set();
+            }
+            const items = (data || []).filter(
+              (item) => !dismissedIds.has(String(item.id))
+            );
             setAnnouncements(items);
             setAnnouncementIndex(0);
             setIsAnnouncementOpen(items.length > 0);
@@ -675,7 +720,7 @@ function VisitorDashboardContent() {
         return () => {
           active = false;
         };
-      }, []);
+      }, [user?.id]);
 
 
   // =========================================================
@@ -698,6 +743,8 @@ function VisitorDashboardContent() {
     }
 
     setIsSavingQr(true);
+    setQrSaveMessage('');
+    setQrSaveError('');
 
     try {
       const svgElement = qrCodeRef.current?.querySelector('svg');
@@ -833,10 +880,11 @@ function VisitorDashboardContent() {
       link.click();
 
       document.body.removeChild(link);
+      setQrSaveMessage('QR pass downloaded successfully.');
     } catch (error) {
       console.error('Save QR image error:', error);
 
-      alert('Unable to save the QR code as an image. Please try again.');
+      setQrSaveError('Unable to save the QR code as an image. Please try again.');
     } finally {
       setIsSavingQr(false);
     }
@@ -863,7 +911,6 @@ function VisitorDashboardContent() {
 
   const handleProfileImageCrop = (file) => {
     setProfileImageFile(file);
-    setProfileImagePreview(URL.createObjectURL(file));
     setPendingProfileImageFile(null);
     setRemoveProfileImage(false);
     setFailedProfileImageSrc('');
@@ -1007,6 +1054,73 @@ function VisitorDashboardContent() {
     attendanceVisibleStart,
     attendanceVisibleEnd
   );
+  const attendanceLibraryChartData = useMemo(() => {
+    const counts = new Map();
+    myVisits.forEach((visit) => {
+      const id = String(visit.libraryId || 'unknown');
+      const library = libraries.find((item) => String(item.id) === id);
+      const label = library?.name || (id === 'unknown' ? 'Unknown library' : id);
+      const current = counts.get(id) || { label, count: 0 };
+      current.count += 1;
+      counts.set(id, current);
+    });
+    const rows = [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 5);
+    return {
+      labels: rows.map(({ label }) => label),
+      datasets: [{
+        label: 'Visits',
+        data: rows.map(({ count }) => count),
+        backgroundColor: '#1d4ed8',
+        borderRadius: 6,
+      }],
+    };
+  }, [myVisits, libraries]);
+  const attendanceMonthlyChartData = useMemo(() => {
+    const months = Array.from({ length: 6 }, (_, index) => {
+      const date = new Date();
+      date.setDate(1);
+      date.setMonth(date.getMonth() - (5 - index));
+      return {
+        key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+        label: date.toLocaleDateString('en-PH', { month: 'short', year: '2-digit' }),
+      };
+    });
+    const counts = new Map(months.map(({ key }) => [key, 0]));
+    myVisits.forEach((visit) => {
+      const date = new Date(visit.timeIn || '');
+      if (Number.isNaN(date.getTime())) return;
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (counts.has(key)) counts.set(key, counts.get(key) + 1);
+    });
+    return {
+      labels: months.map(({ label }) => label),
+      datasets: [{
+        label: 'Visits',
+        data: months.map(({ key }) => counts.get(key)),
+        backgroundColor: '#002046',
+        borderRadius: 6,
+      }],
+    };
+  }, [myVisits]);
+  const attendanceChartOptions = {
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { beginAtZero: true, ticks: { precision: 0 } },
+      y: { grid: { display: false } },
+    },
+  };
+  const attendanceMonthlyChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { beginAtZero: true, ticks: { precision: 0 } },
+      x: { grid: { display: false } },
+    },
+  };
 
   // =========================================================
   // VISITOR TRANSACTION HISTORY
@@ -1180,7 +1294,7 @@ function VisitorDashboardContent() {
                 <button
                   type="button"
                   className="absolute inset-0 bg-slate-950/60"
-                  onClick={() => setIsAnnouncementOpen(false)}
+                  onClick={dismissCurrentAnnouncement}
                   aria-label="Close announcement"
                 />
 
@@ -1203,7 +1317,7 @@ function VisitorDashboardContent() {
 
                     <button
                       type="button"
-                      onClick={() => setIsAnnouncementOpen(false)}
+                      onClick={dismissCurrentAnnouncement}
                       className="rounded-lg p-2 transition hover:bg-white/15"
                       aria-label="Close announcement"
                     >
@@ -1231,9 +1345,10 @@ function VisitorDashboardContent() {
                       <button
                         type="button"
                         disabled={announcementIndex === 0}
-                        onClick={() =>
-                          setAnnouncementIndex((index) => index - 1)
-                        }
+                        onClick={() => {
+                          markAnnouncementRead(announcements[announcementIndex]);
+                          setAnnouncementIndex((index) => index - 1);
+                        }}
                         className="rounded-lg border border-slate-300 px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600"
                       >
                         Previous
@@ -1246,9 +1361,10 @@ function VisitorDashboardContent() {
                       {announcementIndex < announcements.length - 1 ? (
                         <button
                           type="button"
-                          onClick={() =>
-                            setAnnouncementIndex((index) => index + 1)
-                          }
+                          onClick={() => {
+                            markAnnouncementRead(announcements[announcementIndex]);
+                            setAnnouncementIndex((index) => index + 1);
+                          }}
                           className="rounded-lg bg-shelf-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#003366]"
                         >
                           Next
@@ -1256,7 +1372,7 @@ function VisitorDashboardContent() {
                       ) : (
                         <button
                           type="button"
-                          onClick={() => setIsAnnouncementOpen(false)}
+                          onClick={dismissCurrentAnnouncement}
                           className="rounded-lg bg-shelf-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#003366]"
                         >
                           Got it
@@ -1768,7 +1884,7 @@ function VisitorDashboardContent() {
                 tab === 'categories' ||
                 tab === 'myBorrows'
               ) && (
-                <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                <div className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300">
                   <span>
                     Filtered to <b>{libraryName(libraryFilter)}</b>
                   </span>
@@ -1837,23 +1953,23 @@ function VisitorDashboardContent() {
 
       {isMenuOpen && (
         <div
-          className="fixed inset-0 z-50 flex justify-end"
+          className={`fixed inset-0 z-50 flex ${menuSection === 'profile' ? 'justify-center' : 'justify-end'}`}
           role="dialog"
           aria-modal="true"
-          aria-label="Visitor menu"
+          aria-label={menuSection === 'profile' ? 'My profile' : 'Visitor menu'}
         >
           {/* BACKDROP */}
 
           <button
             type="button"
-            className="absolute inset-0 bg-slate-950/45"
+            className={`absolute inset-0 ${menuSection === 'profile' ? 'bg-slate-100 dark:bg-slate-950' : 'bg-slate-950/45'}`}
             onClick={() => setIsMenuOpen(false)}
             aria-label="Close visitor menu"
           />
 
           {/* SIDE MENU */}
 
-          <aside className="visitor-profile-drawer relative flex h-full w-full max-w-md flex-col bg-white dark:bg-slate-800 shadow-2xl">
+          <aside className={`visitor-profile-drawer relative flex h-full w-full flex-col bg-white dark:bg-slate-800 shadow-2xl ${menuSection === 'profile' ? 'visitor-profile-page max-w-none' : 'max-w-md'}`}>
             {/* MENU HEADER */}
 
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-5 py-4">
@@ -1863,7 +1979,7 @@ function VisitorDashboardContent() {
                 </p>
 
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                  Your Menu
+                  {menuSection === 'profile' ? 'My Profile' : 'Your Menu'}
                 </h2>
               </div>
 
@@ -1886,8 +2002,8 @@ function VisitorDashboardContent() {
 
               {menuSection === 'profile' && (
                 <div className="space-y-6">
-                  <section className="visitor-profile-summary flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/60">
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-shelf-primary text-sm font-bold text-white">
+                  <section className="visitor-profile-summary flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/60 sm:flex-nowrap">
+                    <span className="relative flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-full bg-shelf-primary text-2xl font-bold text-white ring-4 ring-white shadow-md dark:ring-slate-800">
                       {profileImageSrc && !profileImageFailed ? (
                         <img
                           src={profileImageSrc}
@@ -1898,6 +2014,12 @@ function VisitorDashboardContent() {
                       ) : (
                         getVisitorInitials(visitorDetails?.fullName || user?.name)
                       )}
+                      {isEditingProfile && (
+                        <label className="absolute inset-x-0 bottom-0 flex cursor-pointer items-center justify-center bg-shelf-primary/95 py-1.5 text-xs font-bold text-white shadow-sm" title="Change profile photo">
+                          Change
+                          <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleProfileImageChange} className="sr-only" />
+                        </label>
+                      )}
                     </span>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold text-slate-900 dark:text-white">
@@ -1906,6 +2028,32 @@ function VisitorDashboardContent() {
                       <p className="truncate text-xs text-slate-600 dark:text-slate-300">
                         {visitorDetails?.email || user?.email || '—'}
                       </p>
+                      {isEditingProfile && (
+                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <p className="text-xs text-slate-500 dark:text-slate-400">JPG, PNG, or WEBP up to 2 MB</p>
+                          {(profileImageSrc || visitorDetails?.profileImagePath) && (
+                            <button type="button" onClick={() => { setProfileImageFile(null); setProfileImagePreview(''); setRemoveProfileImage(true); setProfileError(''); }} className="text-xs font-semibold text-red-700 hover:underline dark:text-red-300">Remove photo</button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="ml-auto flex shrink-0 items-center gap-4 p-1">
+                      {visitorQrCode ? (
+                        <div className="visitor-qr-frame rounded-xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-600">
+                          <div ref={qrCodeRef}>
+                            <QRCodeSVG value={visitorQrCode} size={104} level="H" includeMargin fgColor="#000000" bgColor="#FFFFFF" />
+                          </div>
+                        </div>
+                      ) : <div className="flex h-[120px] w-[120px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-slate-400 dark:border-slate-600 dark:bg-slate-900"><QrCode size={32} aria-hidden="true" /></div>}
+                      <div className="min-w-0">
+                        <p className="font-sans text-[10px] font-bold uppercase tracking-[0.16em] text-shelf-primary">Visitor pass</p>
+                        <h3 className="mt-1 font-sans text-base font-bold text-slate-900 dark:text-white">Library QR Pass</h3>
+                        <p className="mt-1 max-w-40 text-xs leading-relaxed text-slate-600 dark:text-slate-300">Show this code at the library desk.</p>
+                        {visitorQrCode && <button type="button" onClick={handleSaveQrAsImage} disabled={isSavingQr} className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-shelf-primary px-3 py-2 font-sans text-xs font-bold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50"><Save size={13} aria-hidden="true" />{isSavingQr ? 'Saving…' : 'Save pass'}</button>}
+                        {qrSaveMessage && <p role="status" className="mt-2 max-w-44 text-xs text-emerald-700 dark:text-emerald-300">{qrSaveMessage}</p>}
+                        {qrSaveError && <p role="alert" className="mt-2 max-w-44 text-xs text-red-700 dark:text-red-300">{qrSaveError}</p>}
+                        {!visitorQrCode && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">QR code is refreshing…</p>}
+                      </div>
                     </div>
                   </section>
 
@@ -1915,116 +2063,18 @@ function VisitorDashboardContent() {
                     </p>
                   )}
 
-                  {isEditingProfile ? (
-                    <form onSubmit={handleSaveVisitorProfile} className="space-y-4">
-                      <section className="space-y-3">
-                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                          Edit profile
-                        </h3>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
-                          Email
-                          <input
-                            type="email"
-                            value={visitorDetails?.email || user?.email || ''}
-                            readOnly
-                            className="mt-1 w-full cursor-not-allowed border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-normal text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                          />
-                          <span className="mt-1 block text-xs font-normal text-slate-500 dark:text-slate-400">
-                            Email address cannot be changed here.
-                          </span>
-                        </label>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
-                          Contact number
-                          <input
-                            type="tel"
-                            maxLength={50}
-                            value={profileForm.contactNumber}
-                            onChange={(event) => setProfileForm((current) => ({
-                              ...current,
-                              contactNumber: event.target.value,
-                            }))}
-                            className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                          />
-                        </label>
-                      </section>
-
-                      <section className="space-y-2">
-                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                          Profile photo
-                        </h3>
-                        <label className="block cursor-pointer rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-center text-sm font-semibold text-slate-700 hover:border-shelf-primary dark:border-slate-600 dark:bg-slate-900/60 dark:text-slate-200">
-                          <span>{profileImageFile?.name || 'Choose a photo to upload'}</span>
-                          <input
-                            type="file"
-                            accept="image/png,image/jpeg,image/webp"
-                            onChange={handleProfileImageChange}
-                            className="sr-only"
-                          />
-                          <span className="mt-1 block text-xs font-normal text-slate-500 dark:text-slate-400">
-                            JPG, PNG, or WEBP up to 2 MB. You can crop it before saving.
-                          </span>
-                        </label>
-                        {(profileImageSrc || visitorDetails?.profileImagePath) && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setProfileImageFile(null);
-                              setProfileImagePreview('');
-                              setRemoveProfileImage(true);
-                              setProfileError('');
-                            }}
-                            className="text-xs font-semibold text-red-700 hover:underline dark:text-red-300"
-                          >
-                            Remove profile photo
-                          </button>
-                        )}
-                      </section>
-
-                      {profileError && (
-                        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
-                          {profileError}
-                        </p>
-                      )}
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={cancelProfileEdit}
-                          disabled={isSavingProfile}
-                          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={isSavingProfile || Boolean(pendingProfileImageFile)}
-                          className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-shelf-primary px-3 py-2 text-sm font-bold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <Save size={15} aria-hidden="true" />
-                          {isSavingProfile ? 'Saving…' : 'Save profile'}
-                        </button>
-                      </div>
-                    </form>
-                  ) : (
+                  <form onSubmit={handleSaveVisitorProfile}>
                     <section>
                       <div className="mb-3 flex items-center justify-between gap-3">
-                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                          Personal Information
-                        </h3>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setProfileForm({
-                              contactNumber: visitorDetails?.contactNumber || '',
-                            });
-                            setProfileError('');
-                            setProfileMessage('');
-                            setIsEditingProfile(true);
-                          }}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
-                        >
-                          <Pencil size={14} aria-hidden="true" />
-                          Edit profile
-                        </button>
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Personal Information</h3>
+                        {isEditingProfile ? (
+                          <div className="flex gap-2">
+                            <button type="button" onClick={cancelProfileEdit} disabled={isSavingProfile} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">Cancel</button>
+                            <button type="submit" disabled={isSavingProfile || Boolean(pendingProfileImageFile)} className="inline-flex items-center gap-1.5 rounded-lg bg-shelf-primary px-3 py-2 text-xs font-bold text-white hover:opacity-90 disabled:opacity-50"><Save size={14} aria-hidden="true" />{isSavingProfile ? 'Saving…' : 'Save'}</button>
+                          </div>
+                        ) : (
+                          <button type="button" onClick={() => { setProfileForm({ contactNumber: visitorDetails?.contactNumber || '' }); setProfileError(''); setProfileMessage(''); setIsEditingProfile(true); }} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"><Pencil size={14} aria-hidden="true" />Edit profile</button>
+                        )}
                       </div>
                       <dl className="divide-y divide-slate-100 border-y border-slate-100 text-sm dark:divide-slate-700 dark:border-slate-700">
                         {[
@@ -2034,66 +2084,16 @@ function VisitorDashboardContent() {
                           [MapPin, 'Address', visitorDetails?.address],
                         ].map(([Icon, label, value]) => (
                           <div key={label} className="grid grid-cols-[7rem_1fr] gap-3 py-2.5">
-                            <dt className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-                              <Icon size={14} aria-hidden="true" />
-                              {label}
-                            </dt>
+                            <dt className="flex items-center gap-2 text-slate-600 dark:text-slate-300"><Icon size={14} aria-hidden="true" />{label}</dt>
                             <dd className="wrap-break-word font-medium text-slate-800 dark:text-slate-200">
-                              {value || '—'}
+                              {isEditingProfile && label === 'Contact number' ? <input type="tel" maxLength={50} value={profileForm.contactNumber} onChange={(event) => setProfileForm((current) => ({ ...current, contactNumber: event.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal text-slate-900 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white" aria-label="Contact number" /> : value || '—'}
                             </dd>
                           </div>
                         ))}
                       </dl>
+                      {isEditingProfile && profileError && <p role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">{profileError}</p>}
                     </section>
-                  )}
-
-                  {/* =================================================
-                      QR PASS
-                  ================================================== */}
-
-                  <section className="text-center">
-                    <h3 className="mb-3 text-sm font-bold text-slate-900 dark:text-white">
-                      Library QR Pass
-                    </h3>
-
-                    {visitorQrCode ? (
-                      <>
-                        <div className="visitor-qr-frame mx-auto w-fit rounded-lg border border-slate-200 bg-white p-2">
-                          <div ref={qrCodeRef}>
-                            <QRCodeSVG
-                              value={visitorQrCode}
-                              size={176}
-                              level="H"
-                              includeMargin
-                              fgColor="#000000"
-                              bgColor="#FFFFFF"
-                            />
-                          </div>
-                        </div>
-
-                        <p className="mt-2 text-xs text-slate-700 dark:text-slate-200">
-                          Show this at the library desk
-                        </p>
-
-                        <button
-                          type="button"
-                          onClick={handleSaveQrAsImage}
-                          disabled={isSavingQr}
-                          className="mt-3 w-full rounded-lg bg-shelf-primary px-3 py-2.5 text-xs font-bold text-white hover:opacity-90 disabled:opacity-50"
-                        >
-                          {isSavingQr
-                            ? 'Saving QR image...'
-                            : 'Save QR pass as image'}
-                        </button>
-                      </>
-                    ) : (
-                      <p className="text-sm text-slate-500 dark:text-slate-400">
-                        Your QR pass is refreshing. If it does not appear, sign
-                        out and sign in again to load the current visitor pass.
-                      </p>
-                    )}
-                  </section>
-
+                  </form>
                   {/* =================================================
                       ATTENDANCE HISTORY
                   ================================================== */}
@@ -2145,6 +2145,25 @@ function VisitorDashboardContent() {
                         </select>
                       </label>
                     </div>
+                    {myVisits.length > 0 && (
+                      <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-slate-900/40">
+                          <h4 className="mb-2 text-xs font-bold text-slate-700 dark:text-slate-200">Most visited libraries</h4>
+                          <div className="h-48">
+                            <Bar data={attendanceLibraryChartData} options={attendanceChartOptions} />
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-slate-900/40">
+                          <h4 className="mb-2 text-xs font-bold text-slate-700 dark:text-slate-200">Visits per month · last 6 months</h4>
+                          <div className="h-48">
+                            <Bar data={attendanceMonthlyChartData} options={attendanceMonthlyChartOptions} />
+                          </div>
+                        </div>
+                        {attendanceHistoryHasMore && (
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 md:col-span-2">Charts update as more attendance history loads.</p>
+                        )}
+                      </div>
+                    )}
                     <div
                       ref={attendanceHistoryContainerRef}
                       onScroll={(event) => setAttendanceHistoryScrollTop(event.currentTarget.scrollTop)}

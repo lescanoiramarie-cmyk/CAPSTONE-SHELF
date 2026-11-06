@@ -1243,13 +1243,33 @@ fineReviewRequired:
   // PERSONAL BOOK
   // ==========================================================================
 
-  const addPersonalBook = useMemo(
-    () =>
-      withRefresh(
-        store.addPersonalBook,
-        'addPersonalBook'
-      ),
-    [withRefresh]
+  const addPersonalBook = useCallback(
+    async (...args) => {
+      const savedBook = await store.addPersonalBook(...args);
+      const mergeSavedBook = (currentData) => ({
+        ...currentData,
+        personalBooks: [
+          savedBook,
+          ...(currentData.personalBooks || []).filter(
+            (book) => String(book.id) !== String(savedBook.id)
+          ),
+        ],
+      });
+
+      // Update the visible collection immediately so the add dialog can close
+      // as soon as the save succeeds. Refresh the rest of the dashboard after.
+      setData(mergeSavedBook);
+      void refreshAll()
+        .catch((error) => {
+          console.error('SHELF personal-book refresh failed:', error);
+        })
+        .finally(() => {
+          setData(mergeSavedBook);
+        });
+
+      return savedBook;
+    },
+    [refreshAll]
   );
 
   const setPersonalBookVisibility = useMemo(

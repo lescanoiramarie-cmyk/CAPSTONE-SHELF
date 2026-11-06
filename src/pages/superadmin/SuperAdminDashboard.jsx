@@ -1275,9 +1275,10 @@ const handleEditStaff = (staff) => {
             <img src="/shelf-logo.png" alt="" className="h-9 w-9 object-contain" />
             <p className="font-extrabold tracking-wider">SHELF</p>
           </button>
-          <p className="mt-1 text-xs text-slate-300">
-            Super-Admin Console
-          </p>
+          <div className="mt-4 border-l-[3px] border-blue-400 pl-3">
+            <p className="text-base font-bold leading-tight tracking-wide text-white">Super admin</p>
+            <p className="mt-1 text-xs font-medium text-blue-100/75">System console</p>
+          </div>
         </div>
 
         {/* NAVIGATION */}
@@ -1292,7 +1293,7 @@ const handleEditStaff = (staff) => {
             }}
             className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
               section === 'overview'
-                ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
+                ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
                 : 'text-slate-300 hover:bg-white/5'
             }`}
           >
@@ -1310,7 +1311,7 @@ const handleEditStaff = (staff) => {
             }}
             className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
               section === 'inventory'
-                ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
+                ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
                 : 'text-slate-300 hover:bg-white/5'
             }`}
           >
@@ -1328,7 +1329,7 @@ const handleEditStaff = (staff) => {
             }}
             className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
               section === 'map'
-                ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
+                ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
                 : 'text-slate-300 hover:bg-white/5'
             }`}
           >
@@ -1346,7 +1347,7 @@ const handleEditStaff = (staff) => {
             }}
             className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
               section === 'accounts'
-                ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
+                ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
                 : 'text-slate-300 hover:bg-white/5'
             }`}
           >
@@ -1363,7 +1364,7 @@ const handleEditStaff = (staff) => {
             }}
             className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
               section === 'visitor-accounts'
-                ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
+                ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
                 : 'text-slate-300 hover:bg-white/5'
             }`}
           >
@@ -1378,7 +1379,7 @@ const handleEditStaff = (staff) => {
               onClick={() => setWorkspaceOpen((prev) => !prev)}
               className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm transition ${
                 section === 'workspace'
-                  ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
+                  ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
                   : 'text-slate-300 hover:bg-white/5'
               }`}
             >
@@ -1399,7 +1400,7 @@ const handleEditStaff = (staff) => {
                   }}
                   className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition ${
                     section === 'workspace' && activeTab === 'reports'
-                      ? 'font-bold text-amber-300 bg-white/10'
+                      ? 'bg-blue-500/25 font-bold text-white shadow-[inset_2px_0_0_0_#93c5fd]'
                       : 'text-slate-300 hover:text-white'
                   }`}
                 >
@@ -1413,7 +1414,7 @@ const handleEditStaff = (staff) => {
                   }}
                   className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition ${
                     section === 'workspace' && activeTab === 'analytics'
-                      ? 'font-bold text-amber-300 bg-white/10'
+                      ? 'bg-blue-500/25 font-bold text-white shadow-[inset_2px_0_0_0_#93c5fd]'
                       : 'text-slate-300 hover:text-white'
                   }`}
                 >
@@ -1430,7 +1431,7 @@ const handleEditStaff = (staff) => {
               onClick={() => setCommunicationOpen((prev) => !prev)}
               className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm transition ${
                 section === 'communication'
-                  ? 'bg-white/15 font-bold text-amber-300 shadow-[inset_3px_0_0_0_#f59e0b]'
+                  ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
                   : 'text-slate-300 hover:bg-white/5'
               }`}
             >
@@ -1451,7 +1452,7 @@ const handleEditStaff = (staff) => {
                   }}
                   className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition ${
                     section === 'communication' && activeTab === 'feedback'
-                      ? 'font-bold text-amber-300 bg-white/10'
+                      ? 'bg-blue-500/25 font-bold text-white shadow-[inset_2px_0_0_0_#93c5fd]'
                       : 'text-slate-300 hover:text-white'
                   }`}
                 >
@@ -1465,7 +1466,7 @@ const handleEditStaff = (staff) => {
                   }}
                   className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition ${
                     section === 'communication' && activeTab === 'announcements'
-                      ? 'font-bold text-amber-300 bg-white/10'
+                      ? 'bg-blue-500/25 font-bold text-white shadow-[inset_2px_0_0_0_#93c5fd]'
                       : 'text-slate-300 hover:text-white'
                   }`}
                 >
@@ -1482,9 +1483,6 @@ const handleEditStaff = (staff) => {
           </p>
           <p className="text-sm font-bold">
             {superAdminName}
-          </p>
-          <p className="text-xs font-semibold text-amber-300">
-            Super Admin
           </p>
           <button
             type="button"
@@ -1789,7 +1787,7 @@ const handleEditStaff = (staff) => {
                             }))
                           }
                           placeholder="e.g. Tanauan City Public Library"
-                          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
                           required
                         />
                       </div>
@@ -1809,7 +1807,7 @@ const handleEditStaff = (staff) => {
                             }))
                           }
                           placeholder="e.g. Tanauan City"
-                          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
                         />
                       </div>
 
@@ -1828,7 +1826,7 @@ const handleEditStaff = (staff) => {
                             }))
                           }
                           placeholder="Complete library address"
-                          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
                           required
                         />
                       </div>
@@ -1853,7 +1851,7 @@ const handleEditStaff = (staff) => {
                               }))
                             }
                             placeholder="e.g. g.batstate-u.edu.ph"
-                            className="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                            className="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2.5 text-sm focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
                             required
                           />
                         </div>
@@ -2040,6 +2038,7 @@ const handleEditStaff = (staff) => {
 
                         <button
                           type="button"
+                          data-confirm-message={`Delete library "${library.name || 'this library'}"? This cannot be undone.`}
                           onClick={() => handleDeleteLibrary(library)}
                           className="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
                         >
@@ -2288,6 +2287,7 @@ const handleEditStaff = (staff) => {
 
                               <button
                                 type="button"
+                                data-confirm-message={`${staff.is_active ? 'Disable' : 'Enable'} the sub-admin account for "${staff.full_name || staff.email}"?`}
                                 onClick={() => handleToggleStaff(staff)}
                                 disabled={staffLoading}
                                 className={`rounded-md border px-3 py-1.5 text-xs font-bold disabled:opacity-50 ${
@@ -2301,6 +2301,7 @@ const handleEditStaff = (staff) => {
 
                               <button
                                 type="button"
+                                data-confirm-message={`Delete the sub-admin account for "${staff.full_name || staff.email}"? This cannot be undone.`}
                                 onClick={() => handleDeleteStaff(staff)}
                                 disabled={staffLoading}
                                 className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-50"

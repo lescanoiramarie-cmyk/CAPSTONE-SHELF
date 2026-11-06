@@ -847,22 +847,23 @@ label.text-xs {
 .superadmin-dashboard main .bg-white.rounded-xl.shadow-sm,
 .subadmin-dashboard main .bg-white.rounded-2xl.shadow-sm,
 .superadmin-dashboard main .bg-white.rounded-2xl.shadow-sm {
-  border-color: transparent;
-  box-shadow: 0 1px 3px rgb(15 23 42 / 8%);
+  border-color: var(--color-shelf-border);
+  box-shadow: 0 2px 8px rgb(15 32 70 / 5%);
 }
 
 .subadmin-dashboard main .bg-white.rounded-xl.shadow-sm:hover,
 .superadmin-dashboard main .bg-white.rounded-xl.shadow-sm:hover,
 .subadmin-dashboard main .bg-white.rounded-2xl.shadow-sm:hover,
 .superadmin-dashboard main .bg-white.rounded-2xl.shadow-sm:hover {
-  border-color: #93c5fd;
+  border-color: rgb(37 99 235 / 35%);
+  box-shadow: 0 6px 18px rgb(15 32 70 / 8%);
 }
 
 /* Align admin main-content surfaces with the visitor dashboard without
    changing the existing side-panel navigation. */
 .subadmin-dashboard > main,
 .superadmin-dashboard > main {
-  background-color: #f8fafc;
+  background-color: var(--color-shelf-bg);
 }
 
 .subadmin-dashboard > main input,
@@ -878,6 +879,16 @@ label.text-xs {
 .subadmin-dashboard > main button,
 .superadmin-dashboard > main button {
   min-height: 2.5rem;
+}
+
+.subadmin-dashboard aside :is(button, a),
+.superadmin-dashboard aside :is(button, a) {
+  border-radius: 0.625rem;
+}
+
+.subadmin-dashboard aside :is(button, a):hover,
+.superadmin-dashboard aside :is(button, a):hover {
+  color: #fff;
 }
 
 .subadmin-sidebar nav,

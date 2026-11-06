@@ -58,9 +58,13 @@ export default function VisitorProfilePhotoCropDialog({ file, onCancel, onApply 
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [error, setError] = useState('');
   const [isApplying, setIsApplying] = useState(false);
-  const [sourceUrl] = useState(() => URL.createObjectURL(file));
+  const [sourceUrl, setSourceUrl] = useState('');
 
-  useEffect(() => () => URL.revokeObjectURL(sourceUrl), [sourceUrl]);
+  useEffect(() => {
+    const nextSourceUrl = URL.createObjectURL(file);
+    setSourceUrl(nextSourceUrl);
+    return () => URL.revokeObjectURL(nextSourceUrl);
+  }, [file]);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -73,6 +77,7 @@ export default function VisitorProfilePhotoCropDialog({ file, onCancel, onApply 
   const layout = imageSize ? getImageLayout(imageSize, zoom) : null;
 
   const handleImageLoad = (event) => {
+    setError('');
     const size = {
       width: event.currentTarget.naturalWidth,
       height: event.currentTarget.naturalHeight,
@@ -83,6 +88,11 @@ export default function VisitorProfilePhotoCropDialog({ file, onCancel, onApply 
       x: (CROP_SIZE - nextLayout.width) / 2,
       y: (CROP_SIZE - nextLayout.height) / 2,
     });
+  };
+
+  const handleImageError = () => {
+    setImageSize(null);
+    setError('This image could not be opened. Choose a JPG, PNG, or WEBP photo and try again.');
   };
 
   const handlePointerDown = (event) => {
@@ -203,6 +213,7 @@ export default function VisitorProfilePhotoCropDialog({ file, onCancel, onApply 
               src={sourceUrl}
               alt="Selected photo to crop"
               onLoad={handleImageLoad}
+              onError={handleImageError}
               draggable="false"
               className="pointer-events-none absolute max-w-none select-none"
               style={layout ? {

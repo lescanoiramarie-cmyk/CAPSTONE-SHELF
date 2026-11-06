@@ -280,6 +280,16 @@
   border-radius: var(--visitor-radius-card) 0 0 var(--visitor-radius-card);
 }
 
+.visitor-dashboard .visitor-profile-page {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.visitor-dashboard .visitor-profile-page .visitor-profile-content > div {
+  width: min(100%, 64rem);
+  margin-inline: auto;
+}
+
 .visitor-dashboard .visitor-profile-summary {
   background-color: var(--visitor-surface-muted);
 }
@@ -318,8 +328,18 @@
 }
 
 .visitor-dashboard .visitor-book-modal > button[aria-label="Close book information"] {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: inline-flex;
+  width: 2.75rem;
+  height: 2.75rem;
   min-width: 44px;
   min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
 }
 
 .visitor-dashboard .visitor-book-collection-grid {
@@ -874,6 +894,13 @@
   border-left-width: 4px;
   box-shadow: var(--visitor-shadow-card);
   font-family: inherit;
+}
+
+.visitor-dashboard .visitor-feedback.visitor-feedback-toast {
+  position: fixed;
+  top: calc(var(--visitor-header-height) + 0.75rem);
+  z-index: 80;
+  align-items: center;
 }
 
 .visitor-dashboard .visitor-feedback > :not(.visitor-feedback-icon) {

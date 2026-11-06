@@ -1,4 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Bar, Doughnut } from 'react-chartjs-2';
+import {
+  ArcElement,
+  BarElement,
+  CategoryScale,
+  Chart as ChartJS,
+  Legend,
+  LinearScale,
+  Tooltip,
+} from 'chart.js';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth.js';
 import { getDashboardPath } from '../routes/roleHome.js';
@@ -44,6 +54,8 @@ import {
 } from '../lib/bookFineRate.js';
 import { useProgressiveList } from '../hooks/useProgressiveList.js';
 import ProgressiveListFooter from './ProgressiveListFooter.jsx';
+
+ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend);
 
 // =========================================================
 // DATE HELPERS
@@ -157,6 +169,12 @@ function getOwnerCommunityRequestStatus(request) {
   return String(request?.status ?? '')
     .trim()
     .toLowerCase();
+}
+
+function formatRequestStatus(status) {
+  return String(status || 'Unknown')
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function getCatalogPaginationItems(currentPage, totalPages) {
@@ -328,6 +346,13 @@ export default function OPACCatalog({
   const [readingListLoading, setReadingListLoading] = useState(false);
   const [savingReadingListBookId, setSavingReadingListBookId] = useState(null);
   const [notice, setNotice] = useState('');
+
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timeoutId = globalThis.setTimeout(() => setNotice(''), 5000);
+    return () => globalThis.clearTimeout(timeoutId);
+  }, [notice]);
+
   const [cancellingRequestId, setCancellingRequestId] = useState(null);
   const [submittingBorrow, setSubmittingBorrow] = useState(false);
   const [submittingBorrowBookId, setSubmittingBorrowBookId] = useState(null);
@@ -568,7 +593,8 @@ export default function OPACCatalog({
     lendingPeriodDays: 7,
     handoverMethod: 'arrange_with_owner',
     handoverDetails: '',
-    lendingEnabled: true,
+    fineRate: '10',
+    lendingEnabled: false,
     isPublic: false,
   });
 
@@ -583,6 +609,7 @@ export default function OPACCatalog({
   // REVIEW STATES
   // =========================================================
   const [reviews, setReviews] = useState([]);
+  const [currentUserReview, setCurrentUserReview] = useState(null);
   const [userRating, setUserRating] = useState(5);
   const [hoverRating, setHoverRating] = useState(0);
   const [userComment, setUserComment] = useState('');
@@ -601,10 +628,10 @@ export default function OPACCatalog({
   }, []);
 
   const updatePersonalBookForm = (field, value) => {
-    setPersonalBookForm((current) => ({
-      ...current,
-      [field]: value,
-    }));
+    setPersonalBookForm((current) => {
+      const next = { ...current, [field]: value };
+      return next;
+    });
   };
   const resetPersonalBookForm = () => {
     if (coverPreviewUrl.startsWith('blob:')) {
@@ -630,7 +657,8 @@ export default function OPACCatalog({
       lendingPeriodDays: 7,
       handoverMethod: 'arrange_with_owner',
       handoverDetails: '',
-      lendingEnabled: true,
+      fineRate: '10',
+      lendingEnabled: false,
       isPublic: false,
       totalCopies: 1,
     });
@@ -651,6 +679,7 @@ export default function OPACCatalog({
       lendingPeriodDays: book.lendingPeriodDays || 7,
       handoverMethod: book.handoverMethod || 'arrange_with_owner',
       handoverDetails: book.handoverDetails || '',
+      fineRate: book.fineRate == null ? '10' : String(book.fineRate),
       lendingEnabled: Boolean(book.lendingEnabled),
       isPublic: Boolean(book.isPublic),
       totalCopies: getPersonalBookCopyAvailability(book).totalCopies,
@@ -730,7 +759,9 @@ export default function OPACCatalog({
     const handoverDetails = personalBookForm.handoverDetails.trim();
     const lendingPeriodDays = Number(personalBookForm.lendingPeriodDays);
     const totalCopies = Number(personalBookForm.totalCopies);
-    const fineRate = getBookFineRate(category);
+    const fineRate = personalBookForm.fineRate.trim()
+      ? Number(personalBookForm.fineRate)
+      : getBookFineRate(category);
     if (!title || !author) {
       setNotice('Book title and author are required.');
       return;
@@ -779,8 +810,11 @@ export default function OPACCatalog({
       setNotice('Please select a handover method when lending is enabled.');
       return;
     }
-    if (personalBookForm.lendingEnabled && fineRate == null) {
-      setNotice('Unclassified — checkout unavailable. Choose an approved category before enabling community lending.');
+    if (
+      (personalBookForm.lendingEnabled || personalBookForm.fineRate.trim()) &&
+      ![10, 15, 20, 30, 50].includes(fineRate)
+    ) {
+      setNotice('Enter a fine rate from ₱1 to ₱100 per overdue day. A valid rate is required when community lending is enabled.');
       return;
     }
     if (handoverDetails.length > 500) {
@@ -829,7 +863,7 @@ export default function OPACCatalog({
         handoverDetails: handoverDetails || null,
         lendingEnabled: Boolean(personalBookForm.lendingEnabled),
         isPublic: Boolean(personalBookForm.isPublic),
-        fineRate,
+        fineRate: personalBookForm.lendingEnabled ? fineRate : null,
       };
       let savedCoverUrl = selectedCoverUrl || null;
       let uploadedCoverPath = null;
@@ -893,7 +927,7 @@ export default function OPACCatalog({
             })
           : await addPersonalBook({
               ...bookDetails,
-              coverUrl: savedCoverUrl,
+              ...(savedCoverUrl ? { coverUrl: savedCoverUrl } : {}),
             });
       } catch (error) {
         if (uploadedCoverPath && supabase) {
@@ -1016,11 +1050,6 @@ export default function OPACCatalog({
   ]
     .filter((label) => !['other', 'others'].includes(label.toLocaleLowerCase()))
     .sort((a, b) => a.localeCompare(b));
-  const personalBookFineRate = getBookFineRate(
-    personalBookForm.category === 'Others'
-      ? personalBookForm.customCategory
-      : personalBookForm.category
-  );
   const selectedBookFineRate = getBookFineRate(selectedBook?.category);
   const libraryOptions = [
     'All',
@@ -1059,7 +1088,13 @@ export default function OPACCatalog({
   // REVIEWS
   // =========================================================
   useEffect(() => {
-    if (!selectedBook) return;
+    if (!selectedBook) {
+      setCurrentUserReview(null);
+      setUserComment('');
+      setUserRating(5);
+      return;
+    }
+    let active = true;
     const fetchReviews = async () => {
       setLoadingReviews(true);
       const { data, error } = await supabase
@@ -1067,16 +1102,26 @@ export default function OPACCatalog({
         .select('*')
         .eq('book_id', String(selectedBook.id))
         .order('created_at', { ascending: false });
+      if (!active) return;
       if (error) {
         console.error('Error fetching reviews:', error.message);
         setReviews([]);
+        setCurrentUserReview(null);
       } else {
-        setReviews(data || []);
+        const loadedReviews = data || [];
+        const ownReview = loadedReviews.find(
+          (review) => String(review.visitor_id) === String(user?.id)
+        ) || null;
+        setReviews(loadedReviews);
+        setCurrentUserReview(ownReview);
+        setUserComment(ownReview?.comment || '');
+        setUserRating(Number(ownReview?.rating) || 5);
       }
       setLoadingReviews(false);
     };
     fetchReviews();
-  }, [selectedBook]);
+    return () => { active = false; };
+  }, [selectedBook, user?.id]);
   const handleSubmitReview = async (event) => {
     event.preventDefault();
     if (!userComment.trim() || !selectedBook) return;
@@ -1091,20 +1136,29 @@ export default function OPACCatalog({
       rating: Number(userRating),
       comment: userComment.trim(),
     };
-    const { data, error } = await supabase
-      .from('book_reviews')
-      .insert([newReview])
-      .select();
+    const result = currentUserReview
+      ? await supabase
+          .from('book_reviews')
+          .update({ rating: newReview.rating, comment: newReview.comment })
+          .eq('id', currentUserReview.id)
+          .select()
+      : await supabase
+          .from('book_reviews')
+          .insert([newReview])
+          .select();
+    const { data, error } = result;
     setIsSubmitting(false);
     if (error) {
       setNotice('Failed to save review: ' + error.message);
       return;
     }
     if (data && data.length > 0) {
-      setReviews((currentReviews) => [data[0], ...currentReviews]);
-      setUserComment('');
-      setUserRating(5);
-      setNotice('Thank you for your rating and review!');
+      const savedReview = data[0];
+      setReviews((currentReviews) => currentUserReview
+        ? currentReviews.map((review) => review.id === savedReview.id ? savedReview : review)
+        : [savedReview, ...currentReviews]);
+      setCurrentUserReview(savedReview);
+      setNotice(currentUserReview ? 'Your review has been updated.' : 'Thank you for your rating and review!');
     }
   };
 
@@ -1427,6 +1481,65 @@ export default function OPACCatalog({
       overdue,
     };
   }, [myRequests]);
+  const requestStatusChartData = useMemo(() => {
+    const counts = new Map();
+    myRequests.forEach((request) => {
+      const status = String(request.status || 'unknown').toLowerCase();
+      counts.set(status, (counts.get(status) || 0) + 1);
+    });
+    const rows = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    return {
+      labels: rows.map(([status]) => formatRequestStatus(status)),
+      datasets: [{
+        data: rows.map(([, count]) => count),
+        backgroundColor: ['#002046', '#2563eb', '#f59e0b', '#0f766e', '#64748b', '#dc2626'],
+        borderColor: '#ffffff',
+        borderWidth: 2,
+      }],
+    };
+  }, [myRequests]);
+  const requestMonthlyChartData = useMemo(() => {
+    const monthKeys = Array.from({ length: 6 }, (_, index) => {
+      const date = new Date();
+      date.setDate(1);
+      date.setMonth(date.getMonth() - (5 - index));
+      return {
+        key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+        label: date.toLocaleDateString('en-PH', { month: 'short' }),
+      };
+    });
+    const counts = new Map(monthKeys.map(({ key }) => [key, 0]));
+    myRequests.forEach((request) => {
+      const date = new Date(request.requestDate || request.request_date || '');
+      if (Number.isNaN(date.getTime())) return;
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (counts.has(key)) counts.set(key, counts.get(key) + 1);
+    });
+    return {
+      labels: monthKeys.map(({ label }) => label),
+      datasets: [{
+        label: 'Requests',
+        data: monthKeys.map(({ key }) => counts.get(key)),
+        backgroundColor: '#1d4ed8',
+        borderRadius: 6,
+      }],
+    };
+  }, [myRequests]);
+  const visitorBarOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { beginAtZero: true, ticks: { precision: 0 } },
+      y: { grid: { display: false } },
+    },
+  };
+  const visitorDoughnutOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: '62%',
+    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12 } } },
+  };
   const myRequestList = useProgressiveList(filteredMyRequests, 12);
   useEffect(() => {
     if (
@@ -2035,7 +2148,7 @@ export default function OPACCatalog({
   const noticeIsError = /unable|failed|cannot|could not|not available|required|must be|invalid/.test(
     normalizedNotice
   );
-  const noticeIsSuccess = /successfully|thank you|was added|was removed|is now /.test(
+  const noticeIsSuccess = /successfully|thank you|was added|was removed|is now |has been updated/.test(
     normalizedNotice
   );
   const noticeTitle =
@@ -2052,12 +2165,12 @@ export default function OPACCatalog({
   const noticeTone = noticeIsError
     ? 'border-red-200 border-l-red-700 bg-red-50 text-red-950 dark:border-red-900 dark:border-l-red-400 dark:bg-red-950/40 dark:text-red-100'
     : noticeIsSuccess
-      ? 'border-emerald-200 border-l-emerald-700 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:border-l-emerald-400 dark:bg-emerald-950/40 dark:text-emerald-100'
+      ? 'border-sky-200 border-l-shelf-primary bg-sky-50 text-shelf-primary dark:border-slate-700 dark:border-l-blue-300 dark:bg-slate-800 dark:text-slate-100'
       : 'border-slate-200 border-l-shelf-primary bg-slate-50 text-shelf-primary dark:border-slate-700 dark:border-l-blue-300 dark:bg-slate-800 dark:text-slate-100';
   const noticeIconTone = noticeIsError
     ? 'bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-200'
     : noticeIsSuccess
-      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200'
+      ? 'bg-sky-100 text-shelf-primary dark:bg-slate-700 dark:text-blue-200'
       : 'bg-blue-100 text-shelf-primary dark:bg-slate-700 dark:text-blue-200';
 
   return (
@@ -2088,7 +2201,7 @@ export default function OPACCatalog({
               onClick={() => navigate('/')} 
               className="text-xs font-semibold text-slate-300 hover:text-white transition px-3 py-1.5 rounded-lg hover:bg-slate-800"
             >
-              â† Back to home
+              ← Back to home
             </button>
             <button
               type="button"
@@ -2108,9 +2221,9 @@ export default function OPACCatalog({
           <div
             role={noticeIsError ? 'alert' : 'status'}
             aria-live={noticeIsError ? 'assertive' : 'polite'}
-            className={`visitor-feedback flex items-start gap-3 rounded-xl border border-l-4 px-4 py-3 shadow-sm ${noticeTone}`}
+            className={`visitor-feedback visitor-feedback-toast fixed left-1/2 top-4 z-[80] flex w-[calc(100%-2rem)] max-w-3xl -translate-x-1/2 items-center gap-3 rounded-xl border border-l-4 px-4 py-3 shadow-lg ${noticeTone}`}
           >
-            <span className={`mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${noticeIconTone}`} aria-hidden="true">
+            <span className={`visitor-feedback-icon inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${noticeIconTone}`} aria-hidden="true">
               {noticeIsSuccess ? <CheckCircle2 size={18} /> : <CircleAlert size={18} />}
             </span>
             <span className="min-w-0 flex-1">
@@ -2273,7 +2386,7 @@ export default function OPACCatalog({
             </div>
 
             {searchTerm && (
-              <div className="flex items-center justify-between text-xs text-slate-500">
+              <div className="flex items-center justify-between text-base font-medium text-slate-700">
                 <span>
                   Search results for: <strong className="text-slate-800">"{searchTerm}"</strong>
                 </span>
@@ -3055,6 +3168,22 @@ export default function OPACCatalog({
                   </div>
                 ))}
               </div>
+              {requestAnalytics.total > 0 && (
+                <div className="mt-4 grid gap-3 border-t border-slate-200 pt-4 dark:border-slate-700 md:grid-cols-2">
+                  <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-slate-900/40">
+                    <h3 className="mb-2 text-xs font-bold text-slate-700 dark:text-slate-200">Requests by status</h3>
+                    <div className="h-56">
+                      <Doughnut data={requestStatusChartData} options={visitorDoughnutOptions} />
+                    </div>
+                  </div>
+                  <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-slate-900/40">
+                    <h3 className="mb-2 text-xs font-bold text-slate-700 dark:text-slate-200">Requests over the last 6 months</h3>
+                    <div className="h-56">
+                      <Bar data={requestMonthlyChartData} options={visitorBarOptions} />
+                    </div>
+                  </div>
+                </div>
+              )}
             </section>
           )}
           <div className="visitor-requests-table rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
@@ -3795,11 +3924,27 @@ export default function OPACCatalog({
                       className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-400"
                     />
                   </div>
-                  <div className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                    <span className="font-bold">Fine rate: </span>
-                    {personalBookFineRate == null
-                      ? 'Unclassified — checkout unavailable'
-                      : `₱${personalBookFineRate} per overdue day`}
+                  <div className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                    <label className="block font-bold mb-1.5" htmlFor="personal-book-fine-rate">
+                      Fine rate per overdue day{personalBookForm.lendingEnabled ? ' *' : ' (optional)'}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span>₱</span>
+                      <select
+                        id="personal-book-fine-rate"
+                        value={personalBookForm.fineRate}
+                        onChange={(event) => updatePersonalBookForm('fineRate', event.target.value)}
+                        className="w-72 max-w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                        required={personalBookForm.lendingEnabled}
+                      >
+                        <option value="10">₱10 — Standard books</option>
+                        <option value="15">₱15 — Larger or valuable books</option>
+                        <option value="20">₱20 — Academic or professional books</option>
+                        <option value="30">₱30 — Specialty or rare books</option>
+                        <option value="50">₱50 — Law or hardbound books</option>
+                      </select>
+                      <span>per overdue day</span>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
@@ -3988,11 +4133,6 @@ export default function OPACCatalog({
                 <button
                   type="submit"
                   disabled={savingPersonalBook}
-                  data-confirm-message={
-                    editingPersonalBook
-                      ? 'Are you sure you want to save your personal book changes?'
-                      : 'Are you sure you want to add this personal book?'
-                  }
                   className="min-h-11 px-5 py-2.5 rounded-lg bg-shelf-primary text-white text-sm font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {savingPersonalBook
@@ -4068,7 +4208,7 @@ export default function OPACCatalog({
             <button
               type="button"
               onClick={() => setSelectedBook(null)}
-              className="absolute right-4 top-4 z-10 rounded-lg bg-white/90 p-2 text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary dark:bg-slate-800/90 dark:text-slate-100 dark:hover:bg-slate-700"
+              className="visitor-book-modal-close absolute right-3 top-3 z-20 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-shelf-primary shadow-sm transition hover:border-shelf-primary/30 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
               aria-label="Close book information"
             >
               <X size={18} aria-hidden="true" />
@@ -4345,7 +4485,7 @@ export default function OPACCatalog({
               <form onSubmit={handleSubmitReview} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <label className="text-xs font-bold text-slate-700">
-                    Leave a Review:
+                    {currentUserReview ? 'Update Your Review:' : 'Leave a Review:'}
                   </label>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-slate-500 mr-1">Rating:</span>
@@ -4395,10 +4535,10 @@ export default function OPACCatalog({
                 <div className="flex justify-end">
                   <button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || loadingReviews}
                     className="bg-shelf-primary text-white text-xs px-4 py-2 rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50"
                   >
-                    {isSubmitting ? 'Submitting...' : 'Submit review'}
+                    {isSubmitting ? 'Saving...' : currentUserReview ? 'Update review' : 'Submit review'}
                   </button>
                 </div>
               </form>

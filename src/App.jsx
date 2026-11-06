@@ -23,6 +23,9 @@ const VisitorDashboard = lazy(
 const SubAdminDashboard = lazy(
   () => import('./pages/subadmin/SubAdminDashboard.jsx')
 );
+const AttendanceKiosk = lazy(
+  () => import('./pages/subadmin/AttendanceKiosk.jsx')
+);
 const SuperAdminDashboard = lazy(
   () => import('./pages/superadmin/SuperAdminDashboard.jsx')
 );
@@ -54,7 +57,7 @@ function getMajorActionConfirmation(button) {
     .trim();
   const normalizedLabel = label.toLowerCase();
   const path = window.location.pathname;
-  const isAdminModule = path === '/subadmin' || path === '/superadmin';
+  const isAdminModule = path.startsWith('/subadmin') || path === '/superadmin';
 
   const customMessage = button.getAttribute('data-confirm-message');
   if (customMessage) return customMessage;
@@ -91,32 +94,13 @@ function getMajorActionConfirmation(button) {
       : 'Are you sure you want to confirm this book borrowing?';
   }
 
-  if (isAdminModule && /\b(add|create|sav(?:e|ing)|update|delete|remove|disable|enable|archive|publish)\b/.test(normalizedLabel)) {
-    if (/\b(add|create)\b/.test(normalizedLabel)) {
-      return `Are you sure you want to ${/\bcreate\b/.test(normalizedLabel) ? 'create' : 'add'} this ${normalizedLabel.includes('personal book') ? 'personal book' : normalizedLabel.includes('library') ? 'library' : normalizedLabel.includes('staff') || normalizedLabel.includes('account') ? 'account' : 'item'}?`;
-    }
-    if (/\b(sav(?:e|ing))\b/.test(normalizedLabel)) {
-      return normalizedLabel.includes('profile')
-        ? 'Are you sure you want to save your profile?'
-        : 'Are you sure you want to save these changes?';
-    }
-    if (/\b(update)\b/.test(normalizedLabel)) {
-      return 'Are you sure you want to update this item?';
-    }
+  if (isAdminModule && /\b(delete|remove|disable|enable|archive)\b/.test(normalizedLabel)) {
     if (/\b(delete|remove)\b/.test(normalizedLabel)) {
       return 'Are you sure you want to delete this item?';
     }
     if (/\b(disable|enable)\b/.test(normalizedLabel)) {
       return `Are you sure you want to ${/\bdisable\b/.test(normalizedLabel) ? 'disable' : 'enable'} this account?`;
     }
-    return 'Are you sure you want to publish this item?';
-  }
-
-  const isPersonalBookForm = Boolean(button.closest('form[data-personal-book-form]'));
-  if (isPersonalBookForm && /\b(add|create|sav(?:e|ing)|update)\b/.test(normalizedLabel)) {
-    return normalizedLabel.includes('add')
-      ? 'Are you sure you want to add this personal book?'
-      : 'Are you sure you want to save this personal book?';
   }
 
   return '';
@@ -231,6 +215,14 @@ function AppRouter() {
                   element={
                     <ProtectedRoute allowedRoles={['subadmin']}>
                       <SubAdminDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/subadmin/attendance-kiosk"
+                  element={
+                    <ProtectedRoute allowedRoles={['subadmin']}>
+                      <AttendanceKiosk />
                     </ProtectedRoute>
                   }
                 />

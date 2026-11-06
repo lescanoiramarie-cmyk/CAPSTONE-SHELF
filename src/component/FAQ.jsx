@@ -161,7 +161,7 @@ export default function FAQ() {
       {/* CHAT WINDOW */}
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div
-          className="h-105 space-y-5 overflow-y-auto bg-slate-50 p-4 sm:h-120 sm:p-6"
+          className="relative h-105 space-y-5 overflow-y-auto bg-slate-50 p-4 sm:h-120 sm:p-6"
           role="log"
           aria-label="Chat conversation"
           aria-live="polite"
@@ -228,6 +228,27 @@ export default function FAQ() {
             </div>
           )}
 
+          {messages.length === 1 && !asking && (
+            <div className="sticky bottom-0 z-10 -mx-1 mt-5 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur dark:border-slate-700 dark:bg-slate-800/95">
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+                Try asking
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {SUGGESTED_QUESTIONS.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    disabled={asking}
+                    onClick={() => sendQuestion(suggestion)}
+                    className="max-w-full rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-left text-xs leading-4 text-shelf-primary transition hover:border-shelf-primary hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div ref={chatEndRef} />
         </div>
 
@@ -288,30 +309,6 @@ export default function FAQ() {
         </div>
       </section>
 
-      {/* SUGGESTED QUESTIONS */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h3 className="text-sm font-bold text-slate-800">
-          Suggested questions
-        </h3>
-
-        <p className="mt-1 text-xs text-slate-500">
-          Select a question to start a conversation.
-        </p>
-
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          {SUGGESTED_QUESTIONS.map((suggestion) => (
-            <button
-              key={suggestion}
-              type="button"
-              disabled={asking}
-              onClick={() => sendQuestion(suggestion)}
-              className="rounded-xl border border-slate-200 px-4 py-3 text-left text-sm leading-relaxed text-slate-700 transition hover:border-shelf-primary hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {suggestion}
-            </button>
-          ))}
-        </div>
-      </section>
     </div>
   );
 }

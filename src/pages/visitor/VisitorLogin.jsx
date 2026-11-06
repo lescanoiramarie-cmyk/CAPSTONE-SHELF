@@ -1,18 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ParticleConstellation from '../../component/ParticleConstellation.jsx';
 import { QRCodeSVG } from 'qrcode.react';
-import {
-  Html5Qrcode,
-  Html5QrcodeScannerState,
-  Html5QrcodeSupportedFormats,
-} from 'html5-qrcode';
 import { philippines } from '@ianlabicani/geoph-lite';
 import {
   Eye,
   EyeOff,
-  Camera,
-  Upload,
   ArrowLeft,
 } from 'lucide-react';
 
@@ -25,7 +18,6 @@ const OTP_CODE_TTL_SECONDS = 10 * 60;
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
 const RESET_CODE_TTL_SECONDS = 10 * 60;
 const RESET_CODE_RESEND_COOLDOWN_SECONDS = 60;
-const MAX_QR_IMAGE_SIZE = 10 * 1024 * 1024;
 const preventPasswordClipboard = (event) => event.preventDefault();
 
 function getInternalReturnPath(from) {
@@ -50,40 +42,6 @@ function getInternalReturnPath(from) {
     : null;
 }
 
-function getCameraErrorMessage(error) {
-  if (
-    typeof window !== 'undefined' &&
-    !window.isSecureContext &&
-    !['localhost', '127.0.0.1'].includes(window.location.hostname)
-  ) {
-    return 'Camera access requires a secure connection (HTTPS). Upload a QR image or open this page over HTTPS.';
-  }
-
-  if (!navigator.mediaDevices?.getUserMedia) {
-    return 'This browser does not support camera scanning. Upload a QR image instead.';
-  }
-
-  switch (error?.name) {
-    case 'NotAllowedError':
-    case 'PermissionDeniedError':
-    case 'SecurityError':
-      return 'Camera permission was denied. Allow camera access in your browser settings and try again.';
-    case 'NotFoundError':
-    case 'DevicesNotFoundError':
-      return 'No camera was found on this device. Upload a QR image instead.';
-    case 'NotSupportedError':
-      return 'This browser does not support camera scanning. Upload a QR image instead.';
-    case 'NotReadableError':
-    case 'TrackStartError':
-    case 'AbortError':
-      return 'The camera is unavailable or being used by another app. Close other camera apps and try again.';
-    case 'OverconstrainedError':
-      return 'The camera does not support the required scanning settings. Try another camera or upload a QR image.';
-    default:
-      return 'Unable to start the camera. Check camera permissions and try again.';
-  }
-}
-
 // =========================================================
 // PASSWORD REQUIREMENT COMPONENT
 // =========================================================
@@ -97,16 +55,6 @@ function PasswordRequirement({ valid, children }) {
           : 'text-slate-500'
       }`}
     >
-      <span
-        className={`flex items-center justify-center w-4 h-4 rounded-full text-xs font-bold ${
-          valid
-            ? 'bg-green-100'
-            : 'bg-slate-100'
-        }`}
-      >
-        {valid ? '✓' : '•'}
-      </span>
-
       <span>{children}</span>
     </li>
   );
@@ -137,7 +85,6 @@ export default function VisitorLogin({ initialView = 'login' }) {
 
   const [view, setView] = useState(initialView);
   const [error, setError] = useState('');
-  const [qrScanNotice, setQrScanNotice] = useState('');
   const [libraries, setLibraries] = useState([]);
   const [librariesLoading, setLibrariesLoading] = useState(true);
   const [libraryLoadError, setLibraryLoadError] = useState('');
@@ -329,23 +276,13 @@ useEffect(() => {
     };
   }, []);
 
-  const [showScanner, setShowScanner] = useState(false);
-
-  const scannerRef = useRef(null);
-  const scannerStartPromiseRef = useRef(null);
-  const scannerCleanupPromiseRef = useRef(null);
-  const fileInputRef = useRef(null);
   // IMPORTANT:
   // This is a synchronous lock.
   // It prevents two submit events from entering
   // registerVisitor before React has rendered again.
   const registrationLockRef = useRef(false);
 
-  // Prevent repeated QR login attempts while a QR is being processed.
   const loginRequestLockRef = useRef(false);
-
-  const [isUploadingQr, setIsUploadingQr] =
-    useState(false);
 
   const [isRegistering, setIsRegistering] =
     useState(false);
@@ -569,402 +506,6 @@ useEffect(() => {
     formData.password ===
       formData.confirmPassword;
 
-  const stopVisitorScanner = useCallback(async () => {
-    if (scannerCleanupPromiseRef.current) {
-      await scannerCleanupPromiseRef.current;
-      return;
-    }
-
-    const scanner = scannerRef.current;
-    if (!scanner) return;
-
-    const cleanup = (async () => {
-      try {
-        if (scannerStartPromiseRef.current) {
-          try {
-            await scannerStartPromiseRef.current;
-          } catch {
-            // A failed start still needs its scanner element cleared.
-          }
-        }
-
-        if (scannerRef.current !== scanner) return;
-
-        const state = scanner.getState();
-        if (
-          state === Html5QrcodeScannerState.SCANNING ||
-          state === Html5QrcodeScannerState.PAUSED
-        ) {
-          await scanner.stop();
-        }
-      } catch (err) {
-        console.warn('QR scanner stop skipped:', err?.message || err);
-      }
-
-      try {
-        await scanner.clear();
-      } catch (err) {
-        console.warn('QR scanner clear skipped:', err?.message || err);
-      } finally {
-        if (scannerRef.current === scanner) {
-          scannerRef.current = null;
-        }
-        scannerStartPromiseRef.current = null;
-      }
-    })();
-
-    scannerCleanupPromiseRef.current = cleanup;
-    try {
-      await cleanup;
-    } finally {
-      if (scannerCleanupPromiseRef.current === cleanup) {
-        scannerCleanupPromiseRef.current = null;
-      }
-    }
-  }, []);
-
-  
-  // =========================================================
-  // Scan a visitor QR pass and place it in the sign-in form.
-  // =========================================================
-
-  const handleQrLogin = useCallback(
-    async (decodedText) => {
-      const qrCode = String(decodedText ?? '').trim();
-
-      if (!qrCode) {
-        throw new Error(
-          'The QR code is empty or does not contain a valid visitor pass.'
-        );
-      }
-
-      if (!/^SHELF-QR-(?:[0-9]{6}|[0-9A-F]{32})$/i.test(qrCode)) {
-        throw new Error('This is not a valid SHELF visitor QR pass.');
-      }
-
-      setLoginData((current) => ({
-        ...current,
-        identifier: qrCode.toUpperCase(),
-      }));
-      setError('');
-      setQrScanNotice(
-        'QR pass scanned successfully. Enter your password to sign in.'
-      );
-    },
-    []
-  );
-
-  
-  
-  // START / STOP CAMERA SCANNER
-  const startScanner = useCallback(() => {
-    setError('');
-    setQrScanNotice('');
-    setShowScanner(true);
-  }, []);
-
-  const stopScanner = useCallback(async () => {
-    await stopVisitorScanner();
-    setShowScanner(false);
-  }, [stopVisitorScanner]);
-
-    // Camera QR scanner — safe start and cleanup
-    useEffect(() => {
-      if (!showScanner) return;
-
-      let cancelled = false;
-      let processing = false;
-
-      const startCamera = async () => {
-        try {
-          const scanner = new Html5Qrcode('visitor-qr-reader', {
-            formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-            verbose: false,
-          });
-          scannerRef.current = scanner;
-
-          const startPromise = scanner.start(
-            { facingMode: 'environment' },
-            {
-              fps: 10,
-              qrbox: (width, height) => {
-                const size = Math.min(width, height, 280);
-                return { width: size, height: size };
-              },
-            },
-            async (decodedText) => {
-              if (cancelled || processing) return;
-
-              processing = true;
-              const qrValue = decodedText.trim();
-
-              try {
-                await stopVisitorScanner();
-                if (cancelled) return;
-                setShowScanner(false);
-                await handleQrLogin(qrValue);
-              } catch (err) {
-                setError(
-                  err?.message || 'Unable to read a valid visitor QR pass.'
-                );
-              }
-            },
-            () => {}
-          );
-          scannerStartPromiseRef.current = startPromise;
-          await startPromise;
-
-          if (cancelled) {
-            await stopVisitorScanner();
-          }
-        } catch (err) {
-          console.error('Camera error:', err);
-
-          await stopVisitorScanner();
-
-          if (!cancelled) {
-            setShowScanner(false);
-            setError(
-              getCameraErrorMessage(err)
-            );
-          }
-        }
-      };
-
-      void startCamera();
-
-      return () => {
-        cancelled = true;
-        void stopVisitorScanner();
-      };
-    }, [showScanner, handleQrLogin, stopVisitorScanner]);
-
-  // =========================================================
-  // CREATE ENHANCED QR IMAGE
-  // =========================================================
-
-  const createEnhancedQrImage = (
-    file
-  ) => {
-    return new Promise(
-      (resolve, reject) => {
-        const image = new Image();
-
-        const objectUrl =
-          URL.createObjectURL(file);
-
-        image.onload = () => {
-          try {
-            const scale = 3;
-
-            const canvas =
-              document.createElement(
-                'canvas'
-              );
-
-            canvas.width = Math.max(
-              image.width * scale,
-              600
-            );
-
-            canvas.height = Math.max(
-              image.height * scale,
-              600
-            );
-
-            const context =
-              canvas.getContext('2d');
-
-            if (!context) {
-              URL.revokeObjectURL(
-                objectUrl
-              );
-
-              reject(
-                new Error(
-                  'Unable to process the uploaded image.'
-                )
-              );
-
-              return;
-            }
-
-            context.fillStyle =
-              '#ffffff';
-
-            context.fillRect(
-              0,
-              0,
-              canvas.width,
-              canvas.height
-            );
-
-            context.imageSmoothingEnabled =
-              false;
-
-            context.drawImage(
-              image,
-              0,
-              0,
-              canvas.width,
-              canvas.height
-            );
-
-            canvas.toBlob(
-              (blob) => {
-                URL.revokeObjectURL(
-                  objectUrl
-                );
-
-                if (!blob) {
-                  reject(
-                    new Error(
-                      'Unable to create an enhanced QR image.'
-                    )
-                  );
-
-                  return;
-                }
-
-                const enhancedFile =
-                  new File(
-                    [blob],
-                    'enhanced-qr.png',
-                    {
-                      type: 'image/png',
-                    }
-                  );
-
-                resolve(
-                  enhancedFile
-                );
-              },
-              'image/png'
-            );
-          } catch (err) {
-            URL.revokeObjectURL(
-              objectUrl
-            );
-
-            reject(err);
-          }
-        };
-
-        image.onerror = () => {
-          URL.revokeObjectURL(
-            objectUrl
-          );
-
-          reject(
-            new Error(
-              'Unable to read the uploaded image.'
-            )
-          );
-        };
-
-        image.src = objectUrl;
-      }
-    );
-  };
-
-
-  // =========================================================
-  // QR IMAGE UPLOAD
-  // =========================================================
-
-  const handleQrImageUpload = async (event) => {
-    const file = event.target.files?.[0];
-
-    // Allow the same image to be selected again.
-    event.target.value = '';
-
-    if (!file || isUploadingQr) return;
-
-    const hasSupportedImageType =
-      ['image/png', 'image/jpeg', 'image/webp'].includes(file.type) ||
-      /\.(png|jpe?g|webp)$/i.test(file.name);
-    if (!hasSupportedImageType) {
-      setError('Choose a PNG, JPG, JPEG, or WEBP image.');
-      return;
-    }
-
-    if (file.size > MAX_QR_IMAGE_SIZE) {
-      setError('QR images must be 10 MB or smaller.');
-      return;
-    }
-
-    setError('');
-    setIsUploadingQr(true);
-
-    let qrScanner = null;
-
-    try {
-      qrScanner = new Html5Qrcode(
-        'visitor-qr-file-reader',
-        {
-          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-          verbose: false,
-        }
-      );
-
-      let decodedText = '';
-
-      try {
-        decodedText = await qrScanner.scanFile(file, false);
-      } catch {
-        // Try the enhanced image below.
-      }
-
-      if (!decodedText) {
-        const enhancedFile = await createEnhancedQrImage(file);
-
-        try {
-          decodedText = await qrScanner.scanFile(
-            enhancedFile,
-            false
-          );
-        } catch {
-          throw new Error(
-            'No QR code was found. Upload a clear image showing the entire QR code and its white border.'
-          );
-        }
-      }
-
-      const qrValue = String(decodedText ?? '').trim();
-
-      if (!qrValue) {
-        throw new Error(
-          'No QR code was detected. Upload a clear image showing the entire QR code and its white border.'
-        );
-      }
-
-      await handleQrLogin(qrValue);
-    } catch (err) {
-      console.error('QR IMAGE SCAN ERROR:', err);
-
-      setError(
-        err?.message === 'Unable to read the uploaded image.'
-          ? 'The image could not be read. Try a PNG, JPG, or WEBP image.'
-          : err?.message || 'Unable to read the QR image. Try another image.'
-      );
-    } finally {
-      try {
-        if (qrScanner) {
-  await qrScanner.clear();
-}
-      } catch (cleanupError) {
-        console.warn(
-          'QR image scanner cleanup warning:',
-          cleanupError
-        );
-      }
-
-      setIsUploadingQr(false);
-    }
-  };
-
-  // =========================================================
-  // NORMAL LOGIN
   // =========================================================
 
   const handleLogin = async (
@@ -975,7 +516,6 @@ useEffect(() => {
     if (loginRequestLockRef.current) return;
 
     setError('');
-    setQrScanNotice('');
     setCanResendVisitorOtp(false);
 
     const identifier =
@@ -986,7 +526,7 @@ useEffect(() => {
 
     if (!identifier) {
       setError(
-        'Please enter your email address or visitor QR pass.'
+        'Please enter your school email address.'
       );
 
       return;
@@ -1902,7 +1442,6 @@ setOtpResendRemaining(
     setPendingEmail('');
     setRegisteredVisitor(null);
 
-    setShowScanner(false);
     setIsRegistering(false);
     setCanResendVisitorOtp(false);
 
@@ -2051,7 +1590,7 @@ setOtpResendRemaining(
 
             <p className="text-xs text-slate-500">
               {view === 'login' &&
-                'Sign in using your email and password, or scan your QR pass and enter your password.'}
+                'Sign in using your school email address and password.'}
 
               {view === 'register' &&
                 'Fill in your personal details to receive your digital library pass.'}
@@ -2060,7 +1599,7 @@ setOtpResendRemaining(
                 'Enter the one-time verification code sent to your email.'}
 
               {view === 'success' &&
-                'Keep your QR pass private. It identifies your account and is used for library attendance and circulation; your password is still required to sign in.'}
+                'Your QR pass is for library attendance, borrowing, and returns. Keep it private and present it at the library when requested.'}
 
               {view === 'forgot' &&
                 resetStep === 'request' &&
@@ -2152,8 +1691,7 @@ setOtpResendRemaining(
                 </p>
 
                 <p className="text-xs text-slate-500">
-                  Use this QR pass with your password to sign in, and present
-                  it for attendance, book pickup, and returns at the library.
+                  Your QR pass is for library attendance, book pickup, and returns. Sign in with your school email and password.
                 </p>
 
                 <button
@@ -2665,7 +2203,7 @@ setOtpResendRemaining(
                     onCut={preventPasswordClipboard}
                     onPaste={preventPasswordClipboard}
                     onDrop={preventPasswordClipboard}
-                    placeholder="Example: Juan@Library2026"
+                    placeholder="Enter Password"
                     value={
                       formData.password
                     }
@@ -2890,49 +2428,19 @@ setOtpResendRemaining(
               className="space-y-4"
               autoComplete="off"
             >
-              <div
-                id="visitor-qr-file-reader"
-                className="hidden"
-                aria-hidden="true"
-              />
-              {showScanner ? (
-  <div className="space-y-4">
-    <div className="bg-shelf-primary text-white rounded-xl p-4 text-center">
-      <h3 className="font-bold text-sm">Scan QR Code</h3>
-      <p className="text-xs text-slate-300 mt-1">
-        Hold the QR code steady inside the frame.
-      </p>
-    </div>
-
-    {/* Dapat may element na tumutugma sa scanner ID. */}
-    <div
-      id="visitor-qr-reader"
-      className="w-full min-h-70 overflow-hidden rounded-xl border border-slate-200 bg-slate-50"
-    />
-
-    <button
-      type="button"
-      onClick={stopScanner}
-      className="w-full border border-slate-300 text-slate-700 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-50 transition"
-    >
-      Cancel camera
-    </button>
-  </div>
-) : (
-                <>
                   {/* LOGIN IDENTIFIER */}
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
-                      School email address or visitor QR pass
+                      School email address
                     </label>
 
                     <input
-                      type="text"
+                      type="email"
                       name="visitor_login_identifier"
                       required
-                      autoComplete="username"
-                      placeholder="email@example.com or SHELF-QR-123456"
+                      autoComplete="email"
+                      placeholder="email@example.com"
                       value={
                         loginData.identifier
                       }
@@ -2940,7 +2448,6 @@ setOtpResendRemaining(
                         setCanResendVisitorOtp(
                           false
                         );
-                        setQrScanNotice('');
 
                         setLoginData({
                           ...loginData,
@@ -2950,15 +2457,6 @@ setOtpResendRemaining(
                       }}
                       className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
                     />
-                    {qrScanNotice && (
-                      <p
-                        role="status"
-                        aria-live="polite"
-                        className="mt-2 text-xs font-medium text-emerald-700"
-                      >
-                        {qrScanNotice}
-                      </p>
-                    )}
                   </div>
 
                   {/* LOGIN PASSWORD */}
@@ -3042,58 +2540,6 @@ setOtpResendRemaining(
                     </button>
                   </div>
 
-                  <div className="relative flex items-center justify-center my-4">
-                    <div className="border-t border-slate-200 w-full" />
-
-                    <span className="bg-white px-3 text-xs uppercase tracking-wider font-semibold text-slate-400 absolute">
-                      Or
-                    </span>
-                  </div>
-
-                  {/* CAMERA QR */}
-
-                  <button
-                    type="button"
-                    onClick={
-                      startScanner
-                    }
-                    className="w-full border border-slate-300 text-slate-700 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition"
-                  >
-                    <Camera size={18} />
-                    Scan QR pass
-                  </button>
-
-                  {/* QR FILE INPUT */}
-
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/jpg,image/webp"
-                    className="hidden"
-                    onChange={
-                      handleQrImageUpload
-                    }
-                  />
-
-                  {/* QR UPLOAD */}
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      fileInputRef.current?.click();
-                    }}
-                    disabled={
-                      isUploadingQr
-                    }
-                    className="w-full border border-slate-300 text-slate-700 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Upload size={18} />
-
-                    {isUploadingQr
-                      ? 'Reading QR code...'
-                      : 'Upload QR code image'}
-                  </button>
-
                   {/* REGISTER LINK */}
 
                   <div className="text-center pt-2">
@@ -3117,8 +2563,6 @@ setOtpResendRemaining(
                       </button>
                     </p>
                   </div>
-                </>
-              )}
             </form>
           )}
 

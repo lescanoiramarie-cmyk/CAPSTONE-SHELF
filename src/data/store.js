@@ -5,8 +5,8 @@
 // call the data layer and never import the Supabase client directly.
 //
 // Authentication:
-//   Visitors      â†’ Supabase Auth + visitors.auth_user_id
-//   Staff/Admin   â†’ Supabase Auth + staff_profiles
+//   Visitors      →’ Supabase Auth + visitors.auth_user_id
+//   Staff/Admin   →’ Supabase Auth + staff_profiles
 //
 // Business rules that must be atomic are handled by PostgreSQL RPC functions.
 // ============================================================================
@@ -308,7 +308,7 @@ function isPasswordValid(
 }
 
 // ============================================================================
-// ROW â†’ CAMELCASE MAPPERS
+// ROW →’ CAMELCASE MAPPERS
 // ============================================================================
 
 const mapLibrary = (r) => ({
@@ -1134,7 +1134,7 @@ export async function fetchBorrowRequests({
     authenticatedUserId = authUserId;
 
     // ------------------------------------------------------------------------
-    // 2B. RESOLVE AUTH USER â†’ SHELF VISITOR
+    // 2B. RESOLVE AUTH USER →’ SHELF VISITOR
     // ------------------------------------------------------------------------
 
     if (
@@ -3173,6 +3173,9 @@ export async function findVisitorByQr(
     address:
       row.address,
 
+    profileImagePath:
+      row.profile_image_path || null,
+
     qrCode:
       row.qr_code,
   };
@@ -3806,6 +3809,7 @@ export async function addPersonalBook({
   lendingEnabled = true,
   isPublic = false,
   coverUrl,
+  fineRate,
 }) {
   const normalizedVisitorId =
     normalizeText(visitorId);
@@ -3846,10 +3850,16 @@ export async function addPersonalBook({
 
   const normalizedLendingEnabled =
     lendingEnabled !== false;
-  const normalizedFineRate = getBookFineRate(normalizedCategory);
+  const normalizedFineRate = fineRate == null || String(fineRate).trim() === ''
+    ? null
+    : normalizeBookFineRate(fineRate);
+
+  if (normalizedFineRate != null && ![10, 15, 20, 30, 50].includes(normalizedFineRate)) {
+    throw new Error('Personal book fine rate must be ₱10, ₱15, ₱20, ₱30, or ₱50 per overdue day.');
+  }
 
   if (normalizedLendingEnabled && normalizedFineRate == null) {
-    throw new Error('Unclassified — checkout unavailable. Choose an approved category before enabling community lending.');
+    throw new Error('Enter a fine rate from 1 to 100 per overdue day to enable community lending.');
   }
 
   if (!normalizedVisitorId) {
@@ -4072,6 +4082,7 @@ export async function updatePersonalBook({
   lendingEnabled = true,
   isPublic = false,
   coverUrl,
+  fineRate,
 }) {
   const normalizedVisitorId = normalizeText(visitorId);
   const normalizedBookId = normalizeText(bookId);
@@ -4087,7 +4098,13 @@ export async function updatePersonalBook({
     normalizeText(handoverMethod).toLowerCase() || 'arrange_with_owner';
   const normalizedHandoverDetails =
     normalizeText(handoverDetails) || null;
-  const normalizedFineRate = getBookFineRate(normalizedCategory);
+  const normalizedFineRate = fineRate == null || String(fineRate).trim() === ''
+    ? null
+    : normalizeBookFineRate(fineRate);
+
+  if (normalizedFineRate != null && ![10, 15, 20, 30, 50].includes(normalizedFineRate)) {
+    throw new Error('Personal book fine rate must be ₱10, ₱15, ₱20, ₱30, or ₱50 per overdue day.');
+  }
 
   if (!isValidVisitorId(normalizedVisitorId)) {
     throw new Error('Invalid visitor ID.');
@@ -4120,7 +4137,7 @@ export async function updatePersonalBook({
     throw new Error('Handover details must not exceed 500 characters.');
   }
   if (lendingEnabled !== false && normalizedFineRate == null) {
-    throw new Error('Unclassified — checkout unavailable. Choose an approved category before enabling community lending.');
+    throw new Error('Enter a fine rate from 1 to 100 per overdue day to enable community lending.');
   }
 
   const { data, error } = await supabase.rpc(
@@ -4142,6 +4159,7 @@ export async function updatePersonalBook({
     p_lending_enabled: lendingEnabled !== false,
     p_total_copies: normalizedTotalCopies,
     p_is_public: Boolean(isPublic),
+    p_fine_rate: normalizedFineRate,
     ...(coverUrl === undefined
       ? {}
       : {

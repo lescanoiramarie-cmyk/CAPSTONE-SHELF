@@ -83,6 +83,10 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+  const keepSessionAlive = useCallback(() => {
+    resetIdleTimerRef.current?.();
+  }, []);
+
   useEffect(() => {
     if (!supabase?.auth) return undefined;
 
@@ -657,6 +661,7 @@ export const AuthProvider = ({ children }) => {
       value={{
         user,
         logout,
+        keepSessionAlive,
         registerVisitor,
         verifyVisitorOtp,
         resendVisitorOtp,

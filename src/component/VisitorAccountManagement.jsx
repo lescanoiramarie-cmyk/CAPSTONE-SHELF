@@ -265,7 +265,7 @@ export default function VisitorAccountManagement({
                     <td className="px-4 py-3">
                       <button
                         type="button"
-                        data-confirm-message={`Are you sure you want to ${visitor.isActive ? 'disable' : 'enable'} this visitor account?`}
+                        data-confirm-message={`${visitor.isActive ? 'Disable' : 'Enable'} the visitor account for "${visitor.fullName || visitor.email || 'this visitor'}"?`}
                         onClick={() => void handleToggleVisitor(visitor)}
                         disabled={Boolean(updatingVisitorId)}
                         className={`rounded-md border px-3 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
