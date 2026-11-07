@@ -312,6 +312,8 @@ export default function OPACCatalog({
   const [searchTerm, setSearchTerm] = useState('');
   const [personalBookSearch, setPersonalBookSearch] = useState('');
   const [personalBookVisibilityFilter, setPersonalBookVisibilityFilter] = useState('all');
+  const [personalBooksPage, setPersonalBooksPage] = useState(1);
+  const personalBooksPageSize = 6;
   const [readingListSearch, setReadingListSearch] = useState('');
   const [myRequestSearch, setMyRequestSearch] = useState('');
   const [myRequestStatus, setMyRequestStatus] = useState('all');
@@ -1581,6 +1583,15 @@ export default function OPACCatalog({
       return matchesSearch && matchesVisibility;
     });
   }, [personalBookSearch, personalBookVisibilityFilter, personalBooks]);
+  const personalBooksPageCount = Math.max(
+    1,
+    Math.ceil(filteredPersonalBooks.length / personalBooksPageSize)
+  );
+  const currentPersonalBooksPage = Math.min(personalBooksPage, personalBooksPageCount);
+  const visiblePersonalBooks = filteredPersonalBooks.slice(
+    (currentPersonalBooksPage - 1) * personalBooksPageSize,
+    currentPersonalBooksPage * personalBooksPageSize
+  );
   const filteredCommunityBooks = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     const safeCommunityBooks = Array.isArray(communityBooks)
@@ -1597,7 +1608,6 @@ export default function OPACCatalog({
         String(book.isbn || '').toLowerCase().includes(term)
     );
   }, [communityBooks, searchTerm]);
-  const personalBookList = useProgressiveList(filteredPersonalBooks, 12);
   const readingListFilteredBooks = useMemo(() => {
     const term = readingListSearch.trim().toLowerCase();
     if (!term) return readingListBooks;
@@ -2020,16 +2030,20 @@ export default function OPACCatalog({
       <div key={book.id} className="visitor-book-card visitor-personal-book-card">
         <div className="visitor-book-card-inner">
           <div className="visitor-book-card-badge-row">
-            <span className="visitor-book-card-badge visitor-book-card-badge-primary">Personal Book</span>
             <span className="visitor-book-card-badge visitor-book-card-badge-neutral">
               {book.isPublic ? 'Public' : 'Private'}
             </span>
-            {!book.lendingEnabled && (
-              <span className="visitor-book-card-badge visitor-book-card-badge-neutral">Not for Lending</span>
-            )}
+            <span className={`visitor-book-card-badge ${book.lendingEnabled ? 'visitor-book-card-badge-success' : 'visitor-book-card-badge-neutral'}`}>
+              {book.lendingEnabled ? 'Lending enabled' : 'Not for lending'}
+            </span>
           </div>
 
-          <div className="visitor-book-card-header">
+          <button
+            type="button"
+            onClick={() => setSelectedBook({ ...book, bookType: 'personal' })}
+            aria-label={`View details for ${book.title || 'personal book'}`}
+            className="visitor-book-card-header visitor-personal-book-details-trigger"
+          >
             <BookCover
               key={`${book.id}-${book.coverUrl || book.title}`}
               src={book.coverUrl}
@@ -2039,33 +2053,9 @@ export default function OPACCatalog({
             <div className="visitor-book-card-text">
               <h3 title={book.title || 'Untitled Book'}>{book.title || 'Untitled Book'}</h3>
               <p title={book.author || 'Unknown Author'}>By {book.author || 'Unknown Author'}</p>
+              <span className="visitor-personal-book-details-hint">View book details</span>
             </div>
-          </div>
-
-          <div className="visitor-book-card-meta">
-            <div className="visitor-book-card-meta-item">
-              <span className="visitor-book-card-meta-label">Category</span>
-              <span className="visitor-book-card-meta-value" title={book.category || '—'}>{formatBookCategory(book.category) || '—'}</span>
-            </div>
-            <div className="visitor-book-card-meta-item">
-              <span className="visitor-book-card-meta-label">Condition</span>
-              <span className="visitor-book-card-meta-value" title={book.condition || '—'}>{book.condition || '—'}</span>
-            </div>
-            <div className="visitor-book-card-meta-item">
-              <span className="visitor-book-card-meta-label">Lending period</span>
-              <span className="visitor-book-card-meta-value">
-                {book.lendingEnabled ? `${book.lendingPeriodDays || 7} days` : 'Not applicable'}
-              </span>
-            </div>
-            <div className="visitor-book-card-meta-item">
-              <span className="visitor-book-card-meta-label">Copies</span>
-              <span className="visitor-book-card-meta-value">{getPersonalBookAvailabilityLabel(book)}</span>
-            </div>
-            <div className="visitor-book-card-meta-item visitor-book-card-meta-item-full">
-              <span className="visitor-book-card-meta-label">ISBN</span>
-              <span className="visitor-book-card-meta-value" title={book.isbn || '—'}>{book.isbn || '—'}</span>
-            </div>
-          </div>
+          </button>
 
           <div className="visitor-book-card-footer">
             {String(book.ownerVisitorId ?? '') === String(user?.id ?? '') && (
@@ -2773,7 +2763,10 @@ export default function OPACCatalog({
                 <input
                   type="search"
                   value={personalBookSearch}
-                  onChange={(event) => setPersonalBookSearch(event.target.value)}
+                  onChange={(event) => {
+                    setPersonalBookSearch(event.target.value);
+                    setPersonalBooksPage(1);
+                  }}
                   placeholder="Search title, author, category, or ISBN"
                   className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                 />
@@ -2782,7 +2775,10 @@ export default function OPACCatalog({
                 <span className="sr-only">Filter personal books</span>
                 <select
                   value={personalBookVisibilityFilter}
-                  onChange={(event) => setPersonalBookVisibilityFilter(event.target.value)}
+                  onChange={(event) => {
+                    setPersonalBookVisibilityFilter(event.target.value);
+                    setPersonalBooksPage(1);
+                  }}
                   className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                 >
                   <option value="all">All personal books</option>
@@ -2937,7 +2933,7 @@ export default function OPACCatalog({
                       <div
                         key={request.id}
                         id={`community-owner-request-${request.id}`}
-                        className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40 sm:p-5"
+                        className="visitor-community-owner-request-card min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/40 sm:p-5"
                       >
                         <div className="space-y-3">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -3145,17 +3141,41 @@ export default function OPACCatalog({
                 </button>
               </div>
             ) : (
-              <div className="personal-book-card-grid visitor-book-collection-grid order-2 w-full min-w-0">
-                {personalBookList.visibleItems.map(renderPersonalBookCard)}
-                <ProgressiveListFooter
-                  noun="books"
-                  totalCount={filteredPersonalBooks.length}
-                  visibleCount={personalBookList.visibleCount}
-                  hasMore={personalBookList.hasMore}
-                  loadMore={personalBookList.loadMore}
-                  sentinelRef={personalBookList.sentinelRef}
-                  className="col-span-full w-full"
-                />
+              <div className="order-2 w-full min-w-0 space-y-4">
+                <div className="personal-book-card-grid visitor-book-collection-grid w-full min-w-0">
+                  {visiblePersonalBooks.map(renderPersonalBookCard)}
+                </div>
+                {filteredPersonalBooks.length > 0 && (
+                  <nav
+                    aria-label="Personal book pages"
+                    className="flex w-full min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800"
+                  >
+                    <p className="text-xs text-slate-600 dark:text-slate-300" aria-live="polite">
+                      Showing {(currentPersonalBooksPage - 1) * personalBooksPageSize + 1}–{Math.min(currentPersonalBooksPage * personalBooksPageSize, filteredPersonalBooks.length)} of {filteredPersonalBooks.length} books
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPersonalBooksPage((page) => Math.max(1, page - 1))}
+                        disabled={currentPersonalBooksPage === 1}
+                        className="min-h-10 rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-45 dark:border-slate-600 dark:text-slate-200"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                        Page {currentPersonalBooksPage} of {personalBooksPageCount}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setPersonalBooksPage((page) => Math.min(personalBooksPageCount, page + 1))}
+                        disabled={currentPersonalBooksPage === personalBooksPageCount}
+                        className="min-h-10 rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-45 dark:border-slate-600 dark:text-slate-200"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </nav>
+                )}
               </div>
             )}
           </section>
@@ -4438,7 +4458,8 @@ export default function OPACCatalog({
                 </div>
               </div>
             )}
-            {selectedBook?.bookType === 'personal' && (
+            {selectedBook?.bookType === 'personal' &&
+              String(selectedBook.ownerVisitorId ?? '') !== String(user?.id ?? '') && (
               <div className="visitor-modal-community-action space-y-3 rounded-xl border-0 bg-white p-4 dark:bg-slate-800">
                 <div>
                   <h4 className="text-sm font-bold text-emerald-950 dark:text-emerald-100">

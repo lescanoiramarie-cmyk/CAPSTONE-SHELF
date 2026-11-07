@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  Building2,
   Clock3,
   MapPin,
   Maximize2,
   Minimize2,
+  Search,
 } from 'lucide-react';
 import {
   MapContainer,
@@ -101,6 +103,8 @@ export default function LibraryMap({
   const [isMapFullscreen, setIsMapFullscreen] = useState(false);
   const [showMap, setShowMap] = useState(true);
   const [selectedLibraryId, setSelectedLibraryId] = useState(null);
+  const [libraryPage, setLibraryPage] = useState(1);
+  const librariesPerPage = 3;
   const activeFocusBranchId = focusBranchId ?? selectedLibraryId;
 
   // =========================================================
@@ -155,6 +159,12 @@ export default function LibraryMap({
       );
     }
   );
+  const pageCount = Math.max(1, Math.ceil(filteredLibraries.length / librariesPerPage));
+  const currentLibraryPage = Math.min(libraryPage, pageCount);
+  const pagedLibraries = filteredLibraries.slice(
+    (currentLibraryPage - 1) * librariesPerPage,
+    currentLibraryPage * librariesPerPage
+  );
 
   // =========================================================
   // LIBRARIES WITH VALID COORDINATES
@@ -196,35 +206,55 @@ export default function LibraryMap({
   // =========================================================
 
   return (
-    <div className="w-full min-w-0 space-y-4">
+    <section className="w-full min-w-0 space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-5">
 
       {/* =====================================================
           SEARCH AND FILTER CONTROLS
       ====================================================== */}
 
-      <div className="flex flex-col sm:flex-row gap-3">
+      <header className="flex flex-col gap-3 border-b border-slate-200 pb-4 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-shelf-primary dark:bg-slate-700 dark:text-blue-200">
+            <Building2 size={21} aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white sm:text-xl">Find a library</h2>
+            <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">Explore branches, check their details, and open a library catalog.</p>
+          </div>
+        </div>
+        <span className="inline-flex w-fit items-center rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+          {filteredLibraries.length} {filteredLibraries.length === 1 ? 'library' : 'libraries'} found
+        </span>
+      </header>
 
-        <input
-          type="text"
-          value={search}
-          onChange={(event) =>
-            setSearch(event.target.value)
-          }
-          placeholder="Search libraries by name or address..."
-          className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
-        />
+      <div className="grid min-w-0 gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-900/50 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,0.42fr)_auto] sm:items-center sm:p-4">
+        <label className="relative block min-w-0">
+          <span className="sr-only">Search libraries by name or address</span>
+          <Search size={17} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setLibraryPage(1);
+            }}
+            placeholder="Search by library or address"
+            className="min-h-11 w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-800 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          />
+        </label>
 
-        <select
-          value={campusFilter}
-          onChange={(event) =>
-            setCampusFilter(
-              event.target.value
-            )
-          }
-          className="px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
-        >
+        <label className="block min-w-0">
+          <span className="sr-only">Filter by campus</span>
+          <select
+            value={campusFilter}
+            onChange={(event) => {
+              setCampusFilter(event.target.value);
+              setLibraryPage(1);
+            }}
+            className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+          >
           <option value="All">
-            All
+            All campuses
           </option>
 
           {campuses.map((campus) => (
@@ -235,14 +265,15 @@ export default function LibraryMap({
               {campus}
             </option>
           ))}
-        </select>
+          </select>
+        </label>
 
         <button
           type="button"
           onClick={() =>
             setShowMap(!showMap)
           }
-          className="px-4 py-2.5 rounded-lg text-sm font-bold border border-slate-300 hover:bg-slate-50 transition"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
         >
           {showMap
             ? 'Hide map view'
@@ -269,9 +300,10 @@ export default function LibraryMap({
           <div
             className={
               isMapFullscreen
-                ? 'fixed inset-0 z-9999 h-screen w-screen overflow-hidden bg-white'
-                : 'relative isolate z-0 h-[320px] min-w-0 w-full overflow-hidden rounded-xl border border-slate-200 shadow-sm sm:h-[480px] md:h-[540px] lg:h-[640px]'
+                ? 'fixed inset-0 z-9999 h-dvh w-screen overflow-hidden bg-white'
+                : 'relative isolate z-0 min-w-0 w-full overflow-hidden rounded-xl border border-slate-200 shadow-sm'
             }
+            style={isMapFullscreen ? undefined : { minHeight: 'clamp(28rem, 72dvh, 48rem)' }}
           >
             <button
               type="button"
@@ -432,10 +464,18 @@ export default function LibraryMap({
         <div
           className={
             showMap
-              ? 'min-w-0 space-y-2 sm:h-[480px] sm:overflow-y-auto sm:overscroll-contain sm:pr-2 md:h-[540px] lg:h-[640px]'
+              ? 'min-w-0 space-y-3'
               : 'min-w-0 space-y-2'
           }
         >
+
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/40">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Library directory</h3>
+              <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">Select a branch to locate it on the map.</p>
+            </div>
+            <MapPin size={18} className="shrink-0 text-shelf-primary dark:text-blue-200" aria-hidden="true" />
+          </div>
 
           {/* NO RESULTS */}
 
@@ -451,7 +491,7 @@ export default function LibraryMap({
 
           {/* LIBRARIES */}
 
-          {filteredLibraries.map(
+          {pagedLibraries.map(
             (library) => (
               <div
                 key={library.id}
@@ -531,10 +571,42 @@ export default function LibraryMap({
             )
           )}
 
+          {filteredLibraries.length > librariesPerPage && (
+            <nav
+              aria-label="Library list pages"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5"
+            >
+              <p className="text-xs text-slate-600" aria-live="polite">
+                Showing {(currentLibraryPage - 1) * librariesPerPage + 1}–{Math.min(currentLibraryPage * librariesPerPage, filteredLibraries.length)} of {filteredLibraries.length} libraries
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setLibraryPage((page) => Math.max(1, page - 1))}
+                  disabled={currentLibraryPage === 1}
+                  className="min-h-10 rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  Previous
+                </button>
+                <span className="text-xs font-semibold text-slate-600">
+                  Page {currentLibraryPage} of {pageCount}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setLibraryPage((page) => Math.min(pageCount, page + 1))}
+                  disabled={currentLibraryPage === pageCount}
+                  className="min-h-10 rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  Next
+                </button>
+              </div>
+            </nav>
+          )}
+
         </div>
       )}
       </div>
 
-    </div>
+    </section>
   );
 }
