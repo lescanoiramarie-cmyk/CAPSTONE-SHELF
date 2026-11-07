@@ -15,7 +15,6 @@ import { supabase } from '../lib/supabaseClient.js';
 import { normalizeBookCategory } from '../lib/bookCategory.js';
 import {
   buildDuplicateBookImportUpdate,
-  getBookFineRate,
   normalizeBookFineRate,
   validateImportedBookFineRates,
 } from '../lib/bookFineRate.js';

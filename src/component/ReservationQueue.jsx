@@ -7,6 +7,15 @@ function formatDateTime(iso) {
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
+function Stat({ label, value, Icon, tone }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <span className={`rounded-lg p-2.5 ${tone}`}><Icon size={18} aria-hidden="true" /></span>
+      <div><p className="text-xs font-semibold text-slate-500">{label}</p><p className="mt-0.5 text-xl font-bold text-slate-900">{value}</p></div>
+    </div>
+  );
+}
+
 export default function ReservationQueue({ user, focusRequestId = null }) {
   const { books, borrowRequests } = useLibraryData();
   const isSubAdmin = user?.role === 'subadmin';
@@ -26,13 +35,6 @@ export default function ReservationQueue({ user, focusRequestId = null }) {
     }))
     .filter(({ queue }) => queue.length > 0);
   const queuedVisitors = booksWithQueue.reduce((total, item) => total + item.queue.length, 0);
-  const Stat = ({ label, value, Icon, tone }) => (
-    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <span className={`rounded-lg p-2.5 ${tone}`}><Icon size={18} aria-hidden="true" /></span>
-      <div><p className="text-xs font-semibold text-slate-500">{label}</p><p className="mt-0.5 text-xl font-bold text-slate-900">{value}</p></div>
-    </div>
-  );
-
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">

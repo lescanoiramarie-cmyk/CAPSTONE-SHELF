@@ -1,6 +1,7 @@
 import {
   lazy,
   Suspense,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -329,7 +330,7 @@ export default function SuperAdminDashboard() {
     }
   };
 
-  const loadTermsEditor = async (key = termsDocumentKey) => {
+  const loadTermsEditor = useCallback(async (key = termsDocumentKey) => {
     setTermsEditorLoading(true);
     setTermsEditorError('');
     setTermsEditorMessage('');
@@ -349,7 +350,7 @@ export default function SuperAdminDashboard() {
     } finally {
       setTermsEditorLoading(false);
     }
-  };
+  }, [termsDocumentKey]);
 
   const saveTermsEditor = async (event) => {
     event.preventDefault();
@@ -403,8 +404,10 @@ export default function SuperAdminDashboard() {
   };
 
   useEffect(() => {
+    // Loading the terms editor synchronizes the settings view with Supabase.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (section === 'settings') void loadTermsEditor(termsDocumentKey);
-  }, [section]);
+  }, [loadTermsEditor, section, termsDocumentKey]);
 
   // Sidebar Collapsible States
   const [workspaceOpen, setWorkspaceOpen] = useState(true);

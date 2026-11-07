@@ -21,11 +21,10 @@ import {
   AlertTriangle,
   Bookmark,
   CheckCircle2,
-  Clock3,
+  CircleAlert,
   ClipboardList,
   CircleDollarSign,
   ChevronDown,
-  ChevronRight,
   FileText,
   Fingerprint,
   LogOut,
@@ -87,16 +86,6 @@ function formatDateTime(iso) {
   });
 }
 
-function formatDate(iso) {
-  if (!iso) return '';
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime())
-    ? ''
-    : date.toLocaleDateString('en-PH', {
-        dateStyle: 'medium',
-      });
-}
-
 const ATTENDANCE_PERIOD_FILTERS = [
   { value: 'this-week', label: 'This Week' },
   { value: 'last-week', label: 'Last Week' },
@@ -140,48 +129,6 @@ function getAttendancePeriodBounds(period) {
   }
 
   return { fromTime: start.toISOString(), beforeTime: end.toISOString() };
-}
-
-function formatStatus(status) {
-  return String(status || '')
-    .replaceAll('_', ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function getStatusClass(status) {
-  const normalizedStatus = String(status || '').toLowerCase();
-
-  switch (normalizedStatus) {
-    case 'returned':
-      return 'visitor-status visitor-status-success';
-
-    case 'borrowed':
-      return 'visitor-status visitor-status-navy';
-
-    case 'ready_for_pickup':
-      return 'visitor-status visitor-status-navy';
-
-    case 'queued':
-    case 'expired':
-    case 'cancelled':
-      return 'visitor-status visitor-status-neutral';
-
-    case 'rejected':
-    case 'overdue':
-      return 'visitor-status visitor-status-danger';
-
-    case 'pending':
-    case 'pending_approval':
-    case 'to_confirm':
-      return 'visitor-status visitor-status-warning';
-
-    case 'available':
-    case 'success':
-      return 'visitor-status visitor-status-success';
-
-    default:
-      return 'visitor-status visitor-status-neutral';
-  }
 }
 
 const MAX_VISITOR_PROFILE_IMAGE_SIZE = 2 * 1024 * 1024;
@@ -331,7 +278,6 @@ function VisitorDashboardContent() {
   const [termsStatus, setTermsStatus] = useState('loading');
   const [termsDocumentContent, setTermsDocumentContent] = useState('');
   const [termsDocumentVersion, setTermsDocumentVersion] = useState(VISITOR_TERMS_VERSION);
-  const [termsAcceptedAt, setTermsAcceptedAt] = useState(null);
   const [termsError, setTermsError] = useState('');
   const [isAcceptingTerms, setIsAcceptingTerms] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -372,6 +318,8 @@ function VisitorDashboardContent() {
 
   useEffect(() => {
     if (user?.role !== 'visitor') return;
+    // Fetching the factor list updates the async security status for this session.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshVisitorMfa().catch((error) => {
       console.error('Unable to load visitor MFA status:', error);
       setVisitorMfaError('Multi-factor authentication status could not be loaded. Please refresh and try again.');
@@ -389,6 +337,8 @@ function VisitorDashboardContent() {
 
   useEffect(() => {
     if (user?.role !== 'visitor') return;
+    // Fetching passkeys updates the async security status for this session.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setVisitorPasskeyLoading(true);
     refreshVisitorPasskeys()
       .catch((error) => {
@@ -583,6 +533,8 @@ function VisitorDashboardContent() {
 
   useEffect(() => {
     if (String(user?.role || '').toLowerCase() !== 'visitor') return undefined;
+    // Start the initial paged attendance request when the filter/session changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadAttendanceHistory(true);
     return () => {
       attendanceHistoryGenerationRef.current += 1;
@@ -645,6 +597,8 @@ function VisitorDashboardContent() {
 
   useEffect(() => {
     if (!profileImageFile) {
+      // Clear a stale preview after the selected file is removed.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setProfileImagePreview('');
       return undefined;
     }
@@ -741,7 +695,6 @@ function VisitorDashboardContent() {
         const acceptedAt = globalThis.localStorage.getItem(
           `shelf_visitor_terms_accepted_${user.id}_${termsDocument?.version || VISITOR_TERMS_VERSION}`
         );
-        setTermsAcceptedAt(acceptedAt || null);
         setTermsStatus(acceptedAt ? 'accepted' : 'required');
         return;
       }
@@ -750,7 +703,6 @@ function VisitorDashboardContent() {
         'get_visitor_terms_accepted_at'
       );
       if (error) throw error;
-      setTermsAcceptedAt(data || null);
       setTermsStatus(data ? 'accepted' : 'required');
     } catch (error) {
       console.error('Unable to load visitor terms acceptance:', error);
@@ -812,16 +764,14 @@ function VisitorDashboardContent() {
       if (sessionError) throw sessionError;
 
       if (sessionData?.session) {
-        const { data, error } = await supabase.rpc('accept_visitor_terms');
+        const { error } = await supabase.rpc('accept_visitor_terms');
         if (error) throw error;
-        setTermsAcceptedAt(data || new Date().toISOString());
       } else {
         const acceptedAt = new Date().toISOString();
         globalThis.localStorage.setItem(
           `shelf_visitor_terms_accepted_${user.id}_${termsDocumentVersion}`,
           acceptedAt
         );
-        setTermsAcceptedAt(acceptedAt);
       }
       setTermsStatus('accepted');
     } catch (error) {

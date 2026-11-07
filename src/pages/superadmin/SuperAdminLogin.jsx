@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/useAuth.js';
-import { QRCodeSVG } from 'qrcode.react';
 import libraryBg from '../../assets/library.jpg';
 
 export default function SuperAdminLogin() {

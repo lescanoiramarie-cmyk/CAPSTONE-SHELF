@@ -396,7 +396,11 @@ export default function BookInventory() {
   );
 
   useEffect(() => {
-    if (page > pageCount) setPage(pageCount);
+    if (page > pageCount) {
+      // Keep the controlled pagination state inside the current result range.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPage(pageCount);
+    }
   }, [page, pageCount]);
 
   if (loading) {

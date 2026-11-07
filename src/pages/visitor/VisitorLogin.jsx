@@ -2587,6 +2587,15 @@ setOtpResendRemaining(
                   </div>
 
                   {/* SIGN IN */}
+                  <div className="text-right">
+                    <button
+                      type="button"
+                      onClick={handleOpenForgotPassword}
+                      className="text-xs font-semibold text-shelf-primary hover:underline"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
 
                   <button
                     type="submit"
@@ -2613,18 +2622,6 @@ setOtpResendRemaining(
                   <p className="-mt-2 text-center text-xs leading-5 text-slate-500">
                     Use fingerprint, Face ID, or your phone’s screen lock. Set up a passkey in Account security first.
                   </p>
-
-                  {/* FORGOT PASSWORD */}
-
-                  <div className="text-center">
-                    <button
-                      type="button"
-                      onClick={handleOpenForgotPassword}
-                      className="text-xs font-semibold text-shelf-primary hover:underline"
-                    >
-                      Forgot password?
-                    </button>
-                  </div>
 
                   {/* REGISTER LINK */}
 

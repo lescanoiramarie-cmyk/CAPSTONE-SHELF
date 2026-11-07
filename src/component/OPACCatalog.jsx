@@ -1088,7 +1088,9 @@ export default function OPACCatalog({
   // REVIEWS
   // =========================================================
   useEffect(() => {
+    // Reset the review form when the selected book is cleared.
     if (!selectedBook) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCurrentUserReview(null);
       setUserComment('');
       setUserRating(5);

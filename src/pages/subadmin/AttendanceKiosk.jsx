@@ -138,6 +138,8 @@ export default function AttendanceKiosk() {
 
   useEffect(() => {
     if (!libraryId) {
+      // Surface the missing branch assignment in the kiosk status UI.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCameraStatus('error');
       setCameraError('No library branch is assigned to this sub-admin account.');
       return undefined;

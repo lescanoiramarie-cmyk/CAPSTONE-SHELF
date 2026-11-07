@@ -549,13 +549,13 @@ export const AuthProvider = ({ children }) => {
       await supabase?.auth?.signOut?.();
       const message = String(error?.message || 'Passkey sign-in failed.');
       if (message.includes('passkey_disabled')) {
-        throw new Error('Passkey sign-in is not enabled for SHELF yet. Use your password instead.');
+        throw new Error('Passkey sign-in is not enabled for SHELF yet. Use your password instead.', { cause: error });
       }
       if (message.includes('webauthn_credential_not_found')) {
-        throw new Error('No passkey is registered for this account yet. Sign in with your password and set up a passkey in Account security.');
+        throw new Error('No passkey is registered for this account yet. Sign in with your password and set up a passkey in Account security.', { cause: error });
       }
       if (message.includes('NotAllowedError') || message.toLowerCase().includes('ceremony')) {
-        throw new Error('Passkey sign-in was cancelled or could not be completed. Try again or use your password.');
+        throw new Error('Passkey sign-in was cancelled or could not be completed. Try again or use your password.', { cause: error });
       }
       throw error;
     }

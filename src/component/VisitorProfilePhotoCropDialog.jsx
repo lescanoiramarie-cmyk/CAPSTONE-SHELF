@@ -62,6 +62,8 @@ export default function VisitorProfilePhotoCropDialog({ file, onCancel, onApply 
 
   useEffect(() => {
     const nextSourceUrl = URL.createObjectURL(file);
+    // Keep a revocable object URL for the image cropper instance.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSourceUrl(nextSourceUrl);
     return () => URL.revokeObjectURL(nextSourceUrl);
   }, [file]);

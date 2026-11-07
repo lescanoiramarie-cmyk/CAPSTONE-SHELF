@@ -182,6 +182,8 @@ export default function AdminWorkspace({
   const exportLockRef = useRef(false);
 
   useEffect(() => {
+    // Clear previously prepared files when the selected analytics range changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPreparedAnalyticsExports([]);
   }, [analyticsLibraryId, customEndDate, customStartDate, timeframe]);
 
