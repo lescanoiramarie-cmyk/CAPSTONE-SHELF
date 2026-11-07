@@ -7,6 +7,7 @@ import {
   Eye,
   EyeOff,
   ArrowLeft,
+  Fingerprint,
 } from 'lucide-react';
 
 import { useAuth } from '../../context/useAuth.js';
@@ -77,6 +78,9 @@ export default function VisitorLogin({ initialView = 'login' }) {
     verifyPasswordResetCode,
     applyPasswordReset,
     login,
+    loginVisitorWithPasskey,
+    completeMfaLogin,
+    cancelMfaLogin,
   } = useAuth();
 
   // =========================================================
@@ -97,6 +101,9 @@ export default function VisitorLogin({ initialView = 'login' }) {
   const [otpTimeRemaining, setOtpTimeRemaining] = useState(0);
   const [otpResendRemaining, setOtpResendRemaining] = useState(0);
   const [isOtpResending, setIsOtpResending] = useState(false);
+  const [mfaPending, setMfaPending] = useState(null);
+  const [mfaCode, setMfaCode] = useState('');
+  const [isMfaSubmitting, setIsMfaSubmitting] = useState(false);
 
   const [
     isResendingVisitorOtp,
@@ -550,6 +557,13 @@ useEffect(() => {
           password,
         });
 
+      if (result?.mfaRequired) {
+        setMfaPending(result);
+        setMfaCode('');
+        setView('mfa');
+        return;
+      }
+
       if (
         result?.role ===
         'visitor'
@@ -608,6 +622,61 @@ useEffect(() => {
     } finally {
       loginRequestLockRef.current = false;
       setIsLoggingIn(false);
+    }
+  };
+
+  const handlePasskeyLogin = async () => {
+    if (loginRequestLockRef.current) return;
+    loginRequestLockRef.current = true;
+    setError('');
+    setCanResendVisitorOtp(false);
+    try {
+      setIsLoggingIn(true);
+      const result = await loginVisitorWithPasskey();
+      if (result?.mfaRequired) {
+        setMfaPending(result);
+        setMfaCode('');
+        setView('mfa');
+      } else if (result?.role === 'visitor') {
+        navigate(getInternalReturnPath(location.state?.from) || '/visitor');
+      } else {
+        setError('This passkey is not linked to a visitor account.');
+      }
+    } catch (err) {
+      setError(err?.message || 'Passkey sign-in failed. Use your password or try again.');
+    } finally {
+      setIsLoggingIn(false);
+      loginRequestLockRef.current = false;
+    }
+  };
+
+  const handleVerifyLoginMfa = async (event) => {
+    event.preventDefault();
+    if (isMfaSubmitting) return;
+    setError('');
+    setIsMfaSubmitting(true);
+    try {
+      const verified = await completeMfaLogin(mfaCode);
+      setMfaPending(null);
+      setMfaCode('');
+      if (verified?.role === 'visitor') navigate(getInternalReturnPath(location.state?.from) || '/visitor');
+      else if (verified?.role === 'subadmin') navigate('/subadmin');
+      else if (verified?.role === 'superadmin') navigate('/superadmin');
+      else setError('Unknown account role.');
+    } catch (verifyError) {
+      setError(verifyError?.message || 'The verification code is invalid or expired.');
+    } finally {
+      setIsMfaSubmitting(false);
+    }
+  };
+
+  const handleCancelMfaLogin = async () => {
+    setIsMfaSubmitting(true);
+    try { await cancelMfaLogin(); } finally {
+      setMfaPending(null);
+      setMfaCode('');
+      setView('login');
+      setIsMfaSubmitting(false);
     }
   };
 
@@ -2528,6 +2597,23 @@ setOtpResendRemaining(
                     {isLoggingIn ? 'Signing in...' : 'Sign in'}
                   </button>
 
+                  <div className="relative py-1 text-center text-xs text-slate-500">
+                    <span className="relative z-10 bg-white px-3">or</span>
+                    <span className="absolute inset-x-0 top-1/2 border-t border-slate-200" aria-hidden="true" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handlePasskeyLogin}
+                    disabled={isLoggingIn}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-shelf-primary transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    <Fingerprint size={18} aria-hidden="true" />
+                    {isLoggingIn ? 'Checking passkey…' : 'Sign in with passkey'}
+                  </button>
+                  <p className="-mt-2 text-center text-xs leading-5 text-slate-500">
+                    Use fingerprint, Face ID, or your phone’s screen lock. Set up a passkey in Account security first.
+                  </p>
+
                   {/* FORGOT PASSWORD */}
 
                   <div className="text-center">
@@ -2563,6 +2649,22 @@ setOtpResendRemaining(
                       </button>
                     </p>
                   </div>
+            </form>
+          )}
+
+          {view === 'mfa' && mfaPending && (
+            <form onSubmit={handleVerifyLoginMfa} className="space-y-4" autoComplete="off">
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+                <p className="font-bold">{mfaPending.mfaSetupRequired ? 'Secure your administrator account' : 'Verify your identity'}</p>
+                <p className="mt-1 text-xs leading-5">{mfaPending.mfaSetupRequired ? 'Scan this QR code with an authenticator app, then enter the six-digit code to finish securing your account. To use another phone, scan this same QR code on it before continuing.' : 'Enter the current six-digit code from your authenticator app to continue.'}</p>
+              </div>
+              {mfaPending.mfaSetupRequired && mfaPending.mfaQrCode && (
+                <div className="mx-auto w-fit rounded-xl border border-slate-200 bg-white p-3"><img src={mfaPending.mfaQrCode} alt="Scan this QR code with your authenticator app" className="h-44 w-44" /><p className="mt-2 max-w-52 break-all text-center font-mono text-xs text-slate-500">{mfaPending.mfaSecret}</p></div>
+              )}
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700" htmlFor="login-mfa-code">6-digit authenticator code</label>
+              <input id="login-mfa-code" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} required value={mfaCode} onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" className="w-full rounded-lg border border-slate-300 px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-slate-900 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20" />
+              <button type="submit" disabled={isMfaSubmitting || mfaCode.length !== 6} className="w-full rounded-lg bg-shelf-primary px-4 py-3 text-sm font-bold text-white hover:opacity-95 disabled:opacity-50">{isMfaSubmitting ? 'Verifying…' : mfaPending.mfaSetupRequired ? 'Enable MFA and continue' : 'Verify and sign in'}</button>
+              <button type="button" disabled={isMfaSubmitting} onClick={() => void handleCancelMfaLogin()} className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel sign-in</button>
             </form>
           )}
 

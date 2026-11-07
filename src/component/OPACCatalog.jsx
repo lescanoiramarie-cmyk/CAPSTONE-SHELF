@@ -2276,6 +2276,28 @@ export default function OPACCatalog({
 
         {activeView === 'catalog' ? (
           <div className="space-y-6">
+            <section aria-labelledby="visitor-borrow-guide-title" className="rounded-2xl border border-blue-200 bg-blue-50/70 p-4 sm:p-5 dark:border-blue-900 dark:bg-blue-950/30">
+              <div className="mb-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-blue-700 dark:text-blue-300">Quick guide</p>
+                <h2 id="visitor-borrow-guide-title" className="mt-1 text-lg font-bold text-slate-900 dark:text-white">How to request and borrow a book</h2>
+              </div>
+              <ol className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {[
+                  { title: 'Find a book', description: 'Search the catalog and open a title to check its library and availability.' },
+                  { title: 'Send your request', description: 'Choose Borrow if a copy is available, or Reserve to join the queue.' },
+                  { title: 'Track the status', description: 'Open My Requests & Borrows to see updates. Community book requests need owner approval.' },
+                  { title: 'Pick it up', description: 'When it is ready, visit the library before the pickup deadline and show your visitor QR pass.' },
+                ].map((step, index) => (
+                  <li key={step.title} className="flex gap-3 rounded-xl border border-blue-100 bg-white/80 p-3 dark:border-blue-900 dark:bg-slate-900/60">
+                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-shelf-primary text-xs font-bold text-white" aria-hidden="true">{index + 1}</span>
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white">{step.title}</h3>
+                      <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">{step.description}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </section>
             {mapLibrary && (
               <div
                 className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm relative"

@@ -32,6 +32,7 @@ import {
   Clock,
   FileText,
   X,
+  Settings,
 } from 'lucide-react';
 import VisitorScanDetails from '../../component/VisitorScanDetails.jsx';
 import SubAdminTermsContent, {
@@ -77,6 +78,7 @@ const NAV = [
   { id: 'inventory', label: 'Inventory', Icon: ClipboardList },
   { id: 'queue', label: 'Reservation Queue', Icon: Clock3 },
   { id: 'map', label: 'Branch Map', Icon: MapPinned },
+  { id: 'settings', label: 'Settings', Icon: Settings },
 ];
 
 function StatCard({ label, value, tone = 'default' }) {
@@ -183,15 +185,17 @@ function AttendanceTrendChart({ attendance = [] }) {
             aria-label={`${monthLabel} ${day.day}: ${day.count} check-ins`}
             className={`flex min-h-9 flex-col justify-between rounded-md border p-1 transition-colors sm:min-h-10 sm:p-1.5 ${getIntensityClass(day.count)}`}
           >
-            <span className="text-xs font-medium leading-none opacity-80">{day.day}</span>
-            <span className="text-xs font-bold leading-none tabular-nums sm:text-sm">{day.count}</span>
+            <span className="text-[10px] font-semibold leading-none text-slate-500">Day {day.day}</span>
+            <span className="mt-1 inline-flex w-fit items-center rounded-full bg-white/80 px-1.5 py-1 text-xs font-bold leading-none tabular-nums text-shelf-primary shadow-sm sm:text-sm">
+              {day.count}<span className="ml-1 text-[9px] font-semibold">visits</span>
+            </span>
           </div>
         ) : (
           <div key={`empty-${index}`} aria-hidden="true" />
         ))}
       </div>
-      <div className="mt-4 flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs text-slate-500" aria-label="Attendance intensity legend">
-        <span className="mr-auto font-medium">Check-ins per day</span>
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs text-slate-500" aria-label="Attendance chart legend">
+        <span className="mr-auto font-medium">Day number <span className="text-slate-300">/</span> visits</span>
         <span className="flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm border border-slate-100 bg-slate-50" />0</span>
         <span className="flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm border border-blue-100 bg-blue-50" />Low</span>
         <span className="flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm border border-blue-300 bg-blue-200" />Medium</span>
@@ -254,11 +258,6 @@ function BorrowingActivityTrendChart({ requests = [] }) {
           <h3 className="text-sm font-bold text-slate-800">Borrowing Activity Trend</h3>
           <p className="mt-1 text-xs text-slate-500">Requests, borrows, and returns by week · {monthLabel}</p>
         </div>
-        <div className="hidden shrink-0 gap-3 text-right sm:flex">
-          <div><p className="text-sm font-bold tabular-nums text-blue-700">{totals.requests}</p><p className="text-xs text-slate-500">Requests</p></div>
-          <div><p className="text-sm font-bold tabular-nums text-amber-600">{totals.borrows}</p><p className="text-xs text-slate-500">Borrows</p></div>
-          <div><p className="text-sm font-bold tabular-nums text-emerald-600">{totals.returns}</p><p className="text-xs text-slate-500">Returns</p></div>
-        </div>
       </div>
       {!hasActivity ? (
         <p className="py-10 text-center text-sm text-slate-500">
@@ -290,6 +289,11 @@ function BorrowingActivityTrendChart({ requests = [] }) {
           <p className="mt-1 text-right text-xs text-slate-400">Weekly activity for {monthLabel}</p>
         </div>
       )}
+      <div className="mt-3 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3 text-center">
+        <div><p className="text-sm font-bold tabular-nums text-blue-700">{totals.requests.toLocaleString()}</p><p className="text-xs text-slate-500">Requests</p></div>
+        <div><p className="text-sm font-bold tabular-nums text-amber-600">{totals.borrows.toLocaleString()}</p><p className="text-xs text-slate-500">Borrows</p></div>
+        <div><p className="text-sm font-bold tabular-nums text-emerald-600">{totals.returns.toLocaleString()}</p><p className="text-xs text-slate-500">Returns</p></div>
+      </div>
     </div>
   );
 }
@@ -1071,7 +1075,10 @@ export default function SubAdminDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { books, borrowRequests, attendanceLogs, libraries, visitorCount } = useLibraryData();
-  const [section, setSection] = useState('overview');
+  const [section, setSection] = useState(() => {
+    const saved = window.localStorage.getItem('shelf_subadmin_start_page');
+    return NAV.some((item) => item.id === saved && item.id !== 'settings') ? saved : 'overview';
+  });
   const mainContentRef = useRef(null);
   const [focusRequestId, setFocusRequestId] = useState(null);
   const [focusNotificationType, setFocusNotificationType] = useState(null);
@@ -1081,9 +1088,15 @@ export default function SubAdminDashboard() {
   const [showImportGuide, setShowImportGuide] = useState(false);
   const [showSubAdminTerms, setShowSubAdminTerms] = useState(false);
   const [subAdminTermsStatus, setSubAdminTermsStatus] = useState('loading');
+  const [subAdminTermsContent, setSubAdminTermsContent] = useState('');
+  const [subAdminTermsVersion, setSubAdminTermsVersion] = useState(SUBADMIN_TERMS_VERSION);
   const [subAdminTermsAcceptedAt, setSubAdminTermsAcceptedAt] = useState(null);
   const [subAdminTermsError, setSubAdminTermsError] = useState('');
   const [isAcceptingSubAdminTerms, setIsAcceptingSubAdminTerms] = useState(false);
+  const [newAdminPassword, setNewAdminPassword] = useState('');
+  const [confirmAdminPassword, setConfirmAdminPassword] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordFeedback, setPasswordFeedback] = useState({ error: '', message: '' });
   const [feedbackPreview, setFeedbackPreview] = useState({ items: [], total: 0, newCount: 0, loading: false, error: '' });
   const [feedbackPreviewLibraryId, setFeedbackPreviewLibraryId] = useState('');
   const {
@@ -1110,6 +1123,15 @@ export default function SubAdminDashboard() {
       if (!sessionData?.session?.user?.id) {
         throw new Error('A signed-in staff session is required to verify terms acceptance.');
       }
+
+      const { data: termsDocument, error: termsDocumentError } = await supabase
+        .from('system_terms_documents')
+        .select('version, content')
+        .eq('document_key', 'subadmin')
+        .maybeSingle();
+      if (termsDocumentError) throw termsDocumentError;
+      setSubAdminTermsContent(termsDocument?.content || '');
+      setSubAdminTermsVersion(termsDocument?.version || SUBADMIN_TERMS_VERSION);
 
       const { data, error } = await supabase.rpc(
         'get_subadmin_terms_accepted_at'
@@ -1189,6 +1211,31 @@ export default function SubAdminDashboard() {
     }
   };
 
+  const updateSubAdminPassword = async (event) => {
+    event.preventDefault();
+    setPasswordFeedback({ error: '', message: '' });
+    if (newAdminPassword.length < 12 || !/[A-Z]/.test(newAdminPassword) || !/[a-z]/.test(newAdminPassword) || !/\d/.test(newAdminPassword) || !/[^A-Za-z0-9]/.test(newAdminPassword)) {
+      setPasswordFeedback({ error: 'Use at least 12 characters with uppercase, lowercase, a number, and a symbol.', message: '' });
+      return;
+    }
+    if (newAdminPassword !== confirmAdminPassword) {
+      setPasswordFeedback({ error: 'The password confirmation does not match.', message: '' });
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newAdminPassword });
+      if (error) throw error;
+      setNewAdminPassword('');
+      setConfirmAdminPassword('');
+      setPasswordFeedback({ error: '', message: 'Your password has been updated.' });
+    } catch (error) {
+      setPasswordFeedback({ error: error?.message || 'Password could not be updated. Please try again.', message: '' });
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
   useEffect(() => {
     if (!focusRequestId || section === 'overview') return;
     const frame = requestAnimationFrame(() => {
@@ -1202,7 +1249,8 @@ export default function SubAdminDashboard() {
 
   useEffect(() => {
     if (mainContentRef.current) mainContentRef.current.scrollTop = 0;
-  }, [section]);
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [section, workspaceTab]);
 
   const navigateToSection = (nextSection) => {
     setFocusRequestId(null);
@@ -1553,7 +1601,7 @@ export default function SubAdminDashboard() {
   };
 
   const [locallyConfirmedPickups, setLocallyConfirmedPickups] = useState([]);
-  const registeredVisitors = visitorCount;
+  const registeredVisitors = visitorCount ?? '—';
   const pendingPickups = branchBorrowRequests.filter(
     (r) => r.status === 'ready_for_pickup' && !locallyConfirmedPickups.includes(r.id)
   ).length;
@@ -1598,9 +1646,16 @@ export default function SubAdminDashboard() {
             <img src="/shelf-logo.png" alt="" className="h-9 w-9 object-contain" />
             <p className="font-extrabold tracking-wider">SHELF</p>
           </button>
-          <div className="mt-4 border-l-[3px] border-blue-400 pl-3">
-            <p className="text-base font-bold leading-tight tracking-wide text-white">Sub-admin</p>
+          <div className="mt-4 min-w-0 border-l-[3px] border-blue-400 pl-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <p className="min-w-0 truncate text-sm font-bold leading-tight text-white">{user?.name || 'Sub-admin'}</p>
+              <span className="shrink-0 rounded-full border border-blue-200/40 bg-blue-400/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-100">Sub-admin</span>
+            </div>
             <p className="mt-1 text-xs font-medium text-blue-100/75">Library console</p>
+            <div className="mt-2 flex items-start gap-2">
+              <Building2 size={13} className="mt-0.5 shrink-0 text-amber-300" aria-hidden="true" />
+              <p className="min-w-0 text-xs text-slate-300 wrap-break-words">{currentBranchName || 'Branch not found'}</p>
+            </div>
           </div>
         </div>
         <nav className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1">
@@ -1679,37 +1734,19 @@ export default function SubAdminDashboard() {
           )}
         </nav>
        
-        <div className="p-4 border-t border-white/10 space-y-3">
-          <p className="text-xs text-slate-400">Signed in as</p>
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-white wrap-break-words">{user?.name || 'Sub-Admin'}</p>
-            <div className="mt-1 flex items-start gap-2">
-              <Building2 size={14} className="mt-0.5 shrink-0 text-amber-300" />
-              <div className="min-w-0">
-                <p className="text-xs text-slate-300 wrap-break-words">{currentBranchName || 'Branch not found'}</p>
-              </div>
-            </div>
-          </div>
+        <div className="mt-auto shrink-0 border-t border-white/10 p-4">
           <button
             type="button"
             onClick={logout}
-            className="w-full bg-white/10 hover:bg-white/20 text-xs px-3 py-2 rounded-lg border border-white/20 transition"
+            className="w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2.5 text-sm font-semibold transition hover:bg-white/20"
           >
             Sign out
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowSubAdminTerms(true)}
-            className="flex w-full items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-left text-xs transition hover:bg-white/20"
-          >
-            <FileText size={15} aria-hidden="true" />
-            Terms and Conditions
           </button>
         </div>
       </aside>
 
       {/* MAIN CONTENT */}
-      <main ref={mainContentRef} className="min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto p-4 sm:p-6 lg:p-8">
+      <main ref={mainContentRef} className="min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8">
         
         {/* Keep the welcome panel on the overview so other sections start at the top. */}
         {section === 'overview' && <CustomDashboardWelcome
@@ -2038,6 +2075,60 @@ export default function SubAdminDashboard() {
             focusBranchId={currentLibraryId || null}
           />
         )}
+        {section === 'settings' && (
+          <section className="w-full max-w-6xl space-y-4">
+            <header>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">Library console</p>
+              <h2 className="mt-1 text-2xl font-bold text-shelf-primary">Settings</h2>
+              <p className="mt-1 text-sm text-slate-600">Manage your dashboard preference and review your account access.</p>
+            </header>
+            <div className="grid gap-4 lg:grid-cols-2">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h3 className="font-bold text-slate-900">Administrator account</h3>
+              <dl className="mt-3 divide-y divide-slate-100 text-sm">
+                <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500">Name</dt><dd className="text-right font-semibold text-slate-800">{user?.name || 'Sub-Admin'}</dd></div>
+                <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500">Email</dt><dd className="break-all text-right font-semibold text-slate-800">{user?.email || 'Not available'}</dd></div>
+                <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500">Assigned library</dt><dd className="text-right font-semibold text-slate-800">{currentBranchName || 'Not assigned'}</dd></div>
+              </dl>
+            </section>
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h3 className="font-bold text-slate-900">Account security</h3>
+              <p className="mt-1 text-sm text-slate-600">Sub-admin sign-ins require an authenticator code. During setup, scan the same QR code on each phone you want to use.</p>
+              <form onSubmit={updateSubAdminPassword} className="mt-4 grid gap-3 sm:grid-cols-2">
+                <label className="text-xs font-semibold text-slate-700">New password<input type="password" required autoComplete="new-password" value={newAdminPassword} onChange={(event) => setNewAdminPassword(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20" /></label>
+                <label className="text-xs font-semibold text-slate-700">Confirm password<input type="password" required autoComplete="new-password" value={confirmAdminPassword} onChange={(event) => setConfirmAdminPassword(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20" /></label>
+                <p className="text-xs text-slate-500 sm:col-span-2">At least 12 characters, with uppercase and lowercase letters, a number, and a symbol.</p>
+                <div className="flex flex-wrap items-center gap-3 sm:col-span-2"><button type="submit" disabled={passwordSaving || !newAdminPassword || !confirmAdminPassword} className="rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{passwordSaving ? 'Updating…' : 'Update password'}</button>{passwordFeedback.message && <p role="status" className="text-sm font-semibold text-emerald-700">{passwordFeedback.message}</p>}{passwordFeedback.error && <p role="alert" className="text-sm font-semibold text-rose-700">{passwordFeedback.error}</p>}</div>
+              </form>
+            </section>
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h3 className="font-bold text-slate-900">Dashboard preferences</h3>
+              <label htmlFor="subadmin-start-page" className="mt-3 block text-sm font-semibold text-slate-700">Open this page when I sign in</label>
+              <select id="subadmin-start-page" defaultValue={window.localStorage.getItem('shelf_subadmin_start_page') || 'overview'} onChange={(event) => window.localStorage.setItem('shelf_subadmin_start_page', event.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20">
+                {NAV.filter((item) => item.id !== 'settings').map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+              </select>
+              <p className="mt-2 text-xs leading-5 text-slate-500">This preference is saved on this device and used on your next sign-in.</p>
+            </section>
+            <section className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <span className="rounded-xl bg-blue-50 p-3 text-blue-800"><FileText size={20} aria-hidden="true" /></span>
+                <div>
+                  <h3 className="font-bold text-slate-900">Terms and Conditions</h3>
+                  <p className="mt-1 text-sm text-slate-600">View the responsibilities for accessing branch and visitor information.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSubAdminTerms(true)}
+                className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-shelf-primary hover:bg-slate-50"
+              >
+                <FileText size={16} aria-hidden="true" />
+                View terms
+              </button>
+            </section>
+            </div>
+          </section>
+        )}
         {section === 'workspace' && (
           <AdminWorkspace
             key={`${workspaceTab}-${['feedback', 'announcements'].includes(workspaceTab) ? 'communication' : 'reports'}`}
@@ -2107,12 +2198,12 @@ export default function SubAdminDashboard() {
               ) : (
                 <>
                   <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                    Version {SUBADMIN_TERMS_VERSION}
+                    Version {subAdminTermsVersion}
                     {subAdminTermsAcceptedAt && (
                       <> · Acknowledged {formatDateTime(subAdminTermsAcceptedAt)}</>
                     )}
                   </p>
-                  <SubAdminTermsContent />
+              <SubAdminTermsContent content={subAdminTermsContent} />
                   {subAdminTermsError && (
                     <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                       {subAdminTermsError}

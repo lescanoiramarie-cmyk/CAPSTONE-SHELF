@@ -375,6 +375,15 @@ export function LibraryProvider({ children }) {
         };
       }
     };
+    const loadOptionalVisitorCount = async () => {
+      try {
+        return await waitForData(store.fetchVisitorCount(), 'Visitor count');
+      } catch (error) {
+        optionalDataErrors.push('Visitor count');
+        console.error('SHELF visitor count loading failed:', error);
+        return null;
+      }
+    };
     setLoading(true);
     try {
       // ----------------------------------------------------------------------
@@ -422,7 +431,7 @@ export function LibraryProvider({ children }) {
             )
           : Promise.resolve([]),
         user?.role === 'subadmin' || user?.role === 'superadmin'
-          ? waitForData(store.fetchVisitorCount(), 'Visitor count')
+          ? loadOptionalVisitorCount()
           : Promise.resolve(currentVisitorId ? 1 : 0),
         currentVisitorId
           ? Promise.resolve([])
@@ -1488,7 +1497,7 @@ fineReviewRequired:
           ? data.visitors
           : [],
 
-      visitorCount: Number(data.visitorCount) || 0,
+      visitorCount: data.visitorCount == null ? null : Number(data.visitorCount) || 0,
 
       borrowRequests:
         Array.isArray(data.borrowRequests)

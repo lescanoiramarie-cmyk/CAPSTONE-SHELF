@@ -58,6 +58,7 @@ export const AuthProvider = ({ children }) => {
     }
   });
   const persistedUserSnapshotRef = useRef(JSON.stringify(user));
+  const pendingMfaLoginRef = useRef(null);
   const [idleSecondsRemaining, setIdleSecondsRemaining] = useState(null);
   const resetIdleTimerRef = useRef(null);
   const idleWarningActiveRef = useRef(false);
@@ -444,6 +445,68 @@ export const AuthProvider = ({ children }) => {
     };
   };
 
+  const beginMfaLogin = async (sessionUser, required) => {
+    if (!supabase?.auth?.mfa) {
+      if (required) throw new Error('Multi-factor authentication is unavailable. Contact your system administrator.');
+      return null;
+    }
+    const { data, error } = await supabase.auth.mfa.listFactors();
+    if (error) throw error;
+    const factors = data?.totp || data?.all || [];
+    const verifiedFactor = factors.find((factor) => factor.status === 'verified');
+    if (!verifiedFactor && !required) return null;
+
+    if (!verifiedFactor) {
+      const pendingFactors = factors.filter((factor) => factor.status === 'unverified');
+      for (const pendingFactor of pendingFactors) {
+        const { error: unenrollError } = await supabase.auth.mfa.unenroll({ factorId: pendingFactor.id });
+        if (unenrollError) throw new Error('An unfinished authenticator setup is attached to this account. Sign in again, then retry MFA setup.');
+      }
+      const { data: enrollment, error: enrollmentError } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: `SHELF sign-in ${Date.now()}` });
+      if (enrollmentError) {
+        // Factor names are unique. Refresh once in case a previous setup left an
+        // unverified factor behind or another request completed enrollment.
+        const { data: refreshed, error: refreshError } = await supabase.auth.mfa.listFactors();
+        if (refreshError) throw enrollmentError;
+        const refreshedFactors = refreshed?.totp || refreshed?.all || [];
+        const alreadyVerified = refreshedFactors.find((factor) => factor.status === 'verified');
+        if (alreadyVerified) {
+          pendingMfaLoginRef.current = { user: sessionUser, factorId: alreadyVerified.id, isSetup: false };
+          return { mfaRequired: true, mfaSetupRequired: false, role: sessionUser.role };
+        }
+        const staleFactors = refreshedFactors.filter((factor) => factor.status === 'unverified');
+        for (const staleFactor of staleFactors) {
+          const { error: cleanupError } = await supabase.auth.mfa.unenroll({ factorId: staleFactor.id });
+          if (cleanupError) throw enrollmentError;
+        }
+        const { data: retryEnrollment, error: retryError } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: `SHELF sign-in ${Date.now()}` });
+        if (retryError) throw retryError;
+        pendingMfaLoginRef.current = { user: sessionUser, factorId: retryEnrollment.id, isSetup: true };
+        return { mfaRequired: true, mfaSetupRequired: true, mfaQrCode: retryEnrollment.totp?.qr_code, mfaSecret: retryEnrollment.totp?.secret, role: sessionUser.role };
+      }
+      pendingMfaLoginRef.current = { user: sessionUser, factorId: enrollment.id, isSetup: true };
+      return { mfaRequired: true, mfaSetupRequired: true, mfaQrCode: enrollment.totp?.qr_code, mfaSecret: enrollment.totp?.secret, role: sessionUser.role };
+    }
+
+    pendingMfaLoginRef.current = { user: sessionUser, factorId: verifiedFactor.id, isSetup: false };
+    return { mfaRequired: true, mfaSetupRequired: false, role: sessionUser.role };
+  };
+
+  const completeMfaLogin = async (code) => {
+    const pending = pendingMfaLoginRef.current;
+    if (!pending) throw new Error('The MFA verification session expired. Sign in again.');
+    const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: pending.factorId, code: String(code || '').trim() });
+    if (error) throw error;
+    pendingMfaLoginRef.current = null;
+    setUser(pending.user);
+    return pending.user;
+  };
+
+  const cancelMfaLogin = async () => {
+    pendingMfaLoginRef.current = null;
+    await logout();
+  };
+
   // =========================================================
   // VISITOR LOGIN
   // =========================================================
@@ -457,10 +520,43 @@ export const AuthProvider = ({ children }) => {
         throw new Error('Visitor account was not found.');
       }
       const visitorSession = createVisitorSession(visitor);
+      const mfaStep = await beginMfaLogin(visitorSession, false);
+      if (mfaStep) return { ...visitor, ...mfaStep };
       setUser(visitorSession);
       return visitor;
     } catch (error) {
       console.error('Visitor login error:', error);
+      throw error;
+    }
+  };
+
+  const loginVisitorWithPasskey = async () => {
+    if (!supabase?.auth?.signInWithPasskey) {
+      throw new Error('Passkey sign-in is unavailable in this browser. Use your password instead.');
+    }
+    try {
+      const { data, error } = await supabase.auth.signInWithPasskey();
+      if (error) throw error;
+      const visitor = await store.fetchVisitorForPasskey(data?.user?.id);
+      const visitorSession = createVisitorSession(visitor);
+      const mfaStep = await beginMfaLogin(visitorSession, false);
+      if (mfaStep) {
+        return { success: true, role: 'visitor', user: visitor, ...mfaStep };
+      }
+      setUser(visitorSession);
+      return { success: true, role: 'visitor', user: visitor };
+    } catch (error) {
+      await supabase?.auth?.signOut?.();
+      const message = String(error?.message || 'Passkey sign-in failed.');
+      if (message.includes('passkey_disabled')) {
+        throw new Error('Passkey sign-in is not enabled for SHELF yet. Use your password instead.');
+      }
+      if (message.includes('webauthn_credential_not_found')) {
+        throw new Error('No passkey is registered for this account yet. Sign in with your password and set up a passkey in Account security.');
+      }
+      if (message.includes('NotAllowedError') || message.toLowerCase().includes('ceremony')) {
+        throw new Error('Passkey sign-in was cancelled or could not be completed. Try again or use your password.');
+      }
       throw error;
     }
   };
@@ -500,10 +596,14 @@ export const AuthProvider = ({ children }) => {
         throw new Error('Staff profile was not found.');
       }
       const staffSession = createStaffSession(staff);
+      const mfaStep = await beginMfaLogin(staffSession, ['subadmin', 'superadmin'].includes(staff.role));
+      if (mfaStep) return { ...staff, ...mfaStep };
       setUser(staffSession);
       return staff;
     } catch (error) {
       console.error('STAFF LOGIN ERROR:', error);
+      pendingMfaLoginRef.current = null;
+      await supabase?.auth?.signOut?.();
       throw error;
     }
   };
@@ -568,6 +668,8 @@ export const AuthProvider = ({ children }) => {
           throw new Error('Visitor account was not found.');
         }
         const visitorSession = createVisitorSession(visitor);
+        const mfaStep = await beginMfaLogin(visitorSession, false);
+        if (mfaStep) return { success: true, ...mfaStep, user: visitor };
         setUser(visitorSession);
         return {
           success: true,
@@ -593,6 +695,8 @@ export const AuthProvider = ({ children }) => {
       });
       if (visitor) {
         const visitorSession = createVisitorSession(visitor);
+        const mfaStep = await beginMfaLogin(visitorSession, false);
+        if (mfaStep) return { success: true, ...mfaStep, user: visitor };
         setUser(visitorSession);
         return {
           success: true,
@@ -631,6 +735,10 @@ export const AuthProvider = ({ children }) => {
         success: true,
         role: staff.role,
         user: staff,
+        mfaRequired: staff.mfaRequired,
+        mfaSetupRequired: staff.mfaSetupRequired,
+        mfaQrCode: staff.mfaQrCode,
+        mfaSecret: staff.mfaSecret,
       };
     } catch (staffError) {
       console.error('STAFF LOGIN ATTEMPT FAILED:', staffError);
@@ -671,11 +779,14 @@ export const AuthProvider = ({ children }) => {
         verifyPasswordResetCode,
         applyPasswordReset,
         loginVisitor,
+        loginVisitorWithPasskey,
         loginAsVisitorSession,
         loginStaffAccount,
         loginSubAdmin,
         loginSuperAdmin,
         login,
+        completeMfaLogin,
+        cancelMfaLogin,
       }}
     >
       {children}

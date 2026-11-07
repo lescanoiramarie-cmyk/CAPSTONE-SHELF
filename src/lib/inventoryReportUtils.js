@@ -76,8 +76,8 @@ export const buildBranchAuditAnalytics = (rows) => {
       { label: 'Utilization', value: `${available + borrowed ? ((borrowed / (available + borrowed)) * 100).toFixed(1) : '0.0'}%` },
     ],
     charts: [
-      { type: 'doughnut', title: 'Stock Availability Status', labels: ['Available Copies', 'Borrowed Copies'], data: [available, borrowed], colors: ['#10B981', '#F97316'] },
-      { type: 'bar', title: 'Inventory by Category', labels: categories.map(([label]) => label), data: categories.map(([, count]) => count), colors: '#2563EB' },
+      { type: 'doughnut', title: 'Stock Availability Status', description: 'Compares copies currently available with copies on loan.', labels: ['Available Copies', 'Borrowed Copies'], data: [available, borrowed], colors: ['#10B981', '#F97316'] },
+      { type: 'bar', title: 'Inventory by Category', description: 'Shows how the catalog is distributed across book categories.', labels: categories.map(([label]) => label), data: categories.map(([, count]) => count), colors: '#2563EB' },
     ],
   };
 };
@@ -92,8 +92,8 @@ export const buildMasterCatalogAnalytics = (rows) => {
       { label: 'Utilization', value: `${rows.reduce((sum, row) => sum + row.totalCopies, 0) ? ((rows.reduce((sum, row) => sum + row.totalCopies - row.availableCopies, 0) / rows.reduce((sum, row) => sum + row.totalCopies, 0)) * 100).toFixed(1) : '0.0'}%` },
     ],
     charts: [
-      { type: 'bar', title: 'Category Distribution System-Wide', labels: categories.map(([label]) => label), data: categories.map(([, count]) => count), colors: '#2563EB', horizontal: true },
-      { type: 'line', title: 'Catalog Growth Trend', labels: growth.map(([label]) => label), data: growth.map(([, count]) => count), colors: '#0F766E', borderColor: '#0F766E', datasetLabel: 'New Books' },
+      { type: 'bar', title: 'Category Distribution System-Wide', description: 'Compares the number of catalog titles recorded in each category.', labels: categories.map(([label]) => label), data: categories.map(([, count]) => count), colors: '#2563EB', horizontal: true },
+      { type: 'line', title: 'Catalog Growth Trend', description: 'Tracks titles added to the catalog over time.', labels: growth.map(([label]) => label), data: growth.map(([, count]) => count), colors: '#0F766E', borderColor: '#0F766E', datasetLabel: 'New Books' },
     ],
   };
 };
@@ -116,8 +116,8 @@ export const buildAssetAllocationAnalytics = (rows, libraries = []) => {
       { label: 'Utilization', value: `${rows.reduce((sum, row) => sum + row.totalCopies, 0) ? ((rows.reduce((sum, row) => sum + row.borrowedCopies, 0) / rows.reduce((sum, row) => sum + row.totalCopies, 0)) * 100).toFixed(1) : '0.0'}%` },
     ],
     charts: [
-      { type: 'bar', title: 'Total Stock per Branch', labels, data: entries.map(([, value]) => value.copies), colors: '#2563EB' },
-      { type: 'bar', title: 'Branch Utilization Rate %', labels, data: entries.map(([, value]) => value.copies ? Number(((value.borrowed / value.copies) * 100).toFixed(2)) : 0), colors: '#F97316' },
+      { type: 'bar', title: 'Total Stock per Branch', description: 'Compares the total number of book copies held by each branch.', labels, data: entries.map(([, value]) => value.copies), colors: '#2563EB' },
+      { type: 'bar', title: 'Branch Utilization Rate %', description: 'Shows the share of each branch’s copies currently on loan.', labels, data: entries.map(([, value]) => value.copies ? Number(((value.borrowed / value.copies) * 100).toFixed(2)) : 0), colors: '#F97316' },
     ],
   };
 };

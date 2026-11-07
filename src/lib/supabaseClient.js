@@ -13,5 +13,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase =
   supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey)
+    ? createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          experimental: { passkey: true },
+        },
+      })
     : null;

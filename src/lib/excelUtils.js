@@ -517,7 +517,7 @@ const createPdfAnalytics = async (analytics) => {
   if (!analytics?.charts?.length) return [];
   const images = [];
   for (const chart of analytics.charts) {
-    images.push(await createChartImage(chart));
+    images.push({ image: await createChartImage(chart), description: chart.description || '' });
   }
   return images;
 };
@@ -705,7 +705,9 @@ export const exportToExcel = async (data = [], fileName, options = {}) => {
    const blob = new Blob([buffer], {
      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
    });
-   downloadBlob(blob, fileName || buildReportFilename(options, 'xlsx'));
+   const resolvedFileName = fileName || buildReportFilename(options, 'xlsx');
+   if (options.download === false) return { blob, fileName: resolvedFileName };
+   downloadBlob(blob, resolvedFileName);
 };
 
 const safeSheetName = (value) =>
@@ -744,9 +746,11 @@ export const exportToCSV = async (data = [], fileName, options = {}) => {
   }
   const csv = `\uFEFF${csvChunks.join('\r\n')}`;
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const resolvedFileName = fileName || buildReportFilename(options, 'csv');
+  if (options.download === false) return { blob, fileName: resolvedFileName };
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
-  link.setAttribute('download', fileName || buildReportFilename(options, 'csv'));
+  link.setAttribute('download', resolvedFileName);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -836,8 +840,15 @@ export const exportToPDF = async (data = [], fileName, options = {}) => {
     const chartGap = 6;
     const chartWidth = (pageWidth - 30 - chartGap) / 2;
     const chartHeight = 78;
-    analyticsImages.slice(0, 2).forEach((image, index) => {
-      document.addImage(image, 'PNG', 15 + index * (chartWidth + chartGap), chartY, chartWidth, chartHeight);
+    analyticsImages.slice(0, 2).forEach(({ image, description }, index) => {
+      const chartX = 15 + index * (chartWidth + chartGap);
+      document.addImage(image, 'PNG', chartX, chartY, chartWidth, chartHeight);
+      if (description) {
+        document.setFont('helvetica', 'normal');
+        document.setFontSize(7);
+        document.setTextColor(71, 85, 105);
+        document.text(document.splitTextToSize(description, chartWidth).slice(0, 2), chartX, chartY + chartHeight + 4);
+      }
     });
     document.addPage();
     tableStartY = 15;
@@ -846,16 +857,29 @@ export const exportToPDF = async (data = [], fileName, options = {}) => {
     const availableWidth = pageWidth - 30;
     const width = Math.min(availableWidth, 150);
     const height = Math.min(width * 0.48, 70);
+    const description = options.chartDescriptions?.[index] || '';
+    const descriptionLines = description
+      ? document.splitTextToSize(description, width).slice(0, 2)
+      : [];
+    const descriptionHeight = descriptionLines.length * 3.5;
     const titleY = tableStartY + 4;
-    if (titleY + height + 7 > document.internal.pageSize.getHeight() - 17) {
+    if (titleY + height + descriptionHeight + 7 > document.internal.pageSize.getHeight() - 17) {
       document.addPage();
       tableStartY = 15;
     }
     document.setFont('helvetica', 'bold');
     document.setFontSize(10);
     document.text(options.chartTitles?.[index] || `Chart ${index + 1}`, 15, tableStartY + 4);
-    document.addImage(image, 'PNG', 15, tableStartY + 7, width, height);
-    tableStartY += height + 12;
+    if (descriptionLines.length) {
+      document.setFont('helvetica', 'normal');
+      document.setFontSize(8);
+      document.setTextColor(71, 85, 105);
+      document.text(descriptionLines, 15, tableStartY + 8);
+      document.setTextColor(51, 65, 85);
+    }
+    const imageY = tableStartY + 8 + descriptionHeight;
+    document.addImage(image, 'PNG', 15, imageY, width, height);
+    tableStartY += height + descriptionHeight + 13;
    });
   }
 
@@ -939,7 +963,11 @@ export const exportToPDF = async (data = [], fileName, options = {}) => {
     document.text(`Generated ${generatedOn}`, pageWidth - 15, pageHeight - 5, { align: 'right' });
     document.text(`Page ${page} of ${pageCount}`, pageWidth / 2, pageHeight - 5, { align: 'center' });
   }
-  document.save(fileName || buildReportFilename(options, 'pdf'));
+  const resolvedFileName = fileName || buildReportFilename(options, 'pdf');
+  if (options.download === false) {
+    return { blob: document.output('blob'), fileName: resolvedFileName };
+  }
+  document.save(resolvedFileName);
 };
 
 export const exportReport = async (data, format, options = {}) => {

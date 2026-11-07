@@ -150,7 +150,7 @@ export default function VisitorAccountManagement({
         </p>
       </header>
 
-      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end">
         <label className="relative min-w-0 flex-1">
           <span className="sr-only">Search visitor accounts</span>
           <Search
@@ -166,41 +166,27 @@ export default function VisitorAccountManagement({
             className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm"
           />
         </label>
-      </div>
-
-      {isSuperAdmin && (
-        <div
-          role="group"
-          aria-label="Filter visitor accounts by library"
-          className="flex min-w-0 gap-2 overflow-x-auto pb-2"
-        >
-          {[
-            { id: 'all', label: 'All libraries' },
-            { id: 'outside', label: 'Outside Visitor' },
-            ...libraries.map((library) => ({
-              id: library.id,
-              label: library.name,
-            })),
-          ].map((filter) => (
-            <button
-              key={filter.id}
-              type="button"
-              aria-pressed={branchFilter === filter.id}
-              onClick={() => {
-                setBranchFilter(filter.id);
+        {isSuperAdmin && (
+          <label className="block w-full sm:w-80 sm:shrink-0">
+            <span className="mb-1 block text-xs font-semibold text-slate-600">Library</span>
+            <select
+              value={branchFilter}
+              onChange={(event) => {
+                setBranchFilter(event.target.value);
                 setPage(1);
               }}
-              className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                branchFilter === filter.id
-                  ? 'border-shelf-primary bg-shelf-primary text-white'
-                  : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-50'
-              }`}
+              aria-label="Filter visitor accounts by library"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20"
             >
-              {filter.label}
-            </button>
-          ))}
-        </div>
-      )}
+              <option value="all">All libraries</option>
+              <option value="outside">Outside Visitor</option>
+              {libraries.map((library) => (
+                <option key={library.id} value={library.id}>{library.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
 
       {visibleError && (
         <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">

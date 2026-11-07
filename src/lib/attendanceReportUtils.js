@@ -71,8 +71,8 @@ export const buildSubAdminAttendanceAnalytics = (rows) => {
       { label: 'Peak Hour', value: hourLabel(Number(peak[0])) },
     ],
     charts: [
-      chart('bar', 'Hourly Peak Traffic', hourly.map(([hour]) => hourLabel(Number(hour))), hourly.map(([, count]) => count), '#2563EB'),
-      chart('doughnut', 'Visitor Status Breakdown', ['Completed Visits', 'Currently Active'], [completed, rows.length - completed], ['#10B981', '#F97316']),
+      chart('bar', 'Hourly Peak Traffic', hourly.map(([hour]) => hourLabel(Number(hour))), hourly.map(([, count]) => count), '#2563EB', { description: 'Shows how visitor check-ins are distributed by hour of day.' }),
+      chart('doughnut', 'Visitor Status Breakdown', ['Completed Visits', 'Currently Active'], [completed, rows.length - completed], ['#10B981', '#F97316'], { description: 'Compares completed visits with visitors who are still checked in.' }),
     ],
   };
 };
@@ -91,8 +91,8 @@ export const buildSystemAttendanceAnalytics = (rows) => {
       { label: 'Peak Hour', value: hourLabel(Number(groupCount(rows, (row) => new Date(row.timeIn).getHours()).reduce((best, current) => current[1] > best[1] ? current : best, [0, 0])[0])) },
     ],
     charts: [
-      chart('bar', 'Comparative Branch Foot Traffic', branches.map(([branch]) => branch), branches.map(([, count]) => count), '#2563EB'),
-      chart('line', 'Daily Attendance Volume Trend', daily.map(([date]) => date), daily.map(([, count]) => count), '#0F766E', { borderColor: '#0F766E', datasetLabel: 'Check-ins' }),
+      chart('bar', 'Comparative Branch Foot Traffic', branches.map(([branch]) => branch), branches.map(([, count]) => count), '#2563EB', { description: 'Compares the number of recorded visits across library branches.' }),
+      chart('line', 'Daily Attendance Volume Trend', daily.map(([date]) => date), daily.map(([, count]) => count), '#0F766E', { borderColor: '#0F766E', datasetLabel: 'Check-ins', description: 'Tracks daily visitor check-ins across the available attendance history.' }),
     ],
   };
 };

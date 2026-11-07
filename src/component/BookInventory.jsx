@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, Search, X } from 'lucide-react';
+import { BookOpen, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 import { useLibrary } from '../context/useLibrary';
 import { useAuth } from '../context/useAuth.js';
 import { supabase } from '../lib/supabaseClient';
 import { normalizeBookFineRate } from '../lib/bookFineRate.js';
 import { formatBookCategory } from '../lib/bookCategory.js';
 import { getBookInventoryScope } from '../lib/bookInventoryScope.js';
+
+const INVENTORY_PAGE_SIZE = 10;
 
 export default function BookInventory() {
   const { user } = useAuth();
@@ -28,6 +30,7 @@ export default function BookInventory() {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [sortBy, setSortBy] = useState('title-asc');
+  const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -385,6 +388,16 @@ export default function BookInventory() {
 
       return 0;
     });
+  const pageCount = Math.max(1, Math.ceil(filteredBooks.length / INVENTORY_PAGE_SIZE));
+  const visiblePage = Math.min(page, pageCount);
+  const visibleBooks = filteredBooks.slice(
+    (visiblePage - 1) * INVENTORY_PAGE_SIZE,
+    visiblePage * INVENTORY_PAGE_SIZE
+  );
+
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
 
   if (loading) {
     return (
@@ -443,14 +456,14 @@ export default function BookInventory() {
             type="text"
             placeholder="Search by title, author, ISBN, category..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="w-full pl-9 pr-9 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
           />
 
           {search && (
             <button
               type="button"
-              onClick={() => setSearch('')}
+              onClick={() => { setSearch(''); setPage(1); }}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100 transition"
               aria-label="Clear search input"
             >
@@ -464,7 +477,7 @@ export default function BookInventory() {
           <select
             id="book-inventory-category-filter"
             value={categoryFilter}
-            onChange={(event) => setCategoryFilter(event.target.value)}
+            onChange={(event) => { setCategoryFilter(event.target.value); setPage(1); }}
             className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
           >
             <option value="all">All categories</option>
@@ -481,7 +494,7 @@ export default function BookInventory() {
           <select
             id="book-inventory-sort"
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
+            onChange={(e) => { setSortBy(e.target.value); setPage(1); }}
             className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
           >
             <option value="title-asc">Title (A-Z)</option>
@@ -517,7 +530,7 @@ export default function BookInventory() {
                   </td>
                 </tr>
               ) : (
-                filteredBooks.map((book) => (
+            visibleBooks.map((book) => (
                   <tr
                     key={book.id}
                     className="group hover:bg-blue-50/60 hover:shadow-inner transition-all duration-150 cursor-pointer"
@@ -608,6 +621,30 @@ export default function BookInventory() {
             </tbody>
           </table>
         </div>
+        <footer className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+          <p aria-live="polite">
+            Showing {filteredBooks.length === 0 ? 0 : (visiblePage - 1) * INVENTORY_PAGE_SIZE + 1}–{Math.min(visiblePage * INVENTORY_PAGE_SIZE, filteredBooks.length)} of {filteredBooks.length} books
+          </p>
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <button
+              type="button"
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={visiblePage <= 1}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <ChevronLeft size={16} aria-hidden="true" /> Previous
+            </button>
+            <span className="whitespace-nowrap text-xs font-medium">Page {visiblePage} of {pageCount}</span>
+            <button
+              type="button"
+              onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+              disabled={visiblePage >= pageCount}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Next <ChevronRight size={16} aria-hidden="true" />
+            </button>
+          </div>
+        </footer>
       </div>
 
       {showForm && (

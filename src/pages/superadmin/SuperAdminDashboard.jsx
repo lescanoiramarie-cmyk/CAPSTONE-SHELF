@@ -35,6 +35,7 @@ import {
   MapPinned,
   MessageSquare,
   ShieldCheck,
+  Settings,
   Upload,
   UsersRound,
 } from 'lucide-react';
@@ -50,6 +51,8 @@ import AdminWorkspace from '../../component/AdminWorkspace.jsx';
 import DashboardWelcome from '../../component/DashboardWelcome.jsx';
 import BookRatingsChart from '../../component/BookRatingsChart.jsx';
 import DashboardDataBoundary from '../../component/DashboardDataBoundary.jsx';
+import VisitorTermsContent, { VISITOR_TERMS_VERSION } from '../../component/VisitorTermsContent.jsx';
+import SubAdminTermsContent, { SUBADMIN_TERMS_VERSION } from '../../component/SubAdminTermsContent.jsx';
 import { supabase } from '../../lib/supabaseClient.js';
 import { formatBookCategory } from '../../lib/bookCategory.js';
 import { sendDueDateFollowUp } from '../../lib/dueDateFollowUp.js';
@@ -199,8 +202,29 @@ export default function SuperAdminDashboard() {
     libraries,
   } = useLibraryData();
 
-  const [section, setSection] = useState('overview');
+  const superAdminStartPages = ['overview', 'inventory', 'map', 'accounts', 'visitor-accounts'];
+  const [section, setSection] = useState(() => {
+    const saved = window.localStorage.getItem('shelf_superadmin_start_page');
+    return superAdminStartPages.includes(saved) ? saved : 'overview';
+  });
+  const [termsDocumentKey, setTermsDocumentKey] = useState('visitor');
+  const [termsDocumentContent, setTermsDocumentContent] = useState('');
+  const [termsDocumentVersion, setTermsDocumentVersion] = useState('');
+  const [termsEditorLoading, setTermsEditorLoading] = useState(false);
+  const [termsEditorSaving, setTermsEditorSaving] = useState(false);
+  const [termsEditorError, setTermsEditorError] = useState('');
+  const [termsEditorMessage, setTermsEditorMessage] = useState('');
+  const [newAdminPassword, setNewAdminPassword] = useState('');
+  const [confirmAdminPassword, setConfirmAdminPassword] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordFeedback, setPasswordFeedback] = useState({ error: '', message: '' });
+  const visitorTermsPreviewRef = useRef(null);
+  const subAdminTermsPreviewRef = useRef(null);
   const [activeTab, setActiveTab] = useState('reports');
+  useEffect(() => {
+    mainScrollRef.current?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [section, activeTab]);
   const [focusedNotificationRequestId, setFocusedNotificationRequestId] = useState(null);
   const [focusedNotificationType, setFocusedNotificationType] = useState(null);
   const [notificationFocusVersion, setNotificationFocusVersion] = useState(0);
@@ -304,6 +328,83 @@ export default function SuperAdminDashboard() {
       setExportingReport('');
     }
   };
+
+  const loadTermsEditor = async (key = termsDocumentKey) => {
+    setTermsEditorLoading(true);
+    setTermsEditorError('');
+    setTermsEditorMessage('');
+    try {
+      const { data, error } = await supabase
+        .from('system_terms_documents')
+        .select('version, content')
+        .eq('document_key', key)
+        .maybeSingle();
+      if (error) throw error;
+      const previewText = (key === 'visitor' ? visitorTermsPreviewRef.current : subAdminTermsPreviewRef.current)?.innerText?.trim() || '';
+      setTermsDocumentContent(data?.content || previewText);
+      setTermsDocumentVersion(data?.version || (key === 'visitor' ? VISITOR_TERMS_VERSION : SUBADMIN_TERMS_VERSION));
+    } catch (error) {
+      console.error('Unable to load terms document for editing:', error);
+      setTermsEditorError('Could not load the terms document. Confirm that the latest database migration has been applied.');
+    } finally {
+      setTermsEditorLoading(false);
+    }
+  };
+
+  const saveTermsEditor = async (event) => {
+    event.preventDefault();
+    if (!termsDocumentContent.trim() || termsEditorSaving) return;
+    setTermsEditorSaving(true);
+    setTermsEditorError('');
+    setTermsEditorMessage('');
+    try {
+      const nextVersion = `v-${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}`;
+      const { error } = await supabase.from('system_terms_documents').upsert({
+        document_key: termsDocumentKey,
+        version: nextVersion,
+        content: termsDocumentContent.trim(),
+        updated_at: new Date().toISOString(),
+        updated_by: user?.id || null,
+      }, { onConflict: 'document_key' });
+      if (error) throw error;
+      setTermsDocumentVersion(nextVersion);
+      setTermsEditorMessage('Terms saved. Users will be asked to acknowledge this updated version.');
+    } catch (error) {
+      console.error('Unable to save terms document:', error);
+      setTermsEditorError('Could not save the terms. Confirm your Super Admin access and try again.');
+    } finally {
+      setTermsEditorSaving(false);
+    }
+  };
+
+  const updateAdminPassword = async (event) => {
+    event.preventDefault();
+    setPasswordFeedback({ error: '', message: '' });
+    if (newAdminPassword.length < 12 || !/[A-Z]/.test(newAdminPassword) || !/[a-z]/.test(newAdminPassword) || !/\d/.test(newAdminPassword) || !/[^A-Za-z0-9]/.test(newAdminPassword)) {
+      setPasswordFeedback({ error: 'Use at least 12 characters with uppercase, lowercase, a number, and a symbol.', message: '' });
+      return;
+    }
+    if (newAdminPassword !== confirmAdminPassword) {
+      setPasswordFeedback({ error: 'The password confirmation does not match.', message: '' });
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newAdminPassword });
+      if (error) throw error;
+      setNewAdminPassword('');
+      setConfirmAdminPassword('');
+      setPasswordFeedback({ error: '', message: 'Your password has been updated.' });
+    } catch (error) {
+      setPasswordFeedback({ error: error?.message || 'Password could not be updated. Please try again.', message: '' });
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    if (section === 'settings') void loadTermsEditor(termsDocumentKey);
+  }, [section]);
 
   // Sidebar Collapsible States
   const [workspaceOpen, setWorkspaceOpen] = useState(true);
@@ -1262,9 +1363,9 @@ const handleEditStaff = (staff) => {
   }
 
   return (
-    <div className="superadmin-dashboard flex h-screen overflow-hidden bg-shelf-bg text-slate-800">
+    <div className="superadmin-dashboard flex h-dvh min-h-0 overflow-hidden bg-shelf-bg text-slate-800">
       {/* SIDEBAR */}
-      <aside className="superadmin-sidebar fixed inset-y-0 left-0 z-40 flex h-screen w-60 shrink-0 flex-col overflow-hidden bg-shelf-primary text-white">
+      <aside className="superadmin-sidebar fixed inset-y-0 left-0 z-40 flex h-dvh w-60 shrink-0 flex-col overflow-hidden bg-shelf-primary text-white">
         <div className="border-b border-white/10 p-5">
           <button
             type="button"
@@ -1370,6 +1471,15 @@ const handleEditStaff = (staff) => {
           >
             <UsersRound size={18} className="mr-3 inline-block align-[-3px]" />
             Visitor accounts
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSection('settings')}
+            className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${section === 'settings' ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]' : 'text-slate-300 hover:bg-white/5'}`}
+          >
+            <Settings size={18} className="mr-3 inline-block align-[-3px]" />
+            Settings
           </button>
 
           {/* REPORTS & SERVICES COLLAPSIBLE */}
@@ -1497,9 +1607,9 @@ const handleEditStaff = (staff) => {
       {/* MAIN CONTENT */}
       <main
         ref={mainScrollRef}
-        className="ml-60 min-w-0 flex-1 space-y-6 overflow-y-auto p-4 sm:p-6 lg:p-8"
+        className="ml-60 min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8"
       >
-        <DashboardWelcome
+        {section === 'overview' && <DashboardWelcome
           name={superAdminName.split(' ')[0]}
           description="System metrics, library operations, staff accounts, and reports at a glance."
           notifications={superAdminNotifications}
@@ -1518,13 +1628,13 @@ const handleEditStaff = (staff) => {
             { label: 'Manage Staff', Icon: ShieldCheck, onClick: () => setSection('accounts') },
             { label: 'Open Reports', Icon: FileSpreadsheet, onClick: () => { setSection('workspace'); setActiveTab('reports'); } },
           ]}
-        />
+        />}
 
         {/* OVERVIEW */}
         {section === 'overview' && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-              <StatCard label="Registered Visitors" value={visitorCount} tone="blue" />
+              <StatCard label="Registered Visitors" value={visitorCount ?? '—'} tone="blue" />
               <StatCard label="Titles in Catalog" value={books.length} />
               <StatCard label="Active Borrows" value={activeBorrows} />
               <StatCard label="Overdue Items" value={overdue} tone="red" />
@@ -1717,6 +1827,69 @@ const handleEditStaff = (staff) => {
 
         {/* INVENTORY */}
         {section === 'inventory' && <BookInventory />}
+
+        {section === 'settings' && (
+          <section className="w-full max-w-6xl space-y-5">
+            <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="flex items-start gap-4">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-shelf-primary">
+                  <Settings size={21} aria-hidden="true" />
+                </span>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">System console</p>
+                  <h2 className="mt-1 text-2xl font-bold text-shelf-primary">Settings</h2>
+                  <p className="mt-1 text-sm text-slate-600">Manage your account security, terms documents, and dashboard preferences.</p>
+                </div>
+              </div>
+            </header>
+            <div className="grid gap-5 xl:grid-cols-2">
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h3 className="text-base font-bold text-slate-900">Administrator account</h3>
+                <dl className="mt-4 divide-y divide-slate-100 text-sm">
+                  <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500">Name</dt><dd className="text-right font-semibold text-slate-800">{user?.name || superAdminName}</dd></div>
+                  <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500">Email</dt><dd className="break-all text-right font-semibold text-slate-800">{user?.email || 'Not available'}</dd></div>
+                  <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500">Access level</dt><dd className="text-right font-semibold text-slate-800">Super Admin · All libraries</dd></div>
+                </dl>
+              </section>
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h3 className="text-base font-bold text-slate-900">Dashboard preferences</h3>
+                <label className="mt-4 block text-sm font-semibold text-slate-700" htmlFor="superadmin-start-page">Open this page when I sign in</label>
+                <select id="superadmin-start-page" defaultValue={window.localStorage.getItem('shelf_superadmin_start_page') || 'overview'} onChange={(event) => window.localStorage.setItem('shelf_superadmin_start_page', event.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20">
+                  <option value="overview">Overview & analytics</option><option value="inventory">Inventory</option><option value="map">Libraries & map</option><option value="accounts">Staff accounts</option><option value="visitor-accounts">Visitor accounts</option>
+                </select>
+                <p className="mt-2 text-xs leading-5 text-slate-500">This preference is saved on this device and used on your next sign-in.</p>
+              </section>
+            </div>
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <h3 className="text-base font-bold text-slate-900">Account security</h3>
+              <p className="mt-1 text-sm text-slate-600">Super Admin sign-ins require an authenticator code. You can update your password here.</p>
+              <form onSubmit={updateAdminPassword} className="mt-4 grid gap-3 sm:grid-cols-2">
+                <label className="text-xs font-semibold text-slate-700">New password<input type="password" required autoComplete="new-password" value={newAdminPassword} onChange={(event) => setNewAdminPassword(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20" /></label>
+                <label className="text-xs font-semibold text-slate-700">Confirm password<input type="password" required autoComplete="new-password" value={confirmAdminPassword} onChange={(event) => setConfirmAdminPassword(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20" /></label>
+                <p className="text-xs text-slate-500 sm:col-span-2">At least 12 characters, with uppercase and lowercase letters, a number, and a symbol.</p>
+                <div className="flex flex-wrap items-center gap-3 sm:col-span-2"><button type="submit" disabled={passwordSaving || !newAdminPassword || !confirmAdminPassword} className="rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{passwordSaving ? 'Updating…' : 'Update password'}</button>{passwordFeedback.message && <p role="status" className="text-sm font-semibold text-emerald-700">{passwordFeedback.message}</p>}{passwordFeedback.error && <p role="alert" className="text-sm font-semibold text-rose-700">{passwordFeedback.error}</p>}</div>
+              </form>
+            </section>
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div><h3 className="text-base font-bold text-slate-900">Terms and Conditions</h3><p className="mt-1 text-sm text-slate-600">Edit the terms shown to visitors or sub-admins. Saving a revision requires users to acknowledge the new version.</p></div>
+                {termsDocumentVersion && <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">Current version: {termsDocumentVersion}</span>}
+              </div>
+              <form onSubmit={saveTermsEditor} className="mt-4 space-y-3">
+                <label htmlFor="admin-terms-document" className="block text-sm font-semibold text-slate-700">Document to edit</label>
+                <select id="admin-terms-document" value={termsDocumentKey} onChange={(event) => { setTermsDocumentKey(event.target.value); void loadTermsEditor(event.target.value); }} className="w-full max-w-sm rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20">
+                  <option value="visitor">Visitor Terms and Conditions</option>
+                  <option value="subadmin">Sub-admin Terms and Conditions</option>
+                </select>
+                <textarea value={termsDocumentContent} onChange={(event) => setTermsDocumentContent(event.target.value)} rows={16} disabled={termsEditorLoading} aria-label="Terms document content" className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm leading-6 text-slate-800 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 disabled:bg-slate-50" placeholder={termsEditorLoading ? 'Loading terms…' : 'Terms text will appear here.'} />
+                <p className="text-xs text-slate-500">Use a blank line between paragraphs. Keep the terms clear and review privacy or legal changes before publishing.</p>
+                <div className="flex flex-wrap items-center gap-3"><button type="submit" disabled={termsEditorSaving || termsEditorLoading || !termsDocumentContent.trim()} className="rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">{termsEditorSaving ? 'Saving terms…' : 'Save and publish revision'}</button>{termsEditorMessage && <p role="status" className="text-sm font-semibold text-emerald-700">{termsEditorMessage}</p>}</div>
+                {termsEditorError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800">{termsEditorError}</p>}
+              </form>
+              <div className="sr-only" aria-hidden="true"><div ref={visitorTermsPreviewRef}><VisitorTermsContent /></div><div ref={subAdminTermsPreviewRef}><SubAdminTermsContent /></div></div>
+            </section>
+          </section>
+        )}
 
         {/* LIBRARIES & MAP */}
         {section === 'map' && (
@@ -2071,19 +2244,21 @@ const handleEditStaff = (staff) => {
 
         {section === 'accounts' && (
           <div className="space-y-6">
-            <div>
+            <header className="border-b border-slate-200 pb-4">
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">Administration</p>
               <h2 className="text-lg font-bold text-slate-800">Staff Accounts</h2>
               <p className="mt-1 text-sm text-slate-500">Manage database-backed sub-admin and circulation staff accounts.</p>
-            </div>
+            </header>
             {staffError && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{staffError}</div>
             )}
             {staffMessage && (
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{staffMessage}</div>
             )}
-            <form onSubmit={handleCreateStaff} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <form onSubmit={handleCreateStaff} aria-labelledby="staff-account-form-title" className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="mb-5">
-                <h3 className="text-sm font-bold text-slate-800">
+                <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Section 1</p>
+                <h3 id="staff-account-form-title" className="mt-1 text-base font-bold text-slate-800">
                   {editingStaffId ? 'Edit Sub-Admin Account' : 'Create Sub-Admin Account'}
                 </h3>
                 <p className="mt-1 text-xs text-slate-500">Creates a Supabase Auth account and the corresponding staff_profiles record.</p>
@@ -2170,10 +2345,11 @@ const handleEditStaff = (staff) => {
               )}
             </div>
             </form>
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <section aria-labelledby="staff-directory-title" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
               <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-800">Registered Staff Accounts</h3>
+                  <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Section 2</p>
+                  <h3 id="staff-directory-title" className="mt-1 text-sm font-bold text-slate-800">Registered Staff Accounts</h3>
                   <p className="mt-1 text-xs text-slate-500">
                     Showing {filteredStaffAccounts.length} of {staffAccounts.length} accounts.
                   </p>
@@ -2250,7 +2426,7 @@ const handleEditStaff = (staff) => {
                       <th className="p-3">Role</th>
                       <th className="p-3">Assigned Branch</th>
                       <th className="p-3">Status</th>
-                      <th className="p-3">Action</th>
+                      <th className="w-64 p-3">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -2258,7 +2434,7 @@ const handleEditStaff = (staff) => {
                       <tr key={staff.id} className="hover:bg-slate-50">
                         <td className="p-3 font-semibold text-slate-700">{staff.full_name}</td>
                         <td className="p-3 text-xs tabular-nums wrap-anywhere text-slate-500">{staff.email}</td>
-                        <td className="p-3">
+                        <td className="align-middle p-3">
                           <span className={`inline-flex rounded-full px-2 py-1 text-xs font-bold ${staff.role === 'superadmin' ? 'bg-purple-100 text-purple-800' : staff.role === 'subadmin' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700'}`}>
                             {formatStaffRole(staff.role)}
                           </span>
@@ -2269,18 +2445,18 @@ const handleEditStaff = (staff) => {
                             {staff.is_active ? 'Active' : 'Disabled'}
                           </span>
                         </td>
-                        <td className="p-3">
+                        <td className="align-middle p-3">
                           {staff.role === 'superadmin' ? (
                             <span className="text-xs font-semibold text-slate-400">
                               Protected
                             </span>
                           ) : (
-                            <div className="flex flex-wrap items-center gap-2">
+                            <div className="grid w-60 grid-cols-3 items-stretch gap-2">
                               <button
                                 type="button"
                                 onClick={() => handleEditStaff(staff)}
                                 disabled={staffLoading}
-                                className="rounded-md border border-blue-200 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                                className="inline-flex min-h-9 w-full items-center justify-center rounded-md border border-blue-200 px-2 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
                               >
                                 Edit
                               </button>
@@ -2290,7 +2466,7 @@ const handleEditStaff = (staff) => {
                                 data-confirm-message={`${staff.is_active ? 'Disable' : 'Enable'} the sub-admin account for "${staff.full_name || staff.email}"?`}
                                 onClick={() => handleToggleStaff(staff)}
                                 disabled={staffLoading}
-                                className={`rounded-md border px-3 py-1.5 text-xs font-bold disabled:opacity-50 ${
+                                className={`inline-flex min-h-9 w-full items-center justify-center rounded-md border px-2 py-1.5 text-xs font-bold disabled:opacity-50 ${
                                   staff.is_active
                                     ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
                                     : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
@@ -2304,7 +2480,7 @@ const handleEditStaff = (staff) => {
                                 data-confirm-message={`Delete the sub-admin account for "${staff.full_name || staff.email}"? This cannot be undone.`}
                                 onClick={() => handleDeleteStaff(staff)}
                                 disabled={staffLoading}
-                                className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                                className="inline-flex min-h-9 w-full items-center justify-center rounded-md border border-red-200 px-2 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-50"
                               >
                                 Delete
                               </button>
@@ -2349,7 +2525,7 @@ const handleEditStaff = (staff) => {
                   </button>
                 </div>
               </div>
-            </div>
+            </section>
           </div>
         )}
 

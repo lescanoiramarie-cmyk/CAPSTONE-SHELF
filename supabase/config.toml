@@ -45,3 +45,24 @@ entrypoint = "./functions/login-with-lockout/index.ts"
 schema_paths = [
   "schemas",
 ]
+[auth]
+site_url = "https://shelf-system.vercel.app"
+additional_redirect_urls = ["http://localhost:5173/**", "https://shelf-system.vercel.app/**"]
+
+[auth.email]
+max_frequency = "1m0s"
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[auth.passkey]
+enabled = true
+
+[auth.webauthn]
+rp_display_name = "SHELF Library System"
+rp_id = "shelf-system.vercel.app"
+rp_origins = ["https://shelf-system.vercel.app"]
+
+[storage.vector]
+enabled = false

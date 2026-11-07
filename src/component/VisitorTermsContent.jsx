@@ -1,6 +1,11 @@
 export const VISITOR_TERMS_VERSION = '2026-11-04-v2';
 
-export default function VisitorTermsContent() {
+export default function VisitorTermsContent({ content }) {
+  if (typeof content === 'string' && content.trim()) {
+    return content.trim().split(/\n\s*\n/).map((paragraph, index) => (
+      <p key={`custom-visitor-term-${index}`} className="whitespace-pre-line">{paragraph.trim()}</p>
+    ));
+  }
   return (
     <>
       <p>

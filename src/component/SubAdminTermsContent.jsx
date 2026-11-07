@@ -1,6 +1,11 @@
 export const SUBADMIN_TERMS_VERSION = '2026-11-04-v1';
 
-export default function SubAdminTermsContent() {
+export default function SubAdminTermsContent({ content }) {
+  if (typeof content === 'string' && content.trim()) {
+    return content.trim().split(/\n\s*\n/).map((paragraph, index) => (
+      <p key={`custom-subadmin-term-${index}`} className="whitespace-pre-line">{paragraph.trim()}</p>
+    ));
+  }
   return (
     <>
       <p>

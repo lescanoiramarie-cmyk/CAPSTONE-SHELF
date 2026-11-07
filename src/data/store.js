@@ -3079,6 +3079,28 @@ const authData = {
   };
 }
 
+export async function fetchVisitorForPasskey(authUserId) {
+  const normalizedAuthUserId = normalizeText(authUserId);
+  if (!normalizedAuthUserId) {
+    throw new Error('The passkey sign-in did not return an account.');
+  }
+  const { data: visitor, error } = await supabase
+    .from('visitors')
+    .select('id, full_name, email, otp_verified, qr_code, is_active, auth_user_id')
+    .eq('auth_user_id', normalizedAuthUserId)
+    .maybeSingle();
+  if (error) throw cleanErr(error, 'Unable to load your visitor account.');
+  if (!visitor) throw new Error('This passkey is not linked to a SHELF visitor account.');
+  if (visitor.is_active === false) throw new Error('This visitor account is currently inactive.');
+  if (visitor.otp_verified !== true) throw new Error('Please verify your email before signing in.');
+  return {
+    id: visitor.id,
+    fullName: visitor.full_name,
+    email: visitor.email,
+    qrCode: visitor.qr_code,
+  };
+}
+
 // ============================================================================
 // FIND VISITOR BY QR
 // ============================================================================

@@ -27,6 +27,7 @@ import {
   ChevronDown,
   ChevronRight,
   FileText,
+  Fingerprint,
   LogOut,
   Mail,
   MapPinned,
@@ -39,6 +40,7 @@ import {
   QrCode,
   Save,
   Search,
+  ShieldCheck,
   Sun,
   UserRound,
   UsersRound,
@@ -327,6 +329,8 @@ function VisitorDashboardContent() {
   const [communityRequestNotice, setCommunityRequestNotice] = useState(null);
   const previousCommunityRequestStatusesRef = useRef(null);
   const [termsStatus, setTermsStatus] = useState('loading');
+  const [termsDocumentContent, setTermsDocumentContent] = useState('');
+  const [termsDocumentVersion, setTermsDocumentVersion] = useState(VISITOR_TERMS_VERSION);
   const [termsAcceptedAt, setTermsAcceptedAt] = useState(null);
   const [termsError, setTermsError] = useState('');
   const [isAcceptingTerms, setIsAcceptingTerms] = useState(false);
@@ -344,8 +348,160 @@ function VisitorDashboardContent() {
     path: '',
     url: '',
   });
+  const [visitorMfaFactor, setVisitorMfaFactor] = useState(null);
+  const [visitorMfaSetup, setVisitorMfaSetup] = useState(null);
+  const [visitorMfaDisableConfirm, setVisitorMfaDisableConfirm] = useState(false);
+  const [visitorMfaCode, setVisitorMfaCode] = useState('');
+  const [visitorMfaLoading, setVisitorMfaLoading] = useState(false);
+  const [visitorMfaError, setVisitorMfaError] = useState('');
+  const [visitorMfaMessage, setVisitorMfaMessage] = useState('');
+  const [visitorPasskeys, setVisitorPasskeys] = useState([]);
+  const [visitorPasskeyLoading, setVisitorPasskeyLoading] = useState(false);
+  const [visitorPasskeyBusy, setVisitorPasskeyBusy] = useState(false);
+  const [visitorPasskeyError, setVisitorPasskeyError] = useState('');
+  const [visitorPasskeyMessage, setVisitorPasskeyMessage] = useState('');
   const avatarMenuRef = useRef(null);
   const avatarButtonRef = useRef(null);
+
+  const refreshVisitorMfa = useCallback(async () => {
+    if (!supabase?.auth?.mfa) return;
+    const { data, error } = await supabase.auth.mfa.listFactors();
+    if (error) throw error;
+    setVisitorMfaFactor((data?.totp || data?.all || []).find((factor) => factor.status === 'verified') || null);
+  }, []);
+
+  useEffect(() => {
+    if (user?.role !== 'visitor') return;
+    refreshVisitorMfa().catch((error) => {
+      console.error('Unable to load visitor MFA status:', error);
+      setVisitorMfaError('Multi-factor authentication status could not be loaded. Please refresh and try again.');
+    });
+  }, [refreshVisitorMfa, user?.id, user?.role]);
+
+  const refreshVisitorPasskeys = useCallback(async () => {
+    if (!supabase?.auth?.passkey?.list) {
+      throw new Error('Passkey management is unavailable. Please refresh the page.');
+    }
+    const { data, error } = await supabase.auth.passkey.list();
+    if (error) throw error;
+    setVisitorPasskeys(data || []);
+  }, []);
+
+  useEffect(() => {
+    if (user?.role !== 'visitor') return;
+    setVisitorPasskeyLoading(true);
+    refreshVisitorPasskeys()
+      .catch((error) => {
+        console.error('Unable to load visitor passkeys:', error);
+        setVisitorPasskeyError(error?.message?.includes('passkey_disabled')
+          ? 'Passkeys are not enabled for this SHELF site yet.'
+          : error?.message || 'Could not load passkeys for this account.');
+      })
+      .finally(() => setVisitorPasskeyLoading(false));
+  }, [refreshVisitorPasskeys, user?.id, user?.role]);
+
+  const registerVisitorPasskey = async () => {
+    if (!supabase?.auth?.registerPasskey) {
+      setVisitorPasskeyError('Passkey setup is unavailable in this browser.');
+      return;
+    }
+    setVisitorPasskeyBusy(true);
+    setVisitorPasskeyError('');
+    setVisitorPasskeyMessage('');
+    try {
+      const { error } = await supabase.auth.registerPasskey();
+      if (error) throw error;
+      await refreshVisitorPasskeys();
+      setVisitorPasskeyMessage('Passkey added. You can use this phone’s fingerprint, Face ID, or screen lock to sign in.');
+    } catch (error) {
+      setVisitorPasskeyError(error?.message?.includes('passkey_disabled')
+        ? 'Passkeys are not enabled for this SHELF site yet.'
+        : error?.message || 'Could not add a passkey. Please try again.');
+    } finally {
+      setVisitorPasskeyBusy(false);
+    }
+  };
+
+  const removeVisitorPasskey = async (passkey) => {
+    if (!window.confirm('Remove this passkey from your SHELF account? You can add it again later.')) return;
+    setVisitorPasskeyBusy(true);
+    setVisitorPasskeyError('');
+    setVisitorPasskeyMessage('');
+    try {
+      const { error } = await supabase.auth.passkey.delete({ passkeyId: passkey.id });
+      if (error) throw error;
+      await refreshVisitorPasskeys();
+      setVisitorPasskeyMessage('Passkey removed from your account.');
+    } catch (error) {
+      setVisitorPasskeyError(error?.message || 'Could not remove this passkey. Please try again.');
+    } finally {
+      setVisitorPasskeyBusy(false);
+    }
+  };
+
+  const startVisitorMfaSetup = async () => {
+    setVisitorMfaLoading(true);
+    setVisitorMfaError('');
+    setVisitorMfaMessage('');
+    try {
+      const { data: factorData, error: listError } = await supabase.auth.mfa.listFactors();
+      if (listError) throw listError;
+      const factors = factorData?.totp || factorData?.all || [];
+      const pending = factors.filter((factor) => factor.status === 'unverified');
+      for (const factor of pending) {
+        const { error: cleanupError } = await supabase.auth.mfa.unenroll({ factorId: factor.id });
+        if (cleanupError) throw cleanupError;
+      }
+      const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: `SHELF visitor sign-in ${Date.now()}` });
+      if (error) throw error;
+      setVisitorMfaSetup({ id: data.id, qrCode: data.totp?.qr_code, secret: data.totp?.secret });
+      setVisitorMfaCode('');
+    } catch (error) {
+      setVisitorMfaError(error?.message || 'Could not start MFA setup.');
+    } finally {
+      setVisitorMfaLoading(false);
+    }
+  };
+
+  const confirmVisitorMfaSetup = async (event) => {
+    event.preventDefault();
+    if (!visitorMfaSetup || visitorMfaCode.length !== 6) return;
+    setVisitorMfaLoading(true);
+    setVisitorMfaError('');
+    try {
+      const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: visitorMfaSetup.id, code: visitorMfaCode });
+      if (error) throw error;
+      setVisitorMfaSetup(null);
+      setVisitorMfaCode('');
+      await refreshVisitorMfa();
+      setVisitorMfaMessage('MFA enabled. Your next sign-in will require an authenticator code.');
+    } catch (error) {
+      setVisitorMfaError(error?.message || 'The authenticator code was not accepted.');
+    } finally {
+      setVisitorMfaLoading(false);
+    }
+  };
+
+  const disableVisitorMfa = async (event) => {
+    event.preventDefault();
+    if (!visitorMfaFactor || visitorMfaCode.length !== 6) return;
+    setVisitorMfaLoading(true);
+    setVisitorMfaError('');
+    try {
+      const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({ factorId: visitorMfaFactor.id, code: visitorMfaCode });
+      if (verifyError) throw verifyError;
+      const { error: removeError } = await supabase.auth.mfa.unenroll({ factorId: visitorMfaFactor.id });
+      if (removeError) throw removeError;
+      setVisitorMfaFactor(null);
+      setVisitorMfaCode('');
+      setVisitorMfaDisableConfirm(false);
+      setVisitorMfaMessage('MFA disabled for this account.');
+    } catch (error) {
+      setVisitorMfaError(error?.message || 'MFA could not be turned off. Check the code and try again.');
+    } finally {
+      setVisitorMfaLoading(false);
+    }
+  };
 
   const { isDarkAppearance, setIsDarkAppearance } = useTheme();
   const profileImageSrc = profileImagePreview ||
@@ -568,13 +724,22 @@ function VisitorDashboardContent() {
     setTermsError('');
 
     try {
+      const { data: termsDocument, error: termsDocumentError } = await supabase
+        .from('system_terms_documents')
+        .select('version, content')
+        .eq('document_key', 'visitor')
+        .maybeSingle();
+      if (termsDocumentError) throw termsDocumentError;
+      setTermsDocumentContent(termsDocument?.content || '');
+      setTermsDocumentVersion(termsDocument?.version || VISITOR_TERMS_VERSION);
+
       const { data: sessionData, error: sessionError } =
         await supabase.auth.getSession();
       if (sessionError) throw sessionError;
 
       if (!sessionData?.session) {
         const acceptedAt = globalThis.localStorage.getItem(
-          `shelf_visitor_terms_accepted_${user.id}_${VISITOR_TERMS_VERSION}`
+          `shelf_visitor_terms_accepted_${user.id}_${termsDocument?.version || VISITOR_TERMS_VERSION}`
         );
         setTermsAcceptedAt(acceptedAt || null);
         setTermsStatus(acceptedAt ? 'accepted' : 'required');
@@ -653,7 +818,7 @@ function VisitorDashboardContent() {
       } else {
         const acceptedAt = new Date().toISOString();
         globalThis.localStorage.setItem(
-          `shelf_visitor_terms_accepted_${user.id}_${VISITOR_TERMS_VERSION}`,
+          `shelf_visitor_terms_accepted_${user.id}_${termsDocumentVersion}`,
           acceptedAt
         );
         setTermsAcceptedAt(acceptedAt);
@@ -1237,7 +1402,7 @@ function VisitorDashboardContent() {
                   Please review these terms before using your visitor account.
                 </p>
                 <p className="mt-1 text-xs text-slate-300">
-                  Version {VISITOR_TERMS_VERSION}
+                  Version {termsDocumentVersion}
                 </p>
               </div>
               <button
@@ -1251,7 +1416,7 @@ function VisitorDashboardContent() {
             </div>
 
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5 text-sm leading-6 text-slate-700 dark:text-slate-200 sm:px-6">
-              <VisitorTermsContent />
+              <VisitorTermsContent content={termsDocumentContent} />
               {termsError && (
                 <div role="alert" className="space-y-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                   <p>{termsError}</p>
@@ -2117,6 +2282,44 @@ function VisitorDashboardContent() {
                       {isEditingProfile && profileError && <p role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">{profileError}</p>}
                     </section>
                   </form>
+                  <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-start gap-4">
+                        <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl ${visitorMfaFactor ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' : 'bg-slate-100 text-shelf-primary dark:bg-slate-700 dark:text-blue-200'}`}><ShieldCheck size={23} aria-hidden="true" /></div>
+                        <div><h3 className="text-base font-bold text-slate-900 dark:text-white">Account security</h3><p className="mt-1 max-w-xl text-sm leading-5 text-slate-600 dark:text-slate-300">Add an authenticator code as a second step when signing in.</p><span className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${visitorMfaFactor ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200'}`}><span className={`h-1.5 w-1.5 rounded-full ${visitorMfaFactor ? 'bg-emerald-500' : 'bg-slate-400'}`} />{visitorMfaFactor ? 'Two-step verification is on' : 'Two-step verification is off'}</span></div>
+                      </div>
+                      {visitorMfaFactor ? <button type="button" onClick={() => { setVisitorMfaDisableConfirm(true); setVisitorMfaCode(''); setVisitorMfaError(''); setVisitorMfaMessage(''); }} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">Turn off MFA</button> : <button type="button" onClick={startVisitorMfaSetup} disabled={visitorMfaLoading || Boolean(visitorMfaSetup)} className="rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:opacity-90 disabled:opacity-50">{visitorMfaLoading ? 'Preparing setup…' : 'Set up MFA'}</button>}
+                    </div>
+                    {visitorMfaMessage && <p role="status" className="border-t border-emerald-100 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">{visitorMfaMessage}</p>}
+                    {visitorMfaError && !visitorMfaSetup && <p role="alert" className="border-t border-rose-100 bg-rose-50 px-5 py-3 text-sm font-semibold text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200">{visitorMfaError}</p>}
+                  </section>
+                  <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-start gap-4">
+                        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-blue-50 text-shelf-primary dark:bg-blue-950/50 dark:text-blue-200"><Fingerprint size={23} aria-hidden="true" /></div>
+                        <div>
+                          <h3 className="text-base font-bold text-slate-900 dark:text-white">Passkey sign-in</h3>
+                          <p className="mt-1 max-w-xl text-sm leading-5 text-slate-600 dark:text-slate-300">Add a passkey on your own phone to sign in with fingerprint, Face ID, or its screen lock. Each visitor can register their own devices.</p>
+                          {visitorPasskeys.map((passkey) => (
+                            <div key={passkey.id} className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                              <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">{passkey.friendly_name || 'Passkey added'}</span>
+                              {passkey.created_at && <span>Added {new Date(passkey.created_at).toLocaleDateString()}</span>}
+                              <button type="button" disabled={visitorPasskeyBusy} onClick={() => removeVisitorPasskey(passkey)} className="font-semibold text-rose-700 underline-offset-2 hover:underline disabled:opacity-50 dark:text-rose-300">Remove</button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <button type="button" onClick={registerVisitorPasskey} disabled={visitorPasskeyBusy || visitorPasskeyLoading} className="shrink-0 rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:opacity-90 disabled:cursor-wait disabled:opacity-50">
+                        {visitorPasskeyBusy ? 'Working…' : visitorPasskeys.length ? 'Add another passkey' : 'Set up passkey'}
+                      </button>
+                    </div>
+                    {visitorPasskeyLoading && <p className="border-t border-slate-100 px-5 py-3 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-300">Loading passkeys…</p>}
+                    {visitorPasskeyMessage && <p role="status" className="border-t border-emerald-100 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">{visitorPasskeyMessage}</p>}
+                    {visitorPasskeyError && <p role="alert" className="border-t border-rose-100 bg-rose-50 px-5 py-3 text-sm font-semibold text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200">{visitorPasskeyError}</p>}
+                  </section>
+                  {(visitorMfaSetup?.qrCode || visitorMfaDisableConfirm) && <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !visitorMfaLoading) { setVisitorMfaSetup(null); setVisitorMfaDisableConfirm(false); setVisitorMfaError(''); setVisitorMfaCode(''); } }}><section role="dialog" aria-modal="true" aria-labelledby="visitor-mfa-dialog-title" className="my-auto w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-800">
+                    {visitorMfaSetup?.qrCode ? <><div className="mb-5"><p className="text-xs font-bold uppercase tracking-wider text-shelf-primary">Secure your account</p><h3 id="visitor-mfa-dialog-title" className="mt-1 text-xl font-bold text-slate-900 dark:text-white">Set up two-step verification</h3><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Use an authenticator app such as Google Authenticator or Microsoft Authenticator.</p></div><div className="grid gap-5 sm:grid-cols-[180px_1fr]"><div className="mx-auto rounded-xl border border-slate-200 bg-white p-3"><img src={visitorMfaSetup.qrCode} alt="Scan this QR code with your authenticator app" className="h-[156px] w-[156px]" /></div><div><ol className="space-y-2 text-sm text-slate-700 dark:text-slate-200"><li><b className="mr-2 text-shelf-primary">1.</b>Open your authenticator app and scan this QR code.</li><li><b className="mr-2 text-shelf-primary">2.</b>Enter the six-digit code shown in the app.</li></ol><details className="mt-3"><summary className="cursor-pointer text-xs font-semibold text-slate-600 dark:text-slate-300">Can't scan? Show setup key</summary><p className="mt-2 break-all rounded-lg bg-slate-50 p-2 font-mono text-xs text-slate-700 dark:bg-slate-900 dark:text-slate-200">{visitorMfaSetup.secret}</p></details><form onSubmit={confirmVisitorMfaSetup} className="mt-4"><label htmlFor="visitor-mfa-setup-code" className="block text-xs font-semibold text-slate-700 dark:text-slate-200">Authenticator code</label><input id="visitor-mfa-setup-code" value={visitorMfaCode} onChange={(event) => setVisitorMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em] dark:border-slate-600 dark:bg-slate-900 dark:text-white" />{visitorMfaError && <p role="alert" className="mt-2 text-xs font-semibold text-rose-700">{visitorMfaError}</p>}<div className="mt-4 flex justify-end gap-2"><button type="button" disabled={visitorMfaLoading} onClick={() => { setVisitorMfaSetup(null); setVisitorMfaError(''); setVisitorMfaCode(''); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold dark:border-slate-600 dark:text-slate-200">Cancel</button><button disabled={visitorMfaLoading || visitorMfaCode.length !== 6} className="rounded-lg bg-shelf-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{visitorMfaLoading ? 'Verifying…' : 'Confirm and enable'}</button></div></form></div></div></> : <form onSubmit={disableVisitorMfa}><p className="text-xs font-bold uppercase tracking-wider text-rose-700">Confirm security change</p><h3 id="visitor-mfa-dialog-title" className="mt-1 text-xl font-bold text-slate-900 dark:text-white">Turn off MFA?</h3><p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Your account will no longer require an authenticator code at sign-in. Enter a current code to confirm.</p><label htmlFor="visitor-mfa-disable-code" className="mt-5 block text-sm font-semibold text-slate-700 dark:text-slate-200">Authenticator code</label><input id="visitor-mfa-disable-code" value={visitorMfaCode} onChange={(event) => setVisitorMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em] dark:border-slate-600 dark:bg-slate-900 dark:text-white" />{visitorMfaError && <p role="alert" className="mt-2 text-xs font-semibold text-rose-700">{visitorMfaError}</p>}<div className="mt-5 flex justify-end gap-2"><button type="button" disabled={visitorMfaLoading} onClick={() => { setVisitorMfaDisableConfirm(false); setVisitorMfaError(''); setVisitorMfaCode(''); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold dark:border-slate-600 dark:text-slate-200">Cancel</button><button disabled={visitorMfaLoading || visitorMfaCode.length !== 6} className="rounded-lg bg-rose-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{visitorMfaLoading ? 'Updating…' : 'Confirm and turn off'}</button></div></form>}
+                  </section></div>}
                   {/* =================================================
                       ATTENDANCE HISTORY
                   ================================================== */}
@@ -2287,7 +2490,7 @@ function VisitorDashboardContent() {
               </button>
             </header>
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5 text-sm leading-6 text-slate-700 dark:text-slate-200 sm:px-6">
-              <VisitorTermsContent />
+              <VisitorTermsContent content={termsDocumentContent} />
             </div>
             <footer className="visitor-terms-review-footer shrink-0 border-t border-slate-200 px-5 py-4 dark:border-slate-700 sm:px-6">
               <button

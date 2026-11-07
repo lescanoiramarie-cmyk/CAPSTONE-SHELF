@@ -10,7 +10,7 @@ import {
   PointElement,
   Tooltip,
 } from 'chart.js';
-import { FileSpreadsheet, FileCode, FileText } from 'lucide-react';
+import { Download, FileSpreadsheet, FileCode, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient.js';
 import { exportReport } from '../lib/excelUtils.js';
 import AnalyticsDateFilter from './AnalyticsDateFilter.jsx';
@@ -148,8 +148,11 @@ export default function AdminWorkspace({
   const [feedback, setFeedback] = useState([]);
   const [feedbackTotal, setFeedbackTotal] = useState(0);
   const [feedbackPage, setFeedbackPage] = useState(1);
+  const [answeredFeedback, setAnsweredFeedback] = useState([]);
+  const [answeredFeedbackTotal, setAnsweredFeedbackTotal] = useState(0);
+  const [answeredFeedbackPage, setAnsweredFeedbackPage] = useState(1);
   const [feedbackSearch, setFeedbackSearch] = useState('');
-  const [feedbackStatusFilter, setFeedbackStatusFilter] = useState('all');
+  const feedbackPageSize = 5;
   const [announcements, setAnnouncements] = useState([]);
   const [announcementsTotal, setAnnouncementsTotal] = useState(0);
   const [announcementsPage, setAnnouncementsPage] = useState(1);
@@ -158,6 +161,8 @@ export default function AdminWorkspace({
   const [sectionRefreshTick, setSectionRefreshTick] = useState(0);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportingFormat, setExportingFormat] = useState('');
+  const [preparedAnalyticsExports, setPreparedAnalyticsExports] = useState([]);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [announcementForm, setAnnouncementForm] = useState({
@@ -175,6 +180,10 @@ export default function AdminWorkspace({
   const [forecast, setForecast] = useState(null);
   const [forecastLoading, setForecastLoading] = useState(false);
   const exportLockRef = useRef(false);
+
+  useEffect(() => {
+    setPreparedAnalyticsExports([]);
+  }, [analyticsLibraryId, customEndDate, customStartDate, timeframe]);
 
   const booksById = useMemo(
     () => new Map(books.map((book) => [book.id, book])),
@@ -300,7 +309,8 @@ export default function AdminWorkspace({
   const activityHistoryPageSize = 20;
   const activityHistoryPageCount = Math.max(1, Math.ceil(filteredReportRows.length / activityHistoryPageSize));
   const visibleActivityHistoryPage = Math.min(activityHistoryPage, activityHistoryPageCount);
-  const visibleFeedbackPage = Math.min(feedbackPage, Math.max(1, Math.ceil(feedbackTotal / 10)));
+  const visibleFeedbackPage = Math.min(feedbackPage, Math.max(1, Math.ceil(feedbackTotal / feedbackPageSize)));
+  const visibleAnsweredFeedbackPage = Math.min(answeredFeedbackPage, Math.max(1, Math.ceil(answeredFeedbackTotal / feedbackPageSize)));
   const visibleAnnouncementsPage = Math.min(announcementsPage, Math.max(1, Math.ceil(announcementsTotal / 10)));
   const activityHistoryStart = (visibleActivityHistoryPage - 1) * activityHistoryPageSize;
   const paginatedReportRows = filteredReportRows.slice(
@@ -330,24 +340,36 @@ export default function AdminWorkspace({
       setError('');
       let result;
       if (tab === 'feedback') {
-        let query = supabase
-          .from('visitor_feedback')
-          .select('*', { count: 'exact' })
-          .order('created_at', { ascending: false });
-        if (isSubAdmin) {
-          query = query.eq('library_id', currentLibraryId);
-        }
-        if (feedbackStatusFilter !== 'all') {
-          query = feedbackStatusFilter === 'new'
-            ? query.in('status', ['new', 'in_review'])
-            : query.eq('status', feedbackStatusFilter);
-        }
         const search = feedbackSearch.trim().replace(/[(),]/g, ' ');
-        if (search) {
-          query = query.or(`subject.ilike.%${search}%,visitor_name.ilike.%${search}%,visitor_email.ilike.%${search}%`);
+        const feedbackQuery = (answered, page) => {
+          let query = supabase
+            .from('visitor_feedback')
+            .select('*', { count: 'exact' })
+            .order('created_at', { ascending: false });
+          if (isSubAdmin) query = query.eq('library_id', currentLibraryId);
+          query = answered
+            ? query.not('admin_reply', 'is', null)
+            : query.is('admin_reply', null);
+          if (search) {
+            query = query.or(`subject.ilike.%${search}%,visitor_name.ilike.%${search}%,visitor_email.ilike.%${search}%`);
+          }
+          return query.range((page - 1) * feedbackPageSize, page * feedbackPageSize - 1);
+        };
+        const [pendingResult, answeredResult] = await Promise.all([
+          feedbackQuery(false, visibleFeedbackPage),
+          feedbackQuery(true, visibleAnsweredFeedbackPage),
+        ]);
+        if (!active) return;
+        if (pendingResult.error || answeredResult.error) {
+          setError(pendingResult.error?.message || answeredResult.error?.message);
+        } else {
+          setFeedback(pendingResult.data || []);
+          setFeedbackTotal(pendingResult.count || 0);
+          setAnsweredFeedback(answeredResult.data || []);
+          setAnsweredFeedbackTotal(answeredResult.count || 0);
         }
-        query = query.range((visibleFeedbackPage - 1) * 10, visibleFeedbackPage * 10 - 1);
-        result = await query;
+        setLoading(false);
+        return;
       } else if (tab === 'announcements') {
         let query = supabase
           .from('announcements')
@@ -397,14 +419,15 @@ export default function AdminWorkspace({
     announcementsPage,
     announcementsSearch,
     announcementsStatusFilter,
+    answeredFeedbackPage,
     currentLibraryId,
     feedbackPage,
     feedbackSearch,
-    feedbackStatusFilter,
     isSubAdmin,
     sectionRefreshTick,
     tab,
     visibleAnnouncementsPage,
+    visibleAnsweredFeedbackPage,
     visibleFeedbackPage,
   ]);
 
@@ -551,6 +574,25 @@ export default function AdminWorkspace({
     ? [...topCategories, ['Other categories', otherCategoryRequestCount]]
     : topCategories;
   const totalCategoryRequests = categoryDemand.reduce((sum, [, count]) => sum + count, 0);
+  const maxCategoryRequestCount = Math.max(0, ...categoryChartRows.map(([, count]) => count));
+  const getCategoryAxisStep = (value) => {
+    if (value <= 150) return 25;
+    const roughStep = value / 5;
+    const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+    const normalizedStep = roughStep / magnitude;
+    const niceStep = normalizedStep <= 1
+      ? 1
+      : normalizedStep <= 2
+        ? 2
+        : normalizedStep <= 2.5
+          ? 2.5
+          : normalizedStep <= 5
+            ? 5
+            : 10;
+    return niceStep * magnitude;
+  };
+  const categoryAxisStep = getCategoryAxisStep(maxCategoryRequestCount);
+  const categoryAxisMax = Math.max(categoryAxisStep, Math.ceil(maxCategoryRequestCount / categoryAxisStep) * categoryAxisStep);
 
   const forecastNarrative = useMemo(() => getForecastNarrative(forecast), [forecast]);
 
@@ -603,6 +645,7 @@ export default function AdminWorkspace({
     if (exportLockRef.current) return;
     exportLockRef.current = true;
     setExporting(true);
+    setExportingFormat(format);
     setError('');
     setMessage('');
     try {
@@ -639,6 +682,7 @@ export default function AdminWorkspace({
     } finally {
       exportLockRef.current = false;
       setExporting(false);
+      setExportingFormat('');
     }
   };
 
@@ -650,6 +694,7 @@ export default function AdminWorkspace({
     if (exportLockRef.current) return;
     exportLockRef.current = true;
     setExporting(true);
+    setExportingFormat(format);
     setError('');
     setMessage('');
     try {
@@ -674,7 +719,7 @@ export default function AdminWorkspace({
         : analyticsLibraryId
           ? getLibraryName(libraries, analyticsLibraryId)
           : 'All Libraries';
-      await exportReport(rows, format, {
+      const exportOptions = {
         reportType: 'Analytics',
         title: 'Analytics Summary',
         libraryName: branchLabel,
@@ -699,15 +744,43 @@ export default function AdminWorkspace({
           ['Active Loans', analyticsBorrows.filter((item) => item.status === 'borrowed').length],
         ],
         chartImages,
-        chartTitles: ['Branch demand'],
+        chartTitles: ['Branch demand', 'Most requested categories', 'Visitor forecast'],
+        chartDescriptions: [
+          'Compares visitor attendance with book transactions across the selected reporting periods.',
+          'Shows which book categories received the most requests during the selected date range.',
+          'Projects visitor activity for the next seven days using the selected history period.',
+        ],
+      };
+      const label = format === 'xlsx' ? 'Excel' : format === 'csv' ? 'CSV' : 'PDF';
+      const generatedFile = await exportReport(rows, format, {
+        ...exportOptions,
+        chartImages: format === 'pdf' ? chartImages : [],
+        download: false,
       });
-      setMessage('Report exported successfully.');
+      setPreparedAnalyticsExports((current) => [
+        ...current.filter((file) => file.format !== format),
+        { format, label, ...generatedFile },
+      ]);
+      setMessage(`${label} file is ready. Choose its Download button when you are ready.`);
     } catch {
       setError('The report could not be exported. Please try again.');
     } finally {
       exportLockRef.current = false;
       setExporting(false);
+      setExportingFormat('');
     }
+  };
+
+  const downloadPreparedAnalyticsExport = (preparedFile) => {
+    if (!preparedFile?.blob || !preparedFile?.fileName) return;
+    const url = URL.createObjectURL(preparedFile.blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = preparedFile.fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const handleAnnouncementEdit = (item) => {
@@ -846,27 +919,38 @@ export default function AdminWorkspace({
 
     setError('');
     setMessage('');
+    const repliedAt = new Date().toISOString();
+    const updatedFeedback = {
+      ...item,
+      admin_reply: reply,
+      replied_by: user?.name || user?.email,
+      replied_at: repliedAt,
+      status: 'answered',
+      updated_at: repliedAt,
+    };
     const { error: replyError } = await supabase
       .from('visitor_feedback')
       .update({
         admin_reply: reply,
         replied_by: user?.name || user?.email,
-        replied_at: new Date().toISOString(),
+        replied_at: repliedAt,
         status: 'answered',
-        updated_at: new Date().toISOString(),
+        updated_at: repliedAt,
       })
       .eq('id', item.id);
 
     if (replyError) {
       setError(replyError.message);
     } else {
-      setFeedback((current) =>
-        current.map((entry) =>
-          entry.id === item.id
-            ? { ...entry, admin_reply: reply, status: 'answered' }
-            : entry
-        )
-      );
+      setFeedback((current) => current.filter((entry) => entry.id !== item.id));
+      setFeedbackTotal((current) => Math.max(0, current - 1));
+      setAnsweredFeedbackTotal((current) => current + 1);
+      if (visibleAnsweredFeedbackPage === 1) {
+        setAnsweredFeedback((current) => [
+          updatedFeedback,
+          ...current.filter((entry) => entry.id !== item.id),
+        ].slice(0, feedbackPageSize));
+      }
       setFeedbackReply((current) => ({ ...current, [item.id]: '' }));
       setSectionRefreshTick((tick) => tick + 1);
       setMessage('Reply saved successfully.');
@@ -944,6 +1028,79 @@ export default function AdminWorkspace({
       setForecastLoading(false);
     }
   };
+
+  const renderFeedbackCard = (item, isAnswered) => (
+    <article key={item.id} className={`space-y-3 rounded-xl border bg-white p-4 shadow-sm ${isAnswered ? 'border-emerald-200' : 'border-amber-200'}`}>
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2">
+        <div className="min-w-0">
+          <p className="break-words font-bold text-slate-900">{item.subject || 'Visitor feedback'}</p>
+          <p className="mt-1 break-words text-xs text-slate-500">
+            {item.visitor_name} · {formatBookCategory(item.category)} · {getLibraryName(libraries, item.library_id)}
+          </p>
+          <p className="mt-1 break-words text-xs text-slate-500">
+            {item.visitor_email} · {new Date(item.created_at).toLocaleString()}
+          </p>
+        </div>
+        <span className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold ${isAnswered ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}>
+          {isAnswered ? 'Replied' : 'Needs reply'}
+        </span>
+      </div>
+      <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{item.message}</p>
+      {isAnswered ? (
+        <div className="rounded-lg border-l-4 border-emerald-600 bg-emerald-50 p-3.5 text-sm text-emerald-900">
+          <strong>Reply:</strong> {item.admin_reply}
+          {item.replied_at && <p className="mt-1 text-xs text-emerald-700">Replied {new Date(item.replied_at).toLocaleString()}</p>}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <textarea
+            rows={2}
+            value={feedbackReply[item.id] || ''}
+            onChange={(event) => setFeedbackReply((current) => ({ ...current, [item.id]: event.target.value }))}
+            placeholder="Write a reply..."
+            aria-label={`Reply to ${item.visitor_name || 'visitor'} feedback`}
+            className="min-w-0 flex-1 rounded-lg border border-slate-300 p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
+          />
+          <button
+            type="button"
+            onClick={() => handleFeedbackReply(item)}
+            className="self-start whitespace-nowrap rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
+          >
+            Save reply
+          </button>
+        </div>
+      )}
+    </article>
+  );
+
+  const renderFeedbackSection = ({ title, description, items, total, page, onPageChange, isAnswered }) => (
+    <section className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="text-base font-bold text-slate-900">{title}</h3>
+          <p className="mt-1 text-sm text-slate-500">{description}</p>
+        </div>
+        <span className={`rounded-full px-3 py-1 text-xs font-bold ${isAnswered ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}`}>
+          {total} {total === 1 ? 'item' : 'items'}
+        </span>
+      </div>
+      <div className="space-y-3">
+        {items.map((item) => renderFeedbackCard(item, isAnswered))}
+        {!loading && items.length === 0 && (
+          <p className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+            {feedbackSearch ? 'No feedback matches your search.' : isAnswered ? 'No replied feedback yet.' : 'No feedback is waiting for a reply.'}
+          </p>
+        )}
+      </div>
+      <AdminListPagination
+        page={page}
+        pageSize={feedbackPageSize}
+        total={total}
+        onPageChange={onPageChange}
+        itemLabel={isAnswered ? 'replied submissions' : 'submissions needing a reply'}
+      />
+    </section>
+  );
 
   if (!supabase) {
     return (
@@ -1091,7 +1248,7 @@ export default function AdminWorkspace({
                   className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold shadow-sm transition hover:-translate-y-0.5 cursor-pointer"
                 >
                   <FileSpreadsheet size={15} className="text-emerald-400" />
-                  <span>{exporting ? 'Exporting…' : 'Export Excel'}</span>
+                  <span>{exportingFormat === 'xlsx' ? 'Exporting…' : 'Export Excel'}</span>
                 </button>
                 <button
                   type="button"
@@ -1100,7 +1257,7 @@ export default function AdminWorkspace({
                   className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold shadow-sm transition hover:-translate-y-0.5 hover:border-slate-400 cursor-pointer"
                 >
                   <FileCode size={15} className="text-blue-600" />
-                  <span>{exporting ? 'Exporting…' : 'Export CSV'}</span>
+                  <span>{exportingFormat === 'csv' ? 'Exporting…' : 'Export CSV'}</span>
                 </button>
                 <button
                   type="button"
@@ -1109,7 +1266,7 @@ export default function AdminWorkspace({
                   className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-rose-50/50 text-rose-700 border border-rose-200 hover:border-rose-300 rounded-lg text-xs font-bold shadow-sm transition hover:-translate-y-0.5 cursor-pointer"
                 >
                   <FileText size={15} className="text-rose-600" />
-                  <span>{exporting ? 'Exporting…' : 'Export PDF'}</span>
+                  <span>{exportingFormat === 'pdf' ? 'Exporting…' : 'Export PDF'}</span>
                 </button>
               </div>
 
@@ -1498,7 +1655,8 @@ export default function AdminWorkspace({
                         scales: {
                           x: {
                             beginAtZero: true,
-                            ticks: { precision: 0, stepSize: 1 },
+                            max: categoryAxisMax,
+                            ticks: { precision: 0, stepSize: categoryAxisStep, autoSkip: false, maxRotation: 0 },
                             grid: { color: '#e2e8f0' },
                           },
                           y: {
@@ -1633,35 +1791,35 @@ export default function AdminWorkspace({
           </section>
           <div className="flex flex-wrap items-center gap-2.5 border-t border-slate-200 pt-4">
             <span className="mr-1 text-xs font-bold uppercase tracking-wider text-slate-500">
-              Export analytics:
+              Analytics export:
             </span>
-            <button
-              type="button"
-              onClick={() => handleAnalyticsExport('xlsx')}
-              disabled={exporting}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <FileSpreadsheet size={15} className="text-emerald-400" />
-              <span>{exporting ? 'Exporting…' : 'Export Excel'}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAnalyticsExport('csv')}
-              disabled={exporting}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <FileCode size={15} className="text-blue-600" />
-              <span>{exporting ? 'Exporting…' : 'Export CSV'}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAnalyticsExport('pdf')}
-              disabled={exporting}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-4 py-2 text-xs font-bold text-rose-700 shadow-sm transition hover:bg-rose-50/50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <FileText size={15} className="text-rose-600" />
-              <span>{exporting ? 'Exporting…' : 'Export PDF'}</span>
-            </button>
+            {[
+              { format: 'xlsx', label: 'Excel', Icon: FileSpreadsheet, tone: 'text-emerald-700' },
+              { format: 'csv', label: 'CSV', Icon: FileCode, tone: 'text-blue-700' },
+              { format: 'pdf', label: 'PDF', Icon: FileText, tone: 'text-rose-700' },
+            ].map(({ format, label, Icon, tone }) => (
+              <button
+                key={format}
+                type="button"
+                onClick={() => handleAnalyticsExport(format)}
+                disabled={exporting || !analyticsWindow.valid}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-shelf-primary hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Icon size={16} className={tone} aria-hidden="true" />
+                <span>{exportingFormat === format ? `Preparing ${label}…` : `Prepare ${label}`}</span>
+              </button>
+            ))}
+            {preparedAnalyticsExports.map((preparedFile) => (
+              <button
+                key={preparedFile.format}
+                type="button"
+                onClick={() => downloadPreparedAnalyticsExport(preparedFile)}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-shelf-primary hover:bg-slate-50"
+              >
+                <Download size={15} aria-hidden="true" />
+                Download {preparedFile.label}
+              </button>
+            ))}
           </div>
           {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
           {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
@@ -1674,94 +1832,45 @@ export default function AdminWorkspace({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-lg font-bold text-slate-800">Visitor feedback</h2>
-              <p className="text-sm text-slate-500">Review submissions and add a manual reply.</p>
+              <p className="text-sm text-slate-500">Reply to new messages and review replies in separate sections.</p>
             </div>
-            <div className="grid gap-2 sm:grid-cols-[minmax(14rem,1fr)_auto]">
+            <div className="w-full sm:max-w-sm">
               <input
                 type="search"
                 value={feedbackSearch}
                 onChange={(event) => {
                   setFeedbackSearch(event.target.value);
                   setFeedbackPage(1);
+                  setAnsweredFeedbackPage(1);
                 }}
                 placeholder="Search visitor, email, or subject"
                 aria-label="Search feedback"
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20"
               />
-              <select
-                value={feedbackStatusFilter}
-                onChange={(event) => {
-                  setFeedbackStatusFilter(event.target.value);
-                  setFeedbackPage(1);
-                }}
-                aria-label="Filter feedback by status"
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20"
-              >
-                <option value="all">All statuses</option>
-                <option value="new">New</option>
-                <option value="answered">Answered</option>
-              </select>
             </div>
           </div>
           {loading && <p className="text-sm text-slate-500">Loading feedback…</p>}
           {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
-          {!loading && feedback.map((item) => (
-            <article key={item.id} className="space-y-3 border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
-              <div className="flex flex-wrap justify-between gap-2">
-                <div>
-                  <p className="font-bold text-slate-900">{item.subject}</p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {item.visitor_name} · {formatBookCategory(item.category)} · {getLibraryName(libraries, item.library_id)} ·{' '}
-                    {new Date(item.created_at).toLocaleString()}
-                  </p>
-                </div>
-                <span className="h-fit bg-slate-100 px-3 py-1 text-xs font-bold rounded-full capitalize text-slate-700">
-                  {String(item.status || '').replaceAll('_', ' ')}
-                </span>
-              </div>
-              <p className="whitespace-pre-wrap text-sm text-slate-700 leading-relaxed">{item.message}</p>
-              {item.admin_reply && (
-                <p className="border-l-4 border-emerald-600 bg-emerald-50 p-3.5 text-sm text-emerald-900 rounded-r-lg">
-                  <strong>Reply:</strong> {item.admin_reply}
-                </p>
-              )}
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <textarea
-                  rows={2}
-                  value={feedbackReply[item.id] || ''}
-                  onChange={(event) =>
-                    setFeedbackReply((current) => ({
-                      ...current,
-                      [item.id]: event.target.value,
-                    }))
-                  }
-                  placeholder="Write a manual reply..."
-                  className="min-w-0 flex-1 border border-slate-300 p-2.5 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
-                />
-                <button
-                  type="button"
-                  onClick={() => handleFeedbackReply(item)}
-                  className="bg-shelf-primary px-4 py-2 text-sm font-bold text-white rounded-lg transition hover:opacity-90"
-                >
-                  Save reply
-                </button>
-              </div>
-            </article>
-          ))}
-          {!loading && feedbackTotal === 0 && (
-            <p className="border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 rounded-xl">
-              {feedbackSearch || feedbackStatusFilter !== 'all'
-                ? 'No feedback matches these filters.'
-                : 'No feedback submissions found.'}
-            </p>
-          )}
-          <AdminListPagination
-            page={visibleFeedbackPage}
-            pageSize={10}
-            total={feedbackTotal}
-            onPageChange={setFeedbackPage}
-            itemLabel="feedback submissions"
-          />
+          <div className="grid min-w-0 gap-5 xl:grid-cols-2">
+            {renderFeedbackSection({
+              title: 'Needs reply',
+              description: 'Visitor messages that still need a response.',
+              items: feedback,
+              total: feedbackTotal,
+              page: visibleFeedbackPage,
+              onPageChange: setFeedbackPage,
+              isAnswered: false,
+            })}
+            {renderFeedbackSection({
+              title: 'Replied',
+              description: 'Visitor messages that already have a response.',
+              items: answeredFeedback,
+              total: answeredFeedbackTotal,
+              page: visibleAnsweredFeedbackPage,
+              onPageChange: setAnsweredFeedbackPage,
+              isAnswered: true,
+            })}
+          </div>
         </section>
       )}
 
