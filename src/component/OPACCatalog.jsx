@@ -3443,7 +3443,7 @@ export default function OPACCatalog({
                               {request.status === 'rejected' && (
                                 <p className="flex items-center gap-1 font-semibold text-red-800 dark:text-red-300">
                                   <CircleAlert size={13} aria-hidden="true" />
-                                  Your request was rejected by the book owner.
+                                  {request.ownerResponse || 'Your request was rejected by the book owner.'}
                                 </p>
                               )}
                               {request.status === 'returned' && (
@@ -3458,7 +3458,7 @@ export default function OPACCatalog({
                                   This community book request was cancelled.
                                 </p>
                               )}
-                              {request.ownerResponse && (
+                              {request.ownerResponse && request.status !== 'rejected' && (
                                 <p>Owner response: {request.ownerResponse}</p>
                               )}
                             </>

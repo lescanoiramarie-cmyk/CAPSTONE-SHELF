@@ -324,7 +324,7 @@ function VisitorDashboardContent() {
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
   const [isTermsReviewOpen, setIsTermsReviewOpen] = useState(false);
   const [focusRequestId, setFocusRequestId] = useState(null);
-  const [communityApprovalNotice, setCommunityApprovalNotice] = useState('');
+  const [communityRequestNotice, setCommunityRequestNotice] = useState(null);
   const previousCommunityRequestStatusesRef = useRef(null);
   const [termsStatus, setTermsStatus] = useState('loading');
   const [termsAcceptedAt, setTermsAcceptedAt] = useState(null);
@@ -516,18 +516,37 @@ function VisitorDashboardContent() {
           {
             status: String(request.status || '').toLowerCase(),
             title: request.bookTitle || 'Community book',
+            ownerResponse: request.ownerResponse || '',
           },
         ])
     );
     const previousStatuses = previousCommunityRequestStatusesRef.current;
     if (previousStatuses) {
-      for (const [requestId, request] of communityRequestStatuses) {
-        const previousStatus = previousStatuses.get(requestId)?.status;
-        if (previousStatus === 'pending' && request.status === 'approved') {
-          setCommunityApprovalNotice(
-            `Your request for "${request.title}" was approved. Check My Requests & Borrows to see the full information.`
-          );
-          break;
+      const newlyRejectedUnavailableRequests = [...communityRequestStatuses].filter(
+        ([requestId, request]) =>
+          previousStatuses.get(requestId)?.status === 'pending' &&
+          request.status === 'rejected' &&
+          /no available copies/i.test(request.ownerResponse)
+      );
+
+      if (newlyRejectedUnavailableRequests.length > 0) {
+        const rejectedTitles = newlyRejectedUnavailableRequests.map(([, request]) => `“${request.title}”`);
+        setCommunityRequestNotice({
+          type: 'rejected',
+          message: rejectedTitles.length === 1
+            ? `Your request for ${rejectedTitles[0]} was rejected because no copies are available.`
+            : `Your requests for ${rejectedTitles.join(', ')} were rejected because no copies are available.`,
+        });
+      } else {
+        for (const [requestId, request] of communityRequestStatuses) {
+          const previousStatus = previousStatuses.get(requestId)?.status;
+          if (previousStatus === 'pending' && request.status === 'approved') {
+            setCommunityRequestNotice({
+              type: 'approved',
+              message: `Your request for “${request.title}” was approved. Check My Requests & Borrows to see the full information.`,
+            });
+            break;
+          }
         }
       }
     }
@@ -1778,40 +1797,44 @@ function VisitorDashboardContent() {
           </section>
         )}
 
-        {communityApprovalNotice && (
+        {communityRequestNotice && (
           <section
             role="status"
             aria-live="polite"
-            className="visitor-feedback visitor-feedback-success flex items-start gap-3 rounded-xl border border-emerald-300 bg-emerald-50 p-4 shadow-sm dark:border-emerald-800 dark:bg-emerald-950/40"
+            className={`visitor-feedback flex items-start gap-3 rounded-xl border p-4 shadow-sm ${communityRequestNotice.type === 'rejected' ? 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40' : 'visitor-feedback-success border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40'}`}
           >
-            <CheckCircle2
+            {communityRequestNotice.type === 'rejected' ? <CircleAlert
+              size={20}
+              className="mt-0.5 shrink-0 text-red-700 dark:text-red-300"
+              aria-hidden="true"
+            /> : <CheckCircle2
               size={20}
               className="mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-300"
               aria-hidden="true"
-            />
+            />}
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-emerald-950 dark:text-emerald-100">
-                {communityApprovalNotice}
+              <p className={`text-sm font-semibold ${communityRequestNotice.type === 'rejected' ? 'text-red-950 dark:text-red-100' : 'text-emerald-950 dark:text-emerald-100'}`}>
+                {communityRequestNotice.message}
               </p>
               <button
                 type="button"
                 onClick={() => {
                   setTab('myBorrows');
-                  setCommunityApprovalNotice('');
+                  setCommunityRequestNotice(null);
                   document
                     .getElementById('visitor-catalog')
                     ?.scrollIntoView({ behavior: 'smooth' });
                 }}
-                className="mt-2 text-xs font-bold text-emerald-900 underline hover:no-underline dark:text-emerald-200"
+                className={`mt-2 text-xs font-bold underline hover:no-underline ${communityRequestNotice.type === 'rejected' ? 'text-red-900 dark:text-red-200' : 'text-emerald-900 dark:text-emerald-200'}`}
               >
                 Open my requests & borrows
               </button>
             </div>
             <button
               type="button"
-              onClick={() => setCommunityApprovalNotice('')}
-              className="rounded-lg p-2 text-emerald-900 transition hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary dark:text-emerald-200 dark:hover:bg-emerald-900/50"
-              aria-label="Dismiss approval notification"
+              onClick={() => setCommunityRequestNotice(null)}
+              className={`rounded-lg p-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary ${communityRequestNotice.type === 'rejected' ? 'text-red-900 hover:bg-red-100 dark:text-red-200 dark:hover:bg-red-900/50' : 'text-emerald-900 hover:bg-emerald-100 dark:text-emerald-200 dark:hover:bg-emerald-900/50'}`}
+              aria-label="Dismiss community book request notification"
             >
               <X size={17} aria-hidden="true" />
             </button>
