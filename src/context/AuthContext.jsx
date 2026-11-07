@@ -548,7 +548,7 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       await supabase?.auth?.signOut?.();
       const message = String(error?.message || 'Passkey sign-in failed.');
-      if (message.includes('passkey_disabled')) {
+      if (message.includes('passkey_disabled') || /passkeys? (?:are )?disabled/i.test(message)) {
         throw new Error('Passkey sign-in is not enabled for SHELF yet. Use your password instead.', { cause: error });
       }
       if (message.includes('webauthn_credential_not_found')) {

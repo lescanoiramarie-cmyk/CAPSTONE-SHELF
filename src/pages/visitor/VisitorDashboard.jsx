@@ -132,6 +132,12 @@ function getAttendancePeriodBounds(period) {
 }
 
 const MAX_VISITOR_PROFILE_IMAGE_SIZE = 2 * 1024 * 1024;
+const PASSKEYS_DISABLED_MESSAGE = 'Passkeys are not enabled for this SHELF site yet. You can continue signing in with your password.';
+
+function isPasskeysDisabled(error) {
+  return /passkey_disabled|passkeys? (?:are )?disabled/i.test(String(error?.message || error || ''));
+}
+
 const VISITOR_PROFILE_IMAGE_TYPES = new Set([
   'image/jpeg',
   'image/png',
@@ -342,9 +348,11 @@ function VisitorDashboardContent() {
     setVisitorPasskeyLoading(true);
     refreshVisitorPasskeys()
       .catch((error) => {
-        console.error('Unable to load visitor passkeys:', error);
-        setVisitorPasskeyError(error?.message?.includes('passkey_disabled')
-          ? 'Passkeys are not enabled for this SHELF site yet.'
+        if (!isPasskeysDisabled(error)) {
+          console.error('Unable to load visitor passkeys:', error);
+        }
+        setVisitorPasskeyError(isPasskeysDisabled(error)
+          ? PASSKEYS_DISABLED_MESSAGE
           : error?.message || 'Could not load passkeys for this account.');
       })
       .finally(() => setVisitorPasskeyLoading(false));
@@ -364,8 +372,8 @@ function VisitorDashboardContent() {
       await refreshVisitorPasskeys();
       setVisitorPasskeyMessage('Passkey added. You can use this phone’s fingerprint, Face ID, or screen lock to sign in.');
     } catch (error) {
-      setVisitorPasskeyError(error?.message?.includes('passkey_disabled')
-        ? 'Passkeys are not enabled for this SHELF site yet.'
+      setVisitorPasskeyError(isPasskeysDisabled(error)
+        ? PASSKEYS_DISABLED_MESSAGE
         : error?.message || 'Could not add a passkey. Please try again.');
     } finally {
       setVisitorPasskeyBusy(false);
@@ -2259,8 +2267,8 @@ function VisitorDashboardContent() {
                           ))}
                         </div>
                       </div>
-                      <button type="button" onClick={registerVisitorPasskey} disabled={visitorPasskeyBusy || visitorPasskeyLoading} className="shrink-0 rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:opacity-90 disabled:cursor-wait disabled:opacity-50">
-                        {visitorPasskeyBusy ? 'Working…' : visitorPasskeys.length ? 'Add another passkey' : 'Set up passkey'}
+                      <button type="button" onClick={registerVisitorPasskey} disabled={visitorPasskeyBusy || visitorPasskeyLoading || isPasskeysDisabled(visitorPasskeyError)} className="shrink-0 rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
+                        {isPasskeysDisabled(visitorPasskeyError) ? 'Passkeys unavailable' : visitorPasskeyBusy ? 'Working…' : visitorPasskeys.length ? 'Add another passkey' : 'Set up passkey'}
                       </button>
                     </div>
                     {visitorPasskeyLoading && <p className="border-t border-slate-100 px-5 py-3 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-300">Loading passkeys…</p>}
