@@ -136,22 +136,32 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
   };
 
   const dueFineRows = useMemo(() => rows.filter((row) => Number(row.outstanding_amount) > 0), [rows]);
+  const alertedRequestIdsForVisitor = useCallback((row) => {
+    const visitorId = visitorIdsByRequest[String(row.request_id)];
+    if (!visitorId) return [String(row.request_id)];
+    return rows
+      .filter((candidate) => String(candidate.library_id || candidate.library_name) === String(row.library_id || row.library_name)
+        && visitorIdsByRequest[String(candidate.request_id)] === visitorId)
+      .map((candidate) => String(candidate.request_id));
+  }, [rows, visitorIdsByRequest]);
+  const wasVisitorAlertedToday = useCallback((row) => alertedRequestIdsForVisitor(row)
+    .some((requestId) => alertedTodayRequestIds.has(requestId)), [alertedRequestIdsForVisitor, alertedTodayRequestIds]);
   const visitorAlertRows = useMemo(() => {
     const visitors = new Map();
     dueFineRows.forEach((row) => {
-      if (alertedTodayRequestIds.has(String(row.request_id))) return;
+      if (wasVisitorAlertedToday(row)) return;
       const visitorId = visitorIdsByRequest[String(row.request_id)];
       const key = visitorId ? `${row.library_id || row.library_name}:${visitorId}` : `${row.library_id || row.library_name}:${String(row.visitor_name || '').trim().toLowerCase()}:${row.request_id}`;
       if (!visitors.has(key)) visitors.set(key, row);
     });
     return [...visitors.values()];
-  }, [dueFineRows, visitorIdsByRequest, alertedTodayRequestIds]);
+  }, [dueFineRows, visitorIdsByRequest, alertedTodayRequestIds, rows, wasVisitorAlertedToday]);
   const sendSingleAlert = async (row) => {
     setAlertingId(String(row.request_id));
     setFeedback({ error: '', message: '' });
     try {
       await sendFineReminder(row.request_id);
-      setAlertedTodayRequestIds((previous) => new Set([...previous, String(row.request_id)]));
+      setAlertedTodayRequestIds((previous) => new Set([...previous, ...alertedRequestIdsForVisitor(row)]));
       setFeedback({ error: '', message: `Fine reminder sent to ${row.visitor_name}.` });
     } catch (error) {
       setFeedback({ error: error.message || 'Unable to send the fine reminder.', message: '' });
@@ -170,7 +180,7 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
       try {
         await sendFineReminder(row.request_id);
         sent += 1;
-        setAlertedTodayRequestIds((previous) => new Set([...previous, String(row.request_id)]));
+        setAlertedTodayRequestIds((previous) => new Set([...previous, ...alertedRequestIdsForVisitor(row)]));
       } catch (error) {
         failures.push(`${row.visitor_name}: ${error.message || 'send failed'}`);
       }
@@ -254,7 +264,7 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
                   </div>
                   <div className="grid min-w-0 grid-cols-2 gap-2 lg:w-[18rem] lg:justify-self-end">
                     {history.length > 0 ? <button type="button" onClick={() => setHistoryFor(historyFor === row.request_id ? null : row.request_id)} className="inline-flex min-w-0 items-center justify-center gap-2 rounded-lg border border-slate-300 px-2.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"><History size={16} className="shrink-0" /> History ({history.length})</button> : <span aria-hidden="true" className="invisible rounded-lg border px-2.5 py-2" />}
-                    {Number(row.outstanding_amount) > 0 ? <button type="button" disabled={alertingAll || alertingId === String(row.request_id) || alertedTodayRequestIds.has(String(row.request_id))} onClick={() => void sendSingleAlert(row)} className="inline-flex min-w-0 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-100 disabled:opacity-50"><Bell size={16} className="shrink-0"/>{alertingId === String(row.request_id) ? 'Sending…' : alertedTodayRequestIds.has(String(row.request_id)) ? 'Alert sent today' : 'Alert visitor'}</button> : <span aria-hidden="true" className="invisible rounded-lg border px-2.5 py-2" />}
+                    {Number(row.outstanding_amount) > 0 ? <button type="button" disabled={alertingAll || alertingId === String(row.request_id) || wasVisitorAlertedToday(row)} onClick={() => void sendSingleAlert(row)} title={wasVisitorAlertedToday(row) ? 'This visitor was alerted today for this library.' : 'Send a fine reminder to this visitor'} className={`inline-flex min-w-0 items-center justify-center gap-2 rounded-lg border px-2.5 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-100 ${wasVisitorAlertedToday(row) ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100'}`}><Bell size={16} className="shrink-0"/>{alertingId === String(row.request_id) ? 'Sending…' : wasVisitorAlertedToday(row) ? 'Alerted today' : 'Alert visitor'}</button> : <span aria-hidden="true" className="invisible rounded-lg border px-2.5 py-2" />}
                     {Number(row.outstanding_amount) > 0 ? <button type="button" onClick={() => openPayment(row)} className="col-span-2 inline-flex items-center justify-center gap-2 rounded-lg bg-shelf-primary px-3 py-2 text-sm font-semibold text-white hover:bg-shelf-primary/90"><CircleDollarSign size={16} /> Record payment</button> : <span className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800"><CheckCircle2 size={16} /> Settled</span>}
                   </div>
                 </div>
