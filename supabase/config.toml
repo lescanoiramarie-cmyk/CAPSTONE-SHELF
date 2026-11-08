@@ -28,6 +28,12 @@ verify_jwt = false
 import_map = "./functions/send-due-date-notifications/deno.json"
 entrypoint = "./functions/send-due-date-notifications/index.ts"
 
+[functions.send-fine-reminder]
+enabled = true
+verify_jwt = false
+import_map = "./functions/send-fine-reminder/deno.json"
+entrypoint = "./functions/send-fine-reminder/index.ts"
+
 [functions.request-password-reset]
 enabled = true
 # Called from the unauthenticated login screen, so there is no JWT yet. The

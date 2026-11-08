@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BadgeCheck, Building2, CalendarDays, Clock3, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
+import { BadgeCheck, Building2, CalendarDays, Clock3, RefreshCw, ShieldCheck, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient.js';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const dateLabel = (value) => value ? new Date(`${value}T00:00:00`).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Not set';
+const addBillingPeriod = (dateValue, period) => {
+  if (!dateValue) return '';
+  const [year, month, day] = dateValue.split('-').map(Number);
+  const targetMonth = month - 1 + (period === 'annual' ? 12 : 1);
+  const targetYear = year + Math.floor(targetMonth / 12);
+  const normalizedMonth = targetMonth % 12;
+  const finalDay = Math.min(day, new Date(Date.UTC(targetYear, normalizedMonth + 1, 0)).getUTCDate());
+  return `${targetYear}-${String(normalizedMonth + 1).padStart(2, '0')}-${String(finalDay).padStart(2, '0')}`;
+};
 const statusLabel = (value) => ({ not_configured: 'Not configured', trial: 'Trial', active: 'Active', expiring: 'Expiring', past_due: 'Past due', suspended: 'Suspended' }[value] || value || 'Not configured');
 const statusStyle = (value) => value === 'active' || value === 'trial' ? 'bg-emerald-100 text-emerald-800' : value === 'expiring' ? 'bg-amber-100 text-amber-900' : value === 'past_due' || value === 'suspended' ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-700';
 const FEATURES = {
@@ -12,20 +21,32 @@ const FEATURES = {
 };
 
 function SubscriptionEditor({ row, onClose, onSaved }) {
-  const [form, setForm] = useState({
-    plan: row.plan_key || 'basic', mode: row.plan_mode || 'trial', period: row.billing_period || 'monthly',
-    starts: row.starts_on || today(), renews: row.renews_on || today(), grace: String(row.grace_period_days ?? 7),
-    paid: row.is_paid === true, paidAt: row.paid_at || today(), note: '',
+  const [form, setForm] = useState(() => {
+    const period = row.billing_period || 'monthly';
+    const starts = row.starts_on || today();
+    return { plan: row.plan_key || 'basic', mode: row.plan_mode || 'trial', period, starts, renews: row.renews_on || addBillingPeriod(starts, period), grace: String(row.grace_period_days ?? 7), paid: row.is_paid === true, paidAt: row.paid_at || today(), note: '' };
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  const update = (key, value) => setForm((current) => {
+    const next = { ...current, [key]: value };
+    if (key === 'period' || key === 'starts') next.renews = addBillingPeriod(next.paid ? next.paidAt : next.starts, next.period);
+    if (key === 'paid' && value) {
+      next.starts = next.paidAt;
+      next.renews = addBillingPeriod(next.paidAt, next.period);
+    }
+    if (key === 'paidAt' && next.paid) {
+      next.starts = value;
+      next.renews = addBillingPeriod(value, next.period);
+    }
+    return next;
+  });
   const save = async (event) => {
     event.preventDefault();
     setBusy(true); setError('');
     const { error: rpcError } = await supabase.rpc('update_library_subscription', {
       p_library_id: row.library_id, p_plan_key: form.plan, p_plan_mode: form.mode,
-      p_billing_period: form.period, p_starts_on: form.starts, p_renews_on: form.renews,
+      p_billing_period: form.period, p_starts_on: form.paid ? form.paidAt : form.starts, p_renews_on: addBillingPeriod(form.paid ? form.paidAt : form.starts, form.period),
       p_grace_period_days: Number(form.grace), p_is_paid: form.paid,
       p_paid_at: form.paid ? form.paidAt : null, p_note: form.note.trim() || null,
     });
@@ -41,7 +62,7 @@ function SubscriptionEditor({ row, onClose, onSaved }) {
       <label className="text-sm font-semibold text-slate-700">Billing period<select className={field} value={form.period} onChange={(e) => update('period', e.target.value)}><option value="monthly">Monthly</option><option value="annual">Annual</option></select></label>
       <label className="text-sm font-semibold text-slate-700">Grace period (days)<input className={field} type="number" min="0" max="60" value={form.grace} onChange={(e) => update('grace', e.target.value)} /></label>
       <label className="text-sm font-semibold text-slate-700">Subscription starts<input required type="date" className={field} value={form.starts} onChange={(e) => update('starts', e.target.value)} /></label>
-      <label className="text-sm font-semibold text-slate-700">Renewal due date<input required type="date" className={field} value={form.renews} onChange={(e) => update('renews', e.target.value)} /></label>
+      <div className="text-sm font-semibold text-slate-700">Automatic renewal due date<div className={`${field} bg-slate-50`}>{dateLabel(form.renews)}</div><p className="mt-1 text-xs font-normal text-slate-500">Calculated from the start/payment date and billing period.</p></div>
       <div className="sm:col-span-2 rounded-xl border border-blue-100 bg-blue-50/70 p-4"><label className="flex items-center gap-3 text-sm font-semibold text-slate-800"><input type="checkbox" checked={form.paid} onChange={(e) => update('paid', e.target.checked)} />Paid for the current subscription period</label>{form.paid && <label className="mt-3 block text-sm font-semibold text-slate-700">Date received<input required type="date" className={field} value={form.paidAt} onChange={(e) => update('paidAt', e.target.value)} /></label>}</div>
       <label className="sm:col-span-2 text-sm font-semibold text-slate-700">Admin note <span className="font-normal text-slate-500">(optional)</span><textarea rows={2} maxLength={500} className={field} value={form.note} onChange={(e) => update('note', e.target.value)} placeholder="Context for this subscription change" /></label>
       {error && <p role="alert" className="sm:col-span-2 rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
@@ -61,6 +82,7 @@ export default function SubscriptionManagement({ mode = 'subadmin', libraryId = 
   const [message, setMessage] = useState('');
   const [busyId, setBusyId] = useState('');
   const [filter, setFilter] = useState('');
+  const [page, setPage] = useState(1);
   const reload = useCallback(async () => {
     setLoading(true); setError('');
     const { data, error: rpcError } = await supabase.rpc('get_library_subscription_dashboard', { p_library_id: libraryId ? String(libraryId) : null });
@@ -86,13 +108,18 @@ export default function SubscriptionManagement({ mode = 'subadmin', libraryId = 
     setBusyId('');
   };
   const rowsToShow = isSuperAdmin ? displayed : rows;
+  const pageCount = Math.max(1, Math.ceil(rowsToShow.length / 10));
+  const visiblePageRows = rowsToShow.slice((page - 1) * 10, page * 10);
+  useEffect(() => { setPage(1); }, [filter]);
+  useEffect(() => { setPage((current) => Math.min(current, pageCount)); }, [pageCount]);
   const heading = isSuperAdmin ? 'Subscriptions' : 'Plan & Subscription';
   return <section className="space-y-5">
     <header className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-4"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">{isSuperAdmin ? 'System administration' : libraryName || 'Library administration'}</p><h2 className="mt-1 text-2xl font-bold text-shelf-primary">{heading}</h2><p className="mt-1 max-w-3xl text-sm text-slate-600">{isSuperAdmin ? 'Manage each library’s plan, renewal, grace period, and manually recorded paid status.' : 'View your library plan and request an upgrade from Super Admin.'}</p></div><button type="button" onClick={() => void reload()} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"><RefreshCw size={15} />Refresh</button></header>
     {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}{message && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
     {isSuperAdmin && renewalAlerts.length > 0 && <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-bold">Subscription follow-up needed for {renewalAlerts.length} {renewalAlerts.length === 1 ? 'library' : 'libraries'}</p><p className="mt-1">{renewalAlerts.map((row) => `${row.library_name} (${statusLabel(row.effective_status).toLowerCase()}${row.renews_on ? ` · due ${dateLabel(row.renews_on)}` : ''})`).join(' · ')}</p></div>}
+    <section aria-labelledby="plan-comparison-title" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><div className="border-b border-slate-100 px-4 py-3"><h3 id="plan-comparison-title" className="font-bold text-slate-900">Plan comparison</h3><p className="mt-1 text-sm text-slate-600">Basic covers day-to-day library operations. Premium adds expanded reporting tools.</p></div><div className="grid divide-y divide-slate-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0"><div className="p-4 sm:p-5"><h4 className="font-bold text-slate-900">Basic</h4><p className="mt-1 text-sm text-slate-600">Core library operations for inventory, lending, visitors, and attendance.</p><ul className="mt-3 space-y-2 text-sm text-slate-700">{FEATURES.basic.map((item) => <li key={item} className="flex gap-2"><BadgeCheck size={15} className="mt-0.5 shrink-0 text-emerald-700"/>{item}</li>)}</ul></div><div className="p-4 sm:p-5"><h4 className="font-bold text-slate-900">Premium</h4><p className="mt-1 text-sm text-slate-600">Adds advanced insights for libraries that need deeper operational analysis.</p><ul className="mt-3 space-y-2 text-sm text-slate-700"><li className="flex gap-2"><Sparkles size={15} className="mt-0.5 shrink-0 text-blue-700"/>Everything in Basic</li><li className="flex gap-2"><Sparkles size={15} className="mt-0.5 shrink-0 text-blue-700"/>Advanced reports and analytics</li><li className="flex gap-2"><Clock3 size={15} className="mt-0.5 shrink-0 text-slate-500"/>SMS reminders can be enabled after an SMS provider is configured</li></ul></div></div></section>
     {isSuperAdmin && <label className="block"><span className="sr-only">Search libraries</span><input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search library or Sub Admin" className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm" /></label>}
-    {loading ? <p className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading subscriptions…</p> : rowsToShow.length === 0 ? <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600">No subscription information is available yet.</div> : <div className="space-y-4">{rowsToShow.map((row) => {
+    {loading ? <p className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading subscriptions…</p> : rowsToShow.length === 0 ? <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600">No subscription information is available yet.</div> : <div className="space-y-4">{visiblePageRows.map((row) => {
       const status = row.effective_status || 'not_configured';
       const history = Array.isArray(row.subscription_history) ? row.subscription_history : [];
       const upgrades = Array.isArray(row.upgrade_requests) ? row.upgrade_requests : [];
@@ -106,6 +133,7 @@ export default function SubscriptionManagement({ mode = 'subadmin', libraryId = 
         {history.length > 0 && <details className="border-t border-slate-100 p-4 sm:px-5"><summary className="cursor-pointer text-sm font-semibold text-slate-700"><Clock3 size={15} className="mr-2 inline" />Subscription history ({history.length})</summary><ol className="mt-3 space-y-2">{history.map((entry, i) => <li key={`${entry.createdAt}-${i}`} className="text-xs text-slate-600"><span className="font-semibold text-slate-800">{String(entry.eventType).replaceAll('_', ' ')}</span> · {entry.changedBy} · {new Date(entry.createdAt).toLocaleString('en-PH')}{entry.details?.note ? ` · ${entry.details.note}` : ''}</li>)}</ol></details>}
       </article>;
     })}</div>}
+    {!loading && rowsToShow.length > 0 && <nav aria-label="Subscription pagination" className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-600">Showing {(page - 1) * 10 + 1}–{Math.min(page * 10, rowsToShow.length)} of {rowsToShow.length} libraries</p><div className="flex items-center justify-between gap-3 sm:justify-end"><button type="button" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft size={16}/>Previous</button><span className="text-sm font-medium text-slate-700">Page {page} of {pageCount}</span><button type="button" disabled={page >= pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40">Next<ChevronRight size={16}/></button></div></nav>}
     {!isSuperAdmin && rows[0] && <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]"><form onSubmit={requestUpgrade} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><h3 className="font-bold text-slate-900">Request an upgrade</h3><p className="mt-1 text-sm text-slate-600">Super Admin will review your request and update your library’s plan if approved.</p><div className="mt-4 flex flex-col gap-3 sm:flex-row"><select aria-label="Requested plan" value={requestPlan} onChange={(e) => setRequestPlan(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"><option value="premium">Premium</option><option value="basic">Basic</option></select><input value={requestNote} onChange={(e) => setRequestNote(e.target.value)} maxLength={500} placeholder="Optional reason" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm"/><button disabled={busyId === 'request'} className="rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Send request</button></div></form><aside className="rounded-xl border border-blue-100 bg-blue-50/70 p-5"><h3 className="flex items-center gap-2 font-bold text-slate-900"><ShieldCheck size={17} className="text-blue-700"/>Subscription access</h3><p className="mt-2 text-sm text-slate-700">If Premium expires or is suspended, core circulation and inventory operations remain available. Premium tools can be restricted according to the library’s subscription status.</p><p className="mt-2 flex items-center gap-2 text-xs text-slate-500"><CalendarDays size={14}/>Renewal and payment records are managed by Super Admin.</p></aside></div>}
     {isSuperAdmin && rows.length > 0 && <p className="text-xs text-slate-500">A grace period is applied before a past-due subscription is suspended. Refresh this page to check current renewal reminders.</p>}
     {selected && <SubscriptionEditor row={selected} onClose={() => setSelected(null)} onSaved={reload} />}

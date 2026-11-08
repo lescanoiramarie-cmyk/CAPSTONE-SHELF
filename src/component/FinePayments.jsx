@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, CircleDollarSign, Clock3, History, Search, X, ClipboardCheck } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CircleDollarSign, Clock3, History, Search, X, ClipboardCheck, Bell, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient.js';
+import { sendFineReminder } from '../lib/fineReminder.js';
 
 const peso = (value) => `₱${Number(value || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const PAGE_SIZE = 10;
 
 function getFineStatus(row) {
   if (row.fine_review_required) return 'Needs review';
@@ -25,10 +27,13 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState({ error: '', message: '' });
   const [historyFor, setHistoryFor] = useState(null);
+  const [page, setPage] = useState(1);
   const [reviewFine, setReviewFine] = useState(null);
   const [reviewDecision, setReviewDecision] = useState('confirmed');
   const [reviewAmount, setReviewAmount] = useState('');
   const [reviewNote, setReviewNote] = useState('');
+  const [alertingId, setAlertingId] = useState('');
+  const [alertingAll, setAlertingAll] = useState(false);
 
   const loadRows = useCallback(async () => {
     if (!supabase) {
@@ -60,6 +65,9 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
       return matchesText && (statusFilter === 'All' || getFineStatus(row) === statusFilter);
     });
   }, [rows, search, statusFilter]);
+  const pageCount = Math.max(1, Math.ceil(visibleRows.length / PAGE_SIZE));
+  const pageRows = visibleRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [search, statusFilter]);
 
   const totals = useMemo(() => rows.reduce((result, row) => {
     const status = getFineStatus(row);
@@ -134,6 +142,48 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
     await loadRows();
   };
 
+  const dueFineRows = useMemo(() => rows.filter((row) => !row.fine_review_required && Number(row.outstanding_amount) > 0), [rows]);
+  const visitorAlertRows = useMemo(() => {
+    const visitors = new Map();
+    dueFineRows.forEach((row) => {
+      const key = `${row.library_id || row.library_name}:${String(row.visitor_name || '').trim().toLowerCase()}`;
+      if (!visitors.has(key)) visitors.set(key, row);
+    });
+    return [...visitors.values()];
+  }, [dueFineRows]);
+  const visitorAlertRequestIds = useMemo(() => new Set(visitorAlertRows.map((row) => String(row.request_id))), [visitorAlertRows]);
+  const sendSingleAlert = async (row) => {
+    setAlertingId(String(row.request_id));
+    setFeedback({ error: '', message: '' });
+    try {
+      await sendFineReminder(row.request_id);
+      setFeedback({ error: '', message: `Fine reminder sent to ${row.visitor_name}.` });
+    } catch (error) {
+      setFeedback({ error: error.message || 'Unable to send the fine reminder.', message: '' });
+    } finally {
+      setAlertingId('');
+    }
+  };
+
+  const sendAllAlerts = async () => {
+    if (alertingAll || visitorAlertRows.length === 0) return;
+    setAlertingAll(true);
+    setFeedback({ error: '', message: '' });
+    let sent = 0;
+    const failures = [];
+    for (const row of visitorAlertRows) {
+      try {
+        await sendFineReminder(row.request_id);
+        sent += 1;
+      } catch (error) {
+        failures.push(`${row.visitor_name}: ${error.message || 'send failed'}`);
+      }
+    }
+    if (failures.length) setFeedback({ error: `${sent} alert(s) sent. ${failures.length} could not be sent: ${failures.slice(0, 3).join('; ')}${failures.length > 3 ? '; …' : ''}`, message: '' });
+    else setFeedback({ error: '', message: `Fine alerts sent for all ${sent} outstanding fine record(s).` });
+    setAlertingAll(false);
+  };
+
   return (
     <section className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-4">
@@ -142,7 +192,7 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
           <h2 className="mt-1 text-2xl font-bold text-shelf-primary">Fine Payments</h2>
           <p className="mt-1 text-sm text-slate-600">Track outstanding library fines and record payments collected offline.</p>
         </div>
-        <button type="button" onClick={() => void loadRows()} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Refresh</button>
+        <div className="flex flex-wrap gap-2"><button type="button" disabled={alertingAll || visitorAlertRows.length === 0} onClick={() => void sendAllAlerts()} className="inline-flex items-center gap-2 rounded-lg bg-shelf-primary px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"><Bell size={16}/>{alertingAll ? 'Sending alerts…' : `Alert all (${visitorAlertRows.length} visitors)`}</button><button type="button" onClick={() => void loadRows()} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Refresh</button></div>
       </header>
 
       {feedback.message && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">{feedback.message}</p>}
@@ -177,7 +227,7 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
         <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600">No fine records match this filter.</div>
       ) : (
         <div className="space-y-3">
-          {visibleRows.map((row) => {
+          {pageRows.map((row) => {
             const status = getFineStatus(row);
             const history = Array.isArray(row.payments) ? row.payments : [];
             return (
@@ -199,6 +249,7 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
                     {history.length > 0 && <button type="button" onClick={() => setHistoryFor(historyFor === row.request_id ? null : row.request_id)} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"><History size={16} /> History ({history.length})</button>}
+                    {!row.fine_review_required && Number(row.outstanding_amount) > 0 && visitorAlertRequestIds.has(String(row.request_id)) && <button type="button" disabled={alertingAll || alertingId === String(row.request_id)} onClick={() => void sendSingleAlert(row)} className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-100 disabled:opacity-50"><Bell size={16}/>{alertingId === String(row.request_id) ? 'Sending…' : 'Alert visitor'}</button>}
                     {row.fine_review_required && <button type="button" onClick={() => openReview(row)} className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100"><ClipboardCheck size={16} /> Review fine</button>}
                     {Number(row.outstanding_amount) > 0 && !row.fine_review_required && <button type="button" onClick={() => openPayment(row)} className="inline-flex items-center gap-2 rounded-lg bg-shelf-primary px-3 py-2 text-sm font-semibold text-white hover:bg-shelf-primary/90"><CircleDollarSign size={16} /> Record payment</button>}
                     {status === 'Paid' && <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800"><CheckCircle2 size={16} /> Settled</span>}
@@ -210,6 +261,8 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
           })}
         </div>
       )}
+
+      {!loading && visibleRows.length > 0 && <nav aria-label="Fine payments pagination" className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-600">Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, visibleRows.length)} of {visibleRows.length} fine records</p><div className="flex items-center justify-between gap-3 sm:justify-end"><button type="button" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft size={16}/>Previous</button><span className="text-sm font-medium text-slate-700">Page {page} of {pageCount}</span><button type="button" disabled={page >= pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40">Next<ChevronRight size={16}/></button></div></nav>}
 
       {selectedFine && <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setSelectedFine(null); }}>
         <section role="dialog" aria-modal="true" aria-labelledby="fine-payment-dialog-title" className="my-auto w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
