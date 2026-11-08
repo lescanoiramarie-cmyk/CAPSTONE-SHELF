@@ -97,12 +97,11 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
   useEffect(() => { setPage(1); }, [search, statusFilter, selectedLibraryId]);
 
   const totals = useMemo(() => rows.filter((row) => Number(row.fine_amount) > 0 || Number(row.fine_paid_amount) > 0).reduce((result, row) => {
-    const status = getFineStatus(row);
+    result.totalAssessed += Number(row.fine_amount || 0);
+    result.totalCollected += Number(row.fine_paid_amount || 0);
     result.confirmedOutstanding += Number(row.outstanding_amount || 0);
-    if (status === 'Unpaid' || status === 'Partially paid') result.dueCount += 1;
-    if (status === 'Paid') result.paidCount += 1;
     return result;
-  }, { confirmedOutstanding: 0, dueCount: 0, paidCount: 0 }), [rows]);
+  }, { totalAssessed: 0, totalCollected: 0, confirmedOutstanding: 0 }), [rows]);
 
   const openPayment = (row) => {
     setSelectedFine(row);
@@ -197,16 +196,16 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">Confirmed outstanding balance</p>
-          <p className="mt-1 text-2xl font-bold text-shelf-primary">{peso(totals.confirmedOutstanding)}</p>
+          <p className="text-sm font-medium text-slate-500">Total fines assessed</p>
+          <p className="mt-1 text-2xl font-bold text-shelf-primary">{peso(totals.totalAssessed)}</p>
         </article>
         <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">Unpaid fine records</p>
-          <p className="mt-1 text-2xl font-bold text-shelf-primary">{totals.dueCount}</p>
+          <p className="text-sm font-medium text-slate-500">Payments recorded</p>
+          <p className="mt-1 text-2xl font-bold text-emerald-700">{peso(totals.totalCollected)}</p>
         </article>
         <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">Paid fine records</p>
-          <p className="mt-1 text-2xl font-bold text-emerald-700">{totals.paidCount}</p>
+          <p className="text-sm font-medium text-slate-500">Outstanding balance</p>
+          <p className="mt-1 text-2xl font-bold text-red-700">{peso(totals.confirmedOutstanding)}</p>
         </article>
       </div>
 
