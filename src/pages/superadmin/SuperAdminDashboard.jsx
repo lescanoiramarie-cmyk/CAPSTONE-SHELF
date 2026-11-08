@@ -2447,19 +2447,7 @@ const handleEditStaff = (staff) => {
                   </select>
                 </div>
               </div>
-            <div className="mt-5 flex flex-wrap gap-3">
-              <button
-                type="submit"
-                disabled={staffLoading}
-                className="rounded-lg bg-shelf-primary px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#003568] disabled:opacity-50"
-              >
-                {staffLoading
-                  ? 'Saving...'
-                  : editingStaffId
-                    ? 'Save changes'
-                    : 'Create sub-admin'}
-              </button>
-
+            <div className={`mt-5 flex flex-wrap gap-3 ${editingStaffId ? 'justify-end' : ''}`}>
               {editingStaffId && (
                 <button
                   type="button"
@@ -2477,9 +2465,20 @@ const handleEditStaff = (staff) => {
                   }}
                   className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
-                  Cancel edit
+                  Cancel
                 </button>
               )}
+              <button
+                type="submit"
+                disabled={staffLoading}
+                className="rounded-lg bg-shelf-primary px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#003568] disabled:opacity-50"
+              >
+                {staffLoading
+                  ? 'Saving...'
+                  : editingStaffId
+                    ? 'Save changes'
+                    : 'Create sub-admin'}
+              </button>
             </div>
             </form>
             <section aria-labelledby="staff-directory-title" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
