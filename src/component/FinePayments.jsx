@@ -38,6 +38,7 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
   const [alertingId, setAlertingId] = useState('');
   const [alertingAll, setAlertingAll] = useState(false);
   const [visitorIdsByRequest, setVisitorIdsByRequest] = useState({});
+  const [alertedTodayRequestIds, setAlertedTodayRequestIds] = useState(() => new Set());
   const activeLibraryId = isSuperAdmin
     ? selectedLibraryId === 'all' ? null : selectedLibraryId
     : libraryId;
@@ -51,6 +52,7 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
     setLoading(true);
     setLoadError('');
     setVisitorIdsByRequest({});
+    setAlertedTodayRequestIds(new Set());
     const dashboardResult = await supabase.rpc('get_fine_payment_dashboard', { p_library_id: activeLibraryId ? String(activeLibraryId) : null });
     const { data, error } = dashboardResult;
     if (error) {
@@ -60,6 +62,7 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
         .then(({ data: targets, error: targetError }) => {
           if (!targetError && Array.isArray(targets)) {
             setVisitorIdsByRequest(Object.fromEntries(targets.map((target) => [String(target.request_id), String(target.visitor_id)])));
+            setAlertedTodayRequestIds(new Set(targets.filter((target) => target.alerted_today).map((target) => String(target.request_id))));
           }
         })
         .catch(() => {});
@@ -169,17 +172,19 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
   const visitorAlertRows = useMemo(() => {
     const visitors = new Map();
     dueFineRows.forEach((row) => {
+      if (alertedTodayRequestIds.has(String(row.request_id))) return;
       const visitorId = visitorIdsByRequest[String(row.request_id)];
       const key = visitorId ? `${row.library_id || row.library_name}:${visitorId}` : `${row.library_id || row.library_name}:${String(row.visitor_name || '').trim().toLowerCase()}:${row.request_id}`;
       if (!visitors.has(key)) visitors.set(key, row);
     });
     return [...visitors.values()];
-  }, [dueFineRows, visitorIdsByRequest]);
+  }, [dueFineRows, visitorIdsByRequest, alertedTodayRequestIds]);
   const sendSingleAlert = async (row) => {
     setAlertingId(String(row.request_id));
     setFeedback({ error: '', message: '' });
     try {
       await sendFineReminder(row.request_id);
+      setAlertedTodayRequestIds((previous) => new Set([...previous, String(row.request_id)]));
       setFeedback({ error: '', message: `Fine reminder sent to ${row.visitor_name}.` });
     } catch (error) {
       setFeedback({ error: error.message || 'Unable to send the fine reminder.', message: '' });
@@ -198,6 +203,7 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
       try {
         await sendFineReminder(row.request_id);
         sent += 1;
+        setAlertedTodayRequestIds((previous) => new Set([...previous, String(row.request_id)]));
       } catch (error) {
         failures.push(`${row.visitor_name}: ${error.message || 'send failed'}`);
       }
@@ -273,7 +279,7 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
                     {history.length > 0 && <button type="button" onClick={() => setHistoryFor(historyFor === row.request_id ? null : row.request_id)} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"><History size={16} /> History ({history.length})</button>}
-                    {!row.fine_review_required && Number(row.outstanding_amount) > 0 && visitorIdsByRequest[String(row.request_id)] && <button type="button" disabled={alertingAll || alertingId === String(row.request_id)} onClick={() => void sendSingleAlert(row)} className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-100 disabled:opacity-50"><Bell size={16}/>{alertingId === String(row.request_id) ? 'Sending…' : 'Alert visitor'}</button>}
+                    {!row.fine_review_required && Number(row.outstanding_amount) > 0 && visitorIdsByRequest[String(row.request_id)] && <button type="button" disabled={alertingAll || alertingId === String(row.request_id) || alertedTodayRequestIds.has(String(row.request_id))} onClick={() => void sendSingleAlert(row)} className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-100 disabled:opacity-50"><Bell size={16}/>{alertingId === String(row.request_id) ? 'Sending…' : alertedTodayRequestIds.has(String(row.request_id)) ? 'Alert sent today' : 'Alert visitor'}</button>}
                     {row.fine_review_required && <button type="button" onClick={() => openReview(row)} className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100"><ClipboardCheck size={16} /> Review fine</button>}
                     {Number(row.outstanding_amount) > 0 && !row.fine_review_required && <button type="button" onClick={() => openPayment(row)} className="inline-flex items-center gap-2 rounded-lg bg-shelf-primary px-3 py-2 text-sm font-semibold text-white hover:bg-shelf-primary/90"><CircleDollarSign size={16} /> Record payment</button>}
                     {status === 'Paid' && <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800"><CheckCircle2 size={16} /> Settled</span>}

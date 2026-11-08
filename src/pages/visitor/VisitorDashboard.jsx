@@ -279,6 +279,31 @@ function VisitorDashboardContent() {
 
   const [isNotificationsOpen, setIsNotificationsOpen] =
   useState(false);
+  const [fineReminderNotifications, setFineReminderNotifications] = useState([]);
+
+  useEffect(() => {
+    if (!supabase || !user?.id || user.role !== 'visitor') return undefined;
+    let cancelled = false;
+    supabase
+      .from('due_date_notifications')
+      .select('id, borrow_request_id, notification_date, sent_at')
+      .eq('visitor_id', String(user.id))
+      .eq('notification_type', 'fine_reminder')
+      .order('sent_at', { ascending: false })
+      .limit(20)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.error('Unable to load fine reminder notifications:', error);
+          setFineReminderNotifications([]);
+          return;
+        }
+        setFineReminderNotifications(Array.isArray(data) ? data : []);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.role]);
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
   const [isTermsReviewOpen, setIsTermsReviewOpen] = useState(false);
   const [focusRequestId, setFocusRequestId] = useState(null);
@@ -1873,7 +1898,19 @@ function VisitorDashboardContent() {
           name={user?.name?.split(' ')[0]}
           visitorAppearance
           description="Search books, check availability, manage requests, and keep track of your library visits."
-          showNotifications={false}
+          showNotifications
+          notifications={fineReminderNotifications.map((notification) => ({
+            id: `fine-reminder-${notification.id}`,
+            requestId: notification.borrow_request_id,
+            title: 'Outstanding fine reminder',
+            message: 'Your library sent an email reminder about your confirmed outstanding fine. Review your borrowing activity for the book and current balance.',
+            timeLabel: `Email reminder sent ${new Date(notification.sent_at || notification.notification_date).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}`,
+            status: 'Fine reminder',
+          }))}
+          onNotificationClick={() => {
+            setTab('myBorrows');
+            document.getElementById('visitor-catalog')?.scrollIntoView({ behavior: 'smooth' });
+          }}
           actions={[
             {
               label: 'Scan QR Pass',
