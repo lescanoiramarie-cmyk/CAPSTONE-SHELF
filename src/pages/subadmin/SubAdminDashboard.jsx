@@ -1005,7 +1005,7 @@ function QRBookBorrowing({
                               type="button"
                               onClick={() => handleConfirmBorrow(request)}
                               disabled={confirming}
-                              className="bg-blue-600 text-white px-5 py-2.5 rounded-lg text-xs font-bold hover:bg-blue-500 transition disabled:opacity-50"
+                              className="bg-shelf-accent text-white px-5 py-2.5 rounded-lg text-xs font-bold hover:brightness-90 transition disabled:opacity-50"
                             >
                               {confirming ? 'Confirming...' : 'Confirm borrowing'}
                             </button>
@@ -1694,7 +1694,7 @@ export default function SubAdminDashboard() {
                   onClick={() => { setWorkspaceTab(item.id); navigateToSection('workspace'); }}
                   className={`w-full text-left text-sm px-3 py-2 rounded-lg transition ${
                     section === 'workspace' && workspaceTab === item.id
-                      ? 'bg-blue-500/25 font-bold text-white shadow-[inset_2px_0_0_0_#93c5fd]'
+                      ? 'bg-shelf-accent/25 font-bold text-white shadow-[inset_2px_0_0_0_#bfdbfe]'
                       : 'text-slate-300 hover:bg-white/5'
                   }`}
                 >
@@ -1723,7 +1723,7 @@ export default function SubAdminDashboard() {
                   onClick={() => { setWorkspaceTab(item.id); navigateToSection('workspace'); }}
                   className={`w-full text-left text-sm px-3 py-2 rounded-lg transition ${
                     section === 'workspace' && workspaceTab === item.id
-                      ? 'bg-blue-500/25 font-bold text-white shadow-[inset_2px_0_0_0_#93c5fd]'
+                      ? 'bg-shelf-accent/25 font-bold text-white shadow-[inset_2px_0_0_0_#bfdbfe]'
                       : 'text-slate-300 hover:bg-white/5'
                   }`}
                 >
@@ -1746,7 +1746,30 @@ export default function SubAdminDashboard() {
       </aside>
 
       {/* MAIN CONTENT */}
-      <main ref={mainContentRef} className="min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8">
+      <main ref={mainContentRef} className={`min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8 ${section === 'overview' ? '' : '!pt-0'}`}>
+        {section !== 'overview' && (
+          <header className="sticky top-0 z-40 -mx-4 flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 bg-shelf-bg/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+            <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm">
+              <button
+                type="button"
+                onClick={() => navigateToSection('overview')}
+                className="shrink-0 font-medium text-slate-500 transition hover:text-shelf-accent"
+              >
+                Dashboard
+              </button>
+              <span aria-hidden="true" className="text-slate-300">/</span>
+              <span className="truncate font-semibold text-shelf-primary">
+                {section === 'workspace'
+                  ? ({ reports: 'Reports', analytics: 'Analytics' }[workspaceTab] || 'Reports')
+                  : ({ visitors: 'Visitor Accounts', attendance: 'Attendance', transactions: 'Book Transactions', inventory: 'Inventory', queue: 'Reservation Queue', map: 'Branch Map', settings: 'Settings' }[section] || 'Dashboard')}
+              </span>
+            </nav>
+            <span className="flex max-w-full min-w-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">
+              <Building2 size={14} className="shrink-0 text-shelf-accent" aria-hidden="true" />
+              <span className="truncate">{currentBranchName || 'Assigned library'}</span>
+            </span>
+          </header>
+        )}
         
         {/* Keep the welcome panel on the overview so other sections start at the top. */}
         {section === 'overview' && <CustomDashboardWelcome
@@ -1872,7 +1895,7 @@ export default function SubAdminDashboard() {
                   onMouseEnter={() => setShowImportGuide(true)}
                   onMouseLeave={() => setShowImportGuide(false)}
                 >
-                  <label className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg cursor-pointer transition flex items-center shadow-sm">
+                  <label className="bg-shelf-accent hover:brightness-90 text-white text-xs font-bold px-3.5 py-2 rounded-lg cursor-pointer transition flex items-center shadow-sm">
                     <Upload size={14} className="mr-1.5 inline-block" aria-hidden="true" />
                     {importingBooks ? 'Importing...' : 'Import Books'}
                     <input

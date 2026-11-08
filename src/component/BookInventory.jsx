@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
+import { BookOpen, ChevronLeft, ChevronRight, Pencil, Search, Trash2, X } from 'lucide-react';
 import { useLibrary } from '../context/useLibrary';
 import { useAuth } from '../context/useAuth.js';
 import { supabase } from '../lib/supabaseClient';
@@ -511,15 +511,23 @@ export default function BookInventory() {
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-600 border-collapse">
+          <table className="w-full min-w-[1080px] table-fixed text-left text-sm text-slate-600 border-collapse">
+            <colgroup>
+              <col style={{ width: '32%' }} />
+              <col style={{ width: '15%' }} />
+              <col style={{ width: '16%' }} />
+              <col style={{ width: '19%' }} />
+              <col style={{ width: '7%' }} />
+              <col style={{ width: '11%' }} />
+            </colgroup>
             <thead className="bg-slate-50/80 text-slate-700 font-bold uppercase text-xs border-b border-slate-100">
               <tr>
-                <th className="p-4 w-4/12">Book</th>
-                <th className="p-4 w-2/12">Category</th>
-                <th className="p-4 w-2/12">Fine Rate</th>
-                <th className="p-4 w-2/12">Library Location</th>
-                <th className="p-4 w-1/12 text-center">Copies</th>
-                <th className="p-4 w-1/12 text-right">Actions</th>
+                <th className="p-4">Book</th>
+                <th className="p-4">Category</th>
+                <th className="p-4">Fine Rate</th>
+                <th className="p-4">Library Location</th>
+                <th className="p-4 text-center">Copies</th>
+                <th className="p-4 text-right">Actions</th>
               </tr>
             </thead>
 
@@ -539,43 +547,43 @@ export default function BookInventory() {
                     key={book.id}
                     className="group hover:bg-blue-50/60 hover:shadow-inner transition-all duration-150 cursor-pointer"
                   >
-                    <td className="p-4 flex items-center gap-3.5">
-                      {book.coverUrl ? (
-                        <img
-                          src={book.coverUrl}
-                          alt={book.title}
-                          className="w-11 h-16 object-cover rounded shadow-sm border border-slate-200/60 shrink-0"
-                        />
-                      ) : (
-                        <div className="w-11 h-16 bg-slate-100 border border-slate-200/80 rounded flex items-center justify-center text-xs font-bold text-slate-400 shrink-0 uppercase tracking-tighter">
-                          No Cover
-                        </div>
-                      )}
-
-                      <div className="min-w-0">
-                        <div className="font-bold text-slate-800 text-sm group-hover:text-shelf-primary transition-colors truncate">
-                          {book.title}
-                        </div>
-
-                        <div className="text-xs text-slate-500 font-medium">
-                          By {book.author || 'Unknown'}
-                        </div>
-
-                        {book.isbn && (
-                          <div className="text-xs tabular-nums text-slate-400 mt-0.5 wrap-anywhere">
-                            ISBN: {book.isbn}
+                    <td className="p-4 align-middle">
+                      <div className="flex min-w-0 items-center gap-3.5">
+                        {book.coverUrl ? (
+                          <img
+                            src={book.coverUrl}
+                            alt={book.title}
+                            className="w-11 h-16 object-cover rounded shadow-sm border border-slate-200/60 shrink-0"
+                          />
+                        ) : (
+                          <div className="w-11 h-16 bg-slate-100 border border-slate-200/80 rounded flex items-center justify-center text-xs font-bold text-slate-400 shrink-0 uppercase tracking-tighter">
+                            No Cover
                           </div>
                         )}
+
+                        <div className="min-w-0 flex-1">
+                          <div title={book.title} className="line-clamp-2 break-words font-bold text-sm text-slate-800 transition-colors group-hover:text-shelf-primary">
+                            {book.title}
+                          </div>
+
+                          <div title={book.author || 'Unknown'} className="truncate text-xs font-medium text-slate-500">
+                            By {book.author || 'Unknown'}
+                          </div>
+
+                          {book.isbn && (
+                            <div className="mt-0.5 text-xs tabular-nums text-slate-400 wrap-anywhere">
+                              ISBN: {book.isbn}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
 
-                    <td className="p-4 align-middle">
-                      <span className="inline-block px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md text-xs font-semibold group-hover:bg-white group-hover:shadow-sm transition-all">
-                        {formatBookCategory(book.category) || 'Unclassified'}
-                      </span>
+                    <td className="p-4 align-middle text-sm font-semibold text-slate-700 break-words">
+                      {formatBookCategory(book.category) || 'Unclassified'}
                     </td>
 
-                    <td className="p-4 align-middle text-xs font-semibold text-slate-700">
+                    <td className="p-4 align-middle text-xs font-semibold text-slate-700 break-words">
                       {(book.fineRate ?? book.fine_rate) == null ? (
                         <div>Fine rate not set</div>
                       ) : (
@@ -585,7 +593,7 @@ export default function BookInventory() {
                       )}
                     </td>
 
-                    <td className="p-4 align-middle text-xs font-semibold text-slate-700">
+                    <td className="p-4 align-middle text-xs font-semibold text-slate-700 break-words">
                       {getLibraryDisplayName(book.libraryId)}
                     </td>
 
@@ -595,29 +603,35 @@ export default function BookInventory() {
                       </span>
                     </td>
 
-                    <td className="p-4 align-middle text-right space-x-2">
-                      <button
-                        type="button"
-                        data-confirm-message={`Delete "${book.title || 'this book'}" from the inventory? This cannot be undone.`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenEdit(book);
-                        }}
-                        className="px-2.5 py-1 text-xs text-blue-700 hover:bg-blue-100 hover:text-blue-800 rounded-md font-bold transition-colors"
-                      >
-                        Edit
-                      </button>
+                    <td className="p-4 align-middle">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          aria-label={`Edit ${book.title}`}
+                          title="Edit book"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenEdit(book);
+                          }}
+                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 transition hover:border-shelf-accent hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-accent/50"
+                        >
+                          <Pencil size={16} aria-hidden="true" />
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(book.id);
-                        }}
-                        className="px-2.5 py-1 text-xs text-red-600 hover:bg-red-100 hover:text-red-800 rounded-md font-bold transition-colors"
-                      >
-                        Delete
-                      </button>
+                        <button
+                          type="button"
+                          aria-label={`Delete ${book.title}`}
+                          title="Delete book"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(book.id);
+                          }}
+                          data-confirm-message={`Delete "${book.title || 'this book'}" from the inventory? This cannot be undone.`}
+                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition hover:border-red-300 hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50"
+                        >
+                          <Trash2 size={16} aria-hidden="true" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

@@ -1544,7 +1544,28 @@ export default function OPACCatalog({
     cutout: '62%',
     plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12 } } },
   };
-  const myRequestList = useProgressiveList(filteredMyRequests, 12);
+  const myRequestPageSize = 10;
+  const [myRequestPage, setMyRequestPage] = useState(1);
+  const myRequestPageCount = Math.max(1, Math.ceil(filteredMyRequests.length / myRequestPageSize));
+  const visibleMyRequests = filteredMyRequests.slice(
+    (myRequestPage - 1) * myRequestPageSize,
+    myRequestPage * myRequestPageSize
+  );
+  useEffect(() => {
+    setMyRequestPage(1);
+  }, [myRequestSearch, myRequestStatus]);
+  useEffect(() => {
+    setMyRequestPage((page) => Math.min(page, myRequestPageCount));
+  }, [myRequestPageCount]);
+  useEffect(() => {
+    if (!focusRequestId || activeView !== 'myBorrows') return;
+    const focusedIndex = filteredMyRequests.findIndex(
+      (request) => String(request.id) === String(focusRequestId)
+    );
+    if (focusedIndex >= 0) {
+      setMyRequestPage(Math.floor(focusedIndex / myRequestPageSize) + 1);
+    }
+  }, [activeView, filteredMyRequests, focusRequestId]);
   useEffect(() => {
     if (
       !focusRequestId ||
@@ -3319,7 +3340,7 @@ export default function OPACCatalog({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {myRequestList.visibleItems.map((request) => {
+                  {visibleMyRequests.map((request) => {
                     const currentFine = calculateCurrentFine(request);
                     const isCommunityRequest =
                       request?.isCommunityBook === true ||
@@ -3573,14 +3594,35 @@ export default function OPACCatalog({
                   })}
                 </tbody>
               </table>
-              <ProgressiveListFooter
-                noun="requests"
-                totalCount={filteredMyRequests.length}
-                visibleCount={myRequestList.visibleCount}
-                hasMore={myRequestList.hasMore}
-                loadMore={myRequestList.loadMore}
-                sentinelRef={myRequestList.sentinelRef}
-              />
+              <nav
+                aria-label="My request pages"
+                className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-4 text-sm dark:border-slate-700"
+              >
+                <p className="text-slate-600 dark:text-slate-300" aria-live="polite">
+                  Showing {filteredMyRequests.length === 0 ? 0 : (myRequestPage - 1) * myRequestPageSize + 1}–{Math.min(myRequestPage * myRequestPageSize, filteredMyRequests.length)} of {filteredMyRequests.length} requests
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMyRequestPage((page) => Math.max(1, page - 1))}
+                    disabled={myRequestPage <= 1}
+                    className="min-h-10 rounded-lg border border-slate-300 px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+                  >
+                    Previous
+                  </button>
+                  <span className="whitespace-nowrap text-slate-600 dark:text-slate-300">
+                    Page {myRequestPage} of {myRequestPageCount}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setMyRequestPage((page) => Math.min(myRequestPageCount, page + 1))}
+                    disabled={myRequestPage >= myRequestPageCount}
+                    className="min-h-10 rounded-lg border border-slate-300 px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+                  >
+                    Next
+                  </button>
+                </div>
+              </nav>
               </>
             )}
           </div>
@@ -4395,10 +4437,10 @@ export default function OPACCatalog({
                       return (
                         <div
                           key={entry.id}
-                          className="visitor-library-entry flex flex-wrap items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs gap-3"
+                          className="visitor-library-entry grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
                         >
-                          <div>
-                            <p className="font-bold text-slate-800 text-sm">
+                          <div className="min-w-0">
+                            <p className="break-words font-bold text-slate-800 text-sm">
                               {libraryName(entry.libraryId)}
                             </p>
                             <p className="text-slate-500">
@@ -4412,11 +4454,11 @@ export default function OPACCatalog({
                                 : `₱${entryFineRate} per overdue day`}
                             </p>
                           </div>
-                          <div className="visitor-library-actions flex max-w-full flex-wrap items-center justify-end gap-2 shrink-0">
+                          <div className="visitor-library-actions flex max-w-full flex-wrap items-center justify-start gap-2 sm:justify-end">
                             <button
                               type="button"
                               onClick={() => handleViewMap(entry.libraryId, entry)}
-                              className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-300 transition"
+                              className="visitor-view-map-button inline-flex min-h-10 items-center justify-center px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-300 transition"
                             >
                               View map
                             </button>
@@ -4424,7 +4466,7 @@ export default function OPACCatalog({
                               type="button"
                               disabled={savingReadingListBookId === entry.id}
                               onClick={() => handleToggleReadingList(entry)}
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <ClipboardList size={14} aria-hidden="true" />
                               {savingReadingListBookId === entry.id
@@ -4442,7 +4484,7 @@ export default function OPACCatalog({
                                   : 'Are you sure you want to reserve this book?'
                               }
                               onClick={() => handleBorrowOrReserve(entry)}
-                              className="px-3 py-1.5 bg-shelf-primary text-white rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="inline-flex min-h-10 items-center justify-center px-3 py-1.5 bg-shelf-primary text-white rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {submittingBorrowBookId === String(entry.id)
                                 ? 'Processing...'

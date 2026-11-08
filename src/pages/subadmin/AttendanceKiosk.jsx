@@ -237,7 +237,7 @@ export default function AttendanceKiosk() {
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-900">
-      <header className="flex flex-wrap items-center justify-between gap-4 bg-shelf-primary px-5 py-4 text-white shadow-md sm:px-8">
+      <header className="sticky top-0 z-50 flex flex-wrap items-center justify-between gap-4 bg-shelf-primary px-5 py-4 text-white shadow-md sm:px-8">
         <a href="/subadmin" className="flex items-center gap-3 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="SHELF dashboard">
           <img src="/shelf-logo.png" alt="" className="h-10 w-10 object-contain" />
           <div>

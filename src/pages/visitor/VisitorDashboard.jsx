@@ -241,10 +241,10 @@ function VisitorDashboardContent() {
   const [attendanceHistoryHasMore, setAttendanceHistoryHasMore] = useState(false);
   const [attendanceHistoryScrollTop, setAttendanceHistoryScrollTop] = useState(0);
   const [attendanceHistoryTotal, setAttendanceHistoryTotal] = useState(null);
+  const [attendanceHistoryPage, setAttendanceHistoryPage] = useState(1);
   const [attendancePeriod, setAttendancePeriod] = useState('all-time');
   const [attendanceLibraryFilter, setAttendanceLibraryFilter] = useState('all');
   const attendanceHistoryContainerRef = useRef(null);
-  const attendanceHistorySentinelRef = useRef(null);
   const attendanceHistoryCursorRef = useRef(null);
   const attendanceHistoryHasMoreRef = useRef(false);
   const attendanceHistoryLoadingRef = useRef(false);
@@ -488,6 +488,7 @@ function VisitorDashboardContent() {
       setAttendanceHistoryHasMore(false);
       setAttendanceHistoryTotal(null);
       setAttendanceHistoryScrollTop(0);
+      setAttendanceHistoryPage(1);
       if (attendanceHistoryContainerRef.current) {
         attendanceHistoryContainerRef.current.scrollTop = 0;
       }
@@ -509,7 +510,7 @@ function VisitorDashboardContent() {
           ? null
           : attendanceLibraryFilter,
       });
-      if (generation !== attendanceHistoryGenerationRef.current) return;
+      if (generation !== attendanceHistoryGenerationRef.current) return null;
 
       setAttendanceHistory((current) => {
         const next = reset ? page.logs : [...current, ...page.logs];
@@ -525,12 +526,14 @@ function VisitorDashboardContent() {
       attendanceHistoryHasMoreRef.current = page.hasMore;
       setAttendanceHistoryHasMore(page.hasMore);
       if (page.totalCount !== null) setAttendanceHistoryTotal(page.totalCount);
+      return page;
     } catch (error) {
       if (generation === attendanceHistoryGenerationRef.current) {
         setAttendanceHistoryError(
           error instanceof Error ? error.message : 'Unable to load attendance history. Please retry.'
         );
       }
+      return null;
     } finally {
       if (generation === attendanceHistoryGenerationRef.current) {
         attendanceHistoryLoadingRef.current = false;
@@ -550,24 +553,6 @@ function VisitorDashboardContent() {
       setAttendanceHistoryLoading(false);
     };
   }, [loadAttendanceHistory, user?.role]);
-
-  useEffect(() => {
-    const root = attendanceHistoryContainerRef.current;
-    const sentinel = attendanceHistorySentinelRef.current;
-    if (
-      !root || !sentinel || !attendanceHistoryHasMore ||
-      attendanceHistoryLoading || attendanceHistoryError ||
-      typeof IntersectionObserver === 'undefined'
-    ) return undefined;
-
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) {
-        void loadAttendanceHistory(false);
-      }
-    }, { root, rootMargin: '120px' });
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [attendanceHistoryHasMore, attendanceHistoryError, attendanceHistoryLoading, loadAttendanceHistory]);
 
   useEffect(() => {
     const path = visitorDetails?.profileImagePath;
@@ -1182,6 +1167,10 @@ function VisitorDashboardContent() {
   // =========================================================
 
   const myVisits = attendanceHistory;
+  const attendancePageSize = 10;
+  const attendancePageCount = Math.max(1, Math.ceil((attendanceHistoryTotal ?? myVisits.length) / attendancePageSize));
+  const attendancePageStart = (attendanceHistoryPage - 1) * attendancePageSize;
+  const attendancePageVisits = myVisits.slice(attendancePageStart, attendancePageStart + attendancePageSize);
   const attendanceRowHeight = 44;
   const attendanceOverscan = 5;
   const attendanceVisibleStart = Math.max(
@@ -1189,13 +1178,28 @@ function VisitorDashboardContent() {
     Math.floor(attendanceHistoryScrollTop / attendanceRowHeight) - attendanceOverscan
   );
   const attendanceVisibleEnd = Math.min(
-    myVisits.length,
+    attendancePageVisits.length,
     attendanceVisibleStart + 18 + attendanceOverscan * 2
   );
-  const visibleAttendanceVisits = myVisits.slice(
+  const visibleAttendanceVisits = attendancePageVisits.slice(
     attendanceVisibleStart,
     attendanceVisibleEnd
   );
+  const goToNextAttendancePage = async () => {
+    if (attendanceHistoryPage >= attendancePageCount || attendanceHistoryLoading) return;
+    const nextPage = attendanceHistoryPage + 1;
+    const nextPageStart = (nextPage - 1) * attendancePageSize;
+    if (nextPageStart >= myVisits.length) {
+      if (!attendanceHistoryHasMore) return;
+      const loadedPage = await loadAttendanceHistory(false);
+      if (!loadedPage?.logs?.length) return;
+    }
+    setAttendanceHistoryPage(nextPage);
+    setAttendanceHistoryScrollTop(0);
+    if (attendanceHistoryContainerRef.current) attendanceHistoryContainerRef.current.scrollTop = 0;
+  };
+  const attendanceAxisColor = isDarkAppearance ? '#cbd5e1' : '#64748b';
+  const attendanceGridColor = isDarkAppearance ? 'rgba(148, 163, 184, 0.18)' : 'rgba(100, 116, 139, 0.16)';
   const attendanceLibraryChartData = useMemo(() => {
     const counts = new Map();
     myVisits.forEach((visit) => {
@@ -1239,28 +1243,28 @@ function VisitorDashboardContent() {
       datasets: [{
         label: 'Visits',
         data: months.map(({ key }) => counts.get(key)),
-        backgroundColor: '#002046',
+        backgroundColor: isDarkAppearance ? '#3b82f6' : '#002046',
         borderRadius: 6,
       }],
     };
-  }, [myVisits]);
+  }, [myVisits, isDarkAppearance]);
   const attendanceChartOptions = {
     indexAxis: 'y',
     responsive: true,
     maintainAspectRatio: false,
     plugins: { legend: { display: false } },
     scales: {
-      x: { beginAtZero: true, ticks: { precision: 0 } },
-      y: { grid: { display: false } },
+      x: { beginAtZero: true, ticks: { precision: 0, color: attendanceAxisColor }, grid: { color: attendanceGridColor } },
+      y: { grid: { display: false }, ticks: { color: attendanceAxisColor } },
     },
   };
   const attendanceMonthlyChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
+    plugins: { legend: { display: false }, tooltip: { titleColor: '#f8fafc', bodyColor: '#f8fafc' } },
     scales: {
-      y: { beginAtZero: true, ticks: { precision: 0 } },
-      x: { grid: { display: false } },
+      y: { beginAtZero: true, ticks: { precision: 0, color: attendanceAxisColor }, grid: { color: attendanceGridColor } },
+      x: { grid: { display: false }, ticks: { color: attendanceAxisColor } },
     },
   };
 
@@ -2366,7 +2370,7 @@ function VisitorDashboardContent() {
                           {visibleAttendanceVisits.map((visit, index) => (
                             <li
                               key={visit.id}
-                              aria-posinset={attendanceVisibleStart + index + 1}
+                              aria-posinset={attendancePageStart + attendanceVisibleStart + index + 1}
                               aria-setsize={attendanceHistoryTotal ?? myVisits.length}
                               className="flex h-11 items-center justify-between gap-3 overflow-hidden py-2.5 text-xs"
                             >
@@ -2395,9 +2399,17 @@ function VisitorDashboardContent() {
                           <button type="button" onClick={() => void loadAttendanceHistory(myVisits.length === 0)} className="mt-2 font-bold underline">Retry</button>
                         </div>
                       )}
-                      <div ref={attendanceHistorySentinelRef} aria-hidden="true" className="h-1" />
-                      {attendanceHistoryHasMore && typeof IntersectionObserver === 'undefined' && (
-                        <button type="button" onClick={() => void loadAttendanceHistory(false)} disabled={attendanceHistoryLoading} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200">Load more attendance</button>
+                      {myVisits.length > 0 && (
+                        <nav aria-label="Attendance history pages" className="sticky bottom-0 mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white/95 px-2 py-3 text-xs backdrop-blur dark:border-slate-700 dark:bg-slate-800/95 sm:text-sm">
+                          <p className="text-slate-600 dark:text-slate-300" aria-live="polite">
+                            Showing {attendancePageStart + 1}–{Math.min(attendancePageStart + attendancePageSize, attendanceHistoryTotal ?? myVisits.length)} of {attendanceHistoryTotal ?? myVisits.length} visits
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={() => { setAttendanceHistoryPage((page) => Math.max(1, page - 1)); setAttendanceHistoryScrollTop(0); if (attendanceHistoryContainerRef.current) attendanceHistoryContainerRef.current.scrollTop = 0; }} disabled={attendanceHistoryPage <= 1} className="min-h-10 rounded-lg border border-slate-300 px-3 py-2 font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">Previous</button>
+                            <span className="whitespace-nowrap text-slate-600 dark:text-slate-300">Page {attendanceHistoryPage} of {attendancePageCount}</span>
+                            <button type="button" onClick={() => void goToNextAttendancePage()} disabled={attendanceHistoryPage >= attendancePageCount || attendanceHistoryLoading} className="min-h-10 rounded-lg border border-slate-300 px-3 py-2 font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">{attendanceHistoryLoading ? 'Loading…' : 'Next'}</button>
+                          </div>
+                        </nav>
                       )}
                       {!attendanceHistoryHasMore && myVisits.length > 0 && !attendanceHistoryLoading && (
                         <p className="py-2 text-center text-[11px] text-slate-400">You have reached the end of your attendance history.</p>

@@ -1,4 +1,5 @@
-﻿import { Clock3, QrCode, UsersRound, UserCheck } from 'lucide-react';
+﻿import { useEffect, useState } from 'react';
+import { Clock3, QrCode, UsersRound, UserCheck } from 'lucide-react';
 import { useAuth } from '../context/useAuth.js';
 import { useLibraryData } from '../context/useLibrary.js';
 
@@ -12,10 +13,9 @@ function formatDateTime(iso) {
 export default function AttendanceScanner() {
   const { user } = useAuth();
   const { attendanceLogs, libraries } = useLibraryData();
+  const [attendancePage, setAttendancePage] = useState(1);
+  const attendancePageSize = 10;
   const libraryId = user?.libraryId || libraries[0]?.id;
-
-  const libraryName =
-    libraries.find((l) => l.id === libraryId)?.name || 'this branch';
 
   const today = new Date().toDateString();
 
@@ -28,6 +28,15 @@ export default function AttendanceScanner() {
     );
   const checkedOutCount = todaysLogs.filter((log) => log.checkedOutAt).length;
   const currentlyInsideCount = todaysLogs.length - checkedOutCount;
+  const attendancePageCount = Math.max(1, Math.ceil(todaysLogs.length / attendancePageSize));
+  const visibleTodaysLogs = todaysLogs.slice(
+    (attendancePage - 1) * attendancePageSize,
+    attendancePage * attendancePageSize
+  );
+
+  useEffect(() => {
+    setAttendancePage((page) => Math.min(page, attendancePageCount));
+  }, [attendancePageCount]);
 
   return (
     <div className="space-y-6">
@@ -38,9 +47,6 @@ export default function AttendanceScanner() {
           <p className="mt-1 text-base leading-6 text-slate-600">Monitor today's branch visits and check-in status.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex w-fit items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-800">
-            <span className="h-2 w-2 rounded-full bg-blue-600" />{libraryName}
-          </span>
           <a href="/subadmin/attendance-kiosk" target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-shelf-primary px-4 py-2 text-base font-semibold text-white shadow-sm transition hover:bg-blue-900">
             <QrCode size={16} aria-hidden="true" />Open kiosk tab
           </a>
@@ -68,11 +74,11 @@ export default function AttendanceScanner() {
           {todaysLogs.length === 0 ? (
             <div className="grid min-h-48 place-items-center px-5 py-8 text-center"><div><span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-slate-100 text-slate-500"><UsersRound size={20} aria-hidden="true" /></span><p className="mt-3 text-base font-semibold leading-6 text-slate-700">No visits recorded today</p><p className="mt-1 text-sm leading-5 text-slate-600">Scans from the kiosk will appear here.</p></div></div>
           ) : (
-            <div className="max-h-[34rem] overflow-auto">
+            <div className="overflow-x-auto">
               <table className="w-full min-w-[38rem] text-left text-sm">
                 <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-bold uppercase tracking-[0.08em] text-slate-600"><tr><th className="px-5 py-3">Visitor</th><th className="px-5 py-3">Library</th><th className="px-5 py-3">Time in</th><th className="px-5 py-3">Status / time out</th></tr></thead>
                 <tbody className="divide-y divide-slate-100">
-                  {todaysLogs.map((log) => {
+                  {visibleTodaysLogs.map((log) => {
                     const visitLibrary = libraries.find((library) => library.id === log.libraryId)?.name || 'Unknown Library';
                     return <tr key={log.id} className="transition-colors hover:bg-blue-50/40">
                       <td className="px-5 py-3.5 text-base font-semibold leading-6 text-slate-800">{log.visitorName}</td>
@@ -84,6 +90,18 @@ export default function AttendanceScanner() {
                 </tbody>
               </table>
             </div>
+          )}
+          {todaysLogs.length > 0 && (
+            <nav aria-label="Attendance pages" className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 text-sm">
+              <p className="text-slate-600" aria-live="polite">
+                Showing {(attendancePage - 1) * attendancePageSize + 1}–{Math.min(attendancePage * attendancePageSize, todaysLogs.length)} of {todaysLogs.length} visits
+              </p>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setAttendancePage((page) => Math.max(1, page - 1))} disabled={attendancePage <= 1} className="min-h-10 rounded-lg border border-slate-300 px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">Previous</button>
+                <span className="whitespace-nowrap text-slate-600">Page {attendancePage} of {attendancePageCount}</span>
+                <button type="button" onClick={() => setAttendancePage((page) => Math.min(attendancePageCount, page + 1))} disabled={attendancePage >= attendancePageCount} className="min-h-10 rounded-lg border border-slate-300 px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">Next</button>
+              </div>
+            </nav>
           )}
       </section>
     </div>

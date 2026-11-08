@@ -512,6 +512,21 @@ export default function SuperAdminDashboard() {
     status: 'Open',
   });
   const [mapPosition, setMapPosition] = useState([14.0850, 121.1490]);
+  const [libraryPage, setLibraryPage] = useState(1);
+  const librariesPerPage = 10;
+  const libraryPageCount = Math.max(1, Math.ceil(libraries.length / librariesPerPage));
+  const paginatedLibraries = libraries.slice(
+    (libraryPage - 1) * librariesPerPage,
+    libraryPage * librariesPerPage
+  );
+
+  useEffect(() => {
+    setLibraryPage((page) => Math.min(page, libraryPageCount));
+  }, [libraryPageCount]);
+
+  useEffect(() => {
+    setLibraryPage(1);
+  }, [section]);
 
   const handleCoordinateChange = (lat, lng) => {
     setLibraryForm((previous) => ({
@@ -1513,7 +1528,7 @@ const handleEditStaff = (staff) => {
                   }}
                   className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition ${
                     section === 'workspace' && activeTab === 'reports'
-                      ? 'bg-blue-500/25 font-bold text-white shadow-[inset_2px_0_0_0_#93c5fd]'
+                      ? 'bg-shelf-accent/25 font-bold text-white shadow-[inset_2px_0_0_0_#bfdbfe]'
                       : 'text-slate-300 hover:text-white'
                   }`}
                 >
@@ -1527,7 +1542,7 @@ const handleEditStaff = (staff) => {
                   }}
                   className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition ${
                     section === 'workspace' && activeTab === 'analytics'
-                      ? 'bg-blue-500/25 font-bold text-white shadow-[inset_2px_0_0_0_#93c5fd]'
+                      ? 'bg-shelf-accent/25 font-bold text-white shadow-[inset_2px_0_0_0_#bfdbfe]'
                       : 'text-slate-300 hover:text-white'
                   }`}
                 >
@@ -1565,7 +1580,7 @@ const handleEditStaff = (staff) => {
                   }}
                   className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition ${
                     section === 'communication' && activeTab === 'feedback'
-                      ? 'bg-blue-500/25 font-bold text-white shadow-[inset_2px_0_0_0_#93c5fd]'
+                      ? 'bg-shelf-accent/25 font-bold text-white shadow-[inset_2px_0_0_0_#bfdbfe]'
                       : 'text-slate-300 hover:text-white'
                   }`}
                 >
@@ -1579,7 +1594,7 @@ const handleEditStaff = (staff) => {
                   }}
                   className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition ${
                     section === 'communication' && activeTab === 'announcements'
-                      ? 'bg-blue-500/25 font-bold text-white shadow-[inset_2px_0_0_0_#93c5fd]'
+                      ? 'bg-shelf-accent/25 font-bold text-white shadow-[inset_2px_0_0_0_#bfdbfe]'
                       : 'text-slate-300 hover:text-white'
                   }`}
                 >
@@ -1610,8 +1625,33 @@ const handleEditStaff = (staff) => {
       {/* MAIN CONTENT */}
       <main
         ref={mainScrollRef}
-        className="ml-60 min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8"
+        className={`ml-60 min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8 ${section === 'overview' ? '' : '!pt-0'}`}
       >
+        {section !== 'overview' && (
+          <header className="sticky top-0 z-40 -mx-4 flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 bg-shelf-bg/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+            <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm">
+              <button
+                type="button"
+                onClick={() => setSection('overview')}
+                className="shrink-0 font-medium text-slate-500 transition hover:text-shelf-accent"
+              >
+                Dashboard
+              </button>
+              <span aria-hidden="true" className="text-slate-300">/</span>
+              <span className="truncate font-semibold text-shelf-primary">
+                {section === 'workspace'
+                  ? (activeTab === 'analytics' ? 'Analytics' : 'Reports')
+                  : section === 'communication'
+                    ? (activeTab === 'announcements' ? 'Announcements' : 'Feedback')
+                    : ({ inventory: 'Inventory', map: 'Libraries & map', accounts: 'Staff accounts', 'visitor-accounts': 'Visitor accounts', settings: 'Settings' }[section] || 'Dashboard')}
+              </span>
+            </nav>
+            <span className="flex max-w-full min-w-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">
+              <Globe size={14} className="shrink-0 text-shelf-accent" aria-hidden="true" />
+              <span className="truncate">All libraries</span>
+            </span>
+          </header>
+        )}
         {section === 'overview' && <DashboardWelcome
           name={superAdminName.split(' ')[0]}
           description="System metrics, library operations, staff accounts, and reports at a glance."
@@ -1768,7 +1808,7 @@ const handleEditStaff = (staff) => {
                     <option value="books">Import to Books Table</option>
                     <option value="attendance_logs">Import to Attendance Logs</option>
                   </select>
-                  <label className="cursor-pointer rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-bold text-white transition hover:bg-blue-700">
+                  <label className="cursor-pointer rounded-lg bg-shelf-accent px-3.5 py-2 text-xs font-bold text-white transition hover:brightness-90">
                     <Upload size={14} className="mr-1.5 inline-block align-[-2px]" aria-hidden="true" />
                     Import File
                     <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} className="hidden" />
@@ -2168,7 +2208,7 @@ const handleEditStaff = (staff) => {
                     No libraries have been added yet.
                   </div>
                 ) : (
-                  libraries.map((library) => (
+                  paginatedLibraries.map((library) => (
                     <div
                       key={library.id}
                       className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
@@ -2223,6 +2263,32 @@ const handleEditStaff = (staff) => {
                       </div>
                     </div>
                   ))
+                )}
+                {libraries.length > 0 && (
+                  <div className="flex flex-col gap-3 rounded-xl border border-shelf-border bg-white px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-slate-600">
+                      Showing {(libraryPage - 1) * librariesPerPage + 1}–{Math.min(libraryPage * librariesPerPage, libraries.length)} of {libraries.length} libraries
+                    </p>
+                    <div className="flex items-center justify-between gap-3 sm:justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setLibraryPage((page) => Math.max(1, page - 1))}
+                        disabled={libraryPage === 1}
+                        className="rounded-lg border border-shelf-border px-3 py-2 font-semibold text-shelf-primary transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Previous
+                      </button>
+                      <span className="whitespace-nowrap text-slate-600">Page {libraryPage} of {libraryPageCount}</span>
+                      <button
+                        type="button"
+                        onClick={() => setLibraryPage((page) => Math.min(libraryPageCount, page + 1))}
+                        disabled={libraryPage === libraryPageCount}
+                        className="rounded-lg border border-shelf-border px-3 py-2 font-semibold text-shelf-primary transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
             )}

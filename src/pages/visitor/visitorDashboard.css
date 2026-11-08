@@ -75,6 +75,44 @@
   color: #e2e8f0;
 }
 
+/* Keep shared visitor surfaces and neutral copy readable in dark appearance,
+   including older sections that do not yet use Tailwind's dark: variants. */
+.visitor-dashboard.theme-dark .bg-white,
+.visitor-dashboard.theme-dark .bg-slate-50,
+.visitor-dashboard.theme-dark .bg-slate-100,
+.visitor-dashboard.theme-dark .bg-gray-50,
+.visitor-dashboard.theme-dark .bg-gray-100 {
+  background-color: var(--visitor-surface);
+}
+
+.visitor-dashboard.theme-dark .bg-slate-50\/70,
+.visitor-dashboard.theme-dark .bg-slate-100\/70,
+.visitor-dashboard.theme-dark .bg-gray-50\/70 {
+  background-color: var(--visitor-surface-muted);
+}
+
+.visitor-dashboard.theme-dark .text-slate-900,
+.visitor-dashboard.theme-dark .text-slate-800,
+.visitor-dashboard.theme-dark .text-slate-700,
+.visitor-dashboard.theme-dark .text-gray-900,
+.visitor-dashboard.theme-dark .text-gray-800,
+.visitor-dashboard.theme-dark .text-gray-700 {
+  color: var(--visitor-ink);
+}
+
+.visitor-dashboard.theme-dark .text-slate-600,
+.visitor-dashboard.theme-dark .text-slate-500,
+.visitor-dashboard.theme-dark .text-gray-600,
+.visitor-dashboard.theme-dark .text-gray-500 {
+  color: var(--visitor-muted);
+}
+
+.visitor-dashboard.theme-dark .hover\:bg-slate-50:hover,
+.visitor-dashboard.theme-dark .hover\:bg-slate-100:hover,
+.visitor-dashboard.theme-dark .hover\:bg-gray-50:hover {
+  background-color: #263449;
+}
+
 .visitor-dashboard .rounded-xl,
 .visitor-dashboard .rounded-2xl,
 .visitor-dashboard .rounded-3xl {
@@ -1179,6 +1217,41 @@
 .visitor-dashboard.theme-dark .visitor-feedback-success .visitor-feedback-icon {
   background-color: #14532d;
   color: #dcfce7;
+}
+
+/* A few legacy visitor forms still use light blue utility backgrounds and
+   dark-blue utility copy without a dark: variant. */
+.visitor-dashboard.theme-dark .bg-blue-50,
+.visitor-dashboard.theme-dark .bg-blue-100,
+.visitor-dashboard.theme-dark .bg-violet-50,
+.visitor-dashboard.theme-dark .bg-violet-100 {
+  border-color: #475569;
+  background-color: #1e293b;
+}
+
+.visitor-dashboard.theme-dark :where(.text-blue-900, .text-blue-800, .text-blue-700, .text-blue-600) {
+  color: #bfdbfe;
+}
+
+.visitor-dashboard.theme-dark :where(.text-violet-900, .text-violet-800, .text-violet-700, .text-violet-600) {
+  color: #ddd6fe;
+}
+
+.visitor-dashboard.theme-dark button:disabled {
+  border-color: #475569;
+  background-color: #334155;
+  color: #cbd5e1;
+  opacity: 1;
+}
+
+.visitor-dashboard.theme-dark .visitor-view-map-button {
+  border: 1px solid #64748b;
+  background-color: #334155;
+  color: #f1f5f9;
+}
+
+.visitor-dashboard.theme-dark .visitor-view-map-button:hover {
+  background-color: #475569;
 }
 
 /* Keep the OPAC card count consistent with the public catalog. */
