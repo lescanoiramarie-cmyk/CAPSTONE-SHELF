@@ -1483,6 +1483,10 @@ export default function OPACCatalog({
     const overdue = borrowed.filter(
       (request) => calculateCurrentFine(request) > 0
     ).length;
+    const outstandingFine = myRequests.reduce(
+      (total, request) => total + calculateCurrentFine(request),
+      0
+    );
 
     return {
       total: myRequests.length,
@@ -1490,6 +1494,7 @@ export default function OPACCatalog({
       borrowed: borrowed.length,
       returned,
       overdue,
+      outstandingFine,
     };
   }, [myRequests]);
   const requestStatusChartData = useMemo(() => {
@@ -3226,13 +3231,14 @@ export default function OPACCatalog({
                     ` ${requestAnalytics.overdue} borrowed ${requestAnalytics.overdue === 1 ? 'book is' : 'books are'} overdue; please check the due dates below.`}
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
                 {[
                   { label: 'Total requests', value: requestAnalytics.total, tone: 'text-shelf-primary' },
                   { label: 'Waiting', value: requestAnalytics.waiting, tone: 'text-amber-700 dark:text-amber-300' },
                   { label: 'Borrowed', value: requestAnalytics.borrowed, tone: 'text-blue-700 dark:text-blue-300' },
                   { label: 'Returned', value: requestAnalytics.returned, tone: 'text-emerald-700 dark:text-emerald-300' },
                   { label: 'Overdue', value: requestAnalytics.overdue, tone: requestAnalytics.overdue ? 'text-red-700 dark:text-red-300' : 'text-slate-600 dark:text-slate-300' },
+                  { label: 'Fine due', value: `₱${requestAnalytics.outstandingFine.toLocaleString('en-PH')}`, tone: requestAnalytics.outstandingFine ? 'text-amber-800 dark:text-amber-300' : 'text-slate-600 dark:text-slate-300' },
                 ].map((metric) => (
                   <div key={metric.label} className="rounded-lg bg-slate-50 px-3 py-2.5 dark:bg-slate-700/60">
                     <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-300">{metric.label}</p>

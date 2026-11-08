@@ -1510,6 +1510,7 @@ const handleEditStaff = (staff) => {
             onClick={() => setSection('subscriptions')}
             className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${section === 'subscriptions' ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]' : 'text-slate-300 hover:bg-white/5'}`}
           >
+            <Building2 size={18} className="mr-3 inline-block align-[-3px]" aria-hidden="true" />
             Subscriptions
           </button>
 
