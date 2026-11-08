@@ -304,7 +304,7 @@ function VisitorDashboardContent() {
     void loadFineReminderNotifications();
     const refreshTimer = window.setInterval(() => {
       if (document.visibilityState === 'visible') void loadFineReminderNotifications();
-    }, 30_000);
+    }, 5 * 60_000);
     const refreshOnFocus = () => void loadFineReminderNotifications();
     window.addEventListener('focus', refreshOnFocus);
     return () => {

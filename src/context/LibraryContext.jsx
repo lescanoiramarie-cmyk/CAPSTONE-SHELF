@@ -61,6 +61,7 @@ export function LibraryProvider({ children }) {
   const [connectionError, setConnectionError] = useState('');
   const [attendanceLoadError, setAttendanceLoadError] = useState('');
   const [optionalDataLoadErrors, setOptionalDataLoadErrors] = useState([]);
+  const [realtimeVisitorId, setRealtimeVisitorId] = useState(null);
   const [borrowRequestsLoading, setBorrowRequestsLoading] = useState(false);
   const [borrowRequestsLoadError, setBorrowRequestsLoadError] = useState('');
   const refreshSequenceRef = useRef(0);
@@ -394,6 +395,7 @@ export function LibraryProvider({ children }) {
         getCurrentVisitorId(user?.role),
         'Visitor account data'
       );
+      setRealtimeVisitorId(currentVisitorId);
 
       console.log(
         'SHELF — CURRENT VISITOR ID:',
@@ -927,17 +929,57 @@ fineReviewRequired:
   useEffect(() => {
     let mounted = true;
     let realtimeRefreshTimer = null;
+    let pendingRealtimeRefresh = null;
+    const role = String(user?.role || '').toLowerCase();
+    const isVisitor = role === 'visitor';
+    const isStaff = role === 'subadmin' || role === 'superadmin';
 
-    const scheduleRealtimeRefresh = () => {
+    const scheduleRealtimeRefresh = (refresh = refreshAll) => {
+      pendingRealtimeRefresh = refresh;
       if (realtimeRefreshTimer) clearTimeout(realtimeRefreshTimer);
       realtimeRefreshTimer = setTimeout(() => {
         realtimeRefreshTimer = null;
-        if (mounted) {
-          void refreshAll().catch((error) => {
+        const refreshPending = pendingRealtimeRefresh;
+        pendingRealtimeRefresh = null;
+        if (mounted && document.visibilityState === 'visible' && refreshPending) {
+          void refreshPending().catch((error) => {
             console.error('SHELF realtime refresh failed:', error);
           });
         }
-      }, 500);
+      }, 750);
+    };
+
+    const applyRealtimeBookChange = (payload) => {
+      const row = payload.eventType === 'DELETE' ? payload.old : payload.new;
+      if (!row?.id) return;
+      const id = String(row.id);
+      const book = payload.eventType === 'DELETE' ? null : store.mapBook(row);
+      setData((currentData) => {
+        const replaceBook = (collection, includeBook = true) => {
+          const remaining = (collection || []).filter((item) => String(item.id) !== id);
+          if (!book || !includeBook) return remaining;
+          return [book, ...remaining].sort((a, b) =>
+            new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+          );
+        };
+        const personalBooks = (currentData.personalBooks || []).filter((item) => String(item.id) !== id);
+        if (book?.bookType === 'personal' && book.ownerVisitorId && String(book.ownerVisitorId) === String(realtimeVisitorId)) {
+          personalBooks.unshift(book);
+        }
+        return {
+          ...currentData,
+          books: replaceBook(currentData.books),
+          communityBooks: replaceBook(currentData.communityBooks, book?.bookType === 'personal' && book.isPublic),
+          personalBooks,
+        };
+      });
+    };
+
+    const refreshAttendance = async () => {
+      const attendanceLogs = await store.fetchAttendanceLogs();
+      if (!mounted) return;
+      setData((currentData) => ({ ...currentData, attendanceLogs }));
+      setAttendanceLoadError('');
     };
 
     // ------------------------------------------------------------------------
@@ -1002,46 +1044,55 @@ fineReviewRequired:
     // ------------------------------------------------------------------------
 
     const channel = supabase
-      ? supabase
-          .channel('shelf-ilms-realtime')
+      ? (() => {
+          let nextChannel = supabase.channel(`shelf-ilms-realtime-${role || 'anonymous'}`)
 
           // ==================================================================
           // BOOKS
           // ==================================================================
 
-          .on(
+          nextChannel = nextChannel.on(
             'postgres_changes',
             {
               event: '*',
               schema: 'public',
               table: 'books',
             },
-            () => {
-              scheduleRealtimeRefresh();
+            (payload) => {
+              applyRealtimeBookChange(payload);
             }
-          )
+          );
 
           // ==================================================================
           // BORROW REQUESTS
           // ==================================================================
 
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'borrow_requests',
-            },
-            () => {
-              scheduleRealtimeRefresh();
-            }
-          )
+          if (isVisitor && realtimeVisitorId) {
+            nextChannel = nextChannel.on(
+              'postgres_changes',
+              {
+                event: '*', schema: 'public', table: 'borrow_requests',
+                filter: `visitor_id=eq.${realtimeVisitorId}`,
+              },
+              () => scheduleRealtimeRefresh(() => loadVisitorBorrowRequests(realtimeVisitorId))
+            );
+          } else if (isStaff) {
+            nextChannel = nextChannel.on(
+              'postgres_changes',
+              {
+                event: '*',
+                schema: 'public',
+                table: 'borrow_requests',
+              },
+              () => scheduleRealtimeRefresh(loadAllBorrowRequests)
+            );
+          }
 
           // ==================================================================
           // COMMUNITY BOOK REQUESTS
           // ==================================================================
 
-          .on(
+          if (isStaff) nextChannel = nextChannel.on(
             'postgres_changes',
             {
               event: '*',
@@ -1051,29 +1102,29 @@ fineReviewRequired:
             () => {
               scheduleRealtimeRefresh();
             }
-          )
+          );
 
           // ==================================================================
           // ATTENDANCE
           // ==================================================================
 
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'attendance_logs',
-            },
-            () => {
-              scheduleRealtimeRefresh();
-            }
-          )
+          if (isStaff) {
+            nextChannel = nextChannel.on(
+              'postgres_changes',
+              {
+                event: '*',
+                schema: 'public',
+                table: 'attendance_logs',
+              },
+              () => scheduleRealtimeRefresh(refreshAttendance)
+            );
+          }
 
           // ==================================================================
           // VISITORS
           // ==================================================================
 
-          .on(
+          if (isStaff) nextChannel = nextChannel.on(
             'postgres_changes',
             {
               event: '*',
@@ -1083,13 +1134,13 @@ fineReviewRequired:
             () => {
               scheduleRealtimeRefresh();
             }
-          )
+          );
 
           // ==================================================================
           // LIBRARIES
           // ==================================================================
 
-          .on(
+          if (isStaff) nextChannel = nextChannel.on(
             'postgres_changes',
             {
               event: '*',
@@ -1099,14 +1150,15 @@ fineReviewRequired:
             () => {
               scheduleRealtimeRefresh();
             }
-          )
+          );
 
-          .subscribe((status) => {
+          return nextChannel.subscribe((status) => {
             console.log(
               'SHELF realtime status:',
               status
             );
-          })
+          });
+        })()
       : null;
 
     // ------------------------------------------------------------------------
@@ -1128,7 +1180,7 @@ fineReviewRequired:
         ?.subscription
         ?.unsubscribe();
     };
-  }, [refreshAll]);
+  }, [loadAllBorrowRequests, loadVisitorBorrowRequests, realtimeVisitorId, refreshAll, user?.role]);
 
   // ==========================================================================
   // GENERIC MUTATION + REFRESH
