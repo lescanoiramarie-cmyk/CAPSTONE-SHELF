@@ -196,16 +196,19 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">Total fines assessed</p>
-          <p className="mt-1 text-2xl font-bold text-shelf-primary">{peso(totals.totalAssessed)}</p>
+          <p className="text-sm font-medium text-slate-500">Total fines charged</p>
+          <p className="mt-1 text-xs text-slate-500">Full fine amount for these records</p>
+          <p className="mt-2 text-2xl font-bold text-shelf-primary">{peso(totals.totalAssessed)}</p>
         </article>
         <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">Payments recorded</p>
-          <p className="mt-1 text-2xl font-bold text-emerald-700">{peso(totals.totalCollected)}</p>
+          <p className="text-sm font-medium text-slate-500">Payments received</p>
+          <p className="mt-1 text-xs text-slate-500">Actual offline payments logged by staff</p>
+          <p className="mt-2 text-2xl font-bold text-emerald-700">{peso(totals.totalCollected)}</p>
         </article>
         <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">Outstanding balance</p>
-          <p className="mt-1 text-2xl font-bold text-red-700">{peso(totals.confirmedOutstanding)}</p>
+          <p className="text-sm font-medium text-slate-500">Still owed by visitors</p>
+          <p className="mt-1 text-xs text-slate-500">Unpaid amount remaining after payments</p>
+          <p className="mt-2 text-2xl font-bold text-red-700">{peso(totals.confirmedOutstanding)}</p>
         </article>
       </div>
 
