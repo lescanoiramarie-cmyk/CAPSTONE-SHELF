@@ -75,16 +75,23 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
 
   useEffect(() => { void loadRows(); }, [loadRows]);
 
+  const libraryRows = useMemo(() => rows.filter((row) => {
+    const matchesLibrary = !isSuperAdmin || selectedLibraryId === 'all' || String(row.library_id) === String(selectedLibraryId);
+    const hasFine = Number(row.fine_amount) > 0 || Number(row.fine_paid_amount) > 0;
+    return matchesLibrary && hasFine;
+  }), [rows, selectedLibraryId, isSuperAdmin]);
+  const statusCounts = useMemo(() => libraryRows.reduce((counts, row) => {
+    counts[getFineStatus(row)] += 1;
+    return counts;
+  }, { All: libraryRows.length, Unpaid: 0, 'Partially paid': 0, Paid: 0 }), [libraryRows]);
   const visibleRows = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return rows.filter((row) => {
+    return libraryRows.filter((row) => {
       const matchesText = !term || [row.visitor_name, row.book_title, row.library_name]
         .some((value) => String(value || '').toLowerCase().includes(term));
-      const matchesLibrary = !isSuperAdmin || selectedLibraryId === 'all' || String(row.library_id) === String(selectedLibraryId);
-      const hasFine = Number(row.fine_amount) > 0 || Number(row.fine_paid_amount) > 0;
-      return hasFine && matchesText && matchesLibrary && (statusFilter === 'All' || getFineStatus(row) === statusFilter);
+      return matchesText && (statusFilter === 'All' || getFineStatus(row) === statusFilter);
     });
-  }, [rows, search, statusFilter, selectedLibraryId, isSuperAdmin]);
+  }, [libraryRows, search, statusFilter]);
   const pageCount = Math.max(1, Math.ceil(visibleRows.length / PAGE_SIZE));
   const pageRows = visibleRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   useEffect(() => { setPage(1); }, [search, statusFilter, selectedLibraryId]);
@@ -209,9 +216,16 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
           <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search visitor, book, or library" className="w-full rounded-lg border border-slate-300 py-2.5 pl-10 pr-3 text-sm text-slate-800" />
         </label>
-        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filter fines by status" className="rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
-          {['All', 'Unpaid', 'Partially paid', 'Paid'].map((status) => <option key={status}>{status}</option>)}
-        </select>
+      </div>
+
+      <div role="tablist" aria-label="Fine payment status" className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+        {['Unpaid', 'Partially paid', 'Paid', 'All'].map((status) => {
+          const selected = statusFilter === status;
+          const count = statusCounts[status];
+          return <button key={status} type="button" role="tab" aria-selected={selected} onClick={() => setStatusFilter(status)} className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${selected ? 'bg-shelf-primary text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}>
+            {status}<span className={`rounded-full px-2 py-0.5 text-xs ${selected ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-600'}`}>{count}</span>
+          </button>;
+        })}
       </div>
 
       {loading ? <p role="status" className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading fine records…</p> : visibleRows.length === 0 ? (
