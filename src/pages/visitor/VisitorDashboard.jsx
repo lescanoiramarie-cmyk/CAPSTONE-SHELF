@@ -1304,10 +1304,15 @@ function VisitorDashboardContent() {
   );
 
   const outstandingFineTransactions = myTransactions
-    .filter((transaction) => !transaction.isCommunityBook && !transaction.fineReviewRequired)
+    .filter((transaction) => !transaction.isCommunityBook)
     .map((transaction) => {
       const status = String(transaction.status || '').toLowerCase();
-      const totalFine = status === 'borrowed' && transaction.dueDate
+      const fineNeedsReview = Boolean(
+        transaction.fineReviewRequired && !transaction.fineReviewResolvedAt
+      );
+      const totalFine = fineNeedsReview
+        ? Number(transaction.fineAmount || 0)
+        : status === 'borrowed' && transaction.dueDate
         ? calculateOverdueFine(
             transaction.dueDate,
             Date.now(),
@@ -1318,13 +1323,19 @@ function VisitorDashboardContent() {
       return {
         ...transaction,
         currentFineAmount: Math.max(0, totalFine - finePaid),
+        fineNeedsReview,
       };
     })
     .filter((transaction) => transaction.currentFineAmount > 0);
-  const outstandingFineTotal = outstandingFineTransactions.reduce(
+  const confirmedOutstandingFineTotal = outstandingFineTransactions
+    .filter((transaction) => !transaction.fineNeedsReview)
+    .reduce(
     (total, transaction) => total + transaction.currentFineAmount,
     0
   );
+  const fineUnderReviewTotal = outstandingFineTransactions
+    .filter((transaction) => transaction.fineNeedsReview)
+    .reduce((total, transaction) => total + transaction.currentFineAmount, 0);
   const overdueBooksToReturn = outstandingFineTransactions.filter(
     (transaction) => String(transaction.status || '').toLowerCase() === 'borrowed'
   );
@@ -1891,13 +1902,19 @@ function VisitorDashboardContent() {
                 <CircleAlert size={20} className="mt-0.5 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden="true" />
                 <div className="min-w-0">
                   <h2 className="text-sm font-bold text-amber-900 dark:text-amber-200">
-                    Outstanding fine: ₱{outstandingFineTotal.toLocaleString('en-PH')}
+                    {confirmedOutstandingFineTotal > 0
+                      ? `Outstanding fine: ${String.fromCharCode(8369)}${confirmedOutstandingFineTotal.toLocaleString('en-PH')}`
+                      : `Recorded fine under review: ${String.fromCharCode(8369)}${fineUnderReviewTotal.toLocaleString('en-PH')}`}
                   </h2>
                   <p className="mt-1 text-sm text-amber-900 dark:text-amber-100">
                     {overdueBooksToReturn.length > 0 && (
                       <>Please return your overdue book{overdueBooksToReturn.length > 1 ? 's' : ''}: {overdueBooksToReturn.map((transaction) => transaction.bookTitle || 'Borrowed book').join(', ')}. </>
                     )}
-                    Contact the library to pay or update your fine.
+                    {fineUnderReviewTotal > 0 && (
+                      <>Recorded fine of {String.fromCharCode(8369)}{fineUnderReviewTotal.toLocaleString('en-PH')} is awaiting library review and is not confirmed yet. </>
+                    )}
+                    {confirmedOutstandingFineTotal > 0 && 'Contact the library to pay or update your confirmed fine.'}
+                    {confirmedOutstandingFineTotal <= 0 && 'The library will update this record after reviewing it.'}
                   </p>
                 </div>
               </div>
