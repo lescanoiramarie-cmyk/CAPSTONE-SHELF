@@ -1,4 +1,4 @@
--- Seed 10 to 25 clearly labeled historical book transactions per
+-- Seed 50 to 100 clearly labeled historical book transactions per
 -- library/month pair across the most recent 12 calendar months. Each pair has
 -- a deterministic target in that range. Existing visitor accounts are rotated
 -- through generated transactions; books belong to the branch receiving them.
@@ -64,9 +64,9 @@ WITH library_pool AS MATERIALIZED (
   SELECT
     library.id AS library_id,
     months.month_start,
-    10 + mod(
+    50 + mod(
       abs(hashtext(format('%s|%s', library.id, months.month_start))::bigint),
-      16
+      51
     )::integer AS target_rows
   FROM library_pool AS library
   CROSS JOIN months
