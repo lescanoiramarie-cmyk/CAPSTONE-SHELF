@@ -210,22 +210,21 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
         </article>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row">
-        {isSuperAdmin && <label className="min-w-0 sm:w-64"><span className="sr-only">Filter fines by partner library</span><select value={selectedLibraryId} onChange={(event) => setSelectedLibraryId(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800"><option value="all">All partner libraries</option>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>}
-        <label className="relative min-w-0 flex-1">
+      <div className="flex min-w-0 flex-nowrap items-center gap-3 overflow-x-auto rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+        {isSuperAdmin && <label className="w-72 shrink-0"><span className="sr-only">Filter fines by partner library</span><select value={selectedLibraryId} onChange={(event) => setSelectedLibraryId(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800"><option value="all">All partner libraries</option>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>}
+        <label className="relative min-w-[16rem] flex-1">
           <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search visitor, book, or library" className="w-full rounded-lg border border-slate-300 py-2.5 pl-10 pr-3 text-sm text-slate-800" />
         </label>
-      </div>
-
-      <div role="tablist" aria-label="Fine payment status" className="flex w-full flex-nowrap gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
-        {['All', 'Unpaid', 'Partially paid', 'Paid'].map((status) => {
-          const selected = statusFilter === status;
-          const count = statusCounts[status];
-          return <button key={status} type="button" role="tab" aria-selected={selected} onClick={() => setStatusFilter(status)} className={`inline-flex min-w-max flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${selected ? 'bg-shelf-primary text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}>
-            {status}<span className={`rounded-full px-2 py-0.5 text-xs ${selected ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-600'}`}>{count}</span>
-          </button>;
-        })}
+        <div role="tablist" aria-label="Fine payment status" className="flex shrink-0 flex-nowrap gap-1 rounded-lg bg-slate-50 p-1">
+          {['All', 'Unpaid', 'Partially paid', 'Paid'].map((status) => {
+            const selected = statusFilter === status;
+            const count = statusCounts[status];
+            return <button key={status} type="button" role="tab" aria-selected={selected} onClick={() => setStatusFilter(status)} className={`inline-flex min-w-max items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${selected ? 'bg-shelf-primary text-white shadow-sm' : 'text-slate-600 hover:bg-white hover:text-slate-900'}`}>
+              {status}<span className={`rounded-full px-2 py-0.5 text-xs ${selected ? 'bg-white/15 text-white' : 'bg-white text-slate-600'}`}>{count}</span>
+            </button>;
+          })}
+        </div>
       </div>
 
       {loading ? <p role="status" className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading fine records…</p> : visibleRows.length === 0 ? (
