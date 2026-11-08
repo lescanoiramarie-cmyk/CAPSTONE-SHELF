@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ClipboardList,
   Clock3,
+  CircleDollarSign,
   MapPinned,
   QrCode,
   Building2,
@@ -48,6 +49,9 @@ import AdminWorkspace from '../../component/AdminWorkspace.jsx';
 import BookRatingsChart from '../../component/BookRatingsChart.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
 import DashboardDataBoundary from '../../component/DashboardDataBoundary.jsx';
+import FinePayments from '../../component/FinePayments.jsx';
+import SubscriptionManagement from '../../component/SubscriptionManagement.jsx';
+import PremiumFeatureGate from '../../component/PremiumFeatureGate.jsx';
 import { supabase } from '../../lib/supabaseClient.js';
 import { exportReport } from '../../lib/excelUtils.js';
 import Papa from 'papaparse';
@@ -75,6 +79,8 @@ const NAV = [
   { id: 'visitors', label: 'Visitor Accounts', Icon: UsersRound },
   { id: 'attendance', label: 'Attendance', Icon: QrCode },
   { id: 'transactions', label: 'Book Transactions', Icon: BookOpen },
+  { id: 'fines', label: 'Fine Payments', Icon: CircleDollarSign },
+  { id: 'subscription', label: 'Plan & Subscription', Icon: Building2 },
   { id: 'inventory', label: 'Inventory', Icon: ClipboardList },
   { id: 'queue', label: 'Reservation Queue', Icon: Clock3 },
   { id: 'map', label: 'Branch Map', Icon: MapPinned },
@@ -618,6 +624,7 @@ function QRBookBorrowing({
             fine_amount,
             fine_rate_snapshot,
             fine_review_required,
+            fine_review_resolved_at,
             confirmed_by,
             return_confirmed_by,
             books!inner(library_id, title, author, isbn, cover_url)
@@ -646,6 +653,7 @@ function QRBookBorrowing({
         fineAmount: r.fine_amount,
         fineRateSnapshot: r.fine_rate_snapshot,
         fineReviewRequired: r.fine_review_required === true,
+        fineReviewResolvedAt: r.fine_review_resolved_at || null,
         confirmedBy: r.confirmed_by,
         returnConfirmedBy: r.return_confirmed_by,
         bookAuthor: r.books?.author || '',
@@ -1761,7 +1769,7 @@ export default function SubAdminDashboard() {
               <span className="truncate font-semibold text-shelf-primary">
                 {section === 'workspace'
                   ? ({ reports: 'Reports', analytics: 'Analytics' }[workspaceTab] || 'Reports')
-                  : ({ visitors: 'Visitor Accounts', attendance: 'Attendance', transactions: 'Book Transactions', inventory: 'Inventory', queue: 'Reservation Queue', map: 'Branch Map', settings: 'Settings' }[section] || 'Dashboard')}
+                  : ({ visitors: 'Visitor Accounts', attendance: 'Attendance', transactions: 'Book Transactions', fines: 'Fine Payments', subscription: 'Plan & Subscription', inventory: 'Inventory', queue: 'Reservation Queue', map: 'Branch Map', settings: 'Settings' }[section] || 'Dashboard')}
               </span>
             </nav>
             <span className="flex max-w-full min-w-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">
@@ -2073,6 +2081,8 @@ export default function SubAdminDashboard() {
             confirmReturn={confirmReturn}
           />
         )}
+        {section === 'fines' && <FinePayments libraryId={currentLibraryId} libraryName={currentBranchName} />}
+        {section === 'subscription' && <SubscriptionManagement mode="subadmin" libraryId={currentLibraryId} libraryName={currentBranchName} />}
         {section === 'inventory' && <BookInventory />}
         {section === 'queue' && (
           <ReservationQueue user={user} focusRequestId={focusRequestId} />
@@ -2153,6 +2163,10 @@ export default function SubAdminDashboard() {
           </section>
         )}
         {section === 'workspace' && (
+          <PremiumFeatureGate
+            libraryId={currentLibraryId}
+            onUpgrade={() => navigateToSection('subscription')}
+          >
           <AdminWorkspace
             key={`${workspaceTab}-${['feedback', 'announcements'].includes(workspaceTab) ? 'communication' : 'reports'}`}
             mode={['feedback', 'announcements'].includes(workspaceTab) ? 'communication' : 'reports'}
@@ -2163,6 +2177,7 @@ export default function SubAdminDashboard() {
             borrowRequests={borrowRequests}
             attendanceLogs={branchAttendance}
           />
+          </PremiumFeatureGate>
         )}
       </main>
       {(subAdminTermsStatus !== 'accepted' || showSubAdminTerms) && (

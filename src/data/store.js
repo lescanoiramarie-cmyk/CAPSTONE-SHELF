@@ -389,6 +389,7 @@ const hasValidFineRateSnapshot = (request) => {
 };
 
 export const isFineReviewRequired = (request) => {
+  if (request.fine_review_resolved_at || request.fineReviewResolvedAt) return false;
   const status = String(request.status || '').trim().toLowerCase();
   const validSnapshot = hasValidFineRateSnapshot(request);
   const hasExistingFine = Number(request.fine_amount || 0) !== 0;
@@ -418,9 +419,11 @@ const mapBorrowRequest = (r) => ({
   dueDate: r.due_date,
   returnDate: r.return_date,
   fineAmount: r.fine_amount,
+  finePaidAmount: Number(r.fine_paid_amount || 0),
   fineRateSnapshot:
     r.fine_rate_snapshot == null ? null : Number(r.fine_rate_snapshot),
   fineReviewRequired: isFineReviewRequired(r),
+  fineReviewResolvedAt: r.fine_review_resolved_at || null,
   confirmedBy: r.confirmed_by,
   returnConfirmedBy: r.return_confirmed_by,
   cancelReason: r.cancel_reason,
@@ -524,7 +527,7 @@ const BORROW_DASHBOARD_ACTIVE_STATUSES = [
 ];
 const BORROW_DASHBOARD_RECENT_DAYS = 35;
 const BORROW_REQUEST_DASHBOARD_SELECT =
-  'id, book_id, book_title, visitor_id, visitor_name, status, request_date, pickup_deadline, queue_position, borrow_date, due_date, return_date, fine_amount, confirmed_by, return_confirmed_by, fine_rate_snapshot, fine_review_required';
+  'id, book_id, book_title, visitor_id, visitor_name, status, request_date, pickup_deadline, queue_position, borrow_date, due_date, return_date, fine_amount, confirmed_by, return_confirmed_by, fine_rate_snapshot, fine_review_required, fine_review_resolved_at';
 
 async function fetchStaffBorrowRequestRows(authenticatedUserId, signal) {
   let staffQuery = supabase
@@ -1261,7 +1264,7 @@ export async function fetchBorrowRequests({
           let query = supabase
             .from('borrow_requests')
             .select(
-              'id, book_id, book_title, visitor_id, visitor_name, status, request_date, pickup_deadline, queue_position, borrow_date, due_date, return_date, fine_amount, confirmed_by, return_confirmed_by, fine_rate_snapshot, fine_review_required'
+              'id, book_id, book_title, visitor_id, visitor_name, status, request_date, pickup_deadline, queue_position, borrow_date, due_date, return_date, fine_amount, fine_paid_amount, confirmed_by, return_confirmed_by, fine_rate_snapshot, fine_review_required, fine_review_resolved_at'
             )
             .eq('visitor_id', normalizedVisitorId)
             .order('request_date', { ascending: false });
@@ -1551,6 +1554,9 @@ export async function fetchBorrowRequests({
       .map(
         (request) => ({
           ...request,
+
+          finePaidAmount:
+            Number(request.fine_paid_amount ?? request.finePaidAmount ?? 0) || 0,
 
           requestType:
             'library',

@@ -113,8 +113,14 @@ function getValidStoredFineRate(value) {
 
 function calculateCurrentFine(request) {
   if (!request) return 0;
+  if (request.fineReviewResolvedAt) {
+    return Math.max(0, Number(request.fineAmount || 0) - Number(request.finePaidAmount || 0));
+  }
   if (request.status === 'returned') {
-    return Number(request.fineAmount || 0);
+    return Math.max(
+      0,
+      Number(request.fineAmount || 0) - Number(request.finePaidAmount || 0)
+    );
   }
   if (
     request.status !== 'borrowed' ||
@@ -123,11 +129,12 @@ function calculateCurrentFine(request) {
   ) {
     return 0;
   }
-  return calculateOverdueFine(
+  const totalFine = calculateOverdueFine(
     request.dueDate,
     Date.now(),
     request.fineRateSnapshot
-  ) ?? 0;
+  ) ?? Number(request.fineAmount || 0);
+  return Math.max(0, totalFine - Number(request.finePaidAmount || 0));
 }
 function calculateOverdueDays(dueDate) {
   return Math.ceil(

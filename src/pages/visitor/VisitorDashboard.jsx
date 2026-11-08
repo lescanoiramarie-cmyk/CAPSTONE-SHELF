@@ -50,6 +50,7 @@ import { useAuth } from '../../context/useAuth.js';
 import { getDashboardPath } from '../../routes/roleHome.js';
 import { useLibrary, useLibraryData } from '../../context/useLibrary.js';
 import { supabase } from '../../lib/supabaseClient.js';
+import { calculateOverdueFine } from '../../lib/bookFineRate.js';
 import {
   fetchAttendanceLogsPage,
   updateVisitorProfile,
@@ -1301,6 +1302,32 @@ function VisitorDashboardContent() {
     (transaction) => !dismissedReminderIds.has(String(transaction.id))
   );
 
+  const outstandingFineTransactions = myTransactions
+    .filter((transaction) => !transaction.isCommunityBook)
+    .map((transaction) => {
+      const status = String(transaction.status || '').toLowerCase();
+      const totalFine = status === 'borrowed' && transaction.dueDate
+        ? calculateOverdueFine(
+            transaction.dueDate,
+            Date.now(),
+            transaction.fineRateSnapshot
+          ) ?? Number(transaction.fineAmount || 0)
+        : Number(transaction.fineAmount || 0);
+      const finePaid = Number(transaction.finePaidAmount || 0);
+      return {
+        ...transaction,
+        currentFineAmount: Math.max(0, totalFine - finePaid),
+      };
+    })
+    .filter((transaction) => transaction.currentFineAmount > 0);
+  const outstandingFineTotal = outstandingFineTransactions.reduce(
+    (total, transaction) => total + transaction.currentFineAmount,
+    0
+  );
+  const overdueBooksToReturn = outstandingFineTransactions.filter(
+    (transaction) => String(transaction.status || '').toLowerCase() === 'borrowed'
+  );
+
   // =========================================================
   // LIBRARY NAME
   // =========================================================
@@ -1851,6 +1878,38 @@ function VisitorDashboardContent() {
           ]}
           />
         </div>
+
+        {outstandingFineTransactions.length > 0 && (
+          <section
+            role="alert"
+            aria-label="Outstanding fines and overdue books"
+            className="visitor-feedback visitor-feedback-warning mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-sm dark:border-amber-700 dark:bg-amber-950/40"
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-start gap-3">
+                <CircleAlert size={20} className="mt-0.5 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden="true" />
+                <div className="min-w-0">
+                  <h2 className="text-sm font-bold text-amber-900 dark:text-amber-200">
+                    Outstanding fine: ₱{outstandingFineTotal.toLocaleString('en-PH')}
+                  </h2>
+                  <p className="mt-1 text-sm text-amber-900 dark:text-amber-100">
+                    {overdueBooksToReturn.length > 0 && (
+                      <>Please return your overdue book{overdueBooksToReturn.length > 1 ? 's' : ''}: {overdueBooksToReturn.map((transaction) => transaction.bookTitle || 'Borrowed book').join(', ')}. </>
+                    )}
+                    Contact the library to pay or update your fine.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTab('myBorrows')}
+                className="shrink-0 rounded-lg bg-amber-900 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-950 dark:bg-amber-200 dark:text-amber-950 dark:hover:bg-amber-100"
+              >
+                View requests & borrows
+              </button>
+            </div>
+          </section>
+        )}
 
         {visibleCommunityReturnReminders.length > 0 && (
           <section

@@ -31,6 +31,9 @@ import {
   Building2,
   ChevronDown,
   ChevronUp,
+  CircleDollarSign,
+  Eye,
+  EyeOff,
   FileSpreadsheet,
   Globe,
   MapPinned,
@@ -52,6 +55,8 @@ import AdminWorkspace from '../../component/AdminWorkspace.jsx';
 import DashboardWelcome from '../../component/DashboardWelcome.jsx';
 import BookRatingsChart from '../../component/BookRatingsChart.jsx';
 import DashboardDataBoundary from '../../component/DashboardDataBoundary.jsx';
+import FinePayments from '../../component/FinePayments.jsx';
+import SubscriptionManagement from '../../component/SubscriptionManagement.jsx';
 import VisitorTermsContent, { VISITOR_TERMS_VERSION } from '../../component/VisitorTermsContent.jsx';
 import SubAdminTermsContent, { SUBADMIN_TERMS_VERSION } from '../../component/SubAdminTermsContent.jsx';
 import { supabase } from '../../lib/supabaseClient.js';
@@ -219,6 +224,7 @@ export default function SuperAdminDashboard() {
   const [confirmAdminPassword, setConfirmAdminPassword] = useState('');
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordFeedback, setPasswordFeedback] = useState({ error: '', message: '' });
+  const [showStaffTemporaryPassword, setShowStaffTemporaryPassword] = useState(false);
   const visitorTermsPreviewRef = useRef(null);
   const subAdminTermsPreviewRef = useRef(null);
   const [activeTab, setActiveTab] = useState('reports');
@@ -1493,6 +1499,22 @@ const handleEditStaff = (staff) => {
 
           <button
             type="button"
+            onClick={() => setSection('fines')}
+            className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${section === 'fines' ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]' : 'text-slate-300 hover:bg-white/5'}`}
+          >
+            <CircleDollarSign size={18} className="mr-3 inline-block align-[-3px]" />
+            Fine Payments
+          </button>
+          <button
+            type="button"
+            onClick={() => setSection('subscriptions')}
+            className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${section === 'subscriptions' ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]' : 'text-slate-300 hover:bg-white/5'}`}
+          >
+            Subscriptions
+          </button>
+
+          <button
+            type="button"
             onClick={() => setSection('settings')}
             className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${section === 'settings' ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]' : 'text-slate-300 hover:bg-white/5'}`}
           >
@@ -1643,7 +1665,7 @@ const handleEditStaff = (staff) => {
                   ? (activeTab === 'analytics' ? 'Analytics' : 'Reports')
                   : section === 'communication'
                     ? (activeTab === 'announcements' ? 'Announcements' : 'Feedback')
-                    : ({ inventory: 'Inventory', map: 'Libraries & map', accounts: 'Staff accounts', 'visitor-accounts': 'Visitor accounts', settings: 'Settings' }[section] || 'Dashboard')}
+                    : ({ inventory: 'Inventory', map: 'Libraries & map', accounts: 'Staff accounts', 'visitor-accounts': 'Visitor accounts', fines: 'Fine Payments', subscriptions: 'Subscriptions', settings: 'Settings' }[section] || 'Dashboard')}
               </span>
             </nav>
             <span className="flex max-w-full min-w-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">
@@ -2311,6 +2333,9 @@ const handleEditStaff = (staff) => {
           </Suspense>
         )}
 
+        {section === 'fines' && <FinePayments isSuperAdmin />}
+        {section === 'subscriptions' && <SubscriptionManagement mode="superadmin" />}
+
         {section === 'accounts' && (
           <div className="space-y-6">
             <header className="border-b border-slate-200 pb-4">
@@ -2345,24 +2370,35 @@ const handleEditStaff = (staff) => {
                   <label className="mb-1 block text-xs font-semibold text-slate-600">
                     {editingStaffId ? 'New Password (Optional)' : 'Temporary Password'}
                   </label>
-                  <input
-                    type="password"
-                    value={staffForm.password}
-                    onChange={(e) =>
-                      setStaffForm((prev) => ({
-                        ...prev,
-                        password: e.target.value,
-                      }))
-                    }
-                    placeholder={
-                      editingStaffId
-                        ? 'Leave blank to keep current password'
-                        : 'Minimum 10 characters'
-                    }
-                    minLength={staffForm.password ? 10 : undefined}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
-                    required={!editingStaffId}
-                  />
+                  <div className="relative">
+                    <input
+                      type={showStaffTemporaryPassword ? 'text' : 'password'}
+                      value={staffForm.password}
+                      onChange={(e) =>
+                        setStaffForm((prev) => ({
+                          ...prev,
+                          password: e.target.value,
+                        }))
+                      }
+                      placeholder={
+                        editingStaffId
+                          ? 'Leave blank to keep current password'
+                          : 'Minimum 10 characters'
+                      }
+                      minLength={staffForm.password ? 10 : undefined}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5 pr-11 text-sm"
+                      required={!editingStaffId}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowStaffTemporaryPassword((shown) => !shown)}
+                      aria-label={showStaffTemporaryPassword ? 'Hide temporary password' : 'Show temporary password'}
+                      aria-pressed={showStaffTemporaryPassword}
+                      className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-500 hover:text-shelf-primary"
+                    >
+                      {showStaffTemporaryPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                   <p className="mt-1 text-xs text-slate-400">
                     {editingStaffId
                       ? 'Leave blank if you do not want to change the password.'
