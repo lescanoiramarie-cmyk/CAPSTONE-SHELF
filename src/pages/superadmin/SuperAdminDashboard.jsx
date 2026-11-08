@@ -2351,28 +2351,43 @@ const handleEditStaff = (staff) => {
               <h2 className="text-lg font-bold text-slate-800">Staff Accounts</h2>
               <p className="mt-1 text-sm text-slate-500">Manage database-backed sub-admin and circulation staff accounts.</p>
             </header>
+            <section aria-labelledby="staff-account-guide-title" className="rounded-xl border border-blue-200 bg-blue-50/60 p-4">
+              <h3 id="staff-account-guide-title" className="text-sm font-bold text-shelf-primary">How staff accounts work</h3>
+              <ol className="mt-3 grid gap-3 sm:grid-cols-3">
+                <li className="flex gap-3 rounded-lg bg-white/80 p-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-shelf-primary text-xs font-bold text-white">1</span>
+                  <span><strong className="block text-sm text-slate-800">Create an account</strong><span className="mt-1 block text-xs leading-5 text-slate-600">Enter the staff member’s details, set a temporary password, and assign a library.</span></span>
+                </li>
+                <li className="flex gap-3 rounded-lg bg-white/80 p-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-shelf-primary text-xs font-bold text-white">2</span>
+                  <span><strong className="block text-sm text-slate-800">Staff signs in</strong><span className="mt-1 block text-xs leading-5 text-slate-600">They use their account credentials and work in the assigned library’s console.</span></span>
+                </li>
+                <li className="flex gap-3 rounded-lg bg-white/80 p-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-shelf-primary text-xs font-bold text-white">3</span>
+                  <span><strong className="block text-sm text-slate-800">Manage access</strong><span className="mt-1 block text-xs leading-5 text-slate-600">Edit account details or disable the account when staff access is no longer needed.</span></span>
+                </li>
+              </ol>
+            </section>
             {staffError && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{staffError}</div>
             )}
             {staffMessage && (
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{staffMessage}</div>
             )}
-            {editingStaffId && <div className="fixed inset-0 z-40 bg-slate-950/55 backdrop-blur-[2px]" aria-hidden="true" />}
+            {editingStaffId && <div className="fixed inset-0 z-40 bg-shelf-primary/55 backdrop-blur-[2px]" aria-hidden="true" />}
             <form
               onSubmit={handleCreateStaff}
               aria-labelledby="staff-account-form-title"
               role={editingStaffId ? 'dialog' : undefined}
               aria-modal={editingStaffId ? 'true' : undefined}
               className={editingStaffId
-                ? 'fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[min(48rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 shadow-2xl'
-                : 'rounded-xl border border-slate-200 bg-white p-5 shadow-sm'}
+                ? 'fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[min(48rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-blue-200 bg-white p-5 shadow-2xl'
+                : 'rounded-xl border border-blue-200 bg-white p-5 shadow-sm'}
             >
               <div className="mb-5">
-                <p className="text-xs font-bold uppercase tracking-wide text-blue-700">{editingStaffId ? 'Update staff account' : 'Section 1'}</p>
-                <h3 id="staff-account-form-title" className="mt-1 text-base font-bold text-slate-800">
+                <h3 id="staff-account-form-title" className="font-serif text-xl font-bold text-shelf-primary">
                   {editingStaffId ? 'Edit Sub-Admin Account' : 'Create Sub-Admin Account'}
                 </h3>
-                <p className="mt-1 text-xs text-slate-500">{editingStaffId ? 'Update the selected staff account. Leave the password blank to keep the current one.' : 'Creates a Supabase Auth account and the corresponding staff_profiles record.'}</p>
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
