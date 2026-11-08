@@ -1267,6 +1267,29 @@ export default function SubAdminDashboard() {
     setSection(nextSection);
   };
   const currentLibraryId = user?.libraryId || user?.assignedBranch || '';
+  const [subscriptionRenewalNotifications, setSubscriptionRenewalNotifications] = useState([]);
+
+  useEffect(() => {
+    if (section !== 'overview' || !currentLibraryId || !supabase) return undefined;
+    let cancelled = false;
+    const loadSubscriptionNotifications = async () => {
+      const { data, error } = await supabase
+        .from('staff_notifications')
+        .select('id, title, message, created_at')
+        .eq('library_id', currentLibraryId)
+        .eq('notification_type', 'subscription_renewal')
+        .is('read_at', null)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      if (!cancelled) setSubscriptionRenewalNotifications(error ? [] : (data || []));
+    };
+    void loadSubscriptionNotifications();
+    const timer = setInterval(() => void loadSubscriptionNotifications(), 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [section, currentLibraryId]);
 
   const currentBranchName = useMemo(() => {
     const assignedId = String(currentLibraryId || '');
@@ -1452,8 +1475,23 @@ export default function SubAdminDashboard() {
       }
     });
 
+    subscriptionRenewalNotifications.forEach((notification) => {
+      const timestamp = new Date(notification.created_at).getTime();
+      items.push({
+        id: `subscription-reminder-${notification.id}`,
+        notificationId: notification.id,
+        type: 'subscription_renewal',
+        targetSection: 'subscription',
+        title: notification.title,
+        message: notification.message,
+        timeLabel: Number.isFinite(timestamp) ? formatTime(notification.created_at) : 'Recently',
+        timestamp: Number.isFinite(timestamp) ? timestamp : now,
+        priority: 0,
+      });
+    });
+
     return items.sort((a, b) => a.priority - b.priority || b.timestamp - a.timestamp).slice(0, 20);
-  }, [branchBorrowRequests, currentLibraryId, notificationNow]);
+  }, [branchBorrowRequests, currentLibraryId, notificationNow, subscriptionRenewalNotifications]);
 
   const handleOverdueFollowUp = async (notification) => {
     await sendDueDateFollowUp(notification.requestId);
@@ -1785,7 +1823,13 @@ export default function SubAdminDashboard() {
           description={`Manage circulation, reservations, and inventory${currentBranchName ? ` for ${currentBranchName}` : ' for your assigned branch'}.`}
           notifications={branchNotifications}
           onNotificationFollowUp={handleOverdueFollowUp}
-          onNotificationClick={(notification) => {
+          onNotificationClick={async (notification) => {
+            if (notification.type === 'subscription_renewal') {
+              const { error } = await supabase.rpc('mark_subscription_renewal_notification_read', { p_notification_id: notification.notificationId });
+              if (!error) setSubscriptionRenewalNotifications((current) => current.filter((item) => item.id !== notification.notificationId));
+              setSection('subscription');
+              return;
+            }
             const requestId = notification.recordId || notification.requestId;
             const target = branchBorrowRequests.find(
               (request) => String(request.id) === String(requestId)
