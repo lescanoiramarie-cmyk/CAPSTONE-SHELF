@@ -13,12 +13,15 @@ function getFineStatus(row) {
   return 'Unpaid';
 }
 
-export default function FinePayments({ libraryId = null, libraryName = '', isSuperAdmin = false }) {
+export default function FinePayments({ libraryId = null, libraryName = '', isSuperAdmin = false, libraries = [] }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [selectedLibraryId, setSelectedLibraryId] = useState(() =>
+    isSuperAdmin && libraries.length > 0 ? String(libraries[0].id) : 'all'
+  );
   const [selectedFine, setSelectedFine] = useState(null);
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState('cash');
@@ -35,6 +38,9 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
   const [alertingId, setAlertingId] = useState('');
   const [alertingAll, setAlertingAll] = useState(false);
   const [visitorIdsByRequest, setVisitorIdsByRequest] = useState({});
+  const activeLibraryId = isSuperAdmin
+    ? selectedLibraryId === 'all' ? null : selectedLibraryId
+    : libraryId;
 
   const loadRows = useCallback(async () => {
     if (!supabase) {
@@ -44,24 +50,32 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
     }
     setLoading(true);
     setLoadError('');
-    const [dashboardResult, targetResult] = await Promise.all([
-      supabase.rpc('get_fine_payment_dashboard', { p_library_id: libraryId ? String(libraryId) : null }),
-      supabase.rpc('get_fine_payment_alert_targets', { p_library_id: libraryId ? String(libraryId) : null }),
-    ]);
+    setVisitorIdsByRequest({});
+    const dashboardResult = await supabase.rpc('get_fine_payment_dashboard', { p_library_id: activeLibraryId ? String(activeLibraryId) : null });
     const { data, error } = dashboardResult;
-    if (!targetResult.error && Array.isArray(targetResult.data)) {
-      setVisitorIdsByRequest(Object.fromEntries(targetResult.data.map((target) => [String(target.request_id), String(target.visitor_id)])));
-    } else {
+    if (error) {
       setVisitorIdsByRequest({});
+    } else {
+      supabase.rpc('get_fine_payment_alert_targets', { p_library_id: activeLibraryId ? String(activeLibraryId) : null })
+        .then(({ data: targets, error: targetError }) => {
+          if (!targetError && Array.isArray(targets)) {
+            setVisitorIdsByRequest(Object.fromEntries(targets.map((target) => [String(target.request_id), String(target.visitor_id)])));
+          }
+        })
+        .catch(() => {});
     }
     if (error) {
-      setLoadError(error.message || 'Unable to load fine records.');
+      setLoadError(error.code === '57014'
+        ? (isSuperAdmin && !activeLibraryId
+          ? 'Loading fines across all libraries timed out. Choose a partner library from the filter and try again.'
+          : 'Loading these fine records timed out. Please retry in a moment.')
+        : error.message || 'Unable to load fine records.');
       setRows([]);
     } else {
       setRows(Array.isArray(data) ? data : []);
     }
     setLoading(false);
-  }, [libraryId]);
+  }, [activeLibraryId, isSuperAdmin]);
 
   useEffect(() => { void loadRows(); }, [loadRows]);
 
@@ -70,12 +84,13 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
     return rows.filter((row) => {
       const matchesText = !term || [row.visitor_name, row.book_title, row.library_name]
         .some((value) => String(value || '').toLowerCase().includes(term));
-      return matchesText && (statusFilter === 'All' || getFineStatus(row) === statusFilter);
+      const matchesLibrary = !isSuperAdmin || selectedLibraryId === 'all' || String(row.library_id) === String(selectedLibraryId);
+      return matchesText && matchesLibrary && (statusFilter === 'All' || getFineStatus(row) === statusFilter);
     });
-  }, [rows, search, statusFilter]);
+  }, [rows, search, statusFilter, selectedLibraryId, isSuperAdmin]);
   const pageCount = Math.max(1, Math.ceil(visibleRows.length / PAGE_SIZE));
   const pageRows = visibleRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  useEffect(() => { setPage(1); }, [search, statusFilter]);
+  useEffect(() => { setPage(1); }, [search, statusFilter, selectedLibraryId]);
 
   const totals = useMemo(() => rows.reduce((result, row) => {
     const status = getFineStatus(row);
@@ -223,6 +238,7 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
       </div>
 
       <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row">
+        {isSuperAdmin && <label className="min-w-0 sm:w-64"><span className="sr-only">Filter fines by partner library</span><select value={selectedLibraryId} onChange={(event) => setSelectedLibraryId(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800"><option value="all">All partner libraries</option>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>}
         <label className="relative min-w-0 flex-1">
           <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search visitor, book, or library" className="w-full rounded-lg border border-slate-300 py-2.5 pl-10 pr-3 text-sm text-slate-800" />

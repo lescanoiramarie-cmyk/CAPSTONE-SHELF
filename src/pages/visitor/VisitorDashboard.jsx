@@ -228,6 +228,7 @@ function VisitorDashboardContent() {
     : 'Outside Visitor';
 
   const [tab, setTab] = useState('catalog');
+  const [showFineOnly, setShowFineOnly] = useState(false);
   const activeVisitorNavTabRef = useRef(null);
   const [catalogResetKey, setCatalogResetKey] = useState(0);
   const [libraryFilter, setLibraryFilter] = useState(null);
@@ -1303,7 +1304,7 @@ function VisitorDashboardContent() {
   );
 
   const outstandingFineTransactions = myTransactions
-    .filter((transaction) => !transaction.isCommunityBook)
+    .filter((transaction) => !transaction.isCommunityBook && !transaction.fineReviewRequired)
     .map((transaction) => {
       const status = String(transaction.status || '').toLowerCase();
       const totalFine = status === 'borrowed' && transaction.dueDate
@@ -1902,7 +1903,10 @@ function VisitorDashboardContent() {
               </div>
               <button
                 type="button"
-                onClick={() => setTab('myBorrows')}
+                onClick={() => {
+                  setShowFineOnly(true);
+                  setTab('myBorrows');
+                }}
                 className="shrink-0 rounded-lg bg-amber-900 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-950 dark:bg-amber-200 dark:text-amber-950 dark:hover:bg-amber-100"
               >
                 View requests & borrows
@@ -2122,6 +2126,8 @@ function VisitorDashboardContent() {
               }
               activeView={tab}
               onViewChange={setTab}
+              fineOnly={showFineOnly}
+              onFineOnlyChange={setShowFineOnly}
               catalogResetKey={catalogResetKey}
               focusRequestId={focusRequestId}
               borrowRequestsLoading={borrowRequestsLoading}

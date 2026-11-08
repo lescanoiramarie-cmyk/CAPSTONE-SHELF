@@ -116,6 +116,7 @@ function calculateCurrentFine(request) {
   if (request.fineReviewResolvedAt) {
     return Math.max(0, Number(request.fineAmount || 0) - Number(request.finePaidAmount || 0));
   }
+  if (request.fineReviewRequired) return 0;
   if (request.status === 'returned') {
     return Math.max(
       0,
@@ -124,8 +125,7 @@ function calculateCurrentFine(request) {
   }
   if (
     request.status !== 'borrowed' ||
-    !request.dueDate ||
-    request.fineReviewRequired
+    !request.dueDate
   ) {
     return 0;
   }
@@ -263,6 +263,8 @@ export default function OPACCatalog({
   borrowRequestsLoading = false,
   borrowRequestsLoadError = '',
   onRetryBorrowRequests = () => {},
+  fineOnly = false,
+  onFineOnlyChange = () => {},
 }) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -1453,15 +1455,17 @@ export default function OPACCatalog({
     return myRequests.filter((request) => {
       const matchesStatus =
         myRequestStatus === 'all' ||
-        String(request.status || '').toLowerCase() === myRequestStatus;
+        (myRequestStatus === 'fine_due'
+          ? calculateCurrentFine(request) > 0
+          : String(request.status || '').toLowerCase() === myRequestStatus);
       const matchesSearch =
         !term ||
         `${request.bookTitle || ''} ${request.ownerName || ''}`
           .toLowerCase()
           .includes(term);
-      return matchesStatus && matchesSearch;
+      return matchesStatus && matchesSearch && (!fineOnly || calculateCurrentFine(request) > 0);
     });
-  }, [myRequestSearch, myRequestStatus, myRequests]);
+  }, [myRequestSearch, myRequestStatus, myRequests, fineOnly]);
   const requestAnalytics = useMemo(() => {
     const waitingStatuses = new Set([
       'pending',
@@ -3298,11 +3302,16 @@ export default function OPACCatalog({
                 <label>
                   <span className="sr-only">Filter requests by status</span>
                   <select
-                    value={myRequestStatus}
-                    onChange={(event) => setMyRequestStatus(event.target.value)}
+                    value={fineOnly ? 'fine_due' : myRequestStatus}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      onFineOnlyChange(value === 'fine_due');
+                      setMyRequestStatus(value === 'fine_due' ? 'all' : value);
+                    }}
                     className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   >
                     <option value="all">All statuses</option>
+                    <option value="fine_due">Outstanding fines</option>
                     {[...new Set(myRequests.map((request) => String(request.status || '').toLowerCase()))]
                       .filter(Boolean)
                       .sort()
@@ -3566,6 +3575,11 @@ export default function OPACCatalog({
                                 </p>
                               )}
                             </>
+                          )}
+                          {currentFine > 0 && !isCommunityRequest && (
+                            <p className="font-semibold text-slate-800 dark:text-slate-100">
+                              Library: {request.libraryName || request.library_name || libraryName(request.libraryId || request.library_id || books.find((book) => String(book.id) === String(request.bookId || request.book_id))?.libraryId) || 'Library location unavailable'}
+                            </p>
                           )}
                           {!isCommunityRequest && request.status === 'returned' && (
                             <p>Returned: {formatDate(request.returnDate)}</p>

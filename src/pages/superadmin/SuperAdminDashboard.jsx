@@ -2334,7 +2334,7 @@ const handleEditStaff = (staff) => {
           </Suspense>
         )}
 
-        {section === 'fines' && <FinePayments isSuperAdmin />}
+        {section === 'fines' && <FinePayments isSuperAdmin libraries={libraries} />}
         {section === 'subscriptions' && <SubscriptionManagement mode="superadmin" />}
 
         {section === 'accounts' && (
