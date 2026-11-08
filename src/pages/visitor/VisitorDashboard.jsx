@@ -1904,7 +1904,7 @@ function VisitorDashboardContent() {
                   <h2 className="text-sm font-bold text-amber-900 dark:text-amber-200">
                     {confirmedOutstandingFineTotal > 0
                       ? `Outstanding fine: ${String.fromCharCode(8369)}${confirmedOutstandingFineTotal.toLocaleString('en-PH')}`
-                      : `Recorded fine under review: ${String.fromCharCode(8369)}${fineUnderReviewTotal.toLocaleString('en-PH')}`}
+                      : `Outstanding fine under review: ${String.fromCharCode(8369)}${fineUnderReviewTotal.toLocaleString('en-PH')}`}
                   </h2>
                   <p className="mt-1 text-sm text-amber-900 dark:text-amber-100">
                     {overdueBooksToReturn.length > 0 && (

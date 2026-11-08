@@ -1495,10 +1495,10 @@ export default function OPACCatalog({
       (request) => String(request.status || '').toLowerCase() === 'returned'
     ).length;
     const overdue = borrowed.filter(
-      (request) => calculateCurrentFine(request) > 0
+      (request) => getVisitorFineHistoryAmount(request) > 0
     ).length;
     const outstandingFine = myRequests.reduce(
-      (total, request) => total + calculateCurrentFine(request),
+      (total, request) => total + getVisitorFineHistoryAmount(request),
       0
     );
 
