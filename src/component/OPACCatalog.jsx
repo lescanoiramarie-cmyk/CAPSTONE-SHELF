@@ -1086,6 +1086,37 @@ export default function OPACCatalog({
   ];
   const libraryName = (id) =>
     libraries.find((library) => library.id === id)?.name || id;
+  const getBorrowRequestLibraryName = (request) => {
+    const requestBookId = request.bookId || request.book_id;
+    const exactBook = books.find(
+      (book) => String(book.id) === String(requestBookId)
+    );
+    const requestTitle = String(
+      request.bookTitle || request.book_title || ''
+    ).trim().toLocaleLowerCase();
+    const titleMatches = requestTitle
+      ? books.filter(
+          (book) =>
+            String(book.title || '').trim().toLocaleLowerCase() ===
+            requestTitle
+        )
+      : [];
+    const availableMatch = titleMatches
+      .filter((book) => book.libraryId && Number(book.availableCopies || 0) > 0)
+      .sort(
+        (a, b) =>
+          Number(b.availableCopies || 0) - Number(a.availableCopies || 0) ||
+          libraryName(a.libraryId).localeCompare(libraryName(b.libraryId))
+      )[0];
+    const resolvedLibraryId =
+      request.libraryId ||
+      request.library_id ||
+      exactBook?.libraryId ||
+      availableMatch?.libraryId ||
+      titleMatches.find((book) => book.libraryId)?.libraryId;
+
+    return resolvedLibraryId ? libraryName(resolvedLibraryId) : null;
+  };
 
   // =========================================================
   // SEARCH HANDLERS
@@ -3615,7 +3646,7 @@ export default function OPACCatalog({
                           )}
                           {currentFine > 0 && !isCommunityRequest && (
                             <p className="font-semibold text-slate-800 dark:text-slate-100">
-                              Library: {request.libraryName || request.library_name || libraryName(request.libraryId || request.library_id || books.find((book) => String(book.id) === String(request.bookId || request.book_id))?.libraryId) || 'Library location unavailable'}
+                              Library: {request.libraryName || request.library_name || getBorrowRequestLibraryName(request) || 'Library location unavailable'}
                             </p>
                           )}
                           {fineNeedsReview && (
