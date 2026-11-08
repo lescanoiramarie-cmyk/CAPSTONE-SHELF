@@ -136,6 +136,16 @@ function calculateCurrentFine(request) {
   ) ?? Number(request.fineAmount || 0);
   return Math.max(0, totalFine - Number(request.finePaidAmount || 0));
 }
+
+function getVisitorFineHistoryAmount(request) {
+  if (request?.fineReviewRequired && !request?.fineReviewResolvedAt) {
+    return Math.max(
+      0,
+      Number(request.fineAmount || 0) - Number(request.finePaidAmount || 0)
+    );
+  }
+  return calculateCurrentFine(request);
+}
 function calculateOverdueDays(dueDate) {
   return Math.ceil(
     (Date.now() - new Date(dueDate).getTime()) /
@@ -1456,14 +1466,14 @@ export default function OPACCatalog({
       const matchesStatus =
         myRequestStatus === 'all' ||
         (myRequestStatus === 'fine_due'
-          ? calculateCurrentFine(request) > 0
+          ? getVisitorFineHistoryAmount(request) > 0
           : String(request.status || '').toLowerCase() === myRequestStatus);
       const matchesSearch =
         !term ||
         `${request.bookTitle || ''} ${request.ownerName || ''}`
           .toLowerCase()
           .includes(term);
-      return matchesStatus && matchesSearch && (!fineOnly || calculateCurrentFine(request) > 0);
+      return matchesStatus && matchesSearch && (!fineOnly || getVisitorFineHistoryAmount(request) > 0);
     });
   }, [myRequestSearch, myRequestStatus, myRequests, fineOnly]);
   const requestAnalytics = useMemo(() => {
@@ -3363,12 +3373,14 @@ export default function OPACCatalog({
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {visibleMyRequests.map((request) => {
-                    const currentFine = calculateCurrentFine(request);
+                    const currentFine = getVisitorFineHistoryAmount(request);
+                    const fineNeedsReview = Boolean(request.fineReviewRequired && !request.fineReviewResolvedAt && currentFine > 0);
                     const isCommunityRequest =
                       request?.isCommunityBook === true ||
                       request?.requestType === 'community';
                     const isOverdue =
                       !isCommunityRequest &&
+                      !fineNeedsReview &&
                       request.status === 'borrowed' &&
                       currentFine > 0;
                     const overdueDays =
@@ -3434,7 +3446,9 @@ export default function OPACCatalog({
                             className={statusClass}
                           >
                             <StatusIcon size={12} aria-hidden="true" />
-                            {isOverdue
+                            {fineNeedsReview
+                              ? 'Fine under review'
+                              : isOverdue
                               ? 'Overdue'
                               : isCommunityRequest
                                 ? request.status === 'pending'
@@ -3579,6 +3593,11 @@ export default function OPACCatalog({
                           {currentFine > 0 && !isCommunityRequest && (
                             <p className="font-semibold text-slate-800 dark:text-slate-100">
                               Library: {request.libraryName || request.library_name || libraryName(request.libraryId || request.library_id || books.find((book) => String(book.id) === String(request.bookId || request.book_id))?.libraryId) || 'Library location unavailable'}
+                            </p>
+                          )}
+                          {fineNeedsReview && (
+                            <p className="font-medium text-amber-700 dark:text-amber-300">
+                              The library is reviewing this recorded fine. It is not confirmed yet.
                             </p>
                           )}
                           {!isCommunityRequest && request.status === 'returned' && (
