@@ -384,7 +384,9 @@ const mapVisitor = (r) => ({
 });
 
 const hasValidFineRateSnapshot = (request) => {
-  const rate = Number(request.fine_rate_snapshot);
+  const rate = Number(
+    request.fine_rate_snapshot ?? request.fineRateSnapshot ?? request.fineRate
+  );
   return Number.isInteger(rate) && rate >= 1 && rate <= 100;
 };
 
@@ -392,11 +394,12 @@ export const isFineReviewRequired = (request) => {
   if (request.fine_review_resolved_at || request.fineReviewResolvedAt) return false;
   const status = String(request.status || '').trim().toLowerCase();
   const validSnapshot = hasValidFineRateSnapshot(request);
-  const hasExistingFine = Number(request.fine_amount || 0) !== 0;
+  if (validSnapshot) return false;
+  const hasExistingFine = Number(request.fine_amount ?? request.fineAmount ?? 0) !== 0;
 
   return request.fine_review_required === true ||
-    (['borrowed', 'returned'].includes(status) && !validSnapshot) ||
-    (hasExistingFine && (status !== 'returned' || !validSnapshot));
+    ['borrowed', 'returned'].includes(status) ||
+    hasExistingFine;
 };
 
 const cleanTestVisitorName = (name) =>

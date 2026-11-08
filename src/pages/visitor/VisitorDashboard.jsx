@@ -203,6 +203,7 @@ function VisitorDashboardContent() {
 
   const {
   borrowRequests = [],
+  books = [],
   libraries = [],
   visitors = [],
   ownerCommunityBookRequests = [],
@@ -1276,6 +1277,23 @@ function VisitorDashboardContent() {
 
   const myTransactions = borrowRequests
     .filter((request) => request.visitorId === user?.id)
+    .map((request) => {
+      const book = books.find(
+        (item) => String(item.id) === String(request.bookId || request.book_id)
+      );
+      const fineRateSnapshot = request.fineRateSnapshot ?? book?.fineRate ?? null;
+      const fineRate = Number(fineRateSnapshot);
+      const hasValidFineRate = Number.isInteger(fineRate) && fineRate >= 1 && fineRate <= 100;
+      return {
+        ...request,
+        fineRateSnapshot,
+        fineReviewRequired: request.fineReviewResolvedAt
+          ? false
+          : hasValidFineRate
+            ? false
+            : request.fineReviewRequired,
+      };
+    })
     .sort(
       (a, b) =>
         new Date(b.requestDate || 0) -
@@ -1307,9 +1325,7 @@ function VisitorDashboardContent() {
     .filter((transaction) => !transaction.isCommunityBook)
     .map((transaction) => {
       const status = String(transaction.status || '').toLowerCase();
-      const fineNeedsReview = Boolean(
-        transaction.fineReviewRequired && !transaction.fineReviewResolvedAt
-      );
+      const fineNeedsReview = Boolean(transaction.fineReviewRequired && !transaction.fineReviewResolvedAt);
       const totalFine = fineNeedsReview
         ? Number(transaction.fineAmount || 0)
         : status === 'borrowed' && transaction.dueDate
@@ -1318,7 +1334,13 @@ function VisitorDashboardContent() {
             Date.now(),
             transaction.fineRateSnapshot
           ) ?? Number(transaction.fineAmount || 0)
-        : Number(transaction.fineAmount || 0);
+        : status === 'returned' && transaction.dueDate && transaction.returnDate
+          ? calculateOverdueFine(
+              transaction.dueDate,
+              transaction.returnDate,
+              transaction.fineRateSnapshot
+            ) ?? Number(transaction.fineAmount || 0)
+          : Number(transaction.fineAmount || 0);
       const finePaid = Number(transaction.finePaidAmount || 0);
       return {
         ...transaction,

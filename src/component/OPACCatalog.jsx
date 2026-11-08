@@ -118,9 +118,17 @@ function calculateCurrentFine(request) {
   }
   if (request.fineReviewRequired) return 0;
   if (request.status === 'returned') {
+    const assessedAtReturn = request.dueDate && request.returnDate
+      ? calculateOverdueFine(
+          request.dueDate,
+          request.returnDate,
+          request.fineRateSnapshot
+        )
+      : null;
     return Math.max(
       0,
-      Number(request.fineAmount || 0) - Number(request.finePaidAmount || 0)
+      Number(assessedAtReturn ?? request.fineAmount ?? 0) -
+        Number(request.finePaidAmount || 0)
     );
   }
   if (
@@ -1383,6 +1391,21 @@ export default function OPACCatalog({
           return (
             String(requestVisitorId).trim() === String(currentVisitorId).trim()
           );
+        }).map((request) => {
+          const book = books.find(
+            (item) => String(item.id) === String(request.bookId || request.book_id)
+          );
+          const fineRateSnapshot = request.fineRateSnapshot ?? book?.fineRate ?? null;
+          const hasValidFineRate = getValidStoredFineRate(fineRateSnapshot) != null;
+          return {
+            ...request,
+            fineRateSnapshot,
+            fineReviewRequired: request.fineReviewResolvedAt
+              ? false
+              : hasValidFineRate
+                ? false
+                : request.fineReviewRequired,
+          };
         })
       : [];
     const communityRequests = Array.isArray(myCommunityBookRequests)

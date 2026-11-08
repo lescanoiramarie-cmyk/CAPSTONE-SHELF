@@ -115,18 +115,16 @@ export function resolveFineAtReturn({
   returnedAt,
   fineRateSnapshot,
 }) {
-  const existingFine = Number(existingFineAmount) || 0;
-  if (existingFine !== 0) {
-    return { fineAmount: existingFine, fineReviewRequired: true };
-  }
-
   const calculatedFine = calculateOverdueFine(
     dueDate,
     returnedAt,
     fineRateSnapshot
   );
   if (calculatedFine == null) {
-    return { fineAmount: existingFine, fineReviewRequired: true };
+    return {
+      fineAmount: Number(existingFineAmount) || 0,
+      fineReviewRequired: true,
+    };
   }
 
   return { fineAmount: calculatedFine, fineReviewRequired: false };
