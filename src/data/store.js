@@ -409,6 +409,7 @@ const mapBorrowRequest = (r) => ({
   id: r.id,
   bookId: r.book_id,
   bookTitle: r.book_title,
+  libraryId: r.library_id ?? null,
   visitorId: r.visitor_id,
   visitorName: cleanTestVisitorName(r.visitor_name),
   isTestData: /^\[TEST\]\s*/i.test(String(r.visitor_name || ''))
@@ -563,7 +564,7 @@ const BORROW_DASHBOARD_ACTIVE_STATUSES = [
 ];
 const BORROW_DASHBOARD_RECENT_DAYS = 35;
 const BORROW_REQUEST_DASHBOARD_SELECT =
-  'id, book_id, book_title, visitor_id, visitor_name, status, request_date, pickup_deadline, queue_position, borrow_date, due_date, return_date, fine_amount, confirmed_by, return_confirmed_by, fine_rate_snapshot, fine_review_required, fine_review_resolved_at';
+  'id, book_id, book_title, visitor_id, visitor_name, library_id, status, request_date, pickup_deadline, queue_position, borrow_date, due_date, return_date, fine_amount, confirmed_by, return_confirmed_by, fine_rate_snapshot, fine_review_required, fine_review_resolved_at';
 
 async function fetchStaffBorrowRequestRows(authenticatedUserId, signal) {
   let staffQuery = supabase
@@ -1300,7 +1301,7 @@ export async function fetchBorrowRequests({
           let query = supabase
             .from('borrow_requests')
             .select(
-              'id, book_id, book_title, visitor_id, visitor_name, status, request_date, pickup_deadline, queue_position, borrow_date, due_date, return_date, fine_amount, fine_paid_amount, confirmed_by, return_confirmed_by, fine_rate_snapshot, fine_review_required, fine_review_resolved_at'
+              'id, book_id, book_title, visitor_id, visitor_name, library_id, status, request_date, pickup_deadline, queue_position, borrow_date, due_date, return_date, fine_amount, fine_paid_amount, confirmed_by, return_confirmed_by, fine_rate_snapshot, fine_review_required, fine_review_resolved_at'
             )
             .eq('visitor_id', normalizedVisitorId)
             .order('request_date', { ascending: false });

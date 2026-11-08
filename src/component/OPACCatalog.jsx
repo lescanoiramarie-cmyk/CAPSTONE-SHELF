@@ -127,7 +127,7 @@ function calculateCurrentFine(request) {
       : null;
     return Math.max(
       0,
-      Number(assessedAtReturn ?? request.fineAmount ?? 0) -
+      Math.max(Number(assessedAtReturn ?? 0), Number(request.fineAmount || 0)) -
         Number(request.finePaidAmount || 0)
     );
   }
