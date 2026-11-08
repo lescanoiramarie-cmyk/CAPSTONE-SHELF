@@ -267,7 +267,7 @@ export default function SuperAdminDashboard() {
         startDate: new Date(),
         endDate: new Date(),
         asOf: isInventory,
-        ...(isAttendance ? { dateRange: 'All available dates' } : {}),
+        ...(isAttendance ? { dateRange: 'Latest 5,000 available records' } : {}),
         summary: [[isInventory ? 'Total Titles' : 'Total Visits', data.length]],
         ...(isInventory ? {
           orientation: 'landscape',
@@ -1875,7 +1875,7 @@ const handleEditStaff = (staff) => {
                       <Activity size={14} className="mr-1.5 inline-block align-[-2px]" aria-hidden="true" />
                       Total Attendance
                     </p>
-                    <p className="text-xs text-slate-500">Total Visits: {attendanceLogs.length}</p>
+                    <p className="text-xs text-slate-500">Recent attendance records (up to 5,000): {attendanceLogs.length}</p>
                   </div>
                   <div className="flex gap-2">
                     <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('attendance', 'xlsx')} className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-700">{exportingReport === 'attendance-xlsx' ? 'Exporting…' : 'Excel'}</button>

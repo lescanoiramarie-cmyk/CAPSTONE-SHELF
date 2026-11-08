@@ -19,9 +19,7 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
   const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [selectedLibraryId, setSelectedLibraryId] = useState(() =>
-    isSuperAdmin && libraries.length > 0 ? String(libraries[0].id) : 'all'
-  );
+  const [selectedLibraryId, setSelectedLibraryId] = useState('all');
   const [selectedFine, setSelectedFine] = useState(null);
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState('cash');
@@ -261,25 +259,25 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
             const status = getFineStatus(row);
             const history = Array.isArray(row.payments) ? row.payments : [];
             return (
-              <article key={row.request_id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <article key={row.request_id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_11rem_18rem] lg:items-center">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-bold text-slate-900">{row.visitor_name}</h3>
                       <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${status === 'Paid' ? 'bg-emerald-100 text-emerald-800' : status === 'Needs review' ? 'bg-amber-100 text-amber-900' : status === 'Partially paid' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'}`}>{status}</span>
                     </div>
-                    <p className="mt-1 break-words text-sm text-slate-700">{row.book_title}</p>
-                    <p className="mt-1 text-xs text-slate-500">{row.library_name} · Borrowed {row.borrow_date ? new Date(row.borrow_date).toLocaleDateString('en-PH') : 'Date unavailable'} · Due {row.due_date ? new Date(row.due_date).toLocaleDateString('en-PH') : 'Date unavailable'}</p>
+                    <p className="mt-1 line-clamp-2 break-words text-sm leading-5 text-slate-700">{row.book_title}</p>
+                    <p className="mt-1 line-clamp-2 break-words text-xs leading-4 text-slate-500">{row.library_name} · Borrowed {row.borrow_date ? new Date(row.borrow_date).toLocaleDateString('en-PH') : 'Date unavailable'} · Due {row.due_date ? new Date(row.due_date).toLocaleDateString('en-PH') : 'Date unavailable'}</p>
                     {row.fine_review_required && <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-amber-800"><AlertTriangle size={14} /> Review the fine before accepting payment.</p>}
                   </div>
-                  <div className="grid grid-cols-2 gap-x-5 gap-y-1 text-sm lg:min-w-64">
+                  <div className="grid grid-cols-2 gap-x-5 gap-y-1 text-sm lg:w-44">
                     <span className="text-slate-500">Fine</span><strong className="text-right text-slate-800">{peso(row.fine_amount)}</strong>
                     <span className="text-slate-500">Paid</span><strong className="text-right text-emerald-700">{peso(row.fine_paid_amount)}</strong>
                     <span className="font-semibold text-slate-700">Balance</span><strong className="text-right font-bold text-red-700">{peso(row.outstanding_amount)}</strong>
                   </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
+                  <div className="flex min-w-0 flex-wrap gap-2 lg:justify-end">
                     {history.length > 0 && <button type="button" onClick={() => setHistoryFor(historyFor === row.request_id ? null : row.request_id)} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"><History size={16} /> History ({history.length})</button>}
-                    {!row.fine_review_required && Number(row.outstanding_amount) > 0 && visitorIdsByRequest[String(row.request_id)] && <button type="button" disabled={alertingAll || alertingId === String(row.request_id) || alertedTodayRequestIds.has(String(row.request_id))} onClick={() => void sendSingleAlert(row)} className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-100 disabled:opacity-50"><Bell size={16}/>{alertingId === String(row.request_id) ? 'Sending…' : alertedTodayRequestIds.has(String(row.request_id)) ? 'Alert sent today' : 'Alert visitor'}</button>}
+                    {!row.fine_review_required && Number(row.outstanding_amount) > 0 && <button type="button" disabled={alertingAll || alertingId === String(row.request_id) || alertedTodayRequestIds.has(String(row.request_id))} onClick={() => void sendSingleAlert(row)} className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-100 disabled:opacity-50"><Bell size={16}/>{alertingId === String(row.request_id) ? 'Sending…' : alertedTodayRequestIds.has(String(row.request_id)) ? 'Alert sent today' : 'Alert visitor'}</button>}
                     {row.fine_review_required && <button type="button" onClick={() => openReview(row)} className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100"><ClipboardCheck size={16} /> Review fine</button>}
                     {Number(row.outstanding_amount) > 0 && !row.fine_review_required && <button type="button" onClick={() => openPayment(row)} className="inline-flex items-center gap-2 rounded-lg bg-shelf-primary px-3 py-2 text-sm font-semibold text-white hover:bg-shelf-primary/90"><CircleDollarSign size={16} /> Record payment</button>}
                     {status === 'Paid' && <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800"><CheckCircle2 size={16} /> Settled</span>}

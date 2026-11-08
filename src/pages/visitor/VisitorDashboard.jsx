@@ -284,24 +284,33 @@ function VisitorDashboardContent() {
   useEffect(() => {
     if (!supabase || !user?.id || user.role !== 'visitor') return undefined;
     let cancelled = false;
-    supabase
-      .from('due_date_notifications')
-      .select('id, borrow_request_id, notification_date, sent_at')
-      .eq('visitor_id', String(user.id))
-      .eq('notification_type', 'fine_reminder')
-      .order('sent_at', { ascending: false })
-      .limit(20)
-      .then(({ data, error }) => {
+    const loadFineReminderNotifications = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('due_date_notifications')
+          .select('id, borrow_request_id, notification_date, sent_at')
+          .eq('visitor_id', String(user.id))
+          .eq('notification_type', 'fine_reminder')
+          .order('sent_at', { ascending: false })
+          .limit(20);
         if (cancelled) return;
-        if (error) {
-          console.error('Unable to load fine reminder notifications:', error);
-          setFineReminderNotifications([]);
-          return;
-        }
+        if (error) throw error;
         setFineReminderNotifications(Array.isArray(data) ? data : []);
-      });
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Unable to load fine reminder notifications:', error);
+      }
+    };
+    void loadFineReminderNotifications();
+    const refreshTimer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void loadFineReminderNotifications();
+    }, 30_000);
+    const refreshOnFocus = () => void loadFineReminderNotifications();
+    window.addEventListener('focus', refreshOnFocus);
     return () => {
       cancelled = true;
+      window.clearInterval(refreshTimer);
+      window.removeEventListener('focus', refreshOnFocus);
     };
   }, [user?.id, user?.role]);
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);

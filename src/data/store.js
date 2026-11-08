@@ -444,6 +444,7 @@ const mapAttendance = (r) => ({
 
 const FETCH_PAGE_SIZE = 1000;
 const FETCH_PAGE_BATCH_SIZE = 2;
+const ATTENDANCE_INITIAL_ROW_LIMIT = 5000;
 
 async function getAuthenticatedDataScope() {
   const {
@@ -515,6 +516,38 @@ async function fetchAllRowsInPages(buildQuery, resourceName) {
       return rows;
     }
   }
+}
+
+async function fetchLatestRowsInPages(buildQuery, resourceName, maxRows) {
+  const rows = [];
+
+  for (
+    let batchOffset = 0;
+    batchOffset < maxRows;
+    batchOffset += FETCH_PAGE_SIZE * FETCH_PAGE_BATCH_SIZE
+  ) {
+    const pages = await Promise.all(
+      Array.from({ length: FETCH_PAGE_BATCH_SIZE }, (_, pageIndex) => {
+        const from = batchOffset + pageIndex * FETCH_PAGE_SIZE;
+        if (from >= maxRows) return Promise.resolve({ data: [], error: null });
+        const to = Math.min(from + FETCH_PAGE_SIZE - 1, maxRows - 1);
+        return buildQuery().range(from, to);
+      })
+    );
+
+    for (const page of pages) {
+      if (page.error) {
+        throw cleanErr(page.error, `Unable to fetch ${resourceName}.`);
+      }
+      rows.push(...(page.data || []));
+    }
+
+    if (pages.some((page) => (page.data || []).length < FETCH_PAGE_SIZE)) {
+      return rows.slice(0, maxRows);
+    }
+  }
+
+  return rows.slice(0, maxRows);
 }
 
 async function getBorrowRequestsForSession(loadRows) {
@@ -1668,28 +1701,11 @@ export async function fetchAttendanceLogs() {
     return query;
   };
 
-  let data;
-  if (scope.type === 'superadmin') {
-    const libraries = await fetchLibraries();
-    data = [];
-    for (let offset = 0; offset < libraries.length; offset += 3) {
-      const libraryBatch = libraries.slice(offset, offset + 3);
-      const attendanceBatches = await Promise.all(
-        libraryBatch.map((library) =>
-          fetchAllRowsInPages(
-            () => buildAttendanceQuery(library.id),
-            `attendance records for ${library.name}`
-          )
-        )
-      );
-      data.push(...attendanceBatches.flat());
-    }
-  } else {
-    data = await fetchAllRowsInPages(
-      () => buildAttendanceQuery(scope.libraryId),
-      'attendance records'
-    );
-  }
+  const data = await fetchLatestRowsInPages(
+    () => buildAttendanceQuery(scope.type === 'superadmin' ? null : scope.libraryId),
+    'recent attendance records',
+    ATTENDANCE_INITIAL_ROW_LIMIT
+  );
 
   return data.map(mapAttendance);
 }

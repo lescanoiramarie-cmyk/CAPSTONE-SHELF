@@ -1483,7 +1483,7 @@ export default function SubAdminDashboard() {
         startDate: new Date(),
         endDate: new Date(),
         asOf: isBooksReport,
-        ...(report === 'attendance' ? { dateRange: 'All available dates' } : {}),
+        ...(report === 'attendance' ? { dateRange: 'Latest 5,000 available records' } : {}),
         summary: [[isBooksReport ? 'Total Titles' : 'Total Visits', reportRows.length]],
         ...(isBooksReport ? {
           columns: [
@@ -2002,7 +2002,7 @@ export default function SubAdminDashboard() {
                 <div className="p-3.5 border border-slate-100 bg-slate-50/50 rounded-lg flex items-center justify-between">
                   <div>
                     <p className="flex items-center gap-1.5 text-xs font-bold text-slate-700"><Activity size={14} aria-hidden="true" /> Branch Visitor Attendance</p>
-                    <p className="text-xs text-slate-500">Total Attendance Logs: {branchAttendance.length}</p>
+                    <p className="text-xs text-slate-500">Recent attendance records (up to 5,000): {branchAttendance.length}</p>
                   </div>
                   <div className="flex gap-2">
                     <button
