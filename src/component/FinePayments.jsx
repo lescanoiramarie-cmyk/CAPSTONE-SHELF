@@ -34,6 +34,7 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
   const [reviewNote, setReviewNote] = useState('');
   const [alertingId, setAlertingId] = useState('');
   const [alertingAll, setAlertingAll] = useState(false);
+  const [visitorIdsByRequest, setVisitorIdsByRequest] = useState({});
 
   const loadRows = useCallback(async () => {
     if (!supabase) {
@@ -43,9 +44,16 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
     }
     setLoading(true);
     setLoadError('');
-    const { data, error } = await supabase.rpc('get_fine_payment_dashboard', {
-      p_library_id: libraryId ? String(libraryId) : null,
-    });
+    const [dashboardResult, targetResult] = await Promise.all([
+      supabase.rpc('get_fine_payment_dashboard', { p_library_id: libraryId ? String(libraryId) : null }),
+      supabase.rpc('get_fine_payment_alert_targets', { p_library_id: libraryId ? String(libraryId) : null }),
+    ]);
+    const { data, error } = dashboardResult;
+    if (!targetResult.error && Array.isArray(targetResult.data)) {
+      setVisitorIdsByRequest(Object.fromEntries(targetResult.data.map((target) => [String(target.request_id), String(target.visitor_id)])));
+    } else {
+      setVisitorIdsByRequest({});
+    }
     if (error) {
       setLoadError(error.message || 'Unable to load fine records.');
       setRows([]);
@@ -146,11 +154,12 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
   const visitorAlertRows = useMemo(() => {
     const visitors = new Map();
     dueFineRows.forEach((row) => {
-      const key = `${row.library_id || row.library_name}:${String(row.visitor_name || '').trim().toLowerCase()}`;
+      const visitorId = visitorIdsByRequest[String(row.request_id)];
+      const key = visitorId ? `${row.library_id || row.library_name}:${visitorId}` : `${row.library_id || row.library_name}:${String(row.visitor_name || '').trim().toLowerCase()}:${row.request_id}`;
       if (!visitors.has(key)) visitors.set(key, row);
     });
     return [...visitors.values()];
-  }, [dueFineRows]);
+  }, [dueFineRows, visitorIdsByRequest]);
   const visitorAlertRequestIds = useMemo(() => new Set(visitorAlertRows.map((row) => String(row.request_id))), [visitorAlertRows]);
   const sendSingleAlert = async (row) => {
     setAlertingId(String(row.request_id));
