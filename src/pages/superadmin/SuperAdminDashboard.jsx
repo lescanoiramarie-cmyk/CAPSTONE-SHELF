@@ -579,6 +579,15 @@ export default function SuperAdminDashboard() {
 
   const [editingStaffId, setEditingStaffId] = useState(null);
 
+  useEffect(() => {
+    if (!editingStaffId) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [editingStaffId]);
+
   const staffBranchCounts = useMemo(() => {
     const counts = new Map(
       libraries.map((library) => [String(library.id), {
@@ -856,9 +865,7 @@ const handleEditStaff = (staff) => {
   });
 
   setStaffError('');
-  setStaffMessage(
-    `Editing ${staff.full_name}. Update the fields and save your changes.`
-  );
+  setStaffMessage('');
 };
 
   // DELETE SUB-ADMIN ACCOUNT
@@ -2350,13 +2357,22 @@ const handleEditStaff = (staff) => {
             {staffMessage && (
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{staffMessage}</div>
             )}
-            <form onSubmit={handleCreateStaff} aria-labelledby="staff-account-form-title" className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            {editingStaffId && <div className="fixed inset-0 z-40 bg-slate-950/55 backdrop-blur-[2px]" aria-hidden="true" />}
+            <form
+              onSubmit={handleCreateStaff}
+              aria-labelledby="staff-account-form-title"
+              role={editingStaffId ? 'dialog' : undefined}
+              aria-modal={editingStaffId ? 'true' : undefined}
+              className={editingStaffId
+                ? 'fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[min(48rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 shadow-2xl'
+                : 'rounded-xl border border-slate-200 bg-white p-5 shadow-sm'}
+            >
               <div className="mb-5">
-                <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Section 1</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-blue-700">{editingStaffId ? 'Update staff account' : 'Section 1'}</p>
                 <h3 id="staff-account-form-title" className="mt-1 text-base font-bold text-slate-800">
                   {editingStaffId ? 'Edit Sub-Admin Account' : 'Create Sub-Admin Account'}
                 </h3>
-                <p className="mt-1 text-xs text-slate-500">Creates a Supabase Auth account and the corresponding staff_profiles record.</p>
+                <p className="mt-1 text-xs text-slate-500">{editingStaffId ? 'Update the selected staff account. Leave the password blank to keep the current one.' : 'Creates a Supabase Auth account and the corresponding staff_profiles record.'}</p>
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
