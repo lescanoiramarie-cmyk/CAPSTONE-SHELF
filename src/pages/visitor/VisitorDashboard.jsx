@@ -1360,21 +1360,25 @@ function VisitorDashboardContent() {
     .map((transaction) => {
       const status = String(transaction.status || '').toLowerCase();
       const fineNeedsReview = Boolean(transaction.fineReviewRequired && !transaction.fineReviewResolvedAt);
+      const recordedFine = Math.max(0, Number(transaction.fineAmount || 0));
+      const recalculatedReturnedFine = status === 'returned' && transaction.dueDate && transaction.returnDate
+        ? calculateOverdueFine(
+            transaction.dueDate,
+            transaction.returnDate,
+            transaction.fineRateSnapshot
+          )
+        : null;
       const totalFine = fineNeedsReview
-        ? Number(transaction.fineAmount || 0)
+        ? recordedFine
         : status === 'borrowed' && transaction.dueDate
         ? calculateOverdueFine(
             transaction.dueDate,
             Date.now(),
             transaction.fineRateSnapshot
-          ) ?? Number(transaction.fineAmount || 0)
-        : status === 'returned' && transaction.dueDate && transaction.returnDate
-          ? calculateOverdueFine(
-              transaction.dueDate,
-              transaction.returnDate,
-              transaction.fineRateSnapshot
-            ) ?? Number(transaction.fineAmount || 0)
-          : Number(transaction.fineAmount || 0);
+          ) ?? recordedFine
+        : recalculatedReturnedFine != null
+          ? Math.max(recalculatedReturnedFine, recordedFine)
+          : recordedFine;
       const finePaid = Number(transaction.finePaidAmount || 0);
       return {
         ...transaction,
