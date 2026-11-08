@@ -1,5 +1,3 @@
-﻿BEGIN;
-
 CREATE OR REPLACE FUNCTION public.terminate_library_subscription(
   p_library_id uuid,
   p_note text DEFAULT NULL
@@ -50,5 +48,3 @@ $function$;
 ALTER FUNCTION public.terminate_library_subscription(uuid, text) OWNER TO postgres;
 REVOKE ALL ON FUNCTION public.terminate_library_subscription(uuid, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.terminate_library_subscription(uuid, text) TO authenticated, service_role;
-
-COMMIT;
