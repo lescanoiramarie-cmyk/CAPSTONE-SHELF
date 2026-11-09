@@ -29,7 +29,7 @@ function formatDateTime(value) {
 
 export default function VisitorServices({ user, libraries = [] }) {
   const [announcements, setAnnouncements] = useState([]);
-  const [replies, setReplies] = useState([]);
+  const [feedbackItems, setFeedbackItems] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -37,7 +37,7 @@ export default function VisitorServices({ user, libraries = [] }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [announcementSearch, setAnnouncementSearch] = useState('');
-  const [replySearch, setReplySearch] = useState('');
+  const [feedbackSearch, setFeedbackSearch] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -57,13 +57,14 @@ export default function VisitorServices({ user, libraries = [] }) {
           .in('audience', ['visitor', 'both'])
           .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
           .order('created_at', { ascending: false });
-        const replyRequest = user?.id && user?.email
-          ? supabase.rpc('get_visitor_feedback_replies', {
-              p_visitor_id: user.id,
-              p_email: user.email,
-            })
+        const feedbackRequest = user?.id
+          ? supabase
+              .from('visitor_feedback')
+              .select('id, category, subject, message, library_id, status, admin_reply, replied_at, created_at')
+              .eq('visitor_id', user.id)
+              .order('created_at', { ascending: false })
           : Promise.resolve({ data: [], error: null });
-        const [announcementResult, replyResult] = await Promise.all([announcementRequest, replyRequest]);
+        const [announcementResult, feedbackResult] = await Promise.all([announcementRequest, feedbackRequest]);
 
         if (!active) return;
         if (announcementResult.error) {
@@ -71,12 +72,12 @@ export default function VisitorServices({ user, libraries = [] }) {
         } else {
           setAnnouncements(announcementResult.data || []);
         }
-        if (replyResult.error) {
+        if (feedbackResult.error) {
           setLoadError((current) => current
-            ? `${current} ${replyResult.error.message}`
-            : replyResult.error.message);
+            ? `${current} ${feedbackResult.error.message}`
+            : feedbackResult.error.message);
         } else {
-          setReplies(replyResult.data || []);
+          setFeedbackItems(feedbackResult.data || []);
         }
       } catch (loadError) {
         if (active) setLoadError(loadError.message || 'Unable to load visitor services.');
@@ -97,13 +98,13 @@ export default function VisitorServices({ user, libraries = [] }) {
     );
   }, [announcementSearch, announcements]);
   const announcementList = useProgressiveList(filteredAnnouncements, 8);
-  const filteredReplies = useMemo(() => {
-    const term = replySearch.trim().toLowerCase();
-    return replies.filter((reply) =>
-      !term || `${reply.subject || ''} ${reply.admin_reply || ''}`.toLowerCase().includes(term)
+  const filteredFeedback = useMemo(() => {
+    const term = feedbackSearch.trim().toLowerCase();
+    return feedbackItems.filter((item) =>
+      !term || `${item.category || ''} ${item.subject || ''} ${item.message || ''} ${item.admin_reply || ''}`.toLowerCase().includes(term)
     );
-  }, [replySearch, replies]);
-  const replyList = useProgressiveList(filteredReplies, 8);
+  }, [feedbackSearch, feedbackItems]);
+  const feedbackList = useProgressiveList(filteredFeedback, 8);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -116,7 +117,7 @@ export default function VisitorServices({ user, libraries = [] }) {
     setError('');
     setNotice('');
     try {
-      const { error: insertError } = await supabase.from('visitor_feedback').insert({
+      const { data: submittedFeedback, error: insertError } = await supabase.from('visitor_feedback').insert({
         visitor_id: user?.id || null,
         visitor_name: user?.name || 'Visitor',
         visitor_email: user?.email || null,
@@ -124,8 +125,9 @@ export default function VisitorServices({ user, libraries = [] }) {
         category: form.category,
         subject: form.subject.trim(),
         message: form.message.trim(),
-      });
+      }).select('id, category, subject, message, library_id, status, admin_reply, replied_at, created_at').single();
       if (insertError) throw insertError;
+      if (submittedFeedback) setFeedbackItems((current) => [submittedFeedback, ...current]);
       setNotice('Your message was sent to the library team.');
       setForm(emptyForm);
     } catch (submitError) {
@@ -277,57 +279,59 @@ export default function VisitorServices({ user, libraries = [] }) {
         </form>
       </section>
 
-      <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-6 lg:col-span-2" aria-labelledby="replies-heading">
+      <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-6 lg:col-span-2" aria-labelledby="feedback-submissions-heading">
         <div className="mb-5 flex items-start gap-3">
           <span className="rounded-xl bg-violet-50 p-2.5 text-violet-800 dark:bg-violet-950/50 dark:text-violet-300" aria-hidden="true">
             <MessageSquareText size={19} />
           </span>
           <div>
-            <h2 id="replies-heading" className="text-lg font-bold text-slate-900 dark:text-white">Replies to your feedback</h2>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Responses from the library team will appear here.</p>
+            <h2 id="feedback-submissions-heading" className="text-lg font-bold text-slate-900 dark:text-white">Your submissions</h2>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">View the questions, experiences, and concerns you sent, along with their status and library replies.</p>
           </div>
         </div>
-        {replies.length > 0 && (
+        {feedbackItems.length > 0 && (
           <label className="mb-4 block">
-            <span className="sr-only">Search replies to your feedback</span>
+            <span className="sr-only">Search your submissions</span>
             <input
               type="search"
-              value={replySearch}
-              onChange={(event) => setReplySearch(event.target.value)}
-              placeholder="Search your feedback replies"
+              value={feedbackSearch}
+              onChange={(event) => setFeedbackSearch(event.target.value)}
+              placeholder="Search your submissions and replies"
               className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
             />
           </label>
         )}
-        {replies.length === 0 && !loadError ? (
+        {loading ? (
+          <div className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500 dark:bg-slate-900/60 dark:text-slate-400">Loading your submissions...</div>
+        ) : feedbackItems.length === 0 && !loadError ? (
           <div className="flex min-h-28 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-center dark:border-slate-600 dark:bg-slate-900/40">
-            <p className="text-sm text-slate-500 dark:text-slate-400">No replies yet. We will let you know when the library team responds.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">You have not submitted any questions or feedback yet.</p>
           </div>
-        ) : replies.length > 0 && filteredReplies.length === 0 ? (
+        ) : feedbackItems.length > 0 && filteredFeedback.length === 0 ? (
           <p className="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-600 dark:text-slate-400">
-            No replies match your search.
+            No submissions match your search.
           </p>
-        ) : replies.length > 0 ? (
+        ) : feedbackItems.length > 0 ? (
           <div className="grid gap-3 md:grid-cols-2">
-            {replyList.visibleItems.map((reply) => (
-              <article key={reply.id} className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/40">
-                <h3 className="break-words text-sm font-semibold text-slate-900 dark:text-slate-100">{reply.subject}</h3>
-                <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-600 dark:text-slate-300">{reply.admin_reply}</p>
-                {reply.replied_at && (
-                  <time className="mt-4 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                    <Clock3 size={13} aria-hidden="true" />
-                    {formatDateTime(reply.replied_at)}
-                  </time>
-                )}
+            {feedbackList.visibleItems.map((item) => (
+              <article key={item.id} className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/40">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="break-words text-sm font-semibold text-slate-900 dark:text-slate-100">{item.subject}</h3>
+                  <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800 dark:bg-blue-900/50 dark:text-blue-200">{item.status === 'answered' ? 'Answered' : item.status === 'in_review' ? 'In review' : 'Sent'}</span>
+                </div>
+                <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">{item.category || 'Feedback'}{item.library_id ? ` · ${libraries.find((library) => String(library.id) === String(item.library_id))?.name || 'Library'}` : ' · System-wide'}</p>
+                <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700 dark:text-slate-300">{item.message}</p>
+                <time className="mt-3 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><Clock3 size={13} aria-hidden="true" />Submitted {formatDateTime(item.created_at)}</time>
+                {item.admin_reply && <div className="mt-4 rounded-lg border border-violet-200 bg-violet-50 p-3 dark:border-violet-800 dark:bg-violet-950/40"><p className="text-xs font-bold text-violet-900 dark:text-violet-200">Library reply</p><p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-violet-900 dark:text-violet-100">{item.admin_reply}</p>{item.replied_at && <time className="mt-2 flex items-center gap-1.5 text-xs text-violet-700 dark:text-violet-300"><Clock3 size={13} aria-hidden="true" />{formatDateTime(item.replied_at)}</time>}</div>}
               </article>
             ))}
             <ProgressiveListFooter
-              noun="replies"
-              totalCount={filteredReplies.length}
-              visibleCount={replyList.visibleCount}
-              hasMore={replyList.hasMore}
-              loadMore={replyList.loadMore}
-              sentinelRef={replyList.sentinelRef}
+              noun="submissions"
+              totalCount={filteredFeedback.length}
+              visibleCount={feedbackList.visibleCount}
+              hasMore={feedbackList.hasMore}
+              loadMore={feedbackList.loadMore}
+              sentinelRef={feedbackList.sentinelRef}
               className="md:col-span-2"
             />
           </div>
