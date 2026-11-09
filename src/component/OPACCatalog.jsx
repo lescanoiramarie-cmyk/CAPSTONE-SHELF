@@ -3421,7 +3421,7 @@ export default function OPACCatalog({
                       request?.requestType === 'community';
                     const isOverdue =
                       request.status === 'borrowed' &&
-                      currentFine > 0;
+                      request.dueDate && new Date(request.dueDate).getTime() < Date.now();
                     const overdueDays =
                       request.dueDate && isOverdue
                         ? calculateOverdueDays(request.dueDate)
@@ -3624,6 +3624,9 @@ export default function OPACCatalog({
                                 <p className="font-bold text-red-600">
                                   Overdue by {overdueDays} day{overdueDays !== 1 ? 's' : ''}
                                 </p>
+                              )}
+                              {isOverdue && currentFine <= 0 && (
+                                <p className="font-medium text-amber-700 dark:text-amber-300">The original checkout fine rate is not recorded, so the fine amount is unavailable. Contact the library about this return.</p>
                               )}
                             </>
                           )}

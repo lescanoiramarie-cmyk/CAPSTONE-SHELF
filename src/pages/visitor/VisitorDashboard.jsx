@@ -1396,8 +1396,10 @@ function VisitorDashboardContent() {
     })
     .filter((transaction) => transaction.currentFineAmount > 0);
   const communityFineTotal = communityFineTransactions.reduce((total, transaction) => total + transaction.currentFineAmount, 0);
-  const overdueBooksToReturn = outstandingFineTransactions.filter(
-    (transaction) => String(transaction.status || '').toLowerCase() === 'borrowed'
+  const overdueBooksToReturn = myTransactions.filter((transaction) =>
+    !transaction.isCommunityBook && transaction.requestType !== 'community' &&
+    String(transaction.status || '').toLowerCase() === 'borrowed' &&
+    transaction.dueDate && new Date(transaction.dueDate).getTime() < Date.now()
   );
 
   // =========================================================
@@ -1963,7 +1965,7 @@ function VisitorDashboardContent() {
           />
         </div>
 
-        {outstandingFineTransactions.length > 0 && (
+        {(outstandingFineTransactions.length > 0 || overdueBooksToReturn.length > 0) && (
           <section
             role="alert"
             aria-label="Outstanding fines and overdue books"
@@ -1974,14 +1976,16 @@ function VisitorDashboardContent() {
                 <CircleAlert size={20} className="mt-0.5 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden="true" />
                 <div className="min-w-0">
                   <h2 className="text-sm font-bold text-amber-900 dark:text-amber-200">
-                    {`Outstanding library fine: ${String.fromCharCode(8369)}${confirmedOutstandingFineTotal.toLocaleString('en-PH')}`}
+                    {confirmedOutstandingFineTotal > 0
+                      ? `Outstanding library fine: ${String.fromCharCode(8369)}${confirmedOutstandingFineTotal.toLocaleString('en-PH')}`
+                      : 'Overdue library book'}
                   </h2>
                   <p className="mt-1 text-sm text-amber-900 dark:text-amber-100">
                     {overdueBooksToReturn.length > 0 && (
                       <>Please return your overdue book{overdueBooksToReturn.length > 1 ? 's' : ''}: {overdueBooksToReturn.map((transaction) => transaction.bookTitle || 'Borrowed book').join(', ')}. </>
                     )}
                     {confirmedOutstandingFineTotal > 0 && 'Contact the library to pay or update your confirmed fine.'}
-                    {confirmedOutstandingFineTotal <= 0 && 'Contact your library if you have questions about this balance.'}
+                    {confirmedOutstandingFineTotal <= 0 && 'The original checkout fine rate is not recorded for this loan, so SHELF cannot calculate an amount. Contact the library about the overdue return.'}
                   </p>
                 </div>
               </div>
