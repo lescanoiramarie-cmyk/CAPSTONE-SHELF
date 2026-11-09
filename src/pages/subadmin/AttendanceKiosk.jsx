@@ -180,7 +180,7 @@ export default function AttendanceKiosk() {
             aspectRatio: 4 / 3,
             videoConstraints: { width: { ideal: 1280 }, height: { ideal: 720 } },
             qrbox: (width, height) => {
-              const size = Math.floor(Math.min(width, height, 480) * 0.92);
+              const size = Math.floor(Math.min(width, height, 560) * 0.94);
               return { width: size, height: size };
             },
           },
@@ -250,7 +250,7 @@ export default function AttendanceKiosk() {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-7xl gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1.12fr)_minmax(22rem,0.88fr)] lg:p-8">
+      <div className="mx-auto grid max-w-screen-2xl gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.85fr)] lg:p-8">
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
             <div className="flex items-center gap-3">
