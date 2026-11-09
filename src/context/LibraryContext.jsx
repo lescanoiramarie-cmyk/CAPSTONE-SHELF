@@ -946,7 +946,9 @@ fineReviewRequired:
             console.error('SHELF realtime refresh failed:', error);
           });
         }
-      }, 750);
+      // Several related row changes can arrive together. Wait for the burst to
+      // settle before running refreshAll, which reloads shared dashboard data.
+      }, 5000);
     };
 
     const applyRealtimeBookChange = (payload) => {

@@ -1272,6 +1272,7 @@ export default function SubAdminDashboard() {
   useEffect(() => {
     if (section !== 'overview' || !currentLibraryId || !supabase) return undefined;
     let cancelled = false;
+    let lastRefreshAt = Date.now();
     const loadSubscriptionNotifications = async () => {
       const { data, error } = await supabase
         .from('staff_notifications')
@@ -1284,10 +1285,21 @@ export default function SubAdminDashboard() {
       if (!cancelled) setSubscriptionRenewalNotifications(error ? [] : (data || []));
     };
     void loadSubscriptionNotifications();
-    const timer = setInterval(() => void loadSubscriptionNotifications(), 60_000);
+    const refreshNotifications = () => {
+      const now = Date.now();
+      if (document.visibilityState === 'visible' && now - lastRefreshAt >= 30_000) {
+        lastRefreshAt = now;
+        void loadSubscriptionNotifications();
+      }
+    };
+    const timer = setInterval(refreshNotifications, 5 * 60_000);
+    document.addEventListener('visibilitychange', refreshNotifications);
+    window.addEventListener('focus', refreshNotifications);
     return () => {
       cancelled = true;
       clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshNotifications);
+      window.removeEventListener('focus', refreshNotifications);
     };
   }, [section, currentLibraryId]);
 

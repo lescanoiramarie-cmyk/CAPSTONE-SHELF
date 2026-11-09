@@ -286,6 +286,7 @@ function VisitorDashboardContent() {
   useEffect(() => {
     if (!supabase || !user?.id || user.role !== 'visitor') return undefined;
     let cancelled = false;
+    let lastRefreshAt = Date.now();
     const loadFineReminderNotifications = async () => {
       try {
         const { data, error } = await supabase
@@ -304,15 +305,21 @@ function VisitorDashboardContent() {
       }
     };
     void loadFineReminderNotifications();
-    const refreshTimer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void loadFineReminderNotifications();
-    }, 5 * 60_000);
-    const refreshOnFocus = () => void loadFineReminderNotifications();
+    const refreshOnFocus = () => {
+      const now = Date.now();
+      if (document.visibilityState === 'visible' && now - lastRefreshAt >= 30_000) {
+        lastRefreshAt = now;
+        void loadFineReminderNotifications();
+      }
+    };
+    const refreshTimer = window.setInterval(refreshOnFocus, 5 * 60_000);
     window.addEventListener('focus', refreshOnFocus);
+    document.addEventListener('visibilitychange', refreshOnFocus);
     return () => {
       cancelled = true;
       window.clearInterval(refreshTimer);
       window.removeEventListener('focus', refreshOnFocus);
+      document.removeEventListener('visibilitychange', refreshOnFocus);
     };
   }, [user?.id, user?.role]);
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
