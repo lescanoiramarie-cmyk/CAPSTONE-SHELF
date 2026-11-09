@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Bell,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   CircleAlert,
   Clock3,
   Inbox,
@@ -38,6 +40,8 @@ export default function VisitorServices({ user, libraries = [] }) {
   const [notice, setNotice] = useState('');
   const [announcementSearch, setAnnouncementSearch] = useState('');
   const [feedbackSearch, setFeedbackSearch] = useState('');
+  const [feedbackPage, setFeedbackPage] = useState(1);
+  const feedbackPageSize = 10;
 
   useEffect(() => {
     let active = true;
@@ -104,7 +108,12 @@ export default function VisitorServices({ user, libraries = [] }) {
       !term || `${item.category || ''} ${item.subject || ''} ${item.message || ''} ${item.admin_reply || ''}`.toLowerCase().includes(term)
     );
   }, [feedbackSearch, feedbackItems]);
-  const feedbackList = useProgressiveList(filteredFeedback, 8);
+  const feedbackPageCount = Math.max(1, Math.ceil(filteredFeedback.length / feedbackPageSize));
+  const currentFeedbackPage = Math.min(feedbackPage, feedbackPageCount);
+  const visibleFeedback = useMemo(() => {
+    const start = (currentFeedbackPage - 1) * feedbackPageSize;
+    return filteredFeedback.slice(start, start + feedbackPageSize);
+  }, [currentFeedbackPage, feedbackPageSize, filteredFeedback]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -127,7 +136,10 @@ export default function VisitorServices({ user, libraries = [] }) {
         message: form.message.trim(),
       }).select('id, category, subject, message, library_id, status, admin_reply, replied_at, created_at').single();
       if (insertError) throw insertError;
-      if (submittedFeedback) setFeedbackItems((current) => [submittedFeedback, ...current]);
+      if (submittedFeedback) {
+        setFeedbackItems((current) => [submittedFeedback, ...current]);
+        setFeedbackPage(1);
+      }
       setNotice('Your message was sent to the library team.');
       setForm(emptyForm);
     } catch (submitError) {
@@ -295,7 +307,7 @@ export default function VisitorServices({ user, libraries = [] }) {
             <input
               type="search"
               value={feedbackSearch}
-              onChange={(event) => setFeedbackSearch(event.target.value)}
+              onChange={(event) => { setFeedbackPage(1); setFeedbackSearch(event.target.value); }}
               placeholder="Search your submissions and replies"
               className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
             />
@@ -313,7 +325,7 @@ export default function VisitorServices({ user, libraries = [] }) {
           </p>
         ) : feedbackItems.length > 0 ? (
           <div className="grid gap-3 md:grid-cols-2">
-            {feedbackList.visibleItems.map((item) => (
+            {visibleFeedback.map((item) => (
               <article key={item.id} className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/40">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="break-words text-sm font-semibold text-slate-900 dark:text-slate-100">{item.subject}</h3>
@@ -325,17 +337,18 @@ export default function VisitorServices({ user, libraries = [] }) {
                 {item.admin_reply && <div className="mt-4 rounded-lg border border-violet-200 bg-violet-50 p-3 dark:border-violet-800 dark:bg-violet-950/40"><p className="text-xs font-bold text-violet-900 dark:text-violet-200">Library reply</p><p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-violet-900 dark:text-violet-100">{item.admin_reply}</p>{item.replied_at && <time className="mt-2 flex items-center gap-1.5 text-xs text-violet-700 dark:text-violet-300"><Clock3 size={13} aria-hidden="true" />{formatDateTime(item.replied_at)}</time>}</div>}
               </article>
             ))}
-            <ProgressiveListFooter
-              noun="submissions"
-              totalCount={filteredFeedback.length}
-              visibleCount={feedbackList.visibleCount}
-              hasMore={feedbackList.hasMore}
-              loadMore={feedbackList.loadMore}
-              sentinelRef={feedbackList.sentinelRef}
-              className="md:col-span-2"
-            />
           </div>
         ) : null}
+        {!loading && filteredFeedback.length > 0 && (
+          <nav aria-label="Your feedback submissions pagination" className="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-slate-600 dark:text-slate-300">Showing {(currentFeedbackPage - 1) * feedbackPageSize + 1}–{Math.min(currentFeedbackPage * feedbackPageSize, filteredFeedback.length)} of {filteredFeedback.length} submissions</p>
+            <div className="flex items-center justify-between gap-3 sm:justify-end">
+              <button type="button" disabled={currentFeedbackPage <= 1} onClick={() => setFeedbackPage((page) => Math.max(1, page - 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-200"><ChevronLeft size={16} aria-hidden="true" />Previous</button>
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Page {currentFeedbackPage} of {feedbackPageCount}</span>
+              <button type="button" disabled={currentFeedbackPage >= feedbackPageCount} onClick={() => setFeedbackPage((page) => Math.min(feedbackPageCount, page + 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-200">Next<ChevronRight size={16} aria-hidden="true" /></button>
+            </div>
+          </nav>
+        )}
       </section>
     </div>
   );
