@@ -250,7 +250,7 @@ export default function AttendanceKiosk() {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-screen-2xl gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.85fr)] lg:p-8">
+      <div className="mx-auto grid max-w-screen-2xl gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.85fr)] lg:p-5">
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
             <div className="flex items-center gap-3">
@@ -264,7 +264,7 @@ export default function AttendanceKiosk() {
           </div>
 
           <div className="p-4 sm:p-5">
-            <div className="relative aspect-[4/3] min-h-64 overflow-hidden rounded-xl bg-slate-950 [&_video]:!h-full [&_video]:!w-full [&_video]:!object-cover [&_canvas]:!h-full [&_canvas]:!w-full">
+            <div className="relative aspect-[4/3] min-h-64 overflow-hidden rounded-xl bg-slate-950 lg:aspect-auto lg:h-[min(55vh,32rem)] [&_video]:!h-full [&_video]:!w-full [&_video]:!object-cover [&_canvas]:!h-full [&_canvas]:!w-full">
               <div id={SCANNER_ID} className="h-full w-full" />
               {cameraStatus === 'starting' && <div className="absolute inset-0 grid place-items-center bg-slate-950/80 text-center text-white"><div><Camera size={28} className="mx-auto text-blue-300" /><p className="mt-3 text-sm font-semibold">Starting attendance camera</p><p className="mt-1 text-xs text-slate-300">Allow camera access if your browser asks.</p></div></div>}
               {cameraStatus === 'error' && <div className="absolute inset-0 grid place-items-center bg-slate-950/90 p-6 text-center text-white"><div><CircleAlert size={30} className="mx-auto text-amber-300" /><p className="mt-3 text-sm font-semibold">Camera needs attention</p><p className="mt-1 max-w-sm text-xs leading-5 text-slate-300">{cameraError}</p><button type="button" onClick={() => setRetryCamera((value) => value + 1)} className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-500">Try again</button></div></div>}
