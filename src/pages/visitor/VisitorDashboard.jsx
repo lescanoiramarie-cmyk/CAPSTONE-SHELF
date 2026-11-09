@@ -229,6 +229,8 @@ function VisitorDashboardContent() {
     : 'Outside Visitor';
 
   const [tab, setTab] = useState('catalog');
+  const [mapFocusLibraryId, setMapFocusLibraryId] = useState(null);
+  const [mapBookContext, setMapBookContext] = useState(null);
   const [showFineOnly, setShowFineOnly] = useState(false);
   const activeVisitorNavTabRef = useRef(null);
   const [catalogResetKey, setCatalogResetKey] = useState(0);
@@ -2222,6 +2224,12 @@ function VisitorDashboardContent() {
               borrowRequestsLoading={borrowRequestsLoading}
               borrowRequestsLoadError={borrowRequestsLoadError}
               onRetryBorrowRequests={retryBorrowRequests}
+              onNavigateToMap={(targetLibraryId, bookContext) => {
+                setMapFocusLibraryId(targetLibraryId);
+                setMapBookContext(bookContext);
+                setTab('map');
+                globalThis.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
             />
           </div>
         )}
@@ -2232,6 +2240,8 @@ function VisitorDashboardContent() {
 
         {tab === 'map' && (
           <LibraryMap
+            focusBranchId={mapFocusLibraryId}
+            bookContext={mapBookContext}
             onBrowseLibrary={(libraryId) => {
               setLibraryFilter(libraryId);
               setTab('catalog');

@@ -281,6 +281,7 @@ export default function OPACCatalog({
   borrowRequestsLoading = false,
   borrowRequestsLoadError = '',
   onRetryBorrowRequests = () => {},
+  onNavigateToMap = null,
   fineOnly = false,
   onFineOnlyChange = () => {},
 }) {
@@ -2039,6 +2040,15 @@ export default function OPACCatalog({
         totalCopies: Number(inventoryEntry?.totalCopies || 0),
         availableCopies: Number(inventoryEntry?.availableCopies || 0),
       });
+      if (onNavigateToMap) {
+        onNavigateToMap(library.id, {
+          title: selectedBook.title || 'Untitled Book',
+          totalCopies: Number(inventoryEntry?.totalCopies || 0),
+          availableCopies: Number(inventoryEntry?.availableCopies || 0),
+        });
+        setSelectedBook(null);
+        return;
+      }
     }
     setMapLibrary(library);
     setSelectedBook(null);
