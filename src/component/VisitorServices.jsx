@@ -40,6 +40,7 @@ export default function VisitorServices({ user, libraries = [] }) {
   const [notice, setNotice] = useState('');
   const [announcementSearch, setAnnouncementSearch] = useState('');
   const [feedbackSearch, setFeedbackSearch] = useState('');
+  const [feedbackView, setFeedbackView] = useState('open');
   const [feedbackPage, setFeedbackPage] = useState(1);
   const feedbackPageSize = 10;
 
@@ -91,7 +92,17 @@ export default function VisitorServices({ user, libraries = [] }) {
     }
 
     loadAnnouncements();
-    return () => { active = false; };
+    const refreshFeedback = async () => {
+      if (!supabase || !user?.id) return;
+      const { data, error } = await supabase
+        .from('visitor_feedback')
+        .select('id, category, subject, message, library_id, status, admin_reply, replied_at, created_at')
+        .eq('visitor_id', user.id)
+        .order('created_at', { ascending: false });
+      if (!error && active) setFeedbackItems(data || []);
+    };
+    window.addEventListener('focus', refreshFeedback);
+    return () => { active = false; window.removeEventListener('focus', refreshFeedback); };
   }, [user?.email, user?.id]);
 
   const faqMatch = findFAQResponse(`${form.subject} ${form.message}`);
@@ -104,10 +115,14 @@ export default function VisitorServices({ user, libraries = [] }) {
   const announcementList = useProgressiveList(filteredAnnouncements, 8);
   const filteredFeedback = useMemo(() => {
     const term = feedbackSearch.trim().toLowerCase();
-    return feedbackItems.filter((item) =>
-      !term || `${item.category || ''} ${item.subject || ''} ${item.message || ''} ${item.admin_reply || ''}`.toLowerCase().includes(term)
-    );
-  }, [feedbackSearch, feedbackItems]);
+    return feedbackItems.filter((item) => {
+      const answered = item.status === 'answered' || Boolean(String(item.admin_reply || '').trim());
+      const matchesView = feedbackView === 'answered' ? answered : !answered;
+      return matchesView && (!term || `${item.category || ''} ${item.subject || ''} ${item.message || ''} ${item.admin_reply || ''}`.toLowerCase().includes(term));
+    });
+  }, [feedbackSearch, feedbackItems, feedbackView]);
+  const openFeedbackCount = feedbackItems.filter((item) => item.status !== 'answered' && !String(item.admin_reply || '').trim()).length;
+  const answeredFeedbackCount = feedbackItems.length - openFeedbackCount;
   const feedbackPageCount = Math.max(1, Math.ceil(filteredFeedback.length / feedbackPageSize));
   const currentFeedbackPage = Math.min(feedbackPage, feedbackPageCount);
   const visibleFeedback = useMemo(() => {
@@ -300,6 +315,13 @@ export default function VisitorServices({ user, libraries = [] }) {
             <h2 id="feedback-submissions-heading" className="text-lg font-bold text-slate-900 dark:text-white">Your submissions</h2>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">View the questions, experiences, and concerns you sent, along with their status and library replies.</p>
           </div>
+        </div>
+        <div role="tablist" aria-label="Feedback replies" className="mb-4 flex w-fit max-w-full gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-900/50">
+          {[['open', 'Awaiting reply', openFeedbackCount], ['answered', 'Answered', answeredFeedbackCount]].map(([key, label, count]) => (
+            <button key={key} type="button" role="tab" aria-selected={feedbackView === key} onClick={() => { setFeedbackView(key); setFeedbackPage(1); }} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold ${feedbackView === key ? 'bg-shelf-primary text-white shadow-sm' : 'text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-800'}`}>
+              {label}<span className={`rounded-full px-2 py-0.5 text-xs ${feedbackView === key ? 'bg-white/15 text-white' : 'bg-white text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{count}</span>
+            </button>
+          ))}
         </div>
         {feedbackItems.length > 0 && (
           <label className="mb-4 block">

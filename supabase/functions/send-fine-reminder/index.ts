@@ -40,16 +40,14 @@ Deno.serve(async (req: Request) => {
     const payload = await req.json().catch(() => null);
     const requestId = String(payload?.borrowRequestId || "").trim();
     if (!requestId) return jsonResponse({ error: "A borrow request ID is required." }, 400);
-    const { data: loan, error: loanError } = await admin.from("borrow_requests").select("id, visitor_id, book_id, book_title, status, due_date, return_date, fine_amount, fine_paid_amount, fine_rate_snapshot, fine_review_required, fine_review_resolved_at").eq("id", requestId).maybeSingle();
+    const { data: loan, error: loanError } = await admin.from("borrow_requests").select("id, visitor_id, book_id, book_title, status, due_date, return_date, fine_amount, fine_paid_amount, fine_rate_snapshot").eq("id", requestId).maybeSingle();
     if (loanError || !loan) return jsonResponse({ error: "Fine record not found." }, 404);
     const role = String(staff.role).toLowerCase();
     const { data: book, error: bookError } = await admin.from("books").select("library_id").eq("id", loan.book_id).maybeSingle();
     if (bookError || !book) return jsonResponse({ error: "The loan’s library could not be verified." }, 404);
     if (role === "subadmin" && (!staff.library_id || book.library_id !== staff.library_id)) return jsonResponse({ error: "You can only alert visitors with fines from your assigned library." }, 403);
     if (!["borrowed", "returned"].includes(loan.status)) return jsonResponse({ error: "This loan has no active fine balance." }, 409);
-    if (loan.fine_review_required === true && !loan.fine_review_resolved_at) return jsonResponse({ error: "Review this fine before sending a balance alert." }, 409);
-
-    const { data: visitorLoans, error: visitorLoansError } = await admin.from("borrow_requests").select("id, book_id, book_title, status, due_date, fine_amount, fine_paid_amount, fine_rate_snapshot, fine_review_required, fine_review_resolved_at").eq("visitor_id", loan.visitor_id).in("status", ["borrowed", "returned"]);
+    const { data: visitorLoans, error: visitorLoansError } = await admin.from("borrow_requests").select("id, book_id, book_title, status, due_date, fine_amount, fine_paid_amount, fine_rate_snapshot").eq("visitor_id", loan.visitor_id).in("status", ["borrowed", "returned"]);
     if (visitorLoansError || !visitorLoans?.length) return jsonResponse({ error: "Unable to retrieve the visitor’s fine records." }, 500);
     const bookIds = [...new Set(visitorLoans.map((item) => item.book_id).filter(Boolean))];
     const { data: books, error: booksError } = await admin.from("books").select("id, library_id").in("id", bookIds);
@@ -57,7 +55,6 @@ Deno.serve(async (req: Request) => {
     const bookLibraryIds = new Map((books || []).map((item) => [String(item.id), String(item.library_id)]));
     const fineRows = visitorLoans.filter((item) => {
       if (!["borrowed", "returned"].includes(item.status)) return false;
-      if (item.fine_review_required === true && !item.fine_review_resolved_at) return false;
       if (bookLibraryIds.get(String(item.book_id)) !== String(book.library_id)) return false;
       const fine = getCurrentFine(item, new Date());
       return fine != null && Math.max(0, Number(fine) - Number(item.fine_paid_amount || 0)) > 0;

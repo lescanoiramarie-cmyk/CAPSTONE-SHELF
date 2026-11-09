@@ -21,6 +21,6 @@ CREATE OR REPLACE FUNCTION public.is_active_staff_for_branch (
   );
 $function$;
 
-GRANT EXECUTE ON FUNCTION "public"."is_active_staff_for_branch"(text) TO "anon", "authenticated", "postgres", "service_role";
+GRANT EXECUTE ON FUNCTION "public"."is_active_staff_for_branch"(text) TO "authenticated", "postgres", "service_role";
 
-REVOKE ALL ON FUNCTION "public"."is_active_staff_for_branch"(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION "public"."is_active_staff_for_branch"(text) FROM PUBLIC, "anon";

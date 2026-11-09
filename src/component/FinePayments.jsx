@@ -164,7 +164,10 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
       setAlertedTodayRequestIds((previous) => new Set([...previous, ...alertedRequestIdsForVisitor(row)]));
       setFeedback({ error: '', message: `Fine reminder sent to ${row.visitor_name}.` });
     } catch (error) {
-      setFeedback({ error: error.message || 'Unable to send the fine reminder.', message: '' });
+      if (/already sent for this loan today/i.test(String(error.message || ''))) {
+        setAlertedTodayRequestIds((previous) => new Set([...previous, ...alertedRequestIdsForVisitor(row)]));
+        setFeedback({ error: '', message: `${row.visitor_name} was already alerted today.` });
+      } else setFeedback({ error: error.message || 'Unable to send the fine reminder.', message: '' });
     } finally {
       setAlertingId('');
     }
@@ -182,11 +185,13 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
         sent += 1;
         setAlertedTodayRequestIds((previous) => new Set([...previous, ...alertedRequestIdsForVisitor(row)]));
       } catch (error) {
-        failures.push(`${row.visitor_name}: ${error.message || 'send failed'}`);
+        if (/already sent for this loan today/i.test(String(error.message || ''))) {
+          setAlertedTodayRequestIds((previous) => new Set([...previous, ...alertedRequestIdsForVisitor(row)]));
+        } else failures.push(`${row.visitor_name}: ${error.message || 'send failed'}`);
       }
     }
     if (failures.length) setFeedback({ error: `${sent} alert(s) sent. ${failures.length} could not be sent: ${failures.slice(0, 3).join('; ')}${failures.length > 3 ? '; …' : ''}`, message: '' });
-    else setFeedback({ error: '', message: `Fine alerts sent for all ${sent} outstanding fine record(s).` });
+    else setFeedback({ error: '', message: `Fine alerts sent for ${sent} visitor(s); existing alerts were marked as already sent today.` });
     setAlertingAll(false);
   };
 

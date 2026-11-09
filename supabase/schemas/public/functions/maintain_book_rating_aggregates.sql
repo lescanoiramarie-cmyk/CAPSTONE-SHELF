@@ -29,3 +29,6 @@ BEGIN
   RETURN NEW;
 END;
 $function$;
+
+REVOKE ALL ON FUNCTION public.maintain_book_rating_aggregates()
+  FROM PUBLIC, anon, authenticated;

@@ -383,29 +383,16 @@ const mapVisitor = (r) => ({
   registeredAt: r.registered_at,
 });
 
-const hasValidFineRateSnapshot = (request) => {
-  const rate = Number(
-    request.fine_rate_snapshot ?? request.fineRateSnapshot ?? request.fineRate
-  );
-  return Number.isInteger(rate) && rate >= 1 && rate <= 100;
-};
-
 export const isFineReviewRequired = (request) => {
-  if (request.fine_review_resolved_at || request.fineReviewResolvedAt) return false;
-  const status = String(request.status || '').trim().toLowerCase();
-  const validSnapshot = hasValidFineRateSnapshot(request);
-  if (validSnapshot) return false;
-  const hasExistingFine = Number(request.fine_amount ?? request.fineAmount ?? 0) !== 0;
-
-  return request.fine_review_required === true ||
-    ['borrowed', 'returned'].includes(status) ||
-    hasExistingFine;
+  // Legacy flags remain in the database for compatibility, but they no longer
+  // create a manual review state in visitor-facing flows.
+  return false;
 };
 
 const cleanTestVisitorName = (name) =>
   typeof name === 'string' ? name.replace(/^\[TEST\]\s*/i, '').trim() : name;
 
-const mapBorrowRequest = (r) => ({
+export const mapBorrowRequest = (r) => ({
   id: r.id,
   bookId: r.book_id,
   bookTitle: r.book_title,
@@ -426,7 +413,7 @@ const mapBorrowRequest = (r) => ({
   finePaidAmount: Number(r.fine_paid_amount || 0),
   fineRateSnapshot:
     r.fine_rate_snapshot == null ? null : Number(r.fine_rate_snapshot),
-  fineReviewRequired: isFineReviewRequired(r),
+  fineReviewRequired: false,
   fineReviewResolvedAt: r.fine_review_resolved_at || null,
   confirmedBy: r.confirmed_by,
   returnConfirmedBy: r.return_confirmed_by,
@@ -1534,8 +1521,7 @@ export async function fetchBorrowRequests({
                 ? null
                 : Number(request.fine_rate_snapshot),
 
-            fineReviewRequired:
-              isFineReviewRequired(request),
+            fineReviewRequired: false,
 
             confirmedBy:
               request.confirmed_by ||
@@ -4653,8 +4639,7 @@ export async function fetchOwnerCommunityBookRequests(
         ? null
         : Number(request.fine_rate_snapshot),
 
-    fineReviewRequired:
-      isFineReviewRequired(request),
+    fineReviewRequired: false,
 
     confirmedBy:
       request.confirmed_by ||

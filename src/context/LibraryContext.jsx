@@ -975,10 +975,41 @@ fineReviewRequired:
       });
     };
 
-    const refreshAttendance = async () => {
-      const attendanceLogs = await store.fetchAttendanceLogs();
-      if (!mounted) return;
-      setData((currentData) => ({ ...currentData, attendanceLogs }));
+    const applyRealtimeBorrowRequestChange = (payload) => {
+      const row = payload.eventType === 'DELETE' ? payload.old : payload.new;
+      if (!row?.id) return;
+      const id = String(row.id);
+      const updated = payload.eventType === 'DELETE' ? null : store.mapBorrowRequest(row);
+      setData((currentData) => {
+        const remaining = (currentData.borrowRequests || []).filter((item) => String(item.id) !== id);
+        const borrowRequests = updated
+          ? [updated, ...remaining].sort((a, b) => new Date(b.requestDate || 0) - new Date(a.requestDate || 0))
+          : remaining;
+        return { ...currentData, borrowRequests };
+      });
+    };
+
+    const applyRealtimeAttendanceChange = (payload) => {
+      const row = payload.eventType === 'DELETE' ? payload.old : payload.new;
+      if (!row?.id) return;
+      const id = String(row.id);
+      const updated = payload.eventType === 'DELETE' ? null : {
+        id: row.id,
+        visitorId: row.visitor_id,
+        visitorName: row.visitor_name,
+        isTestData: /^\[TEST\]\s*/i.test(String(row.visitor_name || '')),
+        libraryId: row.library_id,
+        timeIn: row.time_in,
+        checkedOutAt: row.checked_out_at,
+      };
+      setData((currentData) => {
+        const current = currentData.attendanceLogs || [];
+        const remaining = current.filter((item) => String(item.id) !== id);
+        const attendanceLogs = updated
+          ? [updated, ...remaining].sort((a, b) => new Date(b.timeIn || 0) - new Date(a.timeIn || 0)).slice(0, 5000)
+          : remaining;
+        return { ...currentData, attendanceLogs };
+      });
       setAttendanceLoadError('');
     };
 
@@ -1074,7 +1105,7 @@ fineReviewRequired:
                 event: '*', schema: 'public', table: 'borrow_requests',
                 filter: `visitor_id=eq.${realtimeVisitorId}`,
               },
-              () => scheduleRealtimeRefresh(() => loadVisitorBorrowRequests(realtimeVisitorId))
+              applyRealtimeBorrowRequestChange
             );
           } else if (isStaff) {
             nextChannel = nextChannel.on(
@@ -1084,7 +1115,7 @@ fineReviewRequired:
                 schema: 'public',
                 table: 'borrow_requests',
               },
-              () => scheduleRealtimeRefresh(loadAllBorrowRequests)
+              applyRealtimeBorrowRequestChange
             );
           }
 
@@ -1116,7 +1147,7 @@ fineReviewRequired:
                 schema: 'public',
                 table: 'attendance_logs',
               },
-              () => scheduleRealtimeRefresh(refreshAttendance)
+              applyRealtimeAttendanceChange
             );
           }
 

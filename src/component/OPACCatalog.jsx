@@ -116,7 +116,6 @@ function calculateCurrentFine(request) {
   if (request.fineReviewResolvedAt) {
     return Math.max(0, Number(request.fineAmount || 0) - Number(request.finePaidAmount || 0));
   }
-  if (request.fineReviewRequired) return 0;
   if (request.status === 'returned') {
     const assessedAtReturn = request.dueDate && request.returnDate
       ? calculateOverdueFine(
@@ -146,12 +145,6 @@ function calculateCurrentFine(request) {
 }
 
 function getVisitorFineHistoryAmount(request) {
-  if (request?.fineReviewRequired && !request?.fineReviewResolvedAt) {
-    return Math.max(
-      0,
-      Number(request.fineAmount || 0) - Number(request.finePaidAmount || 0)
-    );
-  }
   return calculateCurrentFine(request);
 }
 function calculateOverdueDays(dueDate) {
@@ -1424,19 +1417,11 @@ export default function OPACCatalog({
             String(requestVisitorId).trim() === String(currentVisitorId).trim()
           );
         }).map((request) => {
-          const book = books.find(
-            (item) => String(item.id) === String(request.bookId || request.book_id)
-          );
-          const fineRateSnapshot = request.fineRateSnapshot ?? book?.fineRate ?? null;
-          const hasValidFineRate = getValidStoredFineRate(fineRateSnapshot) != null;
+          const fineRateSnapshot = request.fineRateSnapshot ?? null;
           return {
             ...request,
             fineRateSnapshot,
-            fineReviewRequired: request.fineReviewResolvedAt
-              ? false
-              : hasValidFineRate
-                ? false
-                : request.fineReviewRequired,
+            fineReviewRequired: false,
           };
         })
       : [];
@@ -1483,9 +1468,7 @@ export default function OPACCatalog({
               Number(request.fine_amount ?? request.fineAmount ?? 0) || 0,
             fineRateSnapshot:
               request.fine_rate_snapshot ?? request.fineRateSnapshot ?? null,
-            fineReviewRequired:
-              request.fine_review_required === true ||
-              request.fineReviewRequired === true,
+            fineReviewRequired: false,
             approvedAt: request.approved_at ?? request.approvedAt ?? null,
             rejectedAt: request.rejected_at ?? request.rejectedAt ?? null,
             requestType: 'community',
@@ -3106,11 +3089,6 @@ export default function OPACCatalog({
                               </p>
                             </div>
                           )}
-                          {request.fineReviewRequired && (
-                            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-                              Manual fine review required. The assessed amount was preserved and no rate was guessed.
-                            </p>
-                          )}
                         </div>
                         {status === 'pending' && (
                           <div className="mt-4 flex flex-col gap-2 border-t border-slate-200 pt-4 sm:flex-row sm:justify-end dark:border-slate-700">
@@ -3438,13 +3416,10 @@ export default function OPACCatalog({
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {visibleMyRequests.map((request) => {
                     const currentFine = getVisitorFineHistoryAmount(request);
-                    const fineNeedsReview = Boolean(request.fineReviewRequired && !request.fineReviewResolvedAt && currentFine > 0);
                     const isCommunityRequest =
                       request?.isCommunityBook === true ||
                       request?.requestType === 'community';
                     const isOverdue =
-                      !isCommunityRequest &&
-                      !fineNeedsReview &&
                       request.status === 'borrowed' &&
                       currentFine > 0;
                     const overdueDays =
@@ -3510,9 +3485,7 @@ export default function OPACCatalog({
                             className={statusClass}
                           >
                             <StatusIcon size={12} aria-hidden="true" />
-                            {fineNeedsReview
-                              ? 'Fine under review'
-                              : isOverdue
+                            {isOverdue
                               ? 'Overdue'
                               : isCommunityRequest
                                 ? request.status === 'pending'
@@ -3654,14 +3627,12 @@ export default function OPACCatalog({
                               )}
                             </>
                           )}
+                          {isCommunityRequest && request.status === 'borrowed' && currentFine > 0 && (
+                            <p className="font-semibold text-blue-800 dark:text-blue-200">Owner-set community-book late fee: contact {request.ownerName || 'the owner'} to arrange payment. This is not a library Fine Payments balance.</p>
+                          )}
                           {currentFine > 0 && !isCommunityRequest && (
                             <p className="font-semibold text-slate-800 dark:text-slate-100">
                               Library: {request.libraryName || request.library_name || getBorrowRequestLibraryName(request) || 'Library location unavailable'}
-                            </p>
-                          )}
-                          {fineNeedsReview && (
-                            <p className="font-medium text-amber-700 dark:text-amber-300">
-                              The library is reviewing this recorded fine. It is not confirmed yet.
                             </p>
                           )}
                           {!isCommunityRequest && request.status === 'returned' && (
@@ -3676,11 +3647,7 @@ export default function OPACCatalog({
                           }`}
                         >
                           {"\u20B1"}{currentFine.toFixed(2)}
-                          {request.fineReviewRequired && (
-                            <span className="mt-1 block text-xs font-semibold text-amber-700">
-                              Manual review required
-                            </span>
-                          )}
+                          {isCommunityRequest && currentFine > 0 && <span className="mt-1 block text-xs font-medium text-blue-700">Owner-set fee</span>}
                         </td>
                         <td
                           data-label="Action"

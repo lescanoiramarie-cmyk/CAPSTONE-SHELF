@@ -708,9 +708,9 @@ as $$
       and coalesce(auth.jwt() -> 'app_metadata' ->> 'role', staff.role) = staff.role
   );
 $$;
-revoke all on function public.is_active_staff_for_branch(text) from public;
+revoke all on function public.is_active_staff_for_branch(text) from public, anon;
 grant execute on function public.is_active_staff_for_branch(text)
-  to anon, authenticated, service_role;
+  to authenticated, service_role;
 
 drop policy if exists "community request participants read"
   on public.community_book_requests;

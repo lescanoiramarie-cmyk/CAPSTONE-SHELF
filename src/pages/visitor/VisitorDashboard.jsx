@@ -1314,20 +1314,13 @@ function VisitorDashboardContent() {
   const myTransactions = borrowRequests
     .filter((request) => request.visitorId === user?.id)
     .map((request) => {
-      const book = books.find(
-        (item) => String(item.id) === String(request.bookId || request.book_id)
-      );
-      const fineRateSnapshot = request.fineRateSnapshot ?? book?.fineRate ?? null;
-      const fineRate = Number(fineRateSnapshot);
-      const hasValidFineRate = Number.isInteger(fineRate) && fineRate >= 1 && fineRate <= 100;
+      // A checkout snapshot is the rate that was agreed to for this loan. Never
+      // substitute today's catalog rate for a historical checkout.
+      const fineRateSnapshot = request.fineRateSnapshot ?? null;
       return {
         ...request,
         fineRateSnapshot,
-        fineReviewRequired: request.fineReviewResolvedAt
-          ? false
-          : hasValidFineRate
-            ? false
-            : request.fineReviewRequired,
+        fineReviewRequired: false,
       };
     })
     .sort(
@@ -1361,7 +1354,6 @@ function VisitorDashboardContent() {
     .filter((transaction) => !transaction.isCommunityBook)
     .map((transaction) => {
       const status = String(transaction.status || '').toLowerCase();
-      const fineNeedsReview = Boolean(transaction.fineReviewRequired && !transaction.fineReviewResolvedAt);
       const recordedFine = Math.max(0, Number(transaction.fineAmount || 0));
       const recalculatedReturnedFine = status === 'returned' && transaction.dueDate && transaction.returnDate
         ? calculateOverdueFine(
@@ -1370,9 +1362,7 @@ function VisitorDashboardContent() {
             transaction.fineRateSnapshot
           )
         : null;
-      const totalFine = fineNeedsReview
-        ? recordedFine
-        : status === 'borrowed' && transaction.dueDate
+      const totalFine = status === 'borrowed' && transaction.dueDate
         ? calculateOverdueFine(
             transaction.dueDate,
             Date.now(),
@@ -1385,19 +1375,27 @@ function VisitorDashboardContent() {
       return {
         ...transaction,
         currentFineAmount: Math.max(0, totalFine - finePaid),
-        fineNeedsReview,
       };
     })
     .filter((transaction) => transaction.currentFineAmount > 0);
-  const confirmedOutstandingFineTotal = outstandingFineTransactions
-    .filter((transaction) => !transaction.fineNeedsReview)
-    .reduce(
+  const confirmedOutstandingFineTotal = outstandingFineTransactions.reduce(
     (total, transaction) => total + transaction.currentFineAmount,
     0
   );
-  const fineUnderReviewTotal = outstandingFineTransactions
-    .filter((transaction) => transaction.fineNeedsReview)
-    .reduce((total, transaction) => total + transaction.currentFineAmount, 0);
+  const communityFineTransactions = myTransactions
+    .filter((transaction) => transaction.isCommunityBook || transaction.requestType === 'community')
+    .map((transaction) => {
+      const status = String(transaction.status || '').toLowerCase();
+      const recordedFine = Math.max(0, Number(transaction.fineAmount || 0));
+      const calculated = status === 'borrowed' && transaction.dueDate
+        ? calculateOverdueFine(transaction.dueDate, Date.now(), transaction.fineRateSnapshot)
+        : status === 'returned' && transaction.dueDate && transaction.returnDate
+          ? calculateOverdueFine(transaction.dueDate, transaction.returnDate, transaction.fineRateSnapshot)
+          : null;
+      return { ...transaction, currentFineAmount: Math.max(0, Number(calculated ?? recordedFine) - Number(transaction.finePaidAmount || 0)) };
+    })
+    .filter((transaction) => transaction.currentFineAmount > 0);
+  const communityFineTotal = communityFineTransactions.reduce((total, transaction) => total + transaction.currentFineAmount, 0);
   const overdueBooksToReturn = outstandingFineTransactions.filter(
     (transaction) => String(transaction.status || '').toLowerCase() === 'borrowed'
   );
@@ -1976,19 +1974,14 @@ function VisitorDashboardContent() {
                 <CircleAlert size={20} className="mt-0.5 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden="true" />
                 <div className="min-w-0">
                   <h2 className="text-sm font-bold text-amber-900 dark:text-amber-200">
-                    {confirmedOutstandingFineTotal > 0
-                      ? `Outstanding fine: ${String.fromCharCode(8369)}${confirmedOutstandingFineTotal.toLocaleString('en-PH')}`
-                      : `Outstanding fine under review: ${String.fromCharCode(8369)}${fineUnderReviewTotal.toLocaleString('en-PH')}`}
+                    {`Outstanding library fine: ${String.fromCharCode(8369)}${confirmedOutstandingFineTotal.toLocaleString('en-PH')}`}
                   </h2>
                   <p className="mt-1 text-sm text-amber-900 dark:text-amber-100">
                     {overdueBooksToReturn.length > 0 && (
                       <>Please return your overdue book{overdueBooksToReturn.length > 1 ? 's' : ''}: {overdueBooksToReturn.map((transaction) => transaction.bookTitle || 'Borrowed book').join(', ')}. </>
                     )}
-                    {fineUnderReviewTotal > 0 && (
-                      <>Recorded fine of {String.fromCharCode(8369)}{fineUnderReviewTotal.toLocaleString('en-PH')} is awaiting library review and is not confirmed yet. </>
-                    )}
                     {confirmedOutstandingFineTotal > 0 && 'Contact the library to pay or update your confirmed fine.'}
-                    {confirmedOutstandingFineTotal <= 0 && 'The library will update this record after reviewing it.'}
+                    {confirmedOutstandingFineTotal <= 0 && 'Contact your library if you have questions about this balance.'}
                   </p>
                 </div>
               </div>
@@ -2003,6 +1996,13 @@ function VisitorDashboardContent() {
                 View requests & borrows
               </button>
             </div>
+          </section>
+        )}
+
+        {communityFineTotal > 0 && (
+          <section role="status" aria-label="Community book late fee" className="visitor-feedback visitor-feedback-warning mb-4 rounded-xl border border-blue-300 bg-blue-50 p-4 shadow-sm dark:border-blue-700 dark:bg-blue-950/40">
+            <h2 className="text-sm font-bold text-blue-950 dark:text-blue-100">Community book late fees: {String.fromCharCode(8369)}{communityFineTotal.toLocaleString('en-PH')}</h2>
+            <p className="mt-1 text-sm text-blue-900 dark:text-blue-200">This amount is based on the book owner’s late-fee rate. Contact the owner to arrange payment; it is separate from library Fine Payments.</p>
           </section>
         )}
 
