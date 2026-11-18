@@ -14,7 +14,7 @@ test('fine schema prerequisite accepts canonical text and varchar partial-index 
   assert.match(migration, /WHEN v_index\.index_name = 'borrow_requests_fine_dashboard_status_book_due_idx'/);
   assert.match(
     migration,
-    /\(\(status\)::text=any\(\(array\[''borrowed''::character varying,''returned''::character varying\]\)::text\[\]\)\)/
+    /\(status=any\(array\[''borrowed''::character varying,''returned''::character varying\]\)\)/
   );
   assert.match(migration, /v_index_predicate\s+IS\s+DISTINCT\s+FROM\s+v_expected_predicate/);
 });

@@ -473,7 +473,7 @@ BEGIN
         -- rendering while retaining the text rendering used by clean replay.
         WHEN v_index.index_name = 'borrow_requests_fine_dashboard_status_book_due_idx'
              AND v_borrow_status_type LIKE 'character varying%' THEN
-          '((status)::text=any((array[''borrowed''::character varying,''returned''::character varying])::text[]))'
+          '(status=any(array[''borrowed''::character varying,''returned''::character varying]))'
         ELSE pg_catalog.regexp_replace(
           pg_catalog.lower(v_index.predicate), '[[:space:]]', '', 'g'
         )
