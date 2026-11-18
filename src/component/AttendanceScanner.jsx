@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Clock3, QrCode, UsersRound, UserCheck } from 'lucide-react';
 import { useAuth } from '../context/useAuth.js';
 import { useLibraryData } from '../context/useLibrary.js';
@@ -91,7 +91,7 @@ export default function AttendanceScanner() {
           {todaysLogs.length > 0 && (
             <nav aria-label="Attendance pages" className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 text-sm">
               <p className="text-slate-600" aria-live="polite">
-                Showing {(currentAttendancePage - 1) * attendancePageSize + 1}�{Math.min(currentAttendancePage * attendancePageSize, todaysLogs.length)} of {todaysLogs.length} visits
+                Showing {(currentAttendancePage - 1) * attendancePageSize + 1}–{Math.min(currentAttendancePage * attendancePageSize, todaysLogs.length)} of {todaysLogs.length} visits
               </p>
               <div className="flex items-center gap-2">
                 <button type="button" onClick={() => setAttendancePage((page) => Math.max(1, Math.min(page, attendancePageCount) - 1))} disabled={currentAttendancePage <= 1} className="min-h-10 rounded-lg border border-slate-300 px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">Previous</button>
