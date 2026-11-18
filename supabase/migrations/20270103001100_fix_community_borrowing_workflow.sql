@@ -622,8 +622,6 @@ GRANT EXECUTE ON FUNCTION public.require_available_community_book_copy()
 -- ============================================================
 -- 6. Fix enforce_book_copy_inventory to separate library vs community
 -- ============================================================
-DROP FUNCTION IF EXISTS public.enforce_book_copy_inventory();
-
 CREATE OR REPLACE FUNCTION public.enforce_book_copy_inventory()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -812,7 +810,7 @@ BEGIN
     CROSS JOIN LATERAL pg_catalog.aclexplode(procedure.proacl) AS acl
     WHERE procedure.oid = v_signature;
 
-    IF v_acl_count <> 1
+    IF v_acl_count <> 2
        OR NOT pg_catalog.has_function_privilege('authenticated', v_signature, 'EXECUTE')
        OR pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE')
        OR pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE') THEN
@@ -841,7 +839,7 @@ BEGIN
     CROSS JOIN LATERAL pg_catalog.aclexplode(procedure.proacl) AS acl
     WHERE procedure.oid = v_signature;
 
-    IF v_acl_count <> 2
+    IF v_acl_count <> 3
        OR NOT pg_catalog.has_function_privilege('authenticated', v_signature, 'EXECUTE')
        OR NOT pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE')
        OR pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE') THEN
@@ -900,7 +898,7 @@ BEGIN
     CROSS JOIN LATERAL pg_catalog.aclexplode(procedure.proacl) AS acl
     WHERE procedure.oid = v_signature;
 
-    IF v_acl_count <> 1
+    IF v_acl_count <> 2
        OR NOT pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE')
        OR pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE')
        OR pg_catalog.has_function_privilege('authenticated', v_signature, 'EXECUTE') THEN

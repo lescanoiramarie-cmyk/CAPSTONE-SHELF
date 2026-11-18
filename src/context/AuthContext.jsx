@@ -13,10 +13,22 @@ const SESSION_ACTIVITY_KEY = 'shelf_ilms_last_activity_v1';
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const IDLE_WARNING_TIMEOUT_MS = 5 * 60 * 1000;
 
-const reportClientError = (context) => {
+const reportClientError = (context, error = null, correlationId = null) => {
   // Avoid logging tokens, credentials, OTPs, PII, or raw provider errors.
   if (typeof console !== 'undefined' && typeof console.error === 'function') {
-    console.error(`[SHELF] ${context}`);
+    const cid = correlationId || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : null);
+    const cidPrefix = cid ? `[cid:${cid}] ` : '';
+    if (error && typeof error === 'object') {
+      const sanitizedStatus = error.status || error.statusCode || error.status_code || null;
+      const sanitizedCode = error.code || error.name || null;
+      const details = [
+        sanitizedStatus ? `status=${sanitizedStatus}` : null,
+        sanitizedCode ? `code=${sanitizedCode}` : null,
+      ].filter(Boolean).join(' ');
+      console.error(`[SHELF] ${cidPrefix}${context}${details ? ` (${details})` : ''}`);
+    } else {
+      console.error(`[SHELF] ${cidPrefix}${context}`);
+    }
   }
 };
 
@@ -781,7 +793,7 @@ const completeMfaLogin = async (code) => {
     // as another failed attempt against the same lockout record.
     const visitorLoginMessage = String(visitorError?.message || '').trim();
     if (
-      /invalid email or password|too many failed login attempts|unable to (?:process|complete) login/i.test(
+      /invalid email or password|too many failed login attempts|unable to (?:process|complete) login|email (?:(?:has )?not been|not) confirmed|please verify your otp|account is currently inactive/i.test(
         visitorLoginMessage
       )
     ) {

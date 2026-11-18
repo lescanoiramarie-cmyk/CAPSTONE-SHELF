@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
-const bookReviewPrivacy = read('../../supabase/migrations/20270102000300_book_reviews_privacy.sql');
+const reviewReconciliation = read('../../supabase/migrations/20270119000000_reconcile_book_reviews_and_eligibility.sql');
 const bookReviewTable = read('../../supabase/schemas/public/tables/book_reviews.sql');
 const roleDefinition = read('../../supabase/migrations/20270102002700_critical_rpcs_for_direct_access.sql');
 const roleHardening = read('../../supabase/migrations/20270103000200_fix_get_current_user_role.sql');
@@ -19,7 +19,7 @@ test('book review RPC owner UPDATE grant only names columns in the current schem
   const columns = new Set(
     [...tableDefinition.matchAll(/^\s*"([a-z_][a-z0-9_]*)"\s+/gim)].map((match) => match[1])
   );
-  const grant = bookReviewPrivacy.match(
+  const grant = reviewReconciliation.match(
     /GRANT UPDATE\s*\(([^)]+)\)\s*ON TABLE public\.book_reviews/i
   );
   assert.ok(grant, 'RPC owner keeps a column-scoped UPDATE grant');
@@ -31,10 +31,7 @@ test('book review RPC owner UPDATE grant only names columns in the current schem
 
 test('book review save RPCs never write the absent updated_at column', () => {
   const migrations = [
-    bookReviewPrivacy,
-    read('../../supabase/migrations/20270102000400_rpc_owner_auth_claim_access.sql'),
-    read('../../supabase/migrations/20270102001100_attendance_claims_review_labels_and_table_acl.sql'),
-    read('../../supabase/migrations/20270103001000_review_eligibility_enforcement.sql'),
+    reviewReconciliation,
   ];
   for (const sql of migrations) {
     const updates = [...sql.matchAll(/UPDATE public\.book_reviews AS review\s+SET([\s\S]*?)WHERE review\.id/gi)];
@@ -43,6 +40,66 @@ test('book review save RPCs never write the absent updated_at column', () => {
       assert.match(update[1], /comment\s*=/i);
       assert.doesNotMatch(update[1], /updated_at\s*=/i);
     }
+  }
+});
+
+test('review RPC signatures and result types match the captured production table types', () => {
+  const migrations = [
+    reviewReconciliation,
+  ];
+  assert.match(bookReviewTable, /"id"\s+bigint/);
+  assert.match(bookReviewTable, /"rating"\s+integer/);
+  for (const sql of migrations) {
+    for (const functionName of ['get_book_reviews', 'save_my_book_review']) {
+      const definition = sql.match(new RegExp(
+        `CREATE(?: OR REPLACE)? FUNCTION public\\.${functionName}\\([\\s\\S]*?RETURNS TABLE \\(([\\s\\S]*?)\\)\\s*LANGUAGE`,
+        'i'
+      ));
+      if (definition) {
+        assert.match(definition[1], /\bid text\b/);
+        assert.match(definition[1], /\brating integer\b/);
+        assert.doesNotMatch(definition[1], /\bid (?:uuid|bigint)\b|\brating smallint\b/);
+      }
+    }
+    if (/CREATE(?: OR REPLACE)? FUNCTION public\.save_my_book_review\(/i.test(sql)) {
+      assert.match(sql, /v_review_id text;/);
+      const saveStart = sql.search(/CREATE(?: OR REPLACE)? FUNCTION public\.save_my_book_review\(/i);
+      const saveEnd = sql.indexOf('$function$;', saveStart);
+      assert.match(sql.slice(saveStart, saveEnd), /saved\.rating::integer/);
+    }
+    if (/CREATE(?: OR REPLACE)? FUNCTION public\.delete_my_book_review\(/i.test(sql)) {
+      assert.match(sql, /FUNCTION public\.delete_my_book_review\(p_review_id text\)/);
+      assert.match(sql, /v_deleted_id text;/);
+      assert.doesNotMatch(sql, /CREATE(?: OR REPLACE)? FUNCTION public\.delete_my_book_review\((?:uuid|bigint)\)/i);
+    }
+  }
+});
+
+test('review RPC API remains compatible with UUID/smallint and bigint/integer table variants', () => {
+  const initialSchema = read('../../supabase/migrations/20261002000000_security_features.sql');
+  assert.match(initialSchema, /create table if not exists public\.book_reviews \([\s\S]*?id uuid primary key[\s\S]*?rating smallint[\s\S]*?unique \(book_id, visitor_id\)/i);
+  for (const sql of [reviewReconciliation]) {
+    assert.match(sql, /RETURNS TABLE \([\s\S]*?id text[\s\S]*?rating integer/i);
+    assert.match(sql, /(?:review|saved)\.id::text/);
+    assert.match(sql, /(?:review|saved)\.rating::integer/);
+  }
+  assert.match(reviewReconciliation, /DROP FUNCTION IF EXISTS public\.delete_my_book_review\(uuid\)/);
+  assert.match(reviewReconciliation, /CREATE OR REPLACE FUNCTION public\.get_book_reviews\(/);
+  assert.match(reviewReconciliation, /CREATE OR REPLACE FUNCTION public\.save_my_book_review/);
+});
+
+test('reconciled review save definition uses the unique key through an atomic upsert', () => {
+  const migrations = [
+    reviewReconciliation,
+  ];
+  for (const sql of migrations) {
+    const functionStart = sql.search(/CREATE(?: OR REPLACE)? FUNCTION public\.save_my_book_review\(/i);
+    assert.notEqual(functionStart, -1, 'review save RPC definition is present');
+    const functionEnd = sql.indexOf('$function$;', functionStart);
+    const definition = sql.slice(functionStart, functionEnd);
+    assert.match(definition, /ON CONFLICT \(book_id, visitor_id\) DO UPDATE/);
+    assert.match(definition, /SET rating = EXCLUDED\.rating,[\s\S]*comment = EXCLUDED\.comment/);
+    assert.doesNotMatch(definition, /SELECT review\.id INTO v_review_id[\s\S]*?FOR UPDATE/);
   }
 });
 
@@ -94,4 +151,29 @@ test('latest staff role-claim migration retains exact fail-closed guards', () =>
   assert.match(roleClaimHardening, /COALESCE\\\(v_jwt_role, v_staff_role\\\) <> v_staff_role/);
   assert.match(roleClaimHardening, /old_count = 1 AND new_count = 0/);
   assert.match(roleClaimHardening, /Unexpected role-claim guard/);
+});
+
+
+test('visitor login fail-fast regex captures unconfirmed and inactive visitor states without blocking staff login', () => {
+  const failFastMatch = authContext.match(/if\s*\(\s*(\/[^/]+\/[a-z]*)\.test\(\s*visitorLoginMessage\s*\)\s*\)/i);
+  assert.ok(failFastMatch, 'fail-fast regex is present in AuthContext');
+  const regex = eval(failFastMatch[1]);
+
+  // Outcomes that should fail fast (immediately throw to visitor UI)
+  assert.equal(regex.test('Invalid email or password.'), true);
+  assert.equal(regex.test('Too many failed login attempts.'), true);
+  assert.equal(regex.test('Unable to process login.'), true);
+  assert.equal(regex.test('Email has not been confirmed'), true);
+  assert.equal(regex.test('Email not confirmed'), true);
+  assert.equal(regex.test('Please verify your OTP code before logging in.'), true);
+  assert.equal(regex.test('This visitor account is currently inactive.'), true);
+
+  // Staff login outcome that must NOT be blocked, allowing fallback to staff login
+  assert.equal(regex.test('This account is not registered as a SHELF visitor.'), false);
+  assert.equal(regex.test('Visitor account was not found.'), false);
+
+  // Correlation ID and sanitized diagnostic logging present
+  assert.match(authContext, /cidPrefix\s*=\s*cid\s*\?\s*`\[cid:\$\{cid\}\]\s*`\s*:\s*''/);
+  assert.match(authContext, /status=\$\{sanitizedStatus\}/);
+  assert.doesNotMatch(authContext, /console\.error\([^)]*(?:password|token|code|otp|newPassword)/i);
 });

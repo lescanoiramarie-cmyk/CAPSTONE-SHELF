@@ -744,7 +744,7 @@ BEGIN
   IF auth.uid() IS NULL OR NOT EXISTS (
     SELECT 1
     FROM public.visitors AS visitor
-    WHERE visitor.id = pg_catalog.trim(p_requester_visitor_id)
+    WHERE visitor.id = pg_catalog.btrim(p_requester_visitor_id)
       AND visitor.auth_user_id = auth.uid()
       AND visitor.otp_verified
       AND visitor.is_active
@@ -827,7 +827,7 @@ BEGIN
     ON owner.id = request.owner_visitor_id
   LEFT JOIN public.books AS book
     ON book.id = request.book_id
-  WHERE request.requester_visitor_id = pg_catalog.trim(p_requester_visitor_id)
+  WHERE request.requester_visitor_id = pg_catalog.btrim(p_requester_visitor_id)
   ORDER BY request.request_date DESC;
 END;
 $function$;
@@ -938,7 +938,7 @@ BEGIN
   CROSS JOIN LATERAL pg_catalog.aclexplode(procedure.proacl) AS acl
   WHERE procedure.oid = v_signature;
 
-  IF v_acl_count <> 2
+  IF v_acl_count <> 3
      OR NOT pg_catalog.has_function_privilege('authenticated', v_signature, 'EXECUTE')
      OR NOT pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE')
      OR pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE') THEN
@@ -1063,7 +1063,7 @@ BEGIN
   CROSS JOIN LATERAL pg_catalog.aclexplode(procedure.proacl) AS acl
   WHERE procedure.oid = v_signature;
 
-  IF v_acl_count <> 2
+  IF v_acl_count <> 3
      OR NOT pg_catalog.has_function_privilege('authenticated', v_signature, 'EXECUTE')
      OR NOT pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE')
      OR pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE') THEN
@@ -1091,7 +1091,7 @@ BEGIN
   CROSS JOIN LATERAL pg_catalog.aclexplode(procedure.proacl) AS acl
   WHERE procedure.oid = v_signature;
 
-  IF v_acl_count <> 2
+  IF v_acl_count <> 3
      OR NOT pg_catalog.has_function_privilege('authenticated', v_signature, 'EXECUTE')
      OR NOT pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE')
      OR pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE') THEN
@@ -1120,7 +1120,7 @@ BEGIN
   CROSS JOIN LATERAL pg_catalog.aclexplode(procedure.proacl) AS acl
   WHERE procedure.oid = v_signature;
 
-  IF v_acl_count <> 2
+  IF v_acl_count <> 3
      OR NOT pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE')
      OR NOT pg_catalog.has_function_privilege('authenticated', v_signature, 'EXECUTE')
      OR pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE') THEN

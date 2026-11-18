@@ -339,9 +339,9 @@ BEGIN
   -- Review RPC response contracts retain visitor_name as a generic label but
   -- return no visitor identifier or raw identity field.
   IF pg_catalog.pg_get_function_result('public.get_book_reviews(text,integer,integer)'::regprocedure)
-       NOT LIKE 'TABLE(id uuid, visitor_name text, rating smallint, comment text, created_at timestamp with time zone, is_own boolean)'
+       NOT LIKE 'TABLE(id text, visitor_name text, rating integer, comment text, created_at timestamp with time zone, is_own boolean)'
      OR pg_catalog.pg_get_function_result('public.save_my_book_review(text,integer,text)'::regprocedure)
-       NOT LIKE 'TABLE(id uuid, visitor_name text, rating smallint, comment text, created_at timestamp with time zone, is_own boolean)' THEN
+       NOT LIKE 'TABLE(id text, visitor_name text, rating integer, comment text, created_at timestamp with time zone, is_own boolean)' THEN
     RAISE EXCEPTION 'FAIL: book review RPC response columns changed unexpectedly.';
   END IF;
   v_definition := pg_catalog.pg_get_functiondef('public.get_book_reviews(text,integer,integer)'::regprocedure);

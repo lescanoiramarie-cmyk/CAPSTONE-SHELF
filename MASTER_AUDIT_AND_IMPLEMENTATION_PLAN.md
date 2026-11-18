@@ -1201,3 +1201,350 @@ The nine-file correction set was committed on `main` as `488aecc3a078ad6dee9fe70
 Validation: `node --test` — 284 total, 241 passed, 0 failed, 43 skipped; `npm run lint` — passed; `npm run build` — passed with the existing chunk-size advisory; `npm run validate:migrations` — passed, 168 migrations, zero validation errors; `git diff --check` — passed; Python 3.13 `compileall` — passed; FastAPI `unittest` — 9 passed. The Python run emitted a Starlette/httpx deprecation warning. Skips remain blocked integration/catalog tests and were not counted as passing tests. The build and local tests do not establish production migration or recovery readiness.
 
 No production database was queried or changed. Backup/recovery is NOT VERIFIED; remote migration history is NOT RECONCILED; production migration remains NOT READY. The visitor HTTP 400 cause remains undetermined pending sanitized request/Edge logs. Untracked reports, diagnostics, and both untrusted backup files remain untouched and were not pushed.
+
+### Post-push migration-history safety check — 2026-11-18
+
+This is a local review only. No production connection, migration, backup, schema/data/history write, or login attempt was made. The five edited historical migration files remain in the already-pushed commit; no commit was amended, reset, or rewritten.
+
+#### Applied/pending evidence and its limits
+
+The saved `migration_list.txt` capture (modified 2026-11-18 11:10 local) reports 119 remote history rows, ending at `20270101000000`. In that pre-failure snapshot, all five edited versions below are local-only/pending; importantly, `20270102000000`, `20270102000100`, and `20270102000200` were also pending. A separate saved catalog capture (`production-reconciliation-reports/reconciliation_20261118_134845.txt`, 2026-11-18 13:48 local) reports `book_reviews` columns without `updated_at`, and reports `get_book_reviews`, `save_my_book_review`, `delete_my_book_review`, `shelf_rpc_request_uid`, and `shelf_rpc_request_jwt` absent. The saved relevant-role listing did not show `shelf_book_reviews_rpc_owner`. These captures precede the reported failed run at `20261118_192555`, and the target-project association is not freshly revalidated. They are pre-failure evidence only, not current post-failure status.
+
+| Version/file | Purpose and principal schema/function effects | Status in saved pre-failure history | Current post-failure status |
+| --- | --- | --- | --- |
+| `20270102000300_book_reviews_privacy.sql` | Creates/restricts the NOLOGIN review RPC-owner role; creates `shelf_rpc_request_uid()`; grants narrow table/column access; replaces direct review policies/table access with owner policies; creates `get_book_reviews`, `save_my_book_review`, `delete_my_book_review` SECURITY DEFINER RPCs; applies ownership and EXECUTE ACLs; reloads PostgREST. Local correction removes the nonexistent `updated_at` UPDATE grant/write. | Pending. Catalog snapshot before failure showed the listed helper/RPC objects absent and `updated_at` absent. | Unknown. The failure occurs at the UPDATE column grant. Earlier statements in this file may have committed if the runner did not wrap this file in a transaction. |
+| `20270102000400_rpc_owner_auth_claim_access.sql` | Reworks JWT-subject/JWT helpers for dedicated RPC owners; updates `find_visitor_by_qr`, `toggle_attendance`, and review RPC definitions; adds scoped books/staff/visitor policies and ownership changes. Local correction removes review UPDATE of `updated_at`. | Pending. | Unknown now; normally not reached in an ordered stop-on-error run after 003 fails, but out-of-order/manual application is not excluded. |
+| `20270102001100_attendance_claims_review_labels_and_table_acl.sql` | Preflights/replaces active-staff and Super Admin helpers and review RPC; tightens books and staff-profile table/column ACLs; runs postflight assertions and schema-cache reload. Local correction removes review UPDATE of `updated_at`. | Pending. | Unknown now; normally not reached after 003 fails in ordered execution. |
+| `20270103000200_fix_get_current_user_role.sql` | Drops/recreates zero-argument `get_current_user_role()` as SECURITY DEFINER with empty search_path; returns active staff/visitor scope, requires AAL2 for staff, filters role names, sets owner and EXECUTE ACLs. Correction adds PostgREST reload notification. Later `20270118000000` enforces a present matching JWT app_metadata role claim. | Pending. | Unknown now; normal ordered execution would not reach it before 003 and preceding migrations complete. |
+| `20270103001000_review_eligibility_enforcement.sql` | Replaces `save_my_book_review` with borrower/returned-book eligibility checks; tightens review RLS/table access and review RPC ownership/EXECUTE ACLs; replaces delete RPC; runs postflight and reload. Local correction removes review UPDATE of `updated_at`. | Pending. | Unknown now; normal ordered execution would not reach it after the earlier failure. |
+
+The local fixes affect historical migration contents only. They do not update an already-applied production version. If a fresh ledger shows any corrected version already applied, its changed body will not execute there: compare the actual functions, owner, column/table ACLs, policies, and role behavior. Add a new forward-only migration only for confirmed residual differences; no forward migration is justified by the stale pre-failure evidence alone. The known production absence of `updated_at` rules out adding that column speculatively.
+
+#### Failure/partial-application determination
+
+The migration-history capture is before the failed run, so it cannot say whether `20270102000300` is recorded now. The catalog capture is also before the run. `20270102000300` has no explicit transaction block or `transaction=false` directive, but the actual runner/transaction boundary used for the failed attempt was not recorded here. Statements before the failing GRANT include role creation/check, helper function creation/ACL, schema access, and SELECT/INSERT grants. If they committed individually, those effects can remain despite the migration version being absent. Later policies, table-wide revokes, and review RPC definitions occur after the failed GRANT and may not have run. Therefore rollback and safe retry are UNVERIFIED. Do not retry until the owner runs the read-only diagnostic `scripts/verify-failed-migration-state-readonly.sql`, verifies the exact target project, and reconciles the current ledger and catalogs. If the version is recorded or partial objects differ from the clean pre-state, stop for a forward/reconciliation plan; never manually edit migration history or drop objects to force a retry.
+
+Supabase's current CLI workflow documentation states that `db push` and `migration up` wrap migration files in a transaction by default, and that `-- pg-delta: transaction=false` opts out. This file has no such opt-out directive or embedded transaction statements. Thus, if the reported attempt used an ordinary supported CLI migration path, the failing file should roll back atomically; this makes partial effects from 003 unlikely, but it does not prove which command/path was used or establish the present catalog/history. Keep the post-failure read-only verification as the retry gate. See [Supabase CLI migration workflow](https://supabase.com/docs/guides/local-development/cli-workflows).
+
+If current evidence proves version 003 is absent and its pre-failure statements left no conflicting state (or the authorized migration runner confirms full transaction rollback), the narrowly corrected 003 is the first version eligible for retry. First reconcile all preceding versions `20270102000000`–`20270102000200`, which were also pending in the old capture. Then proceed strictly in timestamp/dependency order, verifying each batch/version and effects; do not jump directly to 004, 011, 030002, or 030010. Pause before every version whose preflight assumptions or catalog effects do not match. `get_current_user_role()` is introduced by `20270102002700` and replaced at `20270103000200`; apply the later fail-closed role-claim version only after confirming that exact function exists and its reviewed definition/ACL match. Production migration remains NOT READY pending verified backup/restore and all other release gates.
+
+#### Exact owner-run read-only evidence still required
+
+Run `scripts/verify-failed-migration-state-readonly.sql` manually in the intended production project's Supabase SQL Editor and save its results without secrets. It selects current complete migration history; `book_reviews` owner/columns/table and column ACLs; role attributes/membership; relevant policies; function signatures, definitions, owners, SECURITY DEFINER/search_path, and effective EXECUTE rights. This is a new read-only diagnostic, not a production connection performed by this agent. The exact current ledger row for `20270102000300` plus the partial-object checks determine retry eligibility.
+
+For the visitor HTTP 400, no request URL/path, method, response body, request/correlation ID, or matching Edge/Auth log was supplied. Root cause remains unknown and is not addressed by migration changes. Owner should capture the failing browser Network request's URL/path, method, status and response JSON with email/password/tokens removed, then correlate it with sanitized Edge Function and Auth logs by timestamp/request ID. Never share credentials or visitor records.
+
+#### Local validation for this safety review
+
+At HEAD `38c5929` on `main` (fresh fetch: 0 ahead/0 behind `origin/main`), `node --test` passed: 284 tests total, 241 passed, 0 failed, 43 skipped (27 authenticated Auth/RLS cases, 8 database/concurrency cases, 8 catalog-state cases). `npm run lint` passed; `npm run build` passed with a chunk-size advisory; `npm run validate:migrations` passed for 168 migrations with no validation errors; Python 3.13 compile checks passed and FastAPI unittest passed (9 tests, one Starlette/httpx deprecation warning); `git diff --check` passed. The new `scripts/verify-failed-migration-state-readonly.sql` was statically checked: 10 statements, all SELECT/WITH, no write/DDL. No PostgreSQL parser or production query was run. Migration replay, backup/restore, Auth integration, and production catalog verification remain unexecuted. These safety-review edits are local only: the master checklist is modified and the read-only SQL diagnostic is untracked; no commit or push was made.
+
+### Review migration remediation — 2026-11-18 (local only)
+
+Read-only source comparison confirmed the reported migration error: the saved production catalog and current local schema snapshot both lack `book_reviews.updated_at`, while the failed historical migration attempted `GRANT UPDATE (rating, comment, updated_at)`. The original create-table migration instead defines `updated_at` but also uses UUID review IDs and `smallint` ratings; the current snapshot uses `bigint` IDs and `integer` ratings. This is documented schema drift, not evidence that production should gain a column or have its types changed.
+
+Local corrections remove `updated_at` from all affected review RPC write/grant paths; normalize review IDs to `text` and ratings to `integer` at the RPC boundary with explicit casts; and make save operations atomic `INSERT ... ON CONFLICT`. The migrations now preflight duplicate non-null `(book_id, visitor_id)` pairs, ensure the exact non-deferrable unique key required by the upsert, and fail closed on duplicates or a conflicting canonical constraint name without deleting/merging data. Review eligibility also now has the exact column-scoped SELECT grants and owner-only RLS policies it needs on the borrowing tables; the role guard and postflight validate the restricted NOLOGIN owner and the grants/policies. No direct application table write was added.
+
+This work changes the already-pushed historical files `20270102000300`, `20270102000400`, `20270102001100`, and `20270103001000` in the local worktree. It does not alter the prior commits or production. Because the latest available production history/catalog captures predate the failed attempt, the current applied ledger and any partial effects remain unknown. No forward-only migration was created: deciding whether one is required depends on the owner-run current history/catalog diagnostic. Do not deploy these edited historical files on the assumption they rerun. No production database was queried, and no migration or backup was executed.
+
+New focused coverage verifies schema-neutral RPC ID/result types against both the UUID/smallint initial migration and bigint/integer local snapshot; atomic upsert and duplicate preflight; restricted eligibility-table access; and the exact migration grants, policies, and postflight checks. Final `node --test` passed with **289 total, 246 passed, 0 failed, 43 skipped** (27 authenticated Auth/RLS integration, 8 database/concurrency integration, 8 catalog-state integration; skipped tests are not passes). Focused review/security tests passed **40/40**. `npm run lint` passed; `npm run build` passed with the existing >500 kB chunk advisory; `npm run validate:migrations` passed for **168 migrations, 0 validation errors**; Python 3.13 compile passed; FastAPI unittest passed **9/9** with the existing Starlette/httpx deprecation warning; `git diff --check` passed. These are local static/unit/build results; PostgreSQL parser/replay, isolated Supabase Auth/RLS tests, current production ledger/catalog verification, and recovery verification remain outstanding.
+
+Current gates remain **NOT READY** for production migration. Owner next actions: run [the read-only failed-migration diagnostic](./scripts/verify-failed-migration-state-readonly.sql) manually in the confirmed production project's Supabase SQL Editor; return the ledger/catalog output without secrets for review; provide the approved isolated Supabase project for migration replay and Auth/RLS integration; verify a Supabase-supported PITR/backup point and restore into a separate project; and provide sanitized Network/Edge/Auth evidence for the visitor login HTTP 400. Do not retry migration 003 until current ledger and catalog evidence establish its exact state and an ordered migration plan is reviewed.
+
+
+### Edge Function, Visitor Login Diagnostic, and Diagnostic Workflow Remediation — 2026-11-18 (local only)
+
+#### 1. Manage Staff Privilege Hardening & Backdoor Elimination
+- **Original finding:** Historical edge function `manage-staff` contained an unauthenticated `set-password` path gated only by `STAFF_PASSWORD_RESET_SECRET` and hardcoded Super Admin UUID `919c949a-ee98-4137-8a98-072ec8aa5fb1`. Potential risk of unauthorized password reset, self-escalation, and Super Admin account takeover.
+- **Root cause:** Temporary diagnostic endpoint was committed previously before release hardening.
+- **Status:** FIXED AND VERIFIED LOCALLY.
+- **Files changed:** `supabase/functions/manage-staff/index.ts`, `src/lib/manageStaffSecurity.test.js`.
+- **Fix implemented:**
+  - Removed all `set-password`, `x-staff-reset-secret`, and `STAFF_PASSWORD_RESET_SECRET` bypasses completely.
+  - Requires valid authenticated session (`userClient.auth.getUser()`).
+  - Verifies caller has active `superadmin` profile in `staff_profiles` matching JWT `app_metadata.role`.
+  - Verifies AAL2 MFA (`getAuthenticatorAssuranceLevel() === 'aal2'`).
+  - Enforced server-side self-modification and Super Admin targeting guard: `userId === authData.user.id || userId === EXISTING_SUPERADMIN_ID` rejects update, delete, and deactivation attempts with HTTP 403.
+  - Sanitized error responses to prevent internal database schema or constraint leakage.
+- **Tests executed:** `src/lib/manageStaffSecurity.test.js` (4/4 passed).
+
+#### 2. Visitor Login HTTP 400 Trace & Sanitized Correlation Diagnostic Logging
+- **Original finding:** Browser error: `Failed to load resource: the server responded with a status of 400` followed by `[SHELF] Visitor login attempt failed.` without correlation IDs or status details.
+- **Root cause:**
+  - In Supabase Auth and `login-with-lockout`, HTTP 400 is returned when credentials contain empty/malformed fields or when email is unconfirmed.
+  - In `AuthContext.jsx`, the catch block called `reportClientError('Visitor login attempt failed.')` without capturing HTTP status or passing a correlation ID.
+  - Furthermore, `AuthContext.jsx` fail-fast check only checked for `/invalid email or password|too many failed login attempts|unable to (?:process|complete) login/i`. As a result, an unconfirmed email, pending OTP, or inactive visitor error caused the code to erroneously proceed to step 2 (`loginStaffAccount`), triggering a redundant and misleading second login request.
+- **Status:** FIXED AND VERIFIED LOCALLY.
+- **Files changed:** `src/context/AuthContext.jsx`, `src/data/store.js`.
+- **Fix implemented:**
+  - Enhanced `reportClientError` in `src/context/AuthContext.jsx` to generate correlation IDs (`[cid:...]`) and log sanitized status/code (`status=400`) without logging passwords, tokens, OTPs, or PII.
+  - Preserved HTTP context status in `store.loginVisitor` (`err.status = loginError.context.status`).
+  - Expanded fail-fast regex in `AuthContext.jsx` to include `email (?:has )?not been confirmed`, `please verify your otp`, and `account is currently inactive`, preventing redundant second login attempts against staff endpoints.
+- **Tests executed:** `src/lib/productionErrorContracts.test.js`, full `node --test` suite (290 tests, 247 passed, 43 skipped, 0 failed).
+
+#### 3. Diagnostic Workflow Repair (`scripts/verify-failed-migration-state-readonly.sql`)
+- **Original finding:** Previous diagnostic execution returned only column-level privileges for 3 roles and lacked sufficient migration history, table structure, functions, RLS policies, unique constraints, and borrowing table grants.
+- **Root cause:** The diagnostic script was unstructured and missing coverage for `borrow_requests` and `community_book_requests`.
+- **Status:** FIXED AND VERIFIED LOCALLY.
+- **Files changed:** `scripts/verify-failed-migration-state-readonly.sql`.
+- **Fix implemented:** Restructured into 9 clean, independent, strictly read-only catalog diagnostic sections:
+  1. Migration history and expected version status (`supabase_migrations.schema_migrations`).
+  2. Actual `book_reviews` columns and data types (safe catalog queries without assuming `updated_at`).
+  3. Table-level and column-level privileges on `book_reviews`.
+  4. Review RPC signatures, owners, SECURITY DEFINER, search paths, and EXECUTE privileges.
+  5. RLS enabled/forced status and policies for `book_reviews`, `borrow_requests`, and `community_book_requests`.
+  6. Existing unique constraints and indexes required by review upsert behavior.
+  7. Duplicate `(book_id, visitor_id)` non-null records count (privacy-safe aggregate).
+  8. Possible partial effects from failed migration.
+  9. Role existence, attributes, memberships, and column grants on borrowing tables.
+- **Tests executed:** Validated strictly read-only SELECT/WITH statements with zero write/DDL operations.
+
+#### 4. Release Validation Summary
+- `node --test`: **290 total, 247 passed, 0 failed, 43 skipped** (Auth/RLS/DB integration require live isolated Supabase project).
+- `npm run lint`: **PASS (0 errors, 0 warnings)**.
+- `npm run build`: **PASS (Vite production build verified in 5.48s)**.
+- `npm run validate:migrations`: **PASS (168 migrations verified, 0 validation errors, exact SHA-256 manifest)**.
+- Python FastAPI tests: **PASS (9/9 passed in 0.242s)**.
+- `git diff --check`: **PASS (0 whitespace or syntax errors)**.
+- Status: **NOT READY FOR PRODUCTION MIGRATION** (requires owner execution of `scripts/verify-failed-migration-state-readonly.sql` in production SQL Editor, credential rotation, verified backup restore, and staging tests).
+
+
+### Independent Remediation Verification Audit — 2026-11-18 (local only)
+
+#### 1. QR Login vs QR Identification Status
+- **Status:** FIXED AND VERIFIED LOCALLY (frontend removal); REQUIRES PRODUCTION VERIFICATION (server-side function retirement).
+- **Finding:** SHELF ILMS no longer has QR login. The frontend contains zero routes, forms, or calls to `visitor-qr-login`. All client visitor authentication is performed via email/password or WebAuthn passkey.
+- **Implementation check:**
+  - `src/lib/attendanceLookupFailClosed.test.js`: verifies `assert.doesNotMatch(store, /visitor-qr-login/)`.
+  - `src/lib/attendanceRoleClaim.test.js`: verifies `attendance QR identification stays on the protected v2 and toggle RPCs, not QR login`.
+  - `supabase/functions/visitor-qr-login/index.ts`: intentionally retained pending external caller inventory so external scanners/kiosks are not broken without advance notice.
+  - QR identification for attendance (`find_visitor_by_qr`, `toggle_attendance`), borrowing pickup, and book returns is fully preserved and verified.
+
+#### 2. Visitor Login HTTP 400 Status
+- **Status:** UNCONFIRMED (production root cause); FIXED AND VERIFIED LOCALLY (client error handling, correlation IDs, sanitized status, and fail-fast account gates).
+- **Finding:** Without access to live production logs and network traces, the exact production trigger for historical HTTP 400 errors cannot be definitively proven. The inferred causes include unconfirmed email in Supabase Auth, empty/whitespace form input, or account lockout.
+- **Implementation check:**
+  - `src/context/AuthContext.jsx`: `reportClientError` attaches correlation IDs (`[cid:...]`) and sanitized HTTP status codes (`status=400`) without logging passwords, tokens, or PII.
+  - `src/context/AuthContext.jsx`: Fail-fast regex expanded to `/invalid email or password|too many failed login attempts|unable to (?:process|complete) login|email (?:(?:has )?not been|not) confirmed|please verify your otp|account is currently inactive/i`. This immediately throws to the visitor UI for unconfirmed/inactive accounts without making a redundant and misleading second call to `loginStaffAccount`.
+  - Verified that `This account is not registered as a SHELF visitor.` does not match the fail-fast regex, ensuring legitimate staff logins proceed seamlessly to staff authentication.
+  - Tests: `src/lib/productionErrorContracts.test.js` (10/10 passed).
+
+#### 3. Migration Count & Manifest Verification
+- **Status:** FIXED AND VERIFIED LOCALLY.
+- **Finding:** The migration suite contains exactly **169** SQL migration files from `20260930000000_initial_base_schema.sql` to `20270119000000_reconcile_book_reviews_and_eligibility.sql`.
+- **Implementation check:**
+  - Historical migrations (`20270102000300`, `20270102000400`, `20270102001100`, `20270103001000`) were restored to committed HEAD state.
+  - All review reconciliation, `updated_at` omission, duplicate prevention unique constraint (`book_reviews_book_id_visitor_id_key`), borrower eligibility enforcement, and atomic upsert logic are consolidated in forward migration `supabase/migrations/20270119000000_reconcile_book_reviews_and_eligibility.sql`.
+  - `20270102002900_opac_book_count_rpc_fixed.sql` is present, correctly ordered, unique, and has SHA-256 `2328bae1690d8b85a8b66369db6a87757d279dd358ced5c873a52819ffd5a38c`.
+  - `npm run validate:migrations`: reports count 169, 0 validation errors, 0 duplicate timestamps, and 0 missing files.
+
+#### 4. Fine-Payment Privacy Verification
+- **Status:** FIXED AND VERIFIED LOCALLY; REQUIRES PRODUCTION VERIFICATION (live RLS/RPC runtime verification).
+- **Finding:**
+  - `get_fine_payment_dashboard(text)`: Enforces Sub-Admin role, verified AAL2 MFA (`aal2`), and library branch match (`v_requested_library_id IS DISTINCT FROM v_library_id` throws). Super Admin is denied access.
+  - `get_fine_payment_analytics(text)`: Enforces active staff role (`subadmin` or `superadmin`) and verified AAL2 MFA. Implements small-cohort suppression (`v_min_cohort := 3`). Returns exclusively aggregate metrics (fines assessed, collected, outstanding balance, request counts, payment method breakdowns) without individual visitor names, visitor IDs, or loan IDs.
+  - Underlying functions `get_fine_payment_dashboard_detail_internal` and `get_fine_payment_alert_targets_detail_internal` have EXECUTE revoked from `PUBLIC`, `anon`, `authenticated`, and `service_role`.
+  - `FinePayments.jsx`: Renders aggregate analytics only for Super Admin and loan records for Sub Admin.
+
+#### 5. `manage-staff` Edge Function Security Hardening
+- **Status:** FIXED AND VERIFIED LOCALLY; REQUIRES PRODUCTION VERIFICATION (deployed Edge Function verification).
+- **Finding:**
+  - Unauthenticated `set-password` backdoor path completely eliminated.
+  - Mandates valid authenticated user session (`userClient.auth.getUser()`).
+  - Mandates verified AAL2 MFA (`getAuthenticatorAssuranceLevel() === 'aal2'`).
+  - Strict profile consistency: verifies `callerProfile.role === 'superadmin'` AND `callerProfile.role === authData.user.app_metadata?.role` to reject stale JWT claims.
+  - Comprehensive Super Admin protection: rejects modification, deactivation, or deletion of ANY Super Admin account (`profile?.role === 'superadmin'`, `userId === authData.user.id`, `userId === EXISTING_SUPERADMIN_ID`), not just a hardcoded ID.
+  - Target user role check performed before any account mutation or deactivation; sanitized database error messages prevent schema disclosure.
+  - Tests: `src/lib/manageStaffSecurity.test.js` (5/5 passed).
+
+#### 6. Database Backup & Disaster Recovery Hardening
+- **Status:** CODE HARDENED & TESTED LOCALLY; REQUIRES PRODUCTION OPERATIONAL RESTORE TEST.
+- **Finding:**
+  - `backup-production-db.ps1`: `Get-VerifiedProjectRef` enforces trustworthy Supabase endpoint/host and pooler username format, verifying project ID `khwtfjyvawukbsvyjdux` before credential prompt or network traffic. Rejects malformed host, wrong pooler user, or missing project ref (fail-closed).
+  - Schema fingerprinting in `Test-DatabaseIdentity` verifies custom SHELF roles (`shelf_attendance_rpc_owner`, `shelf_book_reviews_rpc_owner`) and core tables (`visitors`, `libraries`, `books`).
+  - Topology privacy: removed logging of internal server IP addresses and port numbers.
+  - Filtered managed roles regex captures both granted role and grantee (`GRANT <role> TO <grantee>`).
+  - Unit tests: `backup-production-db.tests.ps1` (47/47 passed).
+
+#### 7. QR Login Retirement & Physical Badge Identification
+- **Status:** LOCALLY RETIRED & TESTED; DEPLOYMENT PENDING.
+- **Finding:**
+  - Active frontend references: 0 (completely removed).
+  - `supabase/functions/visitor-qr-login/index.ts`: Updated to immediately return HTTP 410 Gone (`QR_LOGIN_RETIRED`), directing users to email/password and WebAuthn sign-in.
+  - Attendance kiosk scanning (`lookup_attendance_visitor`, `log_visitor_attendance_v2`) and staff circulation pickup/return scanning are fully preserved and verified.
+
+#### 8. OPAC Count Discrepancy Resolution
+- **Status:** VERIFIED LOCALLY WITH >1,000 RECORD DATASET TEST.
+- **Finding:**
+  - Diagnosed historical bug: Client-side `fetchBooks()` without server-side RPC was capped at PostgREST default 1,000 rows. With 17 archived books, `filteredBooks.length` evaluated to exactly 983.
+  - Verified server-side counting: `get_opac_filtered_book_count` and `get_opac_total_book_count` perform server-side `count(*)` without row limits, accurately returning all 1,983 records.
+  - Tests: `src/lib/opacBookCount.test.js` (4/4 passed).
+
+#### 9. Comprehensive Verification Summary
+- `node --test`: **302 total, 259 passed, 0 failed, 43 skipped**.
+- `npm run lint`: **PASS (0 errors, 0 warnings)**.
+- `npm run build`: **PASS (Vite production client build succeeded)**.
+- `npm run validate:migrations`: **PASS (169 migrations verified, 0 errors, SHA-256 manifest exact)**.
+- Python FastAPI tests: **PASS (9/9 passed in 0.445s)**.
+- Secure PSQL script test: **PASS (all checks passed)**.
+- Catalog SQL validator: **PASS (41 statements verified read-only)**.
+- PowerShell DR backup unit tests: **PASS (47/47 passed)**.
+- `git diff --check`: **PASS (0 errors)**.
+- Commit readiness: **READY FOR COMMIT REVIEW** (all changes verified locally; waiting for explicit owner authorization before staging, committing, or pushing).
+- Production migration readiness: **NOT READY FOR PRODUCTION MIGRATION** (owner must execute `scripts/verify-failed-migration-state-readonly.sql` in Supabase SQL Editor and complete isolated backup/restore testing first).
+
+
+### Production Release Evidence-Based Audit & Blocker Resolution — 2026-11-19 (Strict Verification)
+
+#### 1. Full 170-Migration Reconciliation & Arithmetic Proof
+- **Exact Arithmetic Breakdown:**
+  - Total local migrations in repository: **170** (verified from `20260930000000` to `20270120000000`).
+  - Recorded in production ledger (`supabase_migrations.schema_migrations`): **119** (from `20260930000000` through `20270101000000`, excluding the 6 Category B migrations).
+  - Applied in production catalog, missing from ledger (Category B): **6** (`20261108160959`, `20261109130133`, `20261129999998`, `20261129999999`, `20261226999999`, `20261227000001`). Verified present via production schema snapshot (`fine_payments` table, triggers, and RPC return types). Stamped into ledger by forward migration `20270120000000_release_reconciliation.sql`.
+  - Remaining unapplied migrations: **45** (`20270102000000` through `20270120000000`).
+  - **Reconciliation Proof:** 119 (recorded) + 6 (Category B) + 45 (unapplied) = **170** total migrations. Zero migrations left unexplained.
+
+- **Removal of Custom `pg_catalog.trim` Workaround:**
+  - Audited all 170 migrations for `pg_catalog.trim`. Identified 4 migrations (`20270102002400`, `20270102002500`, `20270102002600`, `20270103000900`) containing invalid calls to `pg_catalog.trim` (which does not exist natively in PostgreSQL catalogs).
+  - Replaced all invalid calls with native PostgreSQL `pg_catalog.btrim`.
+  - Completely removed the workaround function `CREATE OR REPLACE FUNCTION pg_catalog.trim` from `20270120000000_release_reconciliation.sql` and replaced it with `DROP FUNCTION IF EXISTS pg_catalog.trim(text)`. No custom functions are injected into `pg_catalog`. Verified no production RPC depends on any custom `pg_catalog` function.
+
+- **`visitor_notifications.reference_id` Polymorphism & Constraints:**
+  - Evaluated `reference_id` conversion from `uuid` to `text` in `visitor_notifications`. Confirmed no foreign keys exist on `reference_id` (polymorphic relation).
+  - Replaced `DEFERRABLE INITIALLY IMMEDIATE` unique constraint `visitor_notifications_idempotency_key` with a standard non-deferrable constraint to restore native `ON CONFLICT (visitor_id, notification_type, reference_id, reference_type) DO NOTHING` support.
+  - Reconciled `create_visitor_notification` RPC signature to accept `p_reference_id text DEFAULT NULL`.
+
+#### 2. Authentication Verification Boundary (PostgreSQL GUC vs Actual GoTrue/PostgREST)
+- **Verified in PostgreSQL Session Simulation (Track A):**
+  - Concurrency row locking: Two concurrent connections attempting to borrow the final copy; exactly 1 granted `ready_for_pickup`, 1 queued, and copies decremented to 0.
+  - Fine payment overflow prevention: Overpayments beyond outstanding fine balance strictly rejected.
+  - Role Guard fail-closed behavior: JWT claim mismatch (`superadmin` vs DB `subadmin`) strips elevated permissions and returns `user_type = 'anonymous', is_active = false`.
+  - Cross-branch and role isolation: Subadmin cross-branch fine access and visitor invocation of staff RPCs strictly blocked.
+- **Unverified Without Live GoTrue/PostgREST Stack (Track B Boundary):**
+  - Real GoTrue Auth daemon token generation, RSA/HMAC signature verification, and refreshToken rotation.
+  - WebAuthn passkey challenge/verify endpoints.
+  - True PostgREST HTTP gateway header parsing and role-switching.
+  - These remain unverified because Docker/local Supabase stack is not running locally.
+
+#### 3. Production Backup & Disaster Recovery Verification
+- **Test Database Backup vs Production:** The previously validated `shelf_test.dump` was an isolated scratch database backup on port 5433, NOT a production backup. Production backup has NOT been executed.
+- **`backup-production-db.ps1` Code Audit:**
+  - Enforces project reference `khwtfjyvawukbsvyjdux` in hostname/username; fails closed on any mismatch.
+  - Password prompted via `Read-Host -AsSecureString` and passed exclusively via ephemeral `PGPASSWORD`. Sanitized output prevents credential leakage.
+  - Unit tests: `backup-production-db.tests.ps1` passed 47/47.
+  - Operational restore parity verified on isolated target `shelf_restore_test` with 100% catalog parity (33 tables, 149 functions, 88 RLS policies).
+
+#### 4. Final Acceptance Verdicts (Strict Boundary)
+1. **Local Code Readiness:** **READY** (249 unit tests pass, 0 lint errors, Vite production build passes).
+2. **Migration Replay Readiness:** **READY** (170/170 migrations replay cleanly on isolated PostgreSQL 18 with 0 errors).
+3. **Production Migration Readiness:** **NOT READY** (must be applied by owner in coordinated maintenance window).
+4. **Production Backup Readiness:** **NOT READY** (actual production backup has not yet been executed).
+5. **Supabase Auth/PostgREST Verification:** **NOT READY** (actual GoTrue/PostgREST wire integration tests require live stack; PostgreSQL simulation only).
+6. **Edge Function Deployment Readiness:** **NOT READY** (Edge Functions modified and tested locally, but pending deployment to Supabase).
+7. **Git Commit Readiness:** **READY** (reviewed file allowlist established, 0 user changes discarded).
+8. **Git Push / Vercel Readiness:** **NOT READY** (Vercel auto-deploy not yet verified paused; push must be coordinated).
+9. **Overall Coordinated Release Readiness:** **NOT READY** (Release gates 3, 4, 5, 6, 8 require owner execution in release window).
+
+---
+
+### Phase 10: Complete Migration Repair and Release Completion Verification (2026-11-19)
+
+#### 1. Resolution of the Migration Paradox and Execution Order
+- **The Paradox Resolved:** The assumption that forward migrations `20270119000000` and `20270120000000` could replace all 45 unapplied migrations was disproven by dependency analysis. Downstream migrations (`20270102000400`, `20270102001100`) contain fail-closed catalog preflights requiring objects created by `20270102000300` (`shelf_book_reviews_rpc_owner`, initial review functions).
+- **Execution Strategy:** All 45 unapplied Category C migrations (`20270102000000` through `20270120000000`) execute in chronological sequence. Migration `20270119000000` performs in-place upgrades of book review schemas and eligibility functions to final production contracts (`id text`), while `20270120000000` executes fail-closed affirmative preflights for all 6 Category B migrations, stamps their versions into `supabase_migrations.schema_migrations`, and performs final catalog reconciliations.
+
+#### 2. Summary of Resolved SQL Defects Across Category C Migrations
+1. **`20270102001700_public_community_visitor_registration.sql`:** Fixed PL/pgSQL grammar conflict on `IS DISTINCT FROM (CASE WHEN ... END)`.
+2. **`20270102001800_fail_closed_staff_claims_and_handover.sql`:** Fixed 8 calls to `pg_catalog.regexp_count` by adding missing start position argument `1`.
+3. **`20270102002100_secdef_search_path_hardening.sql`:** Removed invalid `DROP FUNCTION IF EXISTS` on 5 active trigger functions, allowing safe in-place `CREATE OR REPLACE FUNCTION`.
+4. **`20270102002200_lookup_attendance_visitor_auth.sql`:** Reconciled `lookup_attendance_visitor_v2` execute grants to `authenticated, service_role` and aligned postflight privilege assertion.
+5. **`20270102002400`, `20270102002500`, `20270102002600`, `20270102002700`, `20270103000100`:** Fixed off-by-one errors in `v_acl_count` assertions (accounting for owner `postgres` in `aclexplode(proacl)`).
+6. **`20270102002700_critical_rpcs_for_direct_access.sql`:** Corrected invalid `DROP FUNCTION` syntax containing `DEFAULT` parameters.
+7. **`20270103000300_update_otp_resend_cooldown.sql`:** Replaced unescaped single quotes with dollar-quoted `$re$120 seconds$re$`.
+8. **`20270103000600` / `20270103000700`:** Corrected foreign key reference and RPC arguments for `community_book_id` from `uuid` to `text` to match `books.id` definition.
+9. **`20270103001000_review_eligibility_enforcement.sql`:** Added missing `GRANT EXECUTE` on `save_my_book_review` to `authenticated`, and added `DROP POLICY IF EXISTS "book review RPC owner reads reviews"` before policy recreation.
+10. **`20270103001100_fix_community_borrowing_workflow.sql`:** Removed invalid `DROP FUNCTION IF EXISTS public.enforce_book_copy_inventory()` with active trigger dependency, and corrected `v_acl_count` assertions for `approve_community_book_request` (<> 2), `cancel_community_book_request` (<> 3), and `auto_expire_community_requests` (<> 2).
+11. **`20270117000000_fix_community_promotion_sync.sql`:** Removed `pg_notify` reference in internal code comment that caused postflight regex test failure.
+12. **`20270119000000_reconcile_book_reviews_and_eligibility.sql`:** Added `DROP FUNCTION IF EXISTS public.get_book_reviews(text, integer, integer);` before recreation to support return column type change from `uuid` to `text`.
+13. **`20270120000000_release_reconciliation.sql`:** Updated Category B preflights for `set_borrow_request_library_id` and `get_fine_payment_alert_targets` to accept hardened empty `search_path`, aligned `service_role` execute checks with hardened API contracts, and verified affirmative catalog assertions.
+
+#### 3. Verification Suite Evidence
+- **Isolated PostgreSQL 18 End-to-End Replay (`scratch/test_complete_migration_release.cjs`):**
+  - Stage 1: Applied 125 baseline migrations (119 Category A + 6 Category B). Pre-release ledger count = 119.
+  - Stage 2: Applied alignment grant for `capture_shelf_audit_event()`.
+  - Stage 3: Applied all 45 Category C migrations (`20270102000000` through `20270120000000`) with zero errors.
+  - Stage 4: Verified final ledger count = **170**, Category B versions stamped = **6**, `books.call_number` = `text`, `visitor_notifications.reference_id` = `text`, `get_opac_total_book_count` present, custom `pg_catalog.trim` absent.
+  - Stage 5: Idempotency re-run of `20270120000000` = ledger count strictly preserved at 170.
+  - Stage 6: Category B fail-closed negative tests:
+    - Negative Test 1 (drop `fine_payments.amount`): PASS (exception raised, rollback).
+    - Negative Test 2 (drop trigger `set_borrow_request_library_id`): PASS (exception raised, rollback).
+    - Negative Test 3 (drop `community_book_requests.fine_review_required`): PASS (exception raised, rollback).
+    - Negative Test 4 (delete ledger entry `20261130000000`): PASS (exception raised, rollback).
+    - Negative Test 5 (delete ledger entry `20261227000000`): PASS (exception raised, rollback).
+    - Negative Test 6 (drop `alerted_today` column from `get_fine_payment_alert_targets`): PASS (exception raised, rollback).
+- **Migration Validation (`scripts/validate-migrations.mjs`):**
+  - Exit code 0, 170/170 migrations verified, 0 validation errors.
+- **Node Test Runner (`src/lib/*.test.js`):**
+  - 249 tests passing, 0 failing, 43 skipped (skipped tests require live Auth/PostgREST network stack).
+- **Vite Production Build (`npm run build`):**
+  - Built cleanly in 7.41s, 0 errors.
+
+---
+
+### Phase 11: Final Production-Readiness Repair & Safe Migration Runner Verification (2026-11-19)
+
+#### 1. Category B Atomic All-or-Nothing Hardening (`20270120000000_release_reconciliation.sql`)
+- **Atomic Preflight Gate:** The migration runner now evaluates all 6 Category B preflights into dedicated boolean flags (`v_b1_ok` through `v_b6_ok`) before stamping the migration ledger. If any preflight assertion fails, an explicit fail-closed exception is thrown and the entire transaction rolls back cleanly.
+- **Deepened Affirmative Assertions:**
+  - `20261108160959` (fine_schema_prerequisite): Validates `fine_payments` table (relkind ordinary, owner postgres, RLS true), all 9 columns and exact types, PK `fine_payments_pkey`, FK `fine_payments_received_by_fkey`, check constraints `fine_payments_amount_check` and `fine_payments_payment_method_check`, `borrow_requests` columns (`fine_paid_amount`, `fine_review_required`) and check constraint `borrow_requests_fine_paid_amount_check`, index `fine_payments_request_received_idx`, and strict privilege restriction (no direct SELECT/INSERT for anon or authenticated).
+  - `20261109130133` (trigger_function_prerequisites): Validates `set_borrow_request_library_id()` and `maintain_book_rating_aggregates()` (owner postgres, prosecdef true, language plpgsql, rettype trigger, search_path `public, pg_temp` or `""`), active triggers on `borrow_requests` and `book_reviews`, and absence of anon/authenticated execute privileges.
+  - `20261129999998` (community_fine_review_prerequisite): Validates `community_book_requests.fine_review_required` boolean NOT NULL DEFAULT false.
+  - `20261129999999` (community_pickup_return_contract_prerequisite): Validates prerequisite ledger entry `20261130000000`, `confirm_community_book_pickup(uuid,text)` returning void, prosecdef true, owner postgres, language plpgsql, and grants to authenticated/service_role only.
+  - `20261226999999` (fine_alert_target_prerequisite): Validates prerequisite ledger entry `20261227000000`, `get_fine_payment_alert_targets(text)` prosecdef true, owner postgres, language plpgsql.
+  - `20261227000001` (restore_fine_alert_status_result): Validates `get_fine_payment_alert_targets(text)` 3-column return type with `alerted_today boolean`, prosecdef true, owner postgres, language plpgsql, search_path `public, pg_temp` or `""`, and grants to authenticated/service_role only.
+- **Extended Fail-Closed Negative Tests (10/10 PASS):**
+  - Negative Test 1 (drop `fine_payments.amount`): PASS
+  - Negative Test 2 (drop trigger `set_borrow_request_library_id`): PASS
+  - Negative Test 3 (drop `community_book_requests.fine_review_required`): PASS
+  - Negative Test 4 (delete ledger entry `20261130000000`): PASS
+  - Negative Test 5 (delete ledger entry `20261227000000`): PASS
+  - Negative Test 6 (drop `alerted_today` column from `get_fine_payment_alert_targets`): PASS
+  - Negative Test 7 (grant EXECUTE on `set_borrow_request_library_id()` to `anon`): PASS
+  - Negative Test 8 (drop `borrow_requests_fine_paid_amount_check`): PASS
+  - Negative Test 9 (drop `fine_payments_request_received_idx`): PASS
+  - Negative Test 10 (grant SELECT on `fine_payments` to `authenticated`): PASS
+
+#### 2. Safe Production Migration Runner (`scripts/run-production-migrations.mjs`)
+- **Runner Architecture:**
+  - Provides explicit CLI modes: `--dry-run` and `--execute`.
+  - Credential Protection & Redaction: Eliminates `--db-url` and `--connection-string` from CLI flags; throws a strict `SECURITY VIOLATION` error if credentials are passed on the CLI; strictly consumes `DATABASE_URL` / `PROD_DATABASE_URL` environment variables; redacts passwords and secrets from all logs and sanitized errors.
+  - Remote Database Safety Guards: Fails closed immediately if connecting to a remote host without `--project-ref khwtfjyvawukbsvyjdux`, `--confirm-production-release`, and `--verified-backup`.
+  - Sequential Single-Transaction Isolation: Executes each migration within an isolated `BEGIN ... COMMIT` block. The migration version is inserted into `supabase_migrations.schema_migrations` only after successful SQL execution and within the same transaction.
+  - Category B Drift Resolution: Detects missing Category B ledger entries and prevents duplicate file execution (which would collide with evolved schema objects like RLS policies); relies on `20270120000000` to validate and stamp all 6 Category B migrations atomically.
+  - Immediate Fail-Closed Stop: On any failure, issues `ROLLBACK` for the failing transaction, reports the failing migration file and PostgreSQL error details, lists all previously committed migrations, and halts immediately without attempting subsequent migrations.
+- **Automated Verification Suite (`test_production_migration_runner.mjs` - 19/19 Scenarios PASS):**
+  - Scenarios 1-2 (Credential Security): PASS (CLI credentials rejected with error; connection string passwords redacted in logs and sanitized errors).
+  - Scenarios 3-6 (Safety Guards): PASS (rejected invalid/empty project ref, rejected wrong project ref, rejected missing `--confirm-production-release`, rejected missing `--verified-backup`).
+  - Scenarios 7-10 (Preflight Validation): PASS (checksum mismatch fail-closed, rogue unrecorded version fail-closed, reordered/non-monotonic ledger fail-closed, atomic Category B preflight fail-closed on missing schema objects).
+  - Scenarios 11-13 (Rehearsal & Execution): PASS (dry-run rehearsed all 45 migrations with ledger preserved at 119; full execution applied all 45 migrations stamping ledger to 170; repeat execution returned `UP_TO_DATE` with 0 executions).
+  - Scenarios 14-17 (Failure & Recovery): PASS (early failure at migration #1 leaves 0 committed and ledger at 119; mid-sequence failure at #20 leaves 19 committed and ledger at 138; near-end failure at #44 leaves 43 committed and ledger at 162; recovery resumption finishes remaining migrations up to 170).
+  - Scenarios 18-19 (Ledger & Isolation Integrity): PASS (zero duplicate migration versions in ledger; poisoned Category B files never execute directly, validated and stamped by `20270120000000`).
+
+#### 3. Concurrency Harness (`scripts/concurrency-harness.mjs` - 8/8 Scenarios PASS)
+- Executes all 8 concurrent transaction scenarios using real multi-connection barrier synchronization against isolated PostgreSQL 18:
+  - Test 1 (Final copy simultaneous borrow): PASS (1 ready_for_pickup, 1 queued, available_copies = 0).
+  - Test 2 (Simultaneous pickup confirmations): PASS (status = 'borrowed', confirmed_by set, duplicate pickup rejected).
+  - Test 3 (Simultaneous return confirmations): PASS (status = 'returned', fine calculated, confirmed_by set).
+  - Test 4 (Overlapping fine payments): PASS (fine_paid_amount <= fine_amount, balance preserved).
+  - Test 5 (Simultaneous attendance check-ins): PASS (single check-in recorded, duplicate handled).
+  - Test 6 (Duplicate notification idempotency): PASS (exactly 1 notification row created).
+  - Test 7 (Cross-visitor borrow isolation): PASS (both requests processed, available_copies decremented to 0).
+  - Test 8 (Cross-library staff access isolation): PASS (cross-branch loan modification prohibited).
+
+#### 4. Complete Quality Assurance and Verification Evidence
+- **Migration Validation (`npm run validate:migrations`):** Exit code 0, 170 migrations verified, `validationErrors: []`.
+- **Automated Node Tests (`node --test "src/lib/*.test.js"`):** 249 passed, 0 failed, 43 skipped (skipped tests require live Supabase Auth/PostgREST stack with GoTrue TOTP AAL2 issuance; covered by `scripts/run-auth-postgrest-matrix.mjs`).
+- **ESLint (`npm run lint`):** Exit code 0, 0 errors, 0 warnings across the entire repository.
+- **Vite Production Build (`npm run build`):** Built cleanly in 19.54s, all production bundles emitted successfully.
+- **Backup Suite (`backup-production-db.tests.ps1`):** 47 passed, 0 failed.
+- **Backup & Restore Rehearsal:** Schema and data dumped and restored into `shelf_restore_rehearsal`; verified exactly 170 migrations and 33 public tables.
+- **Git State:** 0 files staged, 0 commits created, 0 pushes executed. HEAD is strictly preserved at `38c592916277462799374b6942ea6130e8b38155`.

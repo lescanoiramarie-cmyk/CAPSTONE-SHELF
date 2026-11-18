@@ -175,6 +175,87 @@ Options:
 This tool is offline and read-only with respect to Supabase. It never connects to a project,
 applies SQL, repairs history, or infers production migration history.`;
 
+export function validateReleasePackage(entries, manifest) {
+  const errors = [];
+  const CATEGORY_B_VERSIONS = [
+    '20261108160959',
+    '20261109130133',
+    '20261129999998',
+    '20261129999999',
+    '20261226999999',
+    '20261227000001',
+  ];
+  const UNAPPLIED_START = '20270102000000';
+
+  const allVersions = manifest.migrations.map((m) => m.version);
+  const categoryA = allVersions.filter((v) => v < UNAPPLIED_START && !CATEGORY_B_VERSIONS.includes(v));
+  const categoryB = allVersions.filter((v) => CATEGORY_B_VERSIONS.includes(v));
+  const categoryC = allVersions.filter((v) => v >= UNAPPLIED_START);
+
+  if (categoryA.length !== 119) {
+    errors.push({ kind: 'invalid_category_a_count', expected: 119, actual: categoryA.length });
+  }
+  if (categoryB.length !== 6) {
+    errors.push({ kind: 'invalid_category_b_count', expected: 6, actual: categoryB.length });
+  }
+  if (categoryC.length !== 45) {
+    errors.push({ kind: 'invalid_category_c_count', expected: 45, actual: categoryC.length });
+  }
+
+  // Scan for SQL defects across all migration files (calls or definitions of invalid pg_catalog.trim, excluding DROP FUNCTION cleanup)
+  for (const entry of entries) {
+    const text = Buffer.isBuffer(entry.contents) ? entry.contents.toString('utf8') : String(entry.contents);
+    const lines = text.split(/\r?\n/);
+    for (const line of lines) {
+      if (/pg_catalog\.trim\s*\(/i.test(line) && !/DROP\s+FUNCTION/i.test(line)) {
+        errors.push({ kind: 'invalid_pg_catalog_trim', file: basename(entry.file) });
+        break;
+      }
+    }
+  }
+
+  // Verify Category B fail-closed preflights and postflight assertions in 20270120000000
+  const reconEntry = entries.find((e) => basename(e.file).startsWith('20270120000000'));
+  if (!reconEntry) {
+    errors.push({ kind: 'missing_release_reconciliation_migration', version: '20270120000000' });
+  } else {
+    const reconText = Buffer.isBuffer(reconEntry.contents) ? reconEntry.contents.toString('utf8') : String(reconEntry.contents);
+    for (const bVer of CATEGORY_B_VERSIONS) {
+      if (!reconText.includes(bVer)) {
+        errors.push({ kind: 'missing_category_b_stamp', version: bVer });
+      }
+      const failPattern = new RegExp(`Category B verification failed:\\s*${bVer}`, 'i');
+      if (!failPattern.test(reconText)) {
+        errors.push({ kind: 'missing_fail_closed_preflight', version: bVer });
+      }
+    }
+    if (!reconText.includes('$postflight_assertions$')) {
+      errors.push({ kind: 'missing_postflight_assertions' });
+    }
+  }
+
+  // Verify forward reconciliation 20270119000000
+  const reviewsEntry = entries.find((e) => basename(e.file).startsWith('20270119000000'));
+  if (!reviewsEntry) {
+    errors.push({ kind: 'missing_reviews_reconciliation_migration', version: '20270119000000' });
+  } else {
+    const revText = Buffer.isBuffer(reviewsEntry.contents) ? reviewsEntry.contents.toString('utf8') : String(reviewsEntry.contents);
+    if (!revText.includes('save_my_book_review') || !revText.includes('book_reviews_book_id_visitor_id_key')) {
+      errors.push({ kind: 'incomplete_reviews_reconciliation' });
+    }
+  }
+
+  return {
+    categories: {
+      categoryA: { count: categoryA.length, first: categoryA[0], last: categoryA.at(-1) },
+      categoryB: { count: categoryB.length, versions: categoryB },
+      categoryC: { count: categoryC.length, first: categoryC[0], last: categoryC.at(-1) },
+      totalCount: allVersions.length,
+    },
+    errors,
+  };
+}
+
 async function main(args) {
   const options = parseArguments(args);
   if (options.help) {
@@ -188,6 +269,8 @@ async function main(args) {
     : join(repositoryRoot, 'supabase', 'migrations');
   const entries = await readMigrationEntries(migrationDirectory);
   const manifest = buildMigrationManifest(entries);
+  const releaseValidation = validateReleasePackage(entries, manifest);
+
   let comparison = null;
   if (options.history) {
     const historyPath = resolve(options.history);
@@ -199,14 +282,15 @@ async function main(args) {
     count: manifest.migrations.length,
     firstVersion: manifest.migrations[0]?.version ?? null,
     lastVersion: manifest.migrations.at(-1)?.version ?? null,
+    releaseSummary: releaseValidation.categories,
     migrations: manifest.migrations,
-    validationErrors: manifest.errors,
+    validationErrors: [...manifest.errors, ...releaseValidation.errors],
     ...(comparison ? { historyComparison: comparison } : {}),
   };
   const output = `${JSON.stringify(result, null, 2)}\n`;
   if (options.output) await writeFile(resolve(options.output), output, { encoding: 'utf8', flag: 'wx' });
   else process.stdout.write(output);
-  if (manifest.errors.length) return 2;
+  if (manifest.errors.length || releaseValidation.errors.length) return 2;
   if (comparison && (
     comparison.errors.length || comparison.localOnly.length || comparison.historyOnly.length || comparison.nameMismatches.length
   )) return 3;

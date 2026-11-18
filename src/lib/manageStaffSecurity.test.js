@@ -24,4 +24,18 @@ test('manage-staff Edge Function verifies both JWT role claim and active databas
   assert.match(manageStaffSource, /app_metadata\?\.role !== ['"]superadmin['"]/);
   assert.match(manageStaffSource, /callerProfile\.role !== ['"]superadmin['"]/);
   assert.match(manageStaffSource, /callerProfile\.is_active !== true/);
+  assert.match(manageStaffSource, /callerProfile\.role !== authData\.user\.app_metadata\?\.role/);
+});
+
+test('manage-staff Edge Function rejects self-targeting and Super Admin escalation', () => {
+  assert.match(manageStaffSource, /userId === authData\.user\.id \|\| userId === EXISTING_SUPERADMIN_ID/);
+  assert.match(manageStaffSource, /profile\?\.role === ['"]superadmin['"]/);
+  assert.match(manageStaffSource, /Super Admin accounts cannot be modified through this endpoint/);
+  assert.match(manageStaffSource, /Super Admin accounts cannot be deactivated through this endpoint/);
+  assert.match(manageStaffSource, /Super Admin accounts cannot be deleted through this endpoint/);
+});
+
+test('manage-staff Edge Function checks target user profile and sanitizes DB errors before mutation', () => {
+  assert.match(manageStaffSource, /sanitizeDbError\(profileError\.message\)/);
+  assert.match(manageStaffSource, /if \(!profile \|\| profile\.role !== ['"]subadmin['"]\)/);
 });

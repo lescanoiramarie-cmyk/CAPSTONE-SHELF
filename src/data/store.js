@@ -2675,11 +2675,15 @@ if (
     console.warn('Unable to read visitor login error details:');
   }
 
-  throw new Error(
+  const err = new Error(
     details?.error ||
       loginData?.error ||
       'Unable to log in. Please try again.'
   );
+  if (loginError?.context?.status) {
+    err.status = loginError.context.status;
+  }
+  throw err;
 }
 
 const { data: sessionData, error: sessionError } =

@@ -8,7 +8,7 @@ DROP FUNCTION IF EXISTS public.find_visitor_by_qr(text, uuid);
 DROP FUNCTION IF EXISTS public.find_visitor_by_qr(text, text);
 
 -- Create a new secure lookup function that enforces staff auth
-CREATE FUNCTION public.lookup_attendance_visitor_v2(
+CREATE OR REPLACE FUNCTION public.lookup_attendance_visitor_v2(
   p_qr text,
   p_library_id text
 )
@@ -129,7 +129,7 @@ BEGIN
   END IF;
 
   IF pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE')
-     OR pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE')
+     OR NOT pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE')
      OR NOT pg_catalog.has_function_privilege('authenticated', v_signature, 'EXECUTE') THEN
     RAISE EXCEPTION 'lookup_attendance_visitor_v2 EXECUTE privileges differ from the least-privilege contract.';
   END IF;

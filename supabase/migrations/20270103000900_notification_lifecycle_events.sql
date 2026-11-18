@@ -184,7 +184,7 @@ BEGIN
     SELECT b.*
     INTO v_book
     FROM public.books AS b
-    WHERE b.id = pg_catalog.trim(p_book_id)
+    WHERE b.id = pg_catalog.btrim(p_book_id)
     FOR UPDATE;
 
     -- Validate visitor
@@ -211,7 +211,7 @@ BEGIN
         SELECT 1
         FROM public.borrow_requests AS br
         WHERE br.visitor_id = v_visitor.id
-          AND br.book_id = pg_catalog.trim(p_book_id)
+          AND br.book_id = pg_catalog.btrim(p_book_id)
           AND br.status IN ('queued', 'ready_for_pickup', 'borrowed')
     ) THEN
         RAISE EXCEPTION 'You already have an active request or loan for this title.';
@@ -239,7 +239,7 @@ BEGIN
         -- Immediate pickup available
         UPDATE public.books AS b
         SET available_copies = b.available_copies - 1
-        WHERE b.id = pg_catalog.trim(p_book_id);
+        WHERE b.id = pg_catalog.btrim(p_book_id);
 
         INSERT INTO public.borrow_requests (
             book_id,
@@ -285,7 +285,7 @@ BEGIN
         SELECT count(*)
         INTO v_queue_count
         FROM public.borrow_requests AS br
-        WHERE br.book_id = pg_catalog.trim(p_book_id)
+        WHERE br.book_id = pg_catalog.btrim(p_book_id)
           AND br.status = 'queued';
 
         INSERT INTO public.borrow_requests (

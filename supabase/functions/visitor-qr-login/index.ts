@@ -84,6 +84,16 @@ Deno.serve(async (request: Request) => {
     return respond(origin, 405, { error: "Method not allowed." });
   }
 
+  // QR login retirement: SHELF ILMS has permanently retired QR sign-in in favor
+  // of email/password and WebAuthn passkeys. Return HTTP 410 Gone unless explicitly overridden.
+  const qrLoginRetired = (Deno.env.get("SHELF_RETIRE_QR_LOGIN") || "true").trim().toLowerCase() !== "false";
+  if (qrLoginRetired) {
+    return respond(origin, 410, {
+      error: "QR sign-in has been permanently retired from SHELF ILMS. Please sign in using your email and password.",
+      code: "QR_LOGIN_RETIRED",
+    });
+  }
+
   if (!supabaseUrl || !anonKey || !serviceRoleKey) {
     return respond(origin, 500, { error: "QR sign-in is not configured." });
   }

@@ -586,7 +586,7 @@ BEGIN
   CROSS JOIN LATERAL pg_catalog.aclexplode(p.proacl) AS acl
   WHERE p.oid = v_signature;
 
-  IF v_acl_count <> 2
+  IF v_acl_count <> 3
      OR NOT pg_catalog.has_function_privilege('authenticated', v_signature, 'EXECUTE')
      OR NOT pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE')
      OR pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE') THEN

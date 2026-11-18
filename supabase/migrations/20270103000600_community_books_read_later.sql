@@ -3,7 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS public.visitor_saved_community_books (
   visitor_id text NOT NULL REFERENCES public.visitors(id) ON DELETE CASCADE,
-  community_book_id uuid NOT NULL REFERENCES public.books(id) ON DELETE CASCADE,
+  community_book_id text NOT NULL REFERENCES public.books(id) ON DELETE CASCADE,
   saved_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (visitor_id, community_book_id)
 );

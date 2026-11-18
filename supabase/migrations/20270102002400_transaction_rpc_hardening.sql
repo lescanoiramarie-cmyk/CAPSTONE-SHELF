@@ -63,7 +63,7 @@ BEGIN
   SELECT b.*
   INTO v_book
   FROM public.books AS b
-  WHERE b.id = pg_catalog.trim(p_book_id)
+  WHERE b.id = pg_catalog.btrim(p_book_id)
   FOR UPDATE;
 
   -- ============================================================
@@ -105,7 +105,7 @@ BEGIN
     SELECT 1
     FROM public.borrow_requests AS br
     WHERE br.visitor_id = v_visitor.id
-      AND br.book_id = pg_catalog.trim(p_book_id)
+      AND br.book_id = pg_catalog.btrim(p_book_id)
       AND br.status IN (
         'queued',
         'ready_for_pickup',
@@ -140,7 +140,7 @@ BEGIN
 
     UPDATE public.books AS b
     SET available_copies = b.available_copies - 1
-    WHERE b.id = pg_catalog.trim(p_book_id);
+    WHERE b.id = pg_catalog.btrim(p_book_id);
 
     INSERT INTO public.borrow_requests (
       book_id,
@@ -168,7 +168,7 @@ BEGIN
     SELECT count(*)
     INTO v_queue_count
     FROM public.borrow_requests AS br
-    WHERE br.book_id = pg_catalog.trim(p_book_id)
+    WHERE br.book_id = pg_catalog.btrim(p_book_id)
       AND br.status = 'queued';
 
     INSERT INTO public.borrow_requests (
@@ -836,7 +836,7 @@ BEGIN
   CROSS JOIN LATERAL pg_catalog.aclexplode(procedure.proacl) AS acl
   WHERE procedure.oid = v_signature;
 
-  IF v_acl_count <> 1
+  IF v_acl_count <> 2
      OR NOT pg_catalog.has_function_privilege('authenticated', v_signature, 'EXECUTE')
      OR pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE')
      OR pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE') THEN
@@ -882,7 +882,7 @@ BEGIN
   CROSS JOIN LATERAL pg_catalog.aclexplode(procedure.proacl) AS acl
   WHERE procedure.oid = v_signature;
 
-  IF v_acl_count <> 2
+  IF v_acl_count <> 3
      OR NOT pg_catalog.has_function_privilege('authenticated', v_signature, 'EXECUTE')
      OR NOT pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE')
      OR pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE') THEN

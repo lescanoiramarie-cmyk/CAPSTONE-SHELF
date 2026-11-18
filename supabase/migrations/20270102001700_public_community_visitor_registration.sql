@@ -283,7 +283,7 @@ BEGIN
   IF v_profile_library_id IS DISTINCT FROM p_library_id
      OR v_profile_type IS DISTINCT FROM v_type
      OR v_profile_approval IS DISTINCT FROM
-       CASE WHEN v_type = 'community' THEN 'pending' ELSE 'approved' END THEN
+       (CASE WHEN v_type = 'community' THEN 'pending' ELSE 'approved' END) THEN
     RAISE EXCEPTION 'The visitor profile does not match the original registration request.';
   END IF;
 

@@ -156,10 +156,7 @@ GRANT EXECUTE ON FUNCTION public.get_visitor_profile() TO authenticated, service
 -- 3. get_staff_borrowing_history - Replace direct borrow_requests/books access
 -- ============================================================
 
-DROP FUNCTION IF EXISTS public.get_staff_borrowing_history(
-  p_recent_days integer DEFAULT 35,
-  p_active_statuses text[] DEFAULT ARRAY['pending', 'queued', 'ready_for_pickup', 'borrowed']
-);
+DROP FUNCTION IF EXISTS public.get_staff_borrowing_history(integer, text[]);
 
 CREATE FUNCTION public.get_staff_borrowing_history(
   p_recent_days integer DEFAULT 35,
@@ -426,7 +423,7 @@ BEGIN
   CROSS JOIN LATERAL pg_catalog.aclexplode(procedure.proacl) AS acl
   WHERE procedure.oid = v_signature;
 
-  IF v_acl_count <> 2
+  IF v_acl_count <> 3
      OR NOT pg_catalog.has_function_privilege('authenticated', v_signature, 'EXECUTE')
      OR NOT pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE')
      OR pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE') THEN
@@ -454,7 +451,7 @@ BEGIN
   CROSS JOIN LATERAL pg_catalog.aclexplode(procedure.proacl) AS acl
   WHERE procedure.oid = v_signature;
 
-  IF v_acl_count <> 2
+  IF v_acl_count <> 3
      OR NOT pg_catalog.has_function_privilege('authenticated', v_signature, 'EXECUTE')
      OR NOT pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE')
      OR pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE') THEN
@@ -482,7 +479,7 @@ BEGIN
   CROSS JOIN LATERAL pg_catalog.aclexplode(procedure.proacl) AS acl
   WHERE procedure.oid = v_signature;
 
-  IF v_acl_count <> 2
+  IF v_acl_count <> 3
      OR NOT pg_catalog.has_function_privilege('authenticated', v_signature, 'EXECUTE')
      OR NOT pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE')
      OR pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE') THEN
@@ -510,7 +507,7 @@ BEGIN
   CROSS JOIN LATERAL pg_catalog.aclexplode(procedure.proacl) AS acl
   WHERE procedure.oid = v_signature;
 
-  IF v_acl_count <> 2
+  IF v_acl_count <> 3
      OR NOT pg_catalog.has_function_privilege('authenticated', v_signature, 'EXECUTE')
      OR NOT pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE')
      OR pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE') THEN

@@ -497,7 +497,7 @@ BEGIN
   IF auth.uid() IS NULL OR NOT EXISTS (
     SELECT 1
     FROM public.visitors AS visitor
-    WHERE visitor.id = pg_catalog.trim(p_visitor_id)
+    WHERE visitor.id = pg_catalog.btrim(p_visitor_id)
       AND visitor.auth_user_id = auth.uid()
       AND visitor.otp_verified
       AND visitor.is_active
@@ -505,8 +505,8 @@ BEGIN
     RAISE EXCEPTION 'The authenticated, verified visitor account could not be found.';
   END IF;
 
-  IF pg_catalog.nullif(pg_catalog.trim(p_title), '') IS NULL
-     OR pg_catalog.nullif(pg_catalog.trim(p_author), '') IS NULL THEN
+  IF pg_catalog.nullif(pg_catalog.btrim(p_title), '') IS NULL
+     OR pg_catalog.nullif(pg_catalog.btrim(p_author), '') IS NULL THEN
     RAISE EXCEPTION 'Book title and author are required.';
   END IF;
 
@@ -532,19 +532,19 @@ BEGIN
     available_copies
   )
   VALUES (
-    pg_catalog.trim(p_title),
-    pg_catalog.trim(p_author),
-    pg_catalog.nullif(pg_catalog.trim(p_category), ''),
-    pg_catalog.nullif(pg_catalog.trim(p_isbn), ''),
-    pg_catalog.nullif(pg_catalog.trim(p_summary), ''),
+    pg_catalog.btrim(p_title),
+    pg_catalog.btrim(p_author),
+    pg_catalog.nullif(pg_catalog.btrim(p_category), ''),
+    pg_catalog.nullif(pg_catalog.btrim(p_isbn), ''),
+    pg_catalog.nullif(pg_catalog.btrim(p_summary), ''),
     'personal',
-    pg_catalog.trim(p_visitor_id),
+    pg_catalog.btrim(p_visitor_id),
     pg_catalog.coalesce(p_is_public, false),
     pg_catalog.coalesce(p_lending_enabled, false),
-    pg_catalog.nullif(pg_catalog.trim(p_condition), ''),
+    pg_catalog.nullif(pg_catalog.btrim(p_condition), ''),
     p_lending_period_days,
-    pg_catalog.nullif(pg_catalog.trim(p_handover_method), ''),
-    pg_catalog.nullif(pg_catalog.trim(p_handover_details), ''),
+    pg_catalog.nullif(pg_catalog.btrim(p_handover_method), ''),
+    pg_catalog.nullif(pg_catalog.btrim(p_handover_details), ''),
     p_total_copies,
     p_total_copies
   )
@@ -609,7 +609,7 @@ BEGIN
   IF auth.uid() IS NULL OR NOT EXISTS (
     SELECT 1
     FROM public.visitors AS visitor
-    WHERE visitor.id::text = pg_catalog.trim(p_visitor_id)
+    WHERE visitor.id::text = pg_catalog.btrim(p_visitor_id)
       AND visitor.auth_user_id = auth.uid()
       AND visitor.otp_verified
       AND visitor.is_active
@@ -634,10 +634,10 @@ BEGIN
   );
 
   UPDATE public.books
-  SET cover_url = pg_catalog.nullif(pg_catalog.trim(p_cover_url), '')
+  SET cover_url = pg_catalog.nullif(pg_catalog.btrim(p_cover_url), '')
   WHERE id = book_row.id
     AND book_type = 'personal'
-    AND owner_visitor_id::text = pg_catalog.trim(p_visitor_id)
+    AND owner_visitor_id::text = pg_catalog.btrim(p_visitor_id)
   RETURNING * INTO book_row;
 
   IF NOT FOUND THEN
@@ -703,7 +703,7 @@ BEGIN
   IF auth.uid() IS NULL OR NOT EXISTS (
     SELECT 1
     FROM public.visitors AS visitor
-    WHERE visitor.id = pg_catalog.trim(p_visitor_id)
+    WHERE visitor.id = pg_catalog.btrim(p_visitor_id)
       AND visitor.auth_user_id = auth.uid()
       AND visitor.otp_verified
       AND visitor.is_active
@@ -711,8 +711,8 @@ BEGIN
     RAISE EXCEPTION 'The authenticated, verified visitor account could not be found.';
   END IF;
 
-  IF pg_catalog.nullif(pg_catalog.trim(p_title), '') IS NULL
-     OR pg_catalog.nullif(pg_catalog.trim(p_author), '') IS NULL THEN
+  IF pg_catalog.nullif(pg_catalog.btrim(p_title), '') IS NULL
+     OR pg_catalog.nullif(pg_catalog.btrim(p_author), '') IS NULL THEN
     RAISE EXCEPTION 'Book title and author are required.';
   END IF;
 
@@ -747,9 +747,9 @@ BEGIN
 
   SELECT book.* INTO book_row
   FROM public.books AS book
-  WHERE book.id::text = pg_catalog.trim(p_book_id)
+  WHERE book.id::text = pg_catalog.btrim(p_book_id)
     AND book.book_type = 'personal'
-    AND book.owner_visitor_id = pg_catalog.trim(p_visitor_id)
+    AND book.owner_visitor_id = pg_catalog.btrim(p_visitor_id)
   FOR UPDATE;
 
   IF NOT FOUND THEN
@@ -766,15 +766,15 @@ BEGIN
   END IF;
 
   UPDATE public.books
-  SET title = pg_catalog.trim(p_title),
-      author = pg_catalog.trim(p_author),
-      category = pg_catalog.nullif(pg_catalog.trim(p_category), ''),
-      isbn = pg_catalog.nullif(pg_catalog.trim(p_isbn), ''),
-      summary = pg_catalog.nullif(pg_catalog.trim(p_summary), ''),
-      condition = pg_catalog.nullif(pg_catalog.trim(p_condition), ''),
+  SET title = pg_catalog.btrim(p_title),
+      author = pg_catalog.btrim(p_author),
+      category = pg_catalog.nullif(pg_catalog.btrim(p_category), ''),
+      isbn = pg_catalog.nullif(pg_catalog.btrim(p_isbn), ''),
+      summary = pg_catalog.nullif(pg_catalog.btrim(p_summary), ''),
+      condition = pg_catalog.nullif(pg_catalog.btrim(p_condition), ''),
       lending_period_days = p_lending_period_days,
-      handover_method = pg_catalog.nullif(pg_catalog.trim(p_handover_method), ''),
-      handover_details = pg_catalog.nullif(pg_catalog.trim(p_handover_details), ''),
+      handover_method = pg_catalog.nullif(pg_catalog.btrim(p_handover_method), ''),
+      handover_details = pg_catalog.nullif(pg_catalog.btrim(p_handover_details), ''),
       lending_enabled = pg_catalog.coalesce(p_lending_enabled, false),
       is_public = pg_catalog.coalesce(p_is_public, false),
       total_copies = p_total_copies,
@@ -842,7 +842,7 @@ BEGIN
   IF auth.uid() IS NULL OR NOT EXISTS (
     SELECT 1
     FROM public.visitors AS visitor
-    WHERE visitor.id = pg_catalog.trim(p_visitor_id)
+    WHERE visitor.id = pg_catalog.btrim(p_visitor_id)
       AND visitor.auth_user_id = auth.uid()
       AND visitor.otp_verified
       AND visitor.is_active
@@ -868,10 +868,10 @@ BEGIN
   );
 
   UPDATE public.books
-  SET cover_url = pg_catalog.nullif(pg_catalog.trim(p_cover_url), '')
+  SET cover_url = pg_catalog.nullif(pg_catalog.btrim(p_cover_url), '')
   WHERE id = book_row.id
     AND book_type = 'personal'
-    AND owner_visitor_id::text = pg_catalog.trim(p_visitor_id)
+    AND owner_visitor_id::text = pg_catalog.btrim(p_visitor_id)
   RETURNING * INTO book_row;
 
   IF NOT FOUND THEN
@@ -917,7 +917,7 @@ BEGIN
   IF auth.uid() IS NULL OR NOT EXISTS (
     SELECT 1
     FROM public.visitors AS visitor
-    WHERE visitor.id = pg_catalog.trim(p_visitor_id)
+    WHERE visitor.id = pg_catalog.btrim(p_visitor_id)
       AND visitor.auth_user_id = auth.uid()
       AND visitor.otp_verified
       AND visitor.is_active
@@ -927,9 +927,9 @@ BEGIN
 
   SELECT book.* INTO book_row
   FROM public.books AS book
-  WHERE book.id::text = pg_catalog.trim(p_book_id)
+  WHERE book.id::text = pg_catalog.btrim(p_book_id)
     AND book.book_type = 'personal'
-    AND book.owner_visitor_id = pg_catalog.trim(p_visitor_id)
+    AND book.owner_visitor_id = pg_catalog.btrim(p_visitor_id)
   FOR UPDATE;
 
   IF NOT FOUND THEN
@@ -951,7 +951,7 @@ BEGIN
   DELETE FROM public.books
   WHERE id = book_row.id
     AND book_type = 'personal'
-    AND owner_visitor_id = pg_catalog.trim(p_visitor_id);
+    AND owner_visitor_id = pg_catalog.btrim(p_visitor_id);
 
   RETURN true;
 END;
@@ -1059,7 +1059,7 @@ BEGIN
   IF auth.uid() IS NULL OR NOT EXISTS (
     SELECT 1
     FROM public.visitors AS visitor
-    WHERE visitor.id = pg_catalog.trim(p_requester_visitor_id)
+    WHERE visitor.id = pg_catalog.btrim(p_requester_visitor_id)
       AND visitor.auth_user_id = auth.uid()
       AND visitor.otp_verified
       AND visitor.is_active
@@ -1140,7 +1140,7 @@ BEGIN
     ON owner.id = request.owner_visitor_id
   LEFT JOIN public.books AS book
     ON book.id = request.book_id
-  WHERE request.requester_visitor_id = pg_catalog.trim(p_requester_visitor_id)
+  WHERE request.requester_visitor_id = pg_catalog.btrim(p_requester_visitor_id)
   ORDER BY request.request_date DESC;
 END;
 $function$;
@@ -1182,7 +1182,7 @@ BEGIN
   CROSS JOIN LATERAL pg_catalog.aclexplode(procedure.proacl) AS acl
   WHERE procedure.oid = v_signature;
 
-  IF v_acl_count <> 2
+  IF v_acl_count <> 3
      OR NOT pg_catalog.has_function_privilege('authenticated', v_signature, 'EXECUTE')
      OR NOT pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE')
      OR pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE') THEN
@@ -1330,7 +1330,7 @@ BEGIN
   CROSS JOIN LATERAL pg_catalog.aclexplode(procedure.proacl) AS acl
   WHERE procedure.oid = v_signature;
 
-  IF v_acl_count <> 2
+  IF v_acl_count <> 3
      OR NOT pg_catalog.has_function_privilege('authenticated', v_signature, 'EXECUTE')
      OR NOT pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE')
      OR pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE') THEN
@@ -1358,7 +1358,7 @@ BEGIN
   CROSS JOIN LATERAL pg_catalog.aclexplode(procedure.proacl) AS acl
   WHERE procedure.oid = v_signature;
 
-  IF v_acl_count <> 2
+  IF v_acl_count <> 3
      OR NOT pg_catalog.has_function_privilege('authenticated', v_signature, 'EXECUTE')
      OR NOT pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE')
      OR pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE') THEN
@@ -1386,7 +1386,7 @@ BEGIN
   CROSS JOIN LATERAL pg_catalog.aclexplode(procedure.proacl) AS acl
   WHERE procedure.oid = v_signature;
 
-  IF v_acl_count <> 2
+  IF v_acl_count <> 3
      OR NOT pg_catalog.has_function_privilege('authenticated', v_signature, 'EXECUTE')
      OR NOT pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE')
      OR pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE') THEN

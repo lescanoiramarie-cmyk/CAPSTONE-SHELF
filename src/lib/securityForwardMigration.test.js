@@ -118,7 +118,7 @@ test('SQL catalog assertions cover attendance, fine privacy, review identity, gr
     'public.get_fine_payment_alert_targets(text)',
     'public.get_book_reviews(text,integer,integer)',
     'public.save_my_book_review(text,integer,text)',
-    'public.delete_my_book_review(uuid)',
+    'public.delete_my_book_review(text)',
     'pg_default_acl',
     'TRUNCATE',
     'Verified Reader',

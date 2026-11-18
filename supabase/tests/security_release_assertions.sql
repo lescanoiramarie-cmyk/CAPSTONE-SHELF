@@ -32,7 +32,7 @@ BEGIN
       ('public.get_fine_payment_alert_targets(text)', 'postgres', 'plpgsql', 'v', true, ARRAY['search_path=public, pg_temp']::text[]),
       ('public.get_book_reviews(text,integer,integer)', 'shelf_book_reviews_rpc_owner', 'plpgsql', 's', true, ARRAY['search_path=""']::text[]),
       ('public.save_my_book_review(text,integer,text)', 'shelf_book_reviews_rpc_owner', 'plpgsql', 'v', true, ARRAY['search_path=""']::text[]),
-      ('public.delete_my_book_review(uuid)', 'shelf_book_reviews_rpc_owner', 'plpgsql', 'v', true, ARRAY['search_path=""']::text[])
+      ('public.delete_my_book_review(text)', 'shelf_book_reviews_rpc_owner', 'plpgsql', 'v', true, ARRAY['search_path=""']::text[])
     ) AS expected(signature, owner_name, language_name, volatility, security_definer, config)
   LOOP
     v_oid := pg_catalog.to_regprocedure(v_expected.signature)::oid;
@@ -353,7 +353,7 @@ BEGIN
     RAISE EXCEPTION 'Visitor identity policy for review RPC differs from the verified-active-owner contract.';
   END IF;
   v_result := pg_catalog.pg_get_function_result('public.get_book_reviews(text,integer,integer)'::regprocedure);
-  IF v_result NOT LIKE 'TABLE(id uuid, visitor_name text, rating smallint, comment text, created_at timestamp with time zone, is_own boolean)'
+  IF v_result NOT LIKE 'TABLE(id text, visitor_name text, rating integer, comment text, created_at timestamp with time zone, is_own boolean)'
      OR v_result LIKE '%visitor_id%' THEN
     RAISE EXCEPTION 'Safe review RPC response contains an unexpected field: %', v_result;
   END IF;
@@ -364,7 +364,7 @@ BEGIN
   END IF;
   FOREACH v_signature IN ARRAY ARRAY[
     'public.save_my_book_review(text,integer,text)',
-    'public.delete_my_book_review(uuid)'
+    'public.delete_my_book_review(text)'
   ] LOOP
     v_definition := pg_catalog.pg_get_functiondef(pg_catalog.to_regprocedure(v_signature));
     IF pg_catalog.strpos(v_definition, 'shelf_rpc_request_uid()') = 0

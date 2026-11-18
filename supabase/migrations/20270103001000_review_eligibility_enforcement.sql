@@ -121,6 +121,10 @@ $function$;
 
 -- Owner is the dedicated RPC role
 ALTER FUNCTION public.save_my_book_review(text, integer, text) OWNER TO shelf_book_reviews_rpc_owner;
+REVOKE ALL ON FUNCTION public.save_my_book_review(text, integer, text)
+    FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.save_my_book_review(text, integer, text)
+    TO authenticated;
 
 -- ============================================================
 -- 2. Ensure direct table access is fully revoked
@@ -135,6 +139,7 @@ REVOKE ALL ON TABLE public.book_reviews FROM PUBLIC, anon, authenticated, servic
 -- ============================================================
 DROP POLICY IF EXISTS "read public reviews" ON public.book_reviews;
 DROP POLICY IF EXISTS "visitors manage own reviews" ON public.book_reviews;
+DROP POLICY IF EXISTS "book review RPC owner reads reviews" ON public.book_reviews;
 
 -- Only the RPC owner can access the table (via SECURITY DEFINER functions)
 CREATE POLICY "book review RPC owner reads reviews"

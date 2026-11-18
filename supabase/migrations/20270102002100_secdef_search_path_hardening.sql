@@ -7,7 +7,6 @@ BEGIN;
 -- 1. update_community_book_copy_availability() - trigger function
 -- Already uses public.books, public.community_book_requests with schema qualification
 -- Latest definition in 20261121000000_include_reserved_copies_in_inventory_validation.sql
-DROP FUNCTION IF EXISTS public.update_community_book_copy_availability();
 CREATE OR REPLACE FUNCTION public.update_community_book_copy_availability()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -60,7 +59,6 @@ $function$;
 
 -- 2. enforce_book_copy_inventory() - trigger function
 -- Already uses public.books, public.borrow_requests, public.community_book_requests with schema qualification
-DROP FUNCTION IF EXISTS public.enforce_book_copy_inventory();
 CREATE OR REPLACE FUNCTION public.enforce_book_copy_inventory()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -187,7 +185,6 @@ $function$;
 
 -- 6. set_borrow_request_library_id() - trigger function
 -- Already uses public.books with schema qualification
-DROP FUNCTION IF EXISTS public.set_borrow_request_library_id();
 CREATE OR REPLACE FUNCTION public.set_borrow_request_library_id()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -234,7 +231,6 @@ $function$;
 
 -- 8. maintain_borrowed_book_counts() - trigger function
 -- Already uses public.borrowed_book_counts, public.borrow_requests with schema qualification
-DROP FUNCTION IF EXISTS public.maintain_borrowed_book_counts();
 CREATE OR REPLACE FUNCTION public.maintain_borrowed_book_counts()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -293,7 +289,6 @@ END;
 $function$;
 
 -- 9. reject_pending_community_requests_without_copies() - already has empty search_path
-DROP FUNCTION IF EXISTS public.reject_pending_community_requests_without_copies();
 CREATE OR REPLACE FUNCTION public.reject_pending_community_requests_without_copies()
 RETURNS trigger
 LANGUAGE plpgsql

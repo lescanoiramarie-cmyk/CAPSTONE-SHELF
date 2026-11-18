@@ -14,6 +14,10 @@ const sqlAssertions = readFileSync(
   new URL('../../supabase/tests/security_hardening_assertions.sql', import.meta.url),
   'utf8'
 );
+const forwardReviewMigration = readFileSync(
+  new URL('../../supabase/migrations/20270119000000_reconcile_book_reviews_and_eligibility.sql', import.meta.url),
+  'utf8'
+);
 const opacSource = readFileSync(new URL('../component/OPACCatalog.jsx', import.meta.url), 'utf8');
 
 test('review UI uses safe read and save RPCs instead of direct raw table access', () => {
@@ -55,4 +59,38 @@ test('table grants retain only required catalog operations and rollback-only rol
   assert.match(sqlAssertions, /valid exact role claim/);
   assert.match(sqlAssertions, /mismatched app_metadata\.role/);
   assert.match(sqlAssertions, /ROLLBACK;/);
+});
+
+test('forward reconciliation migration normalizes review IDs to text and establishes borrower eligibility', () => {
+  assert.match(forwardReviewMigration, /CREATE OR REPLACE FUNCTION public\.delete_my_book_review\(p_review_id text\)/);
+  assert.match(forwardReviewMigration, /CREATE OR REPLACE FUNCTION public\.save_my_book_review/);
+  assert.match(forwardReviewMigration, /RETURNS TABLE \([\s\S]*?id text[\s\S]*?rating integer/);
+  assert.match(forwardReviewMigration, /ON CONFLICT \(book_id, visitor_id\) DO UPDATE/);
+  assert.match(forwardReviewMigration, /ALTER FUNCTION public\.delete_my_book_review\(text\) OWNER TO shelf_book_reviews_rpc_owner/);
+});
+
+test('forward review migration enforces fail-closed preflights and least privilege without updated_at', () => {
+  // Pre-flight duplicate check fails closed with RAISE EXCEPTION without mutating data
+  assert.match(forwardReviewMigration, /RAISE EXCEPTION 'Duplicate visitor book reviews exist/);
+  assert.doesNotMatch(forwardReviewMigration, /DELETE FROM public\.book_reviews[\s\S]*?GROUP BY/i);
+
+  // Canonical unique constraint non-destructively verified or added
+  assert.match(forwardReviewMigration, /book_reviews_book_id_visitor_id_key UNIQUE \(book_id, visitor_id\)/);
+
+  // updated_at is completely absent from all SQL statements and grants
+  const sqlWithoutComments = forwardReviewMigration.replace(/--.*$/gm, '');
+  assert.doesNotMatch(sqlWithoutComments, /\bupdated_at\b/i);
+
+  // Security definer functions have empty search_path and dedicated role ownership
+  for (const fn of ['save_my_book_review', 'get_book_reviews', 'delete_my_book_review']) {
+    const fnDef = forwardReviewMigration.match(new RegExp(`CREATE OR REPLACE FUNCTION public\\.${fn}[\\s\\S]*?\\$function\\$;`, 'i'));
+    assert.ok(fnDef, `${fn} function definition is present`);
+    assert.match(fnDef[0], /SECURITY DEFINER/);
+    assert.match(fnDef[0], /SET search_path = ''/);
+  }
+
+  // Entire migration is wrapped in a transaction with postflight assertions
+  assert.match(forwardReviewMigration, /^BEGIN;/m);
+  assert.match(forwardReviewMigration, /COMMIT;$/m);
+  assert.match(forwardReviewMigration, /DO \$postflight\$/);
 });

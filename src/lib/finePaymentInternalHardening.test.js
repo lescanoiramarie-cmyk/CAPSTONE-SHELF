@@ -113,6 +113,6 @@ test('postflight validates all function metadata and ACLs', () => {
 
   // Postflight should check analytics function ownership, search_path, and grants (including service_role)
   assert.match(migration, /v_signature := 'public\.get_fine_payment_analytics\(text\)'::regprocedure;/);
-  assert.match(migration, /v_acl_count <> 2/);
+  assert.match(migration, /v_acl_count <> 3/);
   assert.match(migration, /pg_catalog\.has_function_privilege\('service_role', v_signature, 'EXECUTE'\)/);
 });

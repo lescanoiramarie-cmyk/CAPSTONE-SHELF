@@ -2,7 +2,7 @@
 
 -- Save a community book for later reading
 CREATE OR REPLACE FUNCTION public.save_community_book_for_later(
-  p_community_book_id uuid
+  p_community_book_id text
 )
 RETURNS TABLE (success boolean, message text)
 LANGUAGE plpgsql
@@ -47,12 +47,12 @@ BEGIN
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.save_community_book_for_later(uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.save_community_book_for_later(uuid) TO authenticated;
+REVOKE ALL ON FUNCTION public.save_community_book_for_later(text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.save_community_book_for_later(text) TO authenticated;
 
 -- Unsave a community book
 CREATE OR REPLACE FUNCTION public.unsave_community_book_for_later(
-  p_community_book_id uuid
+  p_community_book_id text
 )
 RETURNS TABLE (success boolean, message text)
 LANGUAGE plpgsql
@@ -89,13 +89,13 @@ BEGIN
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.unsave_community_book_for_later(uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.unsave_community_book_for_later(uuid) TO authenticated;
+REVOKE ALL ON FUNCTION public.unsave_community_book_for_later(text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.unsave_community_book_for_later(text) TO authenticated;
 
 -- Fetch saved community books for current visitor
 CREATE OR REPLACE FUNCTION public.get_saved_community_books()
 RETURNS TABLE (
-  book_id uuid,
+  book_id text,
   title text,
   author text,
   category text,
@@ -159,14 +159,14 @@ BEGIN
     SELECT 1 FROM pg_proc
     WHERE proname = 'save_community_book_for_later'
       AND pronamespace = 'public'::regnamespace
-      AND proargtypes[0] = 'uuid'::regtype
+      AND proargtypes[0] = 'text'::regtype
   ) INTO v_save_exists;
 
   SELECT EXISTS (
     SELECT 1 FROM pg_proc
     WHERE proname = 'unsave_community_book_for_later'
       AND pronamespace = 'public'::regnamespace
-      AND proargtypes[0] = 'uuid'::regtype
+      AND proargtypes[0] = 'text'::regtype
   ) INTO v_unsave_exists;
 
   SELECT EXISTS (

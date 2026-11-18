@@ -117,7 +117,8 @@ Deno.serve(async (request) => {
     callerProfileError ||
     !callerProfile ||
     callerProfile.role !== "superadmin" ||
-    callerProfile.is_active !== true
+    callerProfile.is_active !== true ||
+    callerProfile.role !== authData.user.app_metadata?.role
   ) {
     return respond(403, {
       error: "Only an active super-admin can manage staff accounts.",
@@ -260,9 +261,9 @@ Deno.serve(async (request) => {
         });
       }
 
-      if (userId === EXISTING_SUPERADMIN_ID) {
+      if (userId === authData.user.id || userId === EXISTING_SUPERADMIN_ID) {
         return respond(403, {
-          error: "The existing Super Admin account is protected.",
+          error: "Super Admin accounts cannot be modified through this endpoint.",
         });
       }
 
@@ -272,7 +273,19 @@ Deno.serve(async (request) => {
         .eq("id", userId)
         .maybeSingle();
 
-      if (profileError || !profile || profile.role !== "subadmin") {
+      if (profileError) {
+        return respond(400, {
+          error: sanitizeDbError(profileError.message),
+        });
+      }
+
+      if (profile?.role === "superadmin") {
+        return respond(403, {
+          error: "Super Admin accounts cannot be modified through this endpoint.",
+        });
+      }
+
+      if (!profile || profile.role !== "subadmin") {
         return respond(404, {
           error: "Sub-admin account not found.",
         });
@@ -357,9 +370,9 @@ Deno.serve(async (request) => {
         });
       }
 
-      if (userId === EXISTING_SUPERADMIN_ID) {
+      if (userId === authData.user.id || userId === EXISTING_SUPERADMIN_ID) {
         return respond(403, {
-          error: "The existing Super Admin account is protected.",
+          error: "Super Admin accounts cannot be modified through this endpoint.",
         });
       }
 
@@ -371,7 +384,13 @@ Deno.serve(async (request) => {
 
       if (profileError) {
         return respond(400, {
-          error: profileError.message,
+          error: sanitizeDbError(profileError.message),
+        });
+      }
+
+      if (profile?.role === "superadmin") {
+        return respond(403, {
+          error: "Super Admin accounts cannot be deleted through this endpoint.",
         });
       }
 
@@ -415,6 +434,12 @@ Deno.serve(async (request) => {
         });
       }
 
+      if (userId === authData.user.id || userId === EXISTING_SUPERADMIN_ID) {
+        return respond(403, {
+          error: "Super Admin accounts cannot be deactivated through this endpoint.",
+        });
+      }
+
       const {
         data: profile,
         error: profileError,
@@ -424,8 +449,19 @@ Deno.serve(async (request) => {
         .eq("id", userId)
         .maybeSingle();
 
+      if (profileError) {
+        return respond(400, {
+          error: sanitizeDbError(profileError.message),
+        });
+      }
+
+      if (profile?.role === "superadmin") {
+        return respond(403, {
+          error: "Super Admin accounts cannot be deactivated through this endpoint.",
+        });
+      }
+
       if (
-        profileError ||
         !profile ||
         profile.role !== "subadmin"
       ) {

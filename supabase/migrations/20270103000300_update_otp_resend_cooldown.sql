@@ -79,7 +79,7 @@ BEGIN
     RAISE EXCEPTION 'Postflight failed: issue_visitor_resend_capability function not found';
   END IF;
 
-  IF v_src !~ 'interval\s*[\'"]120 seconds[\'"]' THEN
+  IF v_src !~ $re$120 seconds$re$ THEN
     RAISE EXCEPTION 'Postflight failed: issue_visitor_resend_capability cooldown is not 120 seconds. Found: %', v_src;
   END IF;
 END $$;

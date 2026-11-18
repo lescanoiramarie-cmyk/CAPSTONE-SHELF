@@ -153,11 +153,13 @@ BEGIN
       v_old_count := pg_catalog.regexp_count(
         v_updated_definition,
         'COALESCE[[:space:]]*\([[:space:]]*v_jwt_role[[:space:]]*,[[:space:]]*v_staff_role[[:space:]]*\)[[:space:]]*<>[[:space:]]*v_staff_role',
+        1,
         'i'
       );
       v_new_count := pg_catalog.regexp_count(
         v_updated_definition,
         'v_jwt_role[[:space:]]+IS[[:space:]]+DISTINCT[[:space:]]+FROM[[:space:]]+v_staff_role',
+        1,
         'i'
       );
       IF v_old_count = 1 AND v_new_count = 0 THEN
@@ -175,11 +177,13 @@ BEGIN
       v_old_count := pg_catalog.regexp_count(
         v_updated_definition,
         'COALESCE[[:space:]]*\([[:space:]]*auth\.jwt\(\)[[:space:]]*->[[:space:]]*''app_metadata''[[:space:]]*->>[[:space:]]*''role''[[:space:]]*,[[:space:]]*staff\.role[[:space:]]*\)[[:space:]]*=[[:space:]]*staff\.role',
+        1,
         'i'
       );
       v_new_count := pg_catalog.regexp_count(
         v_updated_definition,
         'auth\.jwt\(\)[[:space:]]*->[[:space:]]*''app_metadata''[[:space:]]*->>[[:space:]]*''role''[[:space:]]+IS[[:space:]]+NOT[[:space:]]+NULL[[:space:]]+AND[[:space:]]+auth\.jwt\(\)[[:space:]]*->[[:space:]]*''app_metadata''[[:space:]]*->>[[:space:]]*''role''[[:space:]]*=[[:space:]]*staff\.role',
+        1,
         'i'
       );
       IF v_old_count = 1 AND v_new_count = 0 THEN
@@ -202,11 +206,13 @@ BEGIN
       v_old_count := pg_catalog.regexp_count(
         v_updated_definition,
         'BEGIN[[:space:]]+SELECT request\.\*[[:space:]]+INTO v_req',
+        1,
         'i'
       );
       v_new_count := pg_catalog.regexp_count(
         v_updated_definition,
         'auth\.jwt\(\)[[:space:]]*->[[:space:]]*>[[:space:]]*''aal''[[:space:]]+IS[[:space:]]+DISTINCT[[:space:]]+FROM[[:space:]]+''aal2''',
+        1,
         'i'
       );
       IF v_old_count = 1 AND v_new_count = 0 THEN
@@ -227,11 +233,13 @@ BEGIN
       v_old_count := pg_catalog.regexp_count(
         v_updated_definition,
         'IF auth\.uid\(\) IS NULL THEN[[:space:]]+RAISE EXCEPTION ''Authenticated staff account required\.'';[[:space:]]+END IF;',
+        1,
         'i'
       );
       v_new_count := pg_catalog.regexp_count(
         v_updated_definition,
         'auth\.jwt\(\)[[:space:]]*->[[:space:]]*>[[:space:]]*''aal''[[:space:]]+IS[[:space:]]+DISTINCT[[:space:]]+FROM[[:space:]]+''aal2''',
+        1,
         'i'
       );
       IF v_old_count = 1 AND v_new_count = 0 THEN

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const eligibilityMigration = readFileSync(
-  new URL('../../supabase/migrations/20270103001000_review_eligibility_enforcement.sql', import.meta.url),
+  new URL('../../supabase/migrations/20270119000000_reconcile_book_reviews_and_eligibility.sql', import.meta.url),
   'utf8'
 );
 
@@ -47,10 +47,28 @@ test('save_my_book_review rejects visitors who have not borrowed and returned th
   assert.match(eligibilityMigration, /You can only review books you have borrowed and returned/);
 });
 
-test('save_my_book_review uses upsert with unique constraint on (book_id, visitor_id)', () => {
-  assert.match(eligibilityMigration, /SELECT review\.id INTO v_review_id[\s\S]*FROM public\.book_reviews AS review[\s\S]*WHERE review\.book_id = pg_catalog\.btrim\(p_book_id\)[\s\S]*AND review\.visitor_id = v_visitor_id[\s\S]*FOR UPDATE/);
-  assert.match(eligibilityMigration, /UPDATE public\.book_reviews AS review[\s\S]*WHERE review\.id = v_review_id/);
-  assert.match(eligibilityMigration, /INSERT INTO public\.book_reviews[\s\S]*VALUES[\s\S]*v_visitor_id/);
+test('save_my_book_review uses an atomic upsert with the exact unique key', () => {
+  assert.match(eligibilityMigration, /INSERT INTO public\.book_reviews \(book_id, visitor_id, visitor_name, rating, comment\)[\s\S]*ON CONFLICT \(book_id, visitor_id\) DO UPDATE[\s\S]*SET rating = EXCLUDED\.rating,[\s\S]*comment = EXCLUDED\.comment[\s\S]*RETURNING book_reviews\.id::text INTO v_review_id/);
+  assert.doesNotMatch(eligibilityMigration, /SELECT review\.id INTO v_review_id[\s\S]*?FOR UPDATE/);
+});
+
+test('eligibility migration checks duplicate rows before ensuring the exact unique key', () => {
+  assert.match(eligibilityMigration, /WHERE visitor_id IS NOT NULL\s+GROUP BY book_id, visitor_id\s+HAVING pg_catalog\.count\(\*\) > 1/);
+  assert.match(eligibilityMigration, /Duplicate visitor book reviews exist; resolve them with an approved data plan/);
+  assert.match(eligibilityMigration, /ADD CONSTRAINT book_reviews_book_id_visitor_id_key UNIQUE \(book_id, visitor_id\)/);
+  assert.match(eligibilityMigration, /array_agg\(attribute_row\.attname::text ORDER BY key_column\.ordinality\)[\s\S]*?ARRAY\['book_id', 'visitor_id'\]::text\[\]/);
+  assert.match(eligibilityMigration, /Exact unique constraint on \(book_id, visitor_id\) missing/);
+});
+
+test('review RPC owner receives only required eligibility read columns behind owner-only RLS policies', () => {
+  assert.match(eligibilityMigration, /NOT rolcanlogin AND NOT rolinherit AND NOT rolbypassrls AND NOT rolsuper/);
+  assert.match(eligibilityMigration, /pg_has_role\('authenticated', 'shelf_book_reviews_rpc_owner', 'MEMBER'\)/);
+  assert.match(eligibilityMigration, /GRANT SELECT \(visitor_id, book_id, status, return_date\)[\s\S]*ON TABLE public\.borrow_requests TO shelf_book_reviews_rpc_owner/);
+  assert.match(eligibilityMigration, /GRANT SELECT \(requester_visitor_id, book_id, status, return_date\)[\s\S]*ON TABLE public\.community_book_requests TO shelf_book_reviews_rpc_owner/);
+  assert.match(eligibilityMigration, /ON public\.borrow_requests FOR SELECT TO shelf_book_reviews_rpc_owner\s+USING \(true\)/);
+  assert.match(eligibilityMigration, /ON public\.community_book_requests FOR SELECT TO shelf_book_reviews_rpc_owner\s+USING \(true\)/);
+  assert.match(eligibilityMigration, /has_column_privilege\('shelf_book_reviews_rpc_owner', 'public\.borrow_requests', 'return_date', 'SELECT'\)/);
+  assert.match(eligibilityMigration, /Review RPC owner eligibility RLS policies mismatch/);
 });
 
 test('save_my_book_review returns verified reader label without PII', () => {
@@ -78,7 +96,7 @@ test('get_book_reviews grants are correct', () => {
 });
 
 test('delete_my_book_review enforces authenticated verified visitor session', () => {
-  assert.match(eligibilityMigration, /CREATE OR REPLACE FUNCTION public\.delete_my_book_review\(p_review_id uuid\)/);
+  assert.match(eligibilityMigration, /CREATE OR REPLACE FUNCTION public\.delete_my_book_review\(p_review_id text\)/);
   assert.match(eligibilityMigration, /public\.shelf_rpc_request_uid\(\) IS NULL/);
   assert.match(eligibilityMigration, /visitor\.auth_user_id = public\.shelf_rpc_request_uid\(\)/);
   assert.match(eligibilityMigration, /visitor\.otp_verified IS TRUE/);
@@ -86,15 +104,15 @@ test('delete_my_book_review enforces authenticated verified visitor session', ()
 });
 
 test('delete_my_book_review verifies ownership before deletion', () => {
-  assert.match(eligibilityMigration, /DELETE FROM public\.book_reviews AS review[\s\S]*WHERE review\.id = p_review_id[\s\S]*AND review\.visitor_id = v_visitor_id/);
-  assert.match(eligibilityMigration, /RETURNING review\.id INTO v_deleted_id/);
+  assert.match(eligibilityMigration, /DELETE FROM public\.book_reviews AS review[\s\S]*WHERE review\.id::text = p_review_id[\s\S]*AND review\.visitor_id = v_visitor_id/);
+  assert.match(eligibilityMigration, /RETURNING review\.id::text INTO v_deleted_id/);
   assert.match(eligibilityMigration, /RETURN v_deleted_id IS NOT NULL/);
 });
 
 test('delete_my_book_review ownership and grants are correct', () => {
-  assert.match(eligibilityMigration, /ALTER FUNCTION public\.delete_my_book_review\(uuid\) OWNER TO shelf_book_reviews_rpc_owner/);
-  assert.match(eligibilityMigration, /REVOKE ALL ON FUNCTION public\.delete_my_book_review\(uuid\)[\s\S]*FROM PUBLIC, anon, authenticated, service_role/);
-  assert.match(eligibilityMigration, /GRANT EXECUTE ON FUNCTION public\.delete_my_book_review\(uuid\)[\s\S]*TO authenticated/);
+  assert.ok(eligibilityMigration.includes('ALTER FUNCTION public.delete_my_book_review(text) OWNER TO shelf_book_reviews_rpc_owner'));
+  assert.ok(eligibilityMigration.includes('REVOKE ALL ON FUNCTION public.delete_my_book_review(text)'));
+  assert.ok(eligibilityMigration.includes('GRANT EXECUTE ON FUNCTION public.delete_my_book_review(text)'));
 });
 
 test('postflight validates function ownership, metadata, and search_path', () => {
@@ -114,7 +132,8 @@ test('postflight validates direct table access is revoked', () => {
 
 test('postflight validates unique constraint on (book_id, visitor_id)', () => {
   assert.match(eligibilityMigration, /book_reviews_book_id_visitor_id_key/);
-  assert.match(eligibilityMigration, /Unique constraint on \(book_id, visitor_id\) missing/);
+  assert.match(eligibilityMigration, /Exact unique constraint on \(book_id, visitor_id\) missing/);
+  assert.match(eligibilityMigration, /ARRAY\['book_id', 'visitor_id'\]::text\[\]/);
 });
 
 test('postflight validates RPC EXECUTE grants', () => {

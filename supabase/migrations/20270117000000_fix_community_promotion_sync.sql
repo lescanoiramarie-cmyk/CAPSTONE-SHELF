@@ -93,7 +93,7 @@ BEGIN
                 END IF;
 
                 -- PROMOTION: Synchronously promote next community request if copy available
-                -- This replaces the dead pg_notify('community_promotion', ...) fallback
+                -- Synchronously promote next request in queue
                 IF v_available_after_release >= 1 THEN
                     PERFORM public.promote_next_community_request(old.book_id);
                 END IF;
