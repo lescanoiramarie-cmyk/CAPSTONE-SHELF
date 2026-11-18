@@ -1158,4 +1158,6 @@ Git history metadata confirms prior commits included paths named `.env` and `env
 
 #### Owner-authorized code commit
 
-The owner subsequently authorized commit and push. The 12-file scope above was committed on branch `main` as `2df9458` (`fix: fail closed on staff role claims and secure analytics forecast`). The commit passed the local validation recorded above. Push status is pending at this checklist revision; no production migration was run.
+The owner subsequently authorized commit and push. The 12-file scope above was committed on branch `main` as `2df9458` (`fix: fail closed on staff role claims and secure analytics forecast`). The commit passed the local validation recorded above. The commit and an initial checklist update (`31f4ef4`) were pushed to `origin/main`. No production migration was run.
+
+**Post-push verification:** `origin/main` advanced from `d23d142` to the release commit and checklist update; `git push origin main` returned success. The unrelated untracked reports, diagnostics, and untrusted backup files remain untracked and were not pushed. Production backup/recovery remains NOT VERIFIED; migration history remains NOT RECONCILED; production migration remains NOT READY.
