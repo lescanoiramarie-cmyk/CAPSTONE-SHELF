@@ -924,6 +924,44 @@ NOT "illegal option -- n". The "illegal option -- n" error suggests argument par
 - Cleanup: delete test project after validation
 - **Explicitly states:** Logical `public` backup ≠ complete Supabase DR
 
+### 17.8 Fine Schema Prerequisite Predicate Validation Fix (2026-11-18)
+
+**Problem:** The prerequisite migration `20261108160959_fine_schema_prerequisite.sql` validates the partial index `borrow_requests_fine_dashboard_status_book_due_idx` predicate. Production's `borrow_requests.status` column is `character varying(50)` (with length modifier). PostgreSQL's `pg_get_expr()` renders the predicate with the full type including length modifier:
+```
+(status = ANY(ARRAY['borrowed'::character varying(50), 'returned'::character varying(50)]))
+```
+The original validation (commit `0727c54`) hardcoded `character varying` (without length modifier), causing a mismatch.
+
+**Fix Applied (Working Tree, Uncommitted):**
+- Migration now captures actual column type via `pg_catalog.format_type(a.atttypid, a.atttypmod)` into `v_borrow_status_type`
+- Expected predicate dynamically constructed: `'(status = ANY (ARRAY[''borrowed''::' || v_borrow_status_type || ', ''returned''::' || v_borrow_status_type || ']))'`
+- Both expected and actual predicates normalized via `pg_catalog.regexp_replace(pg_catalog.lower(...), '[[:space:]]', '', 'g')`
+- Fail-closed `IS DISTINCT FROM` comparison preserved
+- All other validations (key columns, include columns, ordering, access method, uniqueness, validity/readiness/live) unchanged
+
+**Migration History Discrepancy (Critical):**
+| Version | Filename | Production `schema_migrations` |
+|---------|----------|--------------------------------|
+| `20261108160959` | `fine_schema_prerequisite.sql` | **MISSING** (never applied) |
+| `20261108161030` | `fine_dashboard_query_indexes.sql` | **APPLIED** (recorded) |
+
+The dashboard index migration (`161030`) that creates `borrow_requests_fine_dashboard_status_book_due_idx` was applied **without** its prerequisite (`160959`). The prerequisite creates:
+- `public.fine_payments` table (9 canonical columns, PK, checks, FK to `staff_profiles`, RLS)
+- `borrow_requests.fine_paid_amount` (numeric, `>= 0` check)
+- `borrow_requests.fine_review_required` (boolean, default false)
+- `borrow_requests.fine_review_resolved_at` (timestamptz)
+- `borrow_requests.fine_review_note` (text)
+- Three indexes: dashboard index, `books_library_id_book_id_idx`, `fine_payments_request_received_idx`
+
+**Production Compatibility When `160959` Eventually Runs:**
+- The prerequisite uses `IF NOT EXISTS` / existence checks for all objects
+- Index validation block only validates if index already exists (lines 403-492): `IF v_index_oid IS NOT NULL THEN ...`
+- Since `161030` already created the dashboard index, the validation will run and **must pass** — the dynamic predicate fix ensures this
+- No `DROP INDEX` or recreation attempted; validation is read-only
+- `fine_payments` table and fine columns will be created (absent in production per reconciliation evidence)
+
+**No Forward Migration Needed:** The validation fix belongs in the prerequisite itself since production will execute it for the first time.
+
 ## Release Status: NOT READY
 
 ### Remaining External Blockers

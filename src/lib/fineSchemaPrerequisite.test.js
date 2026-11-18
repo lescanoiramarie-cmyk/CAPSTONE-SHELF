@@ -12,9 +12,7 @@ test('fine schema prerequisite accepts canonical text and varchar partial-index 
   assert.match(migration, /v_borrow_status_type\s+IS\s+DISTINCT\s+FROM\s+'text'/i);
   assert.match(migration, /v_borrow_status_type\s+NOT\s+LIKE\s+'character varying%'/i);
   assert.match(migration, /WHEN v_index\.index_name = 'borrow_requests_fine_dashboard_status_book_due_idx'/);
-  assert.match(
-    migration,
-    /\(status=any\(array\[''borrowed''::character varying,''returned''::character varying\]\)\)/
-  );
+  assert.match(migration, /v_borrow_status_type/);
+  assert.match(migration, /pg_catalog\.regexp_replace\(/);
   assert.match(migration, /v_index_predicate\s+IS\s+DISTINCT\s+FROM\s+v_expected_predicate/);
 });

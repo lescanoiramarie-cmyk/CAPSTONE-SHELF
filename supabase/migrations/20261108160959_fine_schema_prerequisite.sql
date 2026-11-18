@@ -467,13 +467,14 @@ BEGIN
 
       v_expected_predicate := CASE
         WHEN v_index.predicate IS NULL THEN NULL
-        -- PostgreSQL renders the same `status IN ('borrowed', 'returned')`
-        -- predicate differently when status is varchar instead of text. The
-        -- production schema uses varchar(50); validate that exact catalog
-        -- rendering while retaining the text rendering used by clean replay.
         WHEN v_index.index_name = 'borrow_requests_fine_dashboard_status_book_due_idx'
              AND v_borrow_status_type LIKE 'character varying%' THEN
-          '(status=any(array[''borrowed''::character varying,''returned''::character varying]))'
+          pg_catalog.regexp_replace(
+            pg_catalog.lower(
+              '(status = ANY (ARRAY[''borrowed''::' || v_borrow_status_type || ', ''returned''::' || v_borrow_status_type || ']))'
+            ),
+            '[[:space:]]', '', 'g'
+          )
         ELSE pg_catalog.regexp_replace(
           pg_catalog.lower(v_index.predicate), '[[:space:]]', '', 'g'
         )
