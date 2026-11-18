@@ -1155,3 +1155,7 @@ No fresh production query was run: the existing untracked PowerShell reconciliat
 Git history metadata confirms prior commits included paths named `.env` and `env`; current Git tracking has neither path, and no contents were read. Review affected providers for exposure and rotate any applicable credentials through approved provider workflows after owner confirmation. No rotation was performed.
 
 **Commit decision:** NOT READY until the owner reviews the exact proposed list above. **Push decision:** NOT READY until the reviewed changes are committed and the owner authorizes push. **Production migration decision:** NOT READY until fresh remote history/catalog evidence, verified backup and separate restore, isolated replay, authenticated security tests, migration-by-migration risk review, and rollback approval are complete.
+
+#### Owner-authorized code commit
+
+The owner subsequently authorized commit and push. The 12-file scope above was committed on branch `main` as `2df9458` (`fix: fail closed on staff role claims and secure analytics forecast`). The commit passed the local validation recorded above. Push status is pending at this checklist revision; no production migration was run.
