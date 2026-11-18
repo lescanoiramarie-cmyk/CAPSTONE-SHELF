@@ -1,5 +1,5 @@
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Bot,
   CircleHelp,
@@ -24,20 +24,55 @@ const SUGGESTED_QUESTIONS = [
   'How do I check partner library locations?',
 ];
 
+// Local-first keyword matching for instant responses
+const LOCAL_KEYWORDS = [
+  'borrow', 'request', 'period', 'due', 'return', 'renew',
+  'qr', 'code', 'pass', 'visitor', 'profile', 'library',
+  'branch', 'location', 'hours', 'open', 'close', 'fine',
+  'overdue', 'reserve', 'reservation', 'queue', 'pickup',
+  'community', 'personal', 'book', 'catalog', 'search',
+  'password', 'reset', 'login', 'register', 'verify', 'otp',
+  'attendance', 'scan', 'kiosk', 'map', 'direction',
+];
+
+function isSimpleQuestion(question) {
+  const lower = question.toLowerCase();
+  return LOCAL_KEYWORDS.some((keyword) => lower.includes(keyword));
+}
+
 export default function FAQ() {
   const [messages, setMessages] = useState([INITIAL_MESSAGE]);
   const [question, setQuestion] = useState('');
   const [asking, setAsking] = useState(false);
   const chatEndRef = useRef(null);
+  const abortControllerRef = useRef(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, asking]);
 
-  const sendQuestion = async (text = question) => {
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
+
+  const sendQuestion = useCallback(async (text = question) => {
     const submittedQuestion = text.trim();
 
     if (!submittedQuestion || asking) return;
+
+    // Immediate local response for simple questions
+    const localResponse = findFAQResponse(submittedQuestion);
+    if (localResponse && isSimpleQuestion(submittedQuestion)) {
+      setMessages((previous) => [
+        ...previous,
+        { role: 'user', text: submittedQuestion },
+        { role: 'bot', text: localResponse.a },
+      ]);
+      setQuestion('');
+      return;
+    }
 
     setMessages((previous) => [
       ...previous,
@@ -45,6 +80,9 @@ export default function FAQ() {
     ]);
     setQuestion('');
     setAsking(true);
+
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
 
     try {
       const apiUrl = getAnalyticsApiUrl(
@@ -69,6 +107,7 @@ export default function FAQ() {
             question: submittedQuestion,
             faq_corpus: faqCorpus,
           }),
+          signal,
         }
       );
 
@@ -92,6 +131,8 @@ export default function FAQ() {
         { role: 'bot', text: payload.answer.trim() },
       ]);
     } catch (error) {
+      if (signal?.aborted) return;
+
       const localResponse = findFAQResponse(submittedQuestion);
       setMessages((previous) => [
         ...previous,
@@ -99,28 +140,30 @@ export default function FAQ() {
           role: 'bot',
           text:
             localResponse
-              ? `${localResponse.a}\n\nThe chatbot service is unavailable, so this answer came from the built-in FAQ.`
+              ? `${localResponse.a}\n\n(The chatbot service is unavailable, so this answer came from the built-in FAQ.)`
               : /failed to fetch|networkerror|connection refused/i.test(error.message || '')
                 ? 'I cannot reach the SHELF assistant service right now, and I could not find this in the built-in FAQ. Please try again later or contact the library.'
                 : error.message || 'The chatbot could not answer this question. Please try again.',
         },
       ]);
     } finally {
-      setAsking(false);
+      if (!signal?.aborted) {
+        setAsking(false);
+      }
     }
-  };
+  }, [asking, question]);
 
-  const handleSubmit = (event) => {
+  const handleSubmit = useCallback((event) => {
     event.preventDefault();
     sendQuestion();
-  };
+  }, [sendQuestion]);
 
-  const resetChat = () => {
+  const resetChat = useCallback(() => {
     if (asking) return;
 
     setMessages([INITIAL_MESSAGE]);
     setQuestion('');
-  };
+  }, [asking]);
 
   return (
     <div className="faq-widget mx-auto max-w-4xl min-w-0 space-y-5">

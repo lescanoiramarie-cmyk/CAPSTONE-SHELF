@@ -88,15 +88,17 @@ Deno.serve(async (request: Request) => {
     return respond(origin, 500, { error: "QR sign-in is not configured." });
   }
 
-  const forwardedAddresses =
-    request.headers.get("x-forwarded-for")
-      ?.split(",")
-      .map((address) => address.trim())
-      .filter(Boolean) || [];
-  const clientAddress =
-    request.headers.get("cf-connecting-ip")?.trim() ||
-    request.headers.get("x-real-ip")?.trim() ||
-    forwardedAddresses.at(-1);
+  const trustProxyIps = ((Deno.env.get("SHELF_TRUST_PROXY_IP_HEADERS") || "").trim().toLowerCase() === "true"
+    || (Deno.env.get("SHELF_TRUST_PROXY_IP_HEADERS") || "").trim() === "1");
+  const trustedIpHeader = Deno.env.get("SHELF_TRUSTED_CLIENT_IP_HEADER")?.trim() || "";
+  let clientAddress = "";
+  if (trustProxyIps && trustedIpHeader) {
+    clientAddress = request.headers.get(trustedIpHeader)?.trim() || "";
+  } else if (trustProxyIps) {
+    clientAddress =
+      request.headers.get("cf-connecting-ip")?.trim() ||
+      request.headers.get("x-real-ip")?.trim() || "";
+  }
 
   if (!clientAddress) {
     console.error("QR sign-in rejected: trusted client address is unavailable.");

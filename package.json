@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "validate:migrations": "node scripts/validate-migrations.mjs",
+    "reconcile:migrations": "node scripts/reconcile-migration-evidence.mjs",
+    "test:auth-postgrest": "node scripts/run-auth-postgrest-matrix.mjs",
+    "test:concurrency": "node scripts/concurrency-harness.mjs"
   },
   "dependencies": {
     "@fontsource-variable/source-sans-3": "^5.3.1",
@@ -41,6 +45,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",
     "globals": "^17.7.0",
+    "pg": "^8.23.1",
     "supabase": "^2.120.0-beta.1",
     "tailwindcss": "^4.3.3",
     "vite": "^8.2.0"

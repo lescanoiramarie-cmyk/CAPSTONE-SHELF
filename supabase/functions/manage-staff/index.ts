@@ -3,18 +3,15 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-const resetSecret = Deno.env.get("STAFF_PASSWORD_RESET_SECRET") || "";
 
 const EXISTING_SUPERADMIN_ID =
   "919c949a-ee98-4137-8a98-072ec8aa5fb1";
 
 const headers = {
-  // The function still requires and verifies a Super Admin JWT for all
-  // staff operations. Wildcard CORS allows the configured frontend host
-  // to reach the function without making the endpoint unauthenticated.
+  // Staff operations require a verified Super Admin session with AAL2 MFA.
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-staff-reset-secret",
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Content-Type": "application/json",
 };
@@ -57,178 +54,6 @@ Deno.serve(async (request) => {
     });
   }
 
-  /*
-   * TEMPORARY SUPER ADMIN PASSWORD RESET
-   *
-   * This branch MUST execute before the normal
-   * authenticated-super-admin check.
-   *
-   * It is protected by:
-   * 1. STAFF_PASSWORD_RESET_SECRET
-   * 2. Exact existing Super Admin UUID
-   *
-   * The service-role key remains server-side.
-   */
-  if (body.operation === "set-password") {
-    if (!resetSecret) {
-      return respond(500, {
-        error:
-          "Staff password reset is not configured on the server.",
-      });
-    }
-
-    const providedSecret =
-      request.headers.get("x-staff-reset-secret") || "";
-
-    if (
-      !providedSecret ||
-      providedSecret !== resetSecret
-    ) {
-      return respond(401, {
-        error: "Invalid staff password reset authorization.",
-      });
-    }
-
-    const userId = String(body.userId || "").trim();
-    const newPassword = String(body.password || "");
-
-    if (userId !== EXISTING_SUPERADMIN_ID) {
-      return respond(403, {
-        error:
-          "This temporary reset endpoint is restricted to the existing Super Admin account.",
-      });
-    }
-
-    if (newPassword.length < 10) {
-      return respond(400, {
-        error:
-          "Password must contain at least 10 characters.",
-      });
-    }
-
-    const admin = createClient(
-      supabaseUrl,
-      serviceRoleKey,
-      {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-        },
-      }
-    );
-
-    try {
-      const { data: profile, error: profileError } =
-        await admin
-          .from("staff_profiles")
-          .select(
-            "id, email, full_name, role, library_id, is_active"
-          )
-          .eq("id", userId)
-          .maybeSingle();
-
-      if (profileError) {
-        return respond(400, {
-          error: profileError.message,
-        });
-      }
-
-      if (!profile) {
-        return respond(404, {
-          error: "Super Admin staff profile not found.",
-        });
-      }
-
-      if (profile.role !== "superadmin") {
-        return respond(403, {
-          error:
-            "The specified account is not the SHELF Super Admin.",
-        });
-      }
-
-      const { data: authUser, error: authUserError } =
-        await admin.auth.admin.getUserById(userId);
-
-      if (authUserError || !authUser?.user) {
-        return respond(404, {
-          error:
-            authUserError?.message ||
-            "Super Admin Auth user not found.",
-        });
-      }
-
-      const existingAppMetadata =
-        authUser.user.app_metadata || {};
-
-      const existingUserMetadata =
-        authUser.user.user_metadata || {};
-
-      const { data: updatedUser, error: passwordError } =
-        await admin.auth.admin.updateUserById(
-          userId,
-          {
-            password: newPassword,
-
-            app_metadata: {
-              ...existingAppMetadata,
-              role: "superadmin",
-              is_active: true,
-            },
-
-            user_metadata: {
-              ...existingUserMetadata,
-              full_name: profile.full_name,
-            },
-          }
-        );
-
-      if (passwordError || !updatedUser?.user) {
-        return respond(400, {
-          error:
-            passwordError?.message ||
-            "Unable to update the Super Admin password.",
-        });
-      }
-
-      const { error: profileUpdateError } =
-        await admin
-          .from("staff_profiles")
-          .update({
-            is_active: true,
-          })
-          .eq("id", userId);
-
-      if (profileUpdateError) {
-        return respond(400, {
-          error: profileUpdateError.message,
-        });
-      }
-
-      return respond(200, {
-        success: true,
-        id: profile.id,
-        email: profile.email,
-        role: profile.role,
-        message:
-          "Super Admin password updated successfully.",
-      });
-    } catch (error) {
-      return respond(500, {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unexpected password reset error.",
-      });
-    }
-  }
-
-  /*
-   * NORMAL STAFF MANAGEMENT
-   *
-   * CREATE and SET-ACTIVE require an authenticated
-   * Super Admin account.
-   */
-
   const authorization =
     request.headers.get("Authorization");
 
@@ -269,8 +94,18 @@ Deno.serve(async (request) => {
     });
   }
 
-  // JWT app_metadata can remain valid until a session is refreshed. Confirm
-  // the caller's current database role and active state before using the
+  // Require AAL2 (MFA verified) for all administrative staff operations.
+  const { data: assurance, error: assuranceError } =
+    await userClient.auth.mfa.getAuthenticatorAssuranceLevel();
+
+  if (assuranceError || assurance?.currentLevel !== "aal2") {
+    return respond(403, {
+      error:
+        "AAL2 authentication (MFA) is required for staff management operations.",
+    });
+  }
+
+  // Confirm the caller's current database role and active state before using the
   // service-role client, which bypasses RLS for staff management operations.
   const { data: callerProfile, error: callerProfileError } = await userClient
     .from("staff_profiles")

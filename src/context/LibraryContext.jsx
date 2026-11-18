@@ -12,6 +12,13 @@ import { LibraryContext } from './libraryContext.js';
 import { useAuth } from './useAuth.js';
 import ShelfLoader from '../component/ShelfLoader.jsx';
 
+const reportClientError = (context) => {
+  // Avoid logging tokens, credentials, OTPs, PII, or raw provider errors.
+  if (typeof console !== 'undefined' && typeof console.error === 'function') {
+    console.error(`[SHELF] ${context}`);
+  }
+};
+
 // ============================================================================
 // SHELF ILMS — Library Context Provider
 // ----------------------------------------------------------------------------
@@ -50,6 +57,7 @@ const emptyData = {
 };
 
 const DATA_LOAD_TIMEOUT_MS = 15000;
+const ATTENDANCE_LOAD_TIMEOUT_MS = 120000;
 const BORROW_REQUESTS_LOAD_TIMEOUT_MS = 60000;
 
 export function LibraryProvider({ children }) {
@@ -130,16 +138,10 @@ export function LibraryProvider({ children }) {
         if (refreshError || !authUserId) {
           if (!authUserId) lastResolvedAuthUserIdRef.current = null;
           if (authError) {
-            console.warn(
-              'SHELF Supabase user verification failed:',
-              authError
-            );
+            reportClientError(`Supabase user verification failed: ${authError?.message || 'unknown error'}`);
           }
           if (refreshError) {
-            console.warn(
-              'SHELF Supabase session refresh failed:',
-              refreshError
-            );
+            reportClientError(`Supabase session refresh failed: ${refreshError?.message || 'unknown error'}`);
           }
           return null;
         }
@@ -152,9 +154,9 @@ export function LibraryProvider({ children }) {
       const visitor = await store.getVisitor(authUserId);
       currentVisitorProfileRef.current = visitor;
       return visitor?.id || null;
-    } catch (error) {
+    } catch (e) {
       currentVisitorProfileRef.current = null;
-      console.warn('SHELF could not resolve authenticated visitor:', error);
+      reportClientError(`Could not resolve authenticated visitor: ${e?.message || 'unknown error'}`);
       return null;
     }
   }, []);
@@ -240,7 +242,7 @@ export function LibraryProvider({ children }) {
     } catch (error) {
       if (loadSequence !== borrowRequestsLoadSequenceRef.current) return;
       if (error?.name === 'AbortError') return;
-      console.error('SHELF borrowing history loading failed:', error);
+      console.error('Unable to load your borrowing history.');
       setBorrowRequestsLoadError(
         error?.message || 'Unable to load your borrowing history.'
       );
@@ -318,7 +320,7 @@ export function LibraryProvider({ children }) {
     } catch (error) {
       if (loadSequence !== borrowRequestsLoadSequenceRef.current) return;
       if (error?.name === 'AbortError') return;
-      console.error('SHELF borrowing history loading failed:', error);
+      console.error('Unable to load borrowing history.');
       setBorrowRequestsLoadError(
         error?.message || 'Unable to load borrowing history.'
       );
@@ -343,7 +345,7 @@ export function LibraryProvider({ children }) {
   const refreshAll = useCallback(async () => {
     const refreshSequence = ++refreshSequenceRef.current;
     const optionalDataErrors = [];
-    const waitForData = (request, operation) => {
+    const waitForData = (request, operation, timeoutMs = DATA_LOAD_TIMEOUT_MS) => {
       let timeoutId;
       const timeout = new Promise((_, reject) => {
         timeoutId = setTimeout(() => {
@@ -352,36 +354,36 @@ export function LibraryProvider({ children }) {
           );
           error.name = 'DataLoadTimeoutError';
           reject(error);
-        }, DATA_LOAD_TIMEOUT_MS);
+        }, timeoutMs);
       });
 
       return Promise.race([request, timeout]).finally(() => {
         clearTimeout(timeoutId);
       });
     };
-    const loadOptionalData = async (operation, request, fallback = []) => {
+    const loadOptionalData = async (operation, request, fallback = [], timeoutMs = DATA_LOAD_TIMEOUT_MS) => {
       try {
-        const result = await waitForData(request, operation);
+        const result = await waitForData(request, operation, timeoutMs);
         return {
           data: Array.isArray(result) ? result : fallback,
           error: '',
         };
-      } catch (error) {
+      } catch (e) {
         optionalDataErrors.push(operation);
-        console.error(`SHELF ${operation.toLowerCase()} loading failed:`, error);
+        reportClientError(`Failed to load ${operation}: ${e?.message || 'unknown error'}`);
         return {
           data: fallback,
           error:
-            error?.message || `Unable to load ${operation.toLowerCase()}.`,
+            e?.message || `Unable to load ${operation.toLowerCase()}.`,
         };
       }
     };
     const loadOptionalVisitorCount = async () => {
       try {
         return await waitForData(store.fetchVisitorCount(), 'Visitor count');
-      } catch (error) {
+      } catch (e) {
         optionalDataErrors.push('Visitor count');
-        console.error('SHELF visitor count loading failed:', error);
+        reportClientError(`Failed to load visitor count: ${e?.message || 'unknown error'}`);
         return null;
       }
     };
@@ -396,11 +398,6 @@ export function LibraryProvider({ children }) {
         'Visitor account data'
       );
       setRealtimeVisitorId(currentVisitorId);
-
-      console.log(
-        'SHELF — CURRENT VISITOR ID:',
-        currentVisitorId
-      );
 
       // ----------------------------------------------------------------------
       // Load shared/global data.
@@ -443,7 +440,8 @@ export function LibraryProvider({ children }) {
           : loadOptionalData(
               'Attendance records',
               store.fetchAttendanceLogs(),
-              []
+              [],
+              ATTENDANCE_LOAD_TIMEOUT_MS
             ),
         loadOptionalData(
           'Community books',
@@ -456,7 +454,9 @@ export function LibraryProvider({ children }) {
       const communityBooks = communityBooksResult.data;
 
       if (attendanceError) {
-        console.error('SHELF attendance loading failed:', attendanceError);
+        setAttendanceLoadError('Attendance records are temporarily unavailable.');
+      } else {
+        setAttendanceLoadError('');
       }
 
       // ----------------------------------------------------------------------
@@ -502,10 +502,6 @@ export function LibraryProvider({ children }) {
       const myCommunityBookRequests = myCommunityRequestsResult.data;
       const ownerCommunityBookRequests = ownerRequestsResult.data;
       const ownerCommunityRequestLoadError = ownerRequestsResult.error;
-
-      console.log('SHELF — MY COMMUNITY REQUESTS:', {
-        count: myCommunityBookRequests.length,
-      });
 
       // ----------------------------------------------------------------------
       // Map normal library borrow requests.
@@ -712,30 +708,6 @@ fineReviewRequired:
       );
 
       // ----------------------------------------------------------------------
-      // Debug information.
-      // ----------------------------------------------------------------------
-
-      console.log(
-        'SHELF — FINAL BORROW REQUESTS:',
-        {
-          visitorId:
-            currentVisitorId,
-
-          normalCount:
-            mappedNormalBorrowRequests.length,
-
-          communityCount:
-            mappedMyCommunityRequests.length,
-
-          totalCount:
-            uniqueBorrowRequests.length,
-
-          communityRequests:
-            mappedMyCommunityRequests,
-        }
-      );
-
-      // ----------------------------------------------------------------------
       // Update centralized application state.
       // ----------------------------------------------------------------------
 
@@ -800,7 +772,7 @@ fineReviewRequired:
         ownerCommunityRequestLoadError,
       }));
 
-      setAttendanceLoadError(attendanceError);
+      setAttendanceLoadError('');
       setOptionalDataLoadErrors([...new Set(optionalDataErrors)]);
       setConnectionError('');
       setInitialDataReady(true);
@@ -849,10 +821,7 @@ fineReviewRequired:
         return;
       }
 
-      console.error(
-        'SHELF refreshAll error:',
-        err
-      );
+      reportClientError(`Data refresh failed: ${err?.message || 'unknown error'}`);
 
       setConnectionError(
         err?.message ||
@@ -897,15 +866,8 @@ fineReviewRequired:
 
   useEffect(() => {
     const handleVisitorSessionChanged = () => {
-      console.log(
-        'SHELF — VISITOR SESSION CHANGED. REFRESHING DATA...'
-      );
-
-      void refreshAll().catch((error) => {
-        console.error(
-          'SHELF visitor session refresh failed:',
-          error
-        );
+      void refreshAll().catch((err) => {
+        reportClientError(`Visitor session refresh failed: ${err?.message || 'unknown error'}`);
       });
     };
 
@@ -942,8 +904,8 @@ fineReviewRequired:
         const refreshPending = pendingRealtimeRefresh;
         pendingRealtimeRefresh = null;
         if (mounted && document.visibilityState === 'visible' && refreshPending) {
-          void refreshPending().catch((error) => {
-            console.error('SHELF realtime refresh failed:', error);
+          void refreshPending().catch((err) => {
+            reportClientError(`Realtime refresh failed: ${err?.message || 'unknown error'}`);
           });
         }
       // Several related row changes can arrive together. Wait for the burst to
@@ -1006,13 +968,15 @@ fineReviewRequired:
       };
       setData((currentData) => {
         const current = currentData.attendanceLogs || [];
-        const remaining = current.filter((item) => String(item.id) !== id);
-        const attendanceLogs = updated
-          ? [updated, ...remaining].sort((a, b) => new Date(b.timeIn || 0) - new Date(a.timeIn || 0)).slice(0, 5000)
-          : remaining;
+        const byId = new Map(current.map((item) => [String(item.id), item]));
+        if (payload.eventType === 'DELETE') byId.delete(id);
+        else byId.set(id, updated);
+        const attendanceLogs = [...byId.values()].sort((left, right) => {
+          const timeDifference = new Date(right.timeIn || 0) - new Date(left.timeIn || 0);
+          return timeDifference || String(left.id).localeCompare(String(right.id));
+        });
         return { ...currentData, attendanceLogs };
       });
-      setAttendanceLoadError('');
     };
 
     // ------------------------------------------------------------------------
@@ -1022,12 +986,9 @@ fineReviewRequired:
     const initialize = async () => {
       try {
         await refreshAll();
-      } catch (error) {
+      } catch (err) {
         if (mounted) {
-          console.error(
-            'SHELF initial data loading failed:',
-            error
-          );
+          reportClientError(`Initial data load failed: ${err?.message || 'unknown error'}`);
         }
       }
     };
@@ -1059,14 +1020,7 @@ fineReviewRequired:
           // Avoid heavy operations directly inside the auth callback.
           setTimeout(() => {
             if (mounted) {
-              void refreshAll().catch(
-                (error) => {
-                  console.error(
-                    'SHELF auth refresh failed:',
-                    error
-                  );
-                }
-              );
+              void refreshAll().catch((err) => { reportClientError(`Auth state refresh failed: ${err?.message || 'unknown error'}`); });
             }
           }, 0);
         }
@@ -1235,13 +1189,10 @@ fineReviewRequired:
           await refreshAll();
 
           return result;
-        } catch (error) {
-          console.error(
-            `SHELF ${operationName} failed:`,
-            error
-          );
+        } catch (e) {
+          reportClientError(`${operationName} failed: ${e?.message || 'unknown error'}`);
 
-          throw error;
+          throw e;
         }
       },
     [refreshAll]
@@ -1354,9 +1305,7 @@ fineReviewRequired:
       // as soon as the save succeeds. Refresh the rest of the dashboard after.
       setData(mergeSavedBook);
       void refreshAll()
-        .catch((error) => {
-          console.error('SHELF personal-book refresh failed:', error);
-        })
+        .catch((err) => { reportClientError(`Dashboard refresh failed: ${err?.message || 'unknown error'}`); })
         .finally(() => {
           setData(mergeSavedBook);
         });
@@ -1805,9 +1754,7 @@ fineReviewRequired:
           <button
             type="button"
             onClick={() =>
-              refreshAll().catch((error) => {
-                console.error('SHELF manual data refresh failed:', error);
-              })
+              refreshAll().catch((err) => { reportClientError(`Retry failed: ${err?.message || 'unknown error'}`); })
             }
             className="rounded border border-white/70 px-2 py-1 font-bold hover:bg-white/10"
           >
@@ -1838,9 +1785,7 @@ fineReviewRequired:
           <button
             type="button"
             onClick={() =>
-              refreshAll().catch((error) => {
-                console.error('SHELF optional data retry failed:', error);
-              })
+              refreshAll().catch((err) => { reportClientError(`Retry failed: ${err?.message || 'unknown error'}`); })
             }
             className="ml-2 rounded border border-amber-800/50 px-2 py-1 font-bold hover:bg-amber-100"
           >

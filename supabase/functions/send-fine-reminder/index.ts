@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { claimNotification, sendWithNotificationClaim } from "../send-due-date-notifications/notificationClaims.js";
 import { getCurrentFine } from "../send-due-date-notifications/fineNotification.js";
+import { getNotificationDateKey } from "../send-due-date-notifications/notificationDate.js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -32,20 +33,29 @@ Deno.serve(async (req: Request) => {
     const { data: authData, error: authError } = await userClient.auth.getUser();
     if (authError || !authData.user) return jsonResponse({ error: "Your session is invalid or expired." }, 401);
 
+    const { data: assurance, error: assuranceError } = await userClient.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (assuranceError || assurance?.currentLevel !== "aal2") {
+      return jsonResponse({ error: "AAL2 authentication (MFA) is required to send fine reminders." }, 403);
+    }
+
     const admin = createClient(supabaseUrl, serviceRoleKey);
     const { data: staff, error: staffError } = await admin.from("staff_profiles").select("id, role, library_id, is_active").eq("id", authData.user.id).maybeSingle();
     if (staffError) return jsonResponse({ error: "Unable to verify your staff profile." }, 500);
-    if (!staff || staff.is_active !== true || !["subadmin", "superadmin"].includes(String(staff.role).toLowerCase())) return jsonResponse({ error: "Active library staff access is required." }, 403);
+    const role = String(staff?.role || "").toLowerCase();
+    const jwtRole = String(authData.user.app_metadata?.role || "").toLowerCase();
+    if (!staff || staff.is_active !== true || !["subadmin", "superadmin"].includes(role) || jwtRole !== role) {
+      return jsonResponse({ error: "Active library staff access is required." }, 403);
+    }
 
     const payload = await req.json().catch(() => null);
     const requestId = String(payload?.borrowRequestId || "").trim();
     if (!requestId) return jsonResponse({ error: "A borrow request ID is required." }, 400);
     const { data: loan, error: loanError } = await admin.from("borrow_requests").select("id, visitor_id, book_id, book_title, status, due_date, return_date, fine_amount, fine_paid_amount, fine_rate_snapshot").eq("id", requestId).maybeSingle();
     if (loanError || !loan) return jsonResponse({ error: "Fine record not found." }, 404);
-    const role = String(staff.role).toLowerCase();
+    const loanRole = String(staff.role).toLowerCase();
     const { data: book, error: bookError } = await admin.from("books").select("library_id").eq("id", loan.book_id).maybeSingle();
     if (bookError || !book) return jsonResponse({ error: "The loan’s library could not be verified." }, 404);
-    if (role === "subadmin" && (!staff.library_id || book.library_id !== staff.library_id)) return jsonResponse({ error: "You can only alert visitors with fines from your assigned library." }, 403);
+    if (loanRole === "subadmin" && (!staff.library_id || book.library_id !== staff.library_id)) return jsonResponse({ error: "You can only alert visitors with fines from your assigned library." }, 403);
     if (!["borrowed", "returned"].includes(loan.status)) return jsonResponse({ error: "This loan has no active fine balance." }, 409);
     const { data: visitorLoans, error: visitorLoansError } = await admin.from("borrow_requests").select("id, book_id, book_title, status, due_date, fine_amount, fine_paid_amount, fine_rate_snapshot").eq("visitor_id", loan.visitor_id).in("status", ["borrowed", "returned"]);
     if (visitorLoansError || !visitorLoans?.length) return jsonResponse({ error: "Unable to retrieve the visitor’s fine records." }, 500);
@@ -68,7 +78,8 @@ Deno.serve(async (req: Request) => {
     if (visitorError) return jsonResponse({ error: "Unable to retrieve the visitor email." }, 500);
     if (!visitor?.email) return jsonResponse({ error: "The visitor has no email address on file." }, 404);
 
-    const notificationDate = new Date().toISOString().slice(0, 10);
+    const notificationDate = getNotificationDateKey(new Date());
+    if (!notificationDate) return jsonResponse({ error: "Unable to determine the notification date." }, 500);
     const claim = { borrow_request_id: loan.id, visitor_id: String(loan.visitor_id), notification_type: "fine_reminder", notification_date: notificationDate };
     const claimResult = await claimNotification(admin, "due_date_notifications", claim);
     if (claimResult.status === "duplicate") return jsonResponse({ error: "A fine alert was already sent for this loan today." }, 409);

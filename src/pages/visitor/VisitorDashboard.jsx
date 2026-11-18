@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Draggable from 'react-draggable';
 import { QRCodeSVG } from 'qrcode.react';
 import { Bar } from 'react-chartjs-2';
@@ -10,44 +9,38 @@ import {
   LinearScale,
   Tooltip,
 } from 'chart.js';
-import { ThemeProvider } from '../../context/ThemeContext.jsx';
-import { useTheme } from '../../context/useTheme.js';
 import './visitorDashboard.css';
 import {
-  Bell,
-  BookMarked,
-  BookOpen,
-  CalendarDays,
   AlertTriangle,
   Bookmark,
+  BookOpen,
+  BookMarked,
+  CalendarDays,
   CheckCircle2,
   CircleAlert,
   ClipboardList,
   CircleDollarSign,
-  ChevronDown,
   FileText,
   Fingerprint,
-  LogOut,
   Mail,
   MapPinned,
   Pencil,
   Megaphone,
   MessageCircle,
-  Moon,
   MapPin,
   Phone,
   QrCode,
   Save,
   Search,
   ShieldCheck,
-  Sun,
+  BookmarkCheck,
+  X,
   UserRound,
   UsersRound,
-  X,
 } from 'lucide-react';
 
 import { useAuth } from '../../context/useAuth.js';
-import { getDashboardPath } from '../../routes/roleHome.js';
+import { ThemeProvider } from '../../context/ThemeContext.jsx';
 import { useLibrary, useLibraryData } from '../../context/useLibrary.js';
 import { supabase } from '../../lib/supabaseClient.js';
 import { calculateOverdueFine } from '../../lib/bookFineRate.js';
@@ -67,6 +60,7 @@ import VisitorTermsContent, {
 } from '../../component/VisitorTermsContent.jsx';
 import DashboardDataBoundary from '../../component/DashboardDataBoundary.jsx';
 import VisitorProfilePhotoCropDialog from '../../component/VisitorProfilePhotoCropDialog.jsx';
+import ShelfHeader from '../../component/ShelfHeader.jsx';
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip);
 
@@ -199,14 +193,22 @@ function getCommunityReturnReminder(dueDate) {
 
 function VisitorDashboardContent() {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const [currentTime, setCurrentTime] = useState(0);
+
+  useEffect(() => {
+    const updateCurrentTime = () => setCurrentTime(Date.now());
+    const initialTimer = window.setTimeout(updateCurrentTime, 0);
+    const refreshTimer = window.setInterval(updateCurrentTime, 60_000);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(refreshTimer);
+    };
+  }, []);
 
   const {
   borrowRequests = [],
-  books = [],
   libraries = [],
   visitors = [],
-  ownerCommunityBookRequests = [],
 } = useLibraryData();
   const {
     borrowRequestsLoading,
@@ -278,53 +280,9 @@ function VisitorDashboardContent() {
     markAnnouncementRead(currentAnnouncement);
     setIsAnnouncementOpen(false);
   };
-
-  const [isNotificationsOpen, setIsNotificationsOpen] =
-  useState(false);
-  const [fineReminderNotifications, setFineReminderNotifications] = useState([]);
-
-  useEffect(() => {
-    if (!supabase || !user?.id || user.role !== 'visitor') return undefined;
-    let cancelled = false;
-    let lastRefreshAt = Date.now();
-    const loadFineReminderNotifications = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('due_date_notifications')
-          .select('id, borrow_request_id, notification_date, sent_at')
-          .eq('visitor_id', String(user.id))
-          .eq('notification_type', 'fine_reminder')
-          .order('sent_at', { ascending: false })
-          .limit(20);
-        if (cancelled) return;
-        if (error) throw error;
-        setFineReminderNotifications(Array.isArray(data) ? data : []);
-      } catch (error) {
-        if (cancelled) return;
-        console.error('Unable to load fine reminder notifications:', error);
-      }
-    };
-    void loadFineReminderNotifications();
-    const refreshOnFocus = () => {
-      const now = Date.now();
-      if (document.visibilityState === 'visible' && now - lastRefreshAt >= 30_000) {
-        lastRefreshAt = now;
-        void loadFineReminderNotifications();
-      }
-    };
-    const refreshTimer = window.setInterval(refreshOnFocus, 5 * 60_000);
-    window.addEventListener('focus', refreshOnFocus);
-    document.addEventListener('visibilitychange', refreshOnFocus);
-    return () => {
-      cancelled = true;
-      window.clearInterval(refreshTimer);
-      window.removeEventListener('focus', refreshOnFocus);
-      document.removeEventListener('visibilitychange', refreshOnFocus);
-    };
-  }, [user?.id, user?.role]);
-  const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
   const [isTermsReviewOpen, setIsTermsReviewOpen] = useState(false);
-  const [focusRequestId, setFocusRequestId] = useState(null);
+  // eslint-disable-next-line no-unused-vars
+  const [focusRequestId, _setFocusRequestId] = useState(null);
   const [communityRequestNotice, setCommunityRequestNotice] = useState(null);
   const previousCommunityRequestStatusesRef = useRef(null);
   const [termsStatus, setTermsStatus] = useState('loading');
@@ -358,8 +316,6 @@ function VisitorDashboardContent() {
   const [visitorPasskeyBusy, setVisitorPasskeyBusy] = useState(false);
   const [visitorPasskeyError, setVisitorPasskeyError] = useState('');
   const [visitorPasskeyMessage, setVisitorPasskeyMessage] = useState('');
-  const avatarMenuRef = useRef(null);
-  const avatarButtonRef = useRef(null);
 
   const refreshVisitorMfa = useCallback(async () => {
     if (!supabase?.auth?.mfa) return;
@@ -507,7 +463,23 @@ function VisitorDashboardContent() {
     }
   };
 
-  const { isDarkAppearance, setIsDarkAppearance } = useTheme();
+  // Dark mode state (synced with global ShelfHeader)
+  // eslint-disable-next-line no-unused-vars
+  const [isDarkAppearance, _setIsDarkAppearance] = useState(() => {
+    const saved = globalThis.localStorage.getItem('shelf_dark_mode');
+    if (saved !== null) return saved === 'true';
+    return globalThis.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  useEffect(() => {
+    if (isDarkAppearance) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    globalThis.localStorage.setItem('shelf_dark_mode', String(isDarkAppearance));
+  }, [isDarkAppearance]);
+
   const profileImageSrc = profileImagePreview ||
     (removeProfileImage || signedProfileImage.path !== visitorDetails?.profileImagePath
       ? ''
@@ -761,36 +733,15 @@ function VisitorDashboardContent() {
   }, [loadTermsAcceptance]);
 
   useEffect(() => {
-    if (!isAvatarMenuOpen && !isTermsReviewOpen) return undefined;
+    if (!isTermsReviewOpen) return undefined;
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
-        setIsAvatarMenuOpen(false);
         setIsTermsReviewOpen(false);
-        avatarButtonRef.current?.focus();
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isAvatarMenuOpen, isTermsReviewOpen]);
-
-  useEffect(() => {
-    if (!isAvatarMenuOpen) return undefined;
-    const handlePointerDown = (event) => {
-      if (!avatarMenuRef.current?.contains(event.target)) {
-        setIsAvatarMenuOpen(false);
-      }
-    };
-    document.addEventListener('pointerdown', handlePointerDown);
-    return () => document.removeEventListener('pointerdown', handlePointerDown);
-  }, [isAvatarMenuOpen]);
-
-  useEffect(() => {
-    if (isAvatarMenuOpen) {
-      avatarMenuRef.current
-        ?.querySelector('[role="menuitem"]')
-        ?.focus();
-    }
-  }, [isAvatarMenuOpen]);
+  }, [isTermsReviewOpen]);
 
   const handleAcceptTerms = async () => {
     if (isAcceptingTerms) return;
@@ -822,13 +773,6 @@ function VisitorDashboardContent() {
       setIsAcceptingTerms(false);
     }
   };
-
-  const ownerPendingRequests = ownerCommunityBookRequests.filter(
-    (request) =>
-      String(request.status || '').toLowerCase() === 'pending'
-  );
-
-  const ownerNotificationCount = ownerPendingRequests.length;
 
 
   useEffect(() => {
@@ -1372,7 +1316,7 @@ function VisitorDashboardContent() {
       const totalFine = status === 'borrowed' && transaction.dueDate
         ? calculateOverdueFine(
             transaction.dueDate,
-            Date.now(),
+            currentTime,
             transaction.fineRateSnapshot
           ) ?? recordedFine
         : recalculatedReturnedFine != null
@@ -1395,7 +1339,7 @@ function VisitorDashboardContent() {
       const status = String(transaction.status || '').toLowerCase();
       const recordedFine = Math.max(0, Number(transaction.fineAmount || 0));
       const calculated = status === 'borrowed' && transaction.dueDate
-        ? calculateOverdueFine(transaction.dueDate, Date.now(), transaction.fineRateSnapshot)
+        ? calculateOverdueFine(transaction.dueDate, currentTime, transaction.fineRateSnapshot)
         : status === 'returned' && transaction.dueDate && transaction.returnDate
           ? calculateOverdueFine(transaction.dueDate, transaction.returnDate, transaction.fineRateSnapshot)
           : null;
@@ -1406,7 +1350,7 @@ function VisitorDashboardContent() {
   const overdueBooksToReturn = myTransactions.filter((transaction) =>
     !transaction.isCommunityBook && transaction.requestType !== 'community' &&
     String(transaction.status || '').toLowerCase() === 'borrowed' &&
-    transaction.dueDate && new Date(transaction.dueDate).getTime() < Date.now()
+    transaction.dueDate && new Date(transaction.dueDate).getTime() < currentTime
   );
 
   // =========================================================
@@ -1424,6 +1368,7 @@ function VisitorDashboardContent() {
     'catalog',
     'categories',
     'communityBooks',
+    'savedBooks',
     'personalBooks',
     'readingList',
     'myBorrows',
@@ -1636,275 +1581,50 @@ function VisitorDashboardContent() {
                   </div>
                 </section>
               </div>
-            )}
-
+)}
 
       {/* =====================================================
-          HEADER
+          GLOBAL SHELF HEADER
       ====================================================== */}
-      <header className="visitor-header sticky top-0 z-40 border-b border-white/10 bg-shelf-primary px-3 py-2 text-white shadow-md sm:px-6">
-        <div className="flex min-w-0 items-center justify-between gap-3">
-
-          {/* LEFT: LOGO AND PORTAL LABEL */}
-            <button
-              type="button"
-              onClick={() => navigate(user?.id ? getDashboardPath(user.role) : '/')}
-              aria-label="Go to SHELF home"
-              className="flex min-w-0 items-center gap-2 text-left sm:gap-3"
-            >
-            <img src="/shelf-logo.png" alt="" className="h-8 w-8 shrink-0 object-contain" />
-            <span className="shrink-0 text-base font-extrabold tracking-wider sm:text-lg">
-              SHELF
-            </span>
-
-            <span className="visitor-portal-label hidden text-xs font-medium sm:inline">
-              Library Visitor
-            </span>
-            </button>
-
-          {/* RIGHT: USER CONTROLS */}
-          <div className="flex shrink-0 items-center justify-end gap-1.5 sm:ml-auto sm:gap-3">
-
-            {/* DARK MODE */}
-            <button
-              type="button"
-              onClick={() => setIsDarkAppearance((prev) => !prev)}
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/20 bg-transparent text-white transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-              aria-label={
-                isDarkAppearance
-                  ? 'Switch to light mode'
-                  : 'Switch to dark mode'
-              }
-              aria-pressed={isDarkAppearance}
-              title={
-                isDarkAppearance
-                  ? 'Switch to light mode'
-                  : 'Switch to dark mode'
-              }
-            >
-              {isDarkAppearance ? <Sun size={18} aria-hidden="true" /> : <Moon size={18} aria-hidden="true" />}
-            </button>
-
-{/* COMMUNITY BOOK REQUEST NOTIFICATIONS */}
-<div className="relative">
-  <button
-    type="button"
-    onClick={() => setIsNotificationsOpen((open) => !open)}
-    className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/20 bg-transparent text-white transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-    aria-label={`Book request notifications: ${ownerNotificationCount} pending`}
-    aria-expanded={isNotificationsOpen}
-    title="Book request notifications"
-  >
-    <Bell size={19} aria-hidden="true" />
-
-    {ownerNotificationCount > 0 && (
-      <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
-        {ownerNotificationCount > 99
-          ? '99+'
-          : ownerNotificationCount}
-      </span>
-    )}
-  </button>
-
-  {isNotificationsOpen && (
-    <>
-      <button
-        type="button"
-        className="fixed inset-0 z-40 cursor-default"
-        aria-label="Close notifications"
-        onClick={() => setIsNotificationsOpen(false)}
-      />
-
-      <section
-        className="visitor-notifications-panel absolute right-0 z-50 mt-3 w-[min(92vw,380px)] overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-800 shadow-2xl dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-        aria-label="Community book notifications"
-      >
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
-          <div>
-            <h3 className="text-sm font-bold">
-              Book Request Notifications
-            </h3>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              {ownerNotificationCount} pending request
-              {ownerNotificationCount === 1 ? '' : 's'}
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setIsNotificationsOpen(false)}
-            className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-700"
-            aria-label="Close notifications"
-          >
-            <X size={17} aria-hidden="true" />
-          </button>
-        </div>
-
-        <div className="max-h-80 overflow-y-auto p-3">
-          {ownerPendingRequests.length === 0 ? (
-            <div className="px-3 py-8 text-center">
-              <Bell
-                size={26}
-                className="mx-auto mb-2 text-slate-400"
-                aria-hidden="true"
-              />
-              <p className="text-sm font-semibold">
-                No pending book requests
-              </p>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                Requests for your community books will appear here.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {ownerPendingRequests.map((request) => (
-                <button
-                  key={request.id}
-                  type="button"
-                  onClick={() => {
-                    setIsNotificationsOpen(false);
-                    setTab('personalBooks');
-                    setFocusRequestId(request.id);
-                  }}
-                  className="w-full rounded-lg border border-slate-200 p-3 text-left transition hover:border-blue-300 hover:bg-blue-50/50 dark:border-slate-700 dark:hover:bg-slate-700/60"
-                  aria-label={`Open request for ${request.bookTitle || 'book'}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="rounded-lg bg-blue-50 p-2 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-                      <BookOpen size={18} aria-hidden="true" />
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <p className="wrap-break-word text-sm font-semibold">
-                        {request.requesterName || 'A SHELF visitor'} requested your book
-                      </p>
-
-                      <p className="mt-1 wrap-break-word text-sm">
-                        {request.bookTitle || 'Untitled book'}
-                      </p>
-
-                      {request.requestDate && (
-                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                          {formatDateTime(request.requestDate)}
-                        </p>
-                      )}
-
-                      <span className="mt-2 inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
-                        Pending approval
-                      </span>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-    </>
-  )}
-</div>
-            <div className="relative" ref={avatarMenuRef}>
+      <ShelfHeader
+        profileMenuContent={
+          <>
+            <li>
               <button
-                ref={avatarButtonRef}
                 type="button"
-                onClick={() => setIsAvatarMenuOpen((open) => !open)}
-                className="visitor-profile-chip inline-flex h-10 items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-2 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:px-3"
-                aria-label="Open account menu"
-                aria-haspopup="menu"
-                aria-expanded={isAvatarMenuOpen}
-                title="Account menu"
+                role="menuitem"
+                onClick={() => {
+                  setIsMenuOpen(true);
+                  setMenuSection('profile');
+                }}
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700/50"
               >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/15 text-xs font-bold">
-                  {profileImageSrc && !profileImageFailed ? (
-                    <img
-                      src={profileImageSrc}
-                      alt=""
-                      className="h-full w-full object-cover"
-                      onError={() => setFailedProfileImageSrc(profileImageSrc)}
-                    />
-                  ) : (
-                    getVisitorInitials(user?.name || visitorDetails?.fullName)
-                  )}
-                </span>
-                <span className="hidden max-w-24 truncate text-xs font-semibold md:inline">
-                  {(user?.name || visitorDetails?.fullName || 'Visitor')
-                    .trim()
-                    .split(/\s+/)[0]}
-                </span>
-                <ChevronDown size={14} className="hidden md:block" aria-hidden="true" />
+                <UserRound size={16} aria-hidden="true" />
+                My Profile
               </button>
-              {isAvatarMenuOpen && (
-                <div
-                  role="menu"
-                  aria-label="Account menu"
-                  onKeyDown={(event) => {
-                    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-                    event.preventDefault();
-                    const items = Array.from(
-                      avatarMenuRef.current?.querySelectorAll('[role="menuitem"]') || []
-                    );
-                    if (!items.length) return;
-                    const currentIndex = items.indexOf(document.activeElement);
-                    const nextIndex =
-                      event.key === 'Home'
-                        ? 0
-                        : event.key === 'End'
-                          ? items.length - 1
-                          : (currentIndex + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
-                    items[nextIndex]?.focus();
-                  }}
-                  className="visitor-account-menu absolute right-0 z-50 mt-2 w-[min(90vw,15rem)] overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 text-slate-900 shadow-2xl dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setIsAvatarMenuOpen(false);
-                      setMenuSection('profile');
-                      setIsMenuOpen(true);
-                    }}
-                    className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary dark:hover:bg-slate-700"
-                  >
-                    <UserRound size={17} aria-hidden="true" />
-                    View profile
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setIsAvatarMenuOpen(false);
-                      setIsTermsReviewOpen(true);
-                    }}
-                    className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary dark:hover:bg-slate-700"
-                  >
-                    <FileText size={17} aria-hidden="true" />
-                    Terms and conditions
-                  </button>
-                  <div role="separator" className="my-1 border-t border-slate-200 dark:border-slate-700" />
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setIsAvatarMenuOpen(false);
-                      logout();
-                    }}
-                    className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium text-slate-700 hover:bg-red-50 hover:text-red-700 focus-visible:bg-red-50 focus-visible:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-700 dark:text-slate-200 dark:hover:bg-red-950/40 dark:hover:text-red-300 dark:focus-visible:bg-red-950/40 dark:focus-visible:text-red-300"
-                  >
-                    <LogOut size={17} aria-hidden="true" />
-                    Sign out
-                  </button>
-                </div>
-              )}
-            </div>
-
-          </div>
-        </div>
-      </header>
+            </li>
+            <li>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => setIsTermsReviewOpen(true)}
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700/50"
+              >
+                <FileText size={16} aria-hidden="true" />
+                Terms and conditions
+              </button>
+            </li>
+            <li>
+              <hr className="my-1 border-slate-200 dark:border-slate-700" />
+            </li>
+          </>
+        }
+      />
 
       {/* =====================================================
           MAIN CONTENT
       ====================================================== */}
-        <main className="mx-auto min-w-0 max-w-7xl space-y-7 px-3 py-5 sm:px-6 sm:py-8 lg:space-y-8">
+      <main className="mx-auto min-w-0 max-w-7xl space-y-7 px-3 py-5 sm:px-6 sm:py-8 lg:space-y-8">
 
         {/* =================================================
             PAGE HEADER
@@ -1920,23 +1640,11 @@ function VisitorDashboardContent() {
           name={user?.name?.split(' ')[0]}
           visitorAppearance
           description="Search books, check availability, manage requests, and keep track of your library visits."
-          showNotifications
-          notifications={fineReminderNotifications.map((notification) => ({
-            id: `fine-reminder-${notification.id}`,
-            requestId: notification.borrow_request_id,
-            title: 'Outstanding fine reminder',
-            message: 'Your library sent an email reminder about your confirmed outstanding fine. Review your borrowing activity for the book and current balance.',
-            timeLabel: `Email reminder sent ${new Date(notification.sent_at || notification.notification_date).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}`,
-            status: 'Fine reminder',
-          }))}
-          onNotificationClick={() => {
-            setTab('myBorrows');
-            document.getElementById('visitor-catalog')?.scrollIntoView({ behavior: 'smooth' });
-          }}
+          showNotifications={false}
           actions={[
             {
-              label: 'Scan QR Pass',
-              Icon: QrCode,
+              label: 'My Profile',
+              Icon: UserRound,
               onClick: () => {
                 setMenuSection('profile');
                 setIsMenuOpen(true);
@@ -2144,6 +1852,7 @@ function VisitorDashboardContent() {
             { id: 'catalog', label: 'Catalog', Icon: BookOpen },
             { id: 'categories', label: 'Book Categories', Icon: Bookmark },
             { id: 'communityBooks', label: 'Community Books', Icon: UsersRound },
+            { id: 'savedBooks', label: 'Saved Books', Icon: BookmarkCheck },
             { id: 'personalBooks', label: 'My Personal Books', Icon: BookMarked },
             { id: 'readingList', label: 'My Reading List', Icon: ClipboardList },
             { id: 'myBorrows', label: 'My Requests & Borrows', Icon: CalendarDays },

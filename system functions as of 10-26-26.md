@@ -38,7 +38,7 @@ Role protection is centralized in [ProtectedRoute.jsx](./src/routes/ProtectedRou
 
 ### Authentication and identity
 
-[AuthContext.jsx](./src/context/AuthContext.jsx#L21) restores a SHELF browser session from `localStorage`, listens for Supabase Auth changes, refreshes the visitor profile from Supabase, and exposes login, registration, OTP, password-reset, QR-login, and logout functions. Logout clears both the SHELF session and browser session storage ([AuthContext.jsx](./src/context/AuthContext.jsx#L150)).
+[AuthContext.jsx](./src/context/AuthContext.jsx#L21) restores a SHELF browser session from `localStorage`, listens for Supabase Auth changes, refreshes the visitor profile from Supabase, and exposes email/password and passkey login, registration, OTP, password-reset, and logout functions. Visitor QR passes identify visitors for attendance and circulation; they are not login credentials. The existing `visitor-qr-login` Edge Function remains pending a separate server-side retirement review because external consumers have not been verified. Logout clears both the SHELF session and browser session storage ([AuthContext.jsx](./src/context/AuthContext.jsx#L150)).
 
 An important security boundary is documented in [LibraryContext.jsx](./src/context/LibraryContext.jsx#L56): the local SHELF session controls protected UI state, but the current visitor identity for private RPCs is resolved from a real Supabase Auth session. This is a sound separation between client-side navigation state and server-trusted identity.
 
@@ -239,6 +239,24 @@ This flow keeps the most valuable visitor task—finding and obtaining a book—
 - [LibraryMap.jsx](./src/component/LibraryMap.jsx) — branch discovery and map presentation.
 - [DashboardWelcome.jsx](./src/component/DashboardWelcome.jsx) — visitor page introduction and quick actions.
 
-## 9. Overall assessment
+## 9. Public / Community Visitor Registration
+
+The forward migration `20270102001700_public_community_visitor_registration.sql`
+adds `registration_type` and `approval_status` to `public.visitors`. Existing
+records receive the compatibility defaults `institutional` and `approved`.
+Institutional signup still requires the selected library's configured email
+domain. Community signup accepts a valid personal email only when a preferred
+library is selected, and still requires the visitor OTP flow.
+
+Verified community accounts stay inactive with approval status `pending`. The
+pending session is limited to approval information and the public catalog; the
+existing visitor RLS and RPC checks continue to require an active account.
+`public.approve_community_visitor(text)` requires AAL2, an active supported
+staff session with a matching role claim, and authorization for the assigned
+library. It rejects self-approval and issues the visitor QR pass only after
+approval. Existing QR attendance, borrowing, pickup, and return identification
+remain intact. Runtime Auth/PostgREST tests are required before deployment.
+
+## 10. Overall assessment
 
 The current system is feature-complete enough to support a real library visitor workflow and has a thoughtful foundation for authentication, branch scope, realtime updates, QR identity, and operational service integration. The Visitor Dashboard presents a polished and recognizable UI with good responsive intent. The next phase should focus less on adding more features and more on reducing complexity: split large components, simplify navigation, make state/loading/error behavior more explicit, and measure refresh and interaction performance.

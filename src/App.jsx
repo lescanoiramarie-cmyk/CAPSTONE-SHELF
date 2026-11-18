@@ -20,6 +20,7 @@ const OPACCatalog = lazy(() => import('./component/OPACCatalog.jsx'));
 const VisitorDashboard = lazy(
   () => import('./pages/visitor/VisitorDashboard.jsx')
 );
+const CommunityVisitorPending = lazy(() => import('./pages/visitor/CommunityVisitorPending.jsx'));
 const SubAdminDashboard = lazy(
   () => import('./pages/subadmin/SubAdminDashboard.jsx')
 );
@@ -201,6 +202,14 @@ function AppRouter() {
                 <Route
                   path="/visitor-register"
                   element={<VisitorLogin initialView="register" />}
+                />
+                <Route
+                  path="/visitor/pending-approval"
+                  element={
+                    <ProtectedRoute unauthenticatedTo="/visitor-login">
+                      <CommunityVisitorPending />
+                    </ProtectedRoute>
+                  }
                 />
                 <Route
                   path="/visitor"

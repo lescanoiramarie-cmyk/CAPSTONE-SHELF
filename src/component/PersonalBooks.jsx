@@ -551,7 +551,7 @@ export default function PersonalBooks({ userId }) {
                   htmlFor="personal-book-isbn"
                   className="mb-1.5 block text-sm font-bold text-slate-700 dark:text-slate-200"
                 >
-                  ISBN
+                  ISBN (optional)
                 </label>
 
                 <input
@@ -564,8 +564,8 @@ export default function PersonalBooks({ userId }) {
                       event.target.value
                     )
                   }
-                  placeholder="Optional ISBN"
-                  maxLength={50}
+                  placeholder="10-13 digit ISBN"
+                  maxLength={17}
                   disabled={isSaving}
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/10 disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:disabled:bg-slate-800"
                 />
@@ -576,7 +576,7 @@ export default function PersonalBooks({ userId }) {
               <span className="font-bold">Fine rate: </span>
               {getBookFineRate(form.category) == null
                 ? 'Unclassified — checkout unavailable'
-                : `₱${getBookFineRate(form.category)} per overdue day`}
+                : `${getBookFineRate(form.category)} per overdue day`}
             </div>
 
             {/* SUMMARY */}

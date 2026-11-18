@@ -1,0 +1,4022 @@
+{
+  "generated": "2026-11-17",
+  "scope": "source-level migration inventory (not runtime/catalog)",
+  "summary": {
+    "migrations": 156,
+    "tables": 32,
+    "views": 0,
+    "policies": 56,
+    "rls_statements": 31,
+    "grants": 244,
+    "revokes": 295,
+    "function_definitions": 153,
+    "latest_functions": 63,
+    "triggers": 41
+  },
+  "tables": [
+    "public.announcements",
+    "public.attendance_logs",
+    "public.audit_logs",
+    "public.book_rating_aggregates",
+    "public.book_reviews",
+    "public.books",
+    "public.borrow_requests",
+    "public.borrowed_book_counts",
+    "public.community_book_requests",
+    "public.community_due_date_notifications",
+    "public.due_date_notifications",
+    "public.external_catalog_books",
+    "public.fine_payments",
+    "public.fine_review_events",
+    "public.libraries",
+    "public.library_subscription_events",
+    "public.library_subscriptions",
+    "public.login_attempt_lockouts",
+    "public.password_reset_codes",
+    "public.personal_books",
+    "public.staff_notifications",
+    "public.staff_profiles",
+    "public.staff_terms_acceptances",
+    "public.subscription_renewal_follows",
+    "public.subscription_upgrade_requests",
+    "public.system_terms_documents",
+    "public.visitor_feedback",
+    "public.visitor_otp_delivery_intents",
+    "public.visitor_otp_resend_capabilities",
+    "public.visitor_reading_list",
+    "public.visitors",
+    "shelf_private.visitor_qr_login_rate_limits"
+  ],
+  "views": [],
+  "rls_statements": [
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 467,
+      "stmt": "alter table public.libraries enable row level security;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 468,
+      "stmt": "alter table public.books enable row level security;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 469,
+      "stmt": "alter table public.visitors enable row level security;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 470,
+      "stmt": "alter table public.borrow_requests enable row level security;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 471,
+      "stmt": "alter table public.attendance_logs enable row level security;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 472,
+      "stmt": "alter table public.announcements enable row level security;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 473,
+      "stmt": "alter table public.visitor_feedback enable row level security;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 474,
+      "stmt": "alter table public.staff_profiles enable row level security;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 475,
+      "stmt": "alter table public.book_reviews enable row level security;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 476,
+      "stmt": "alter table public.personal_books enable row level security;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 477,
+      "stmt": "alter table public.audit_logs enable row level security;"
+    },
+    {
+      "file": "20261003000000_community_due_date_notifications.sql",
+      "line": 18,
+      "stmt": "enable row level security;"
+    },
+    {
+      "file": "20261012000100_visitor_reading_list.sql",
+      "line": 82,
+      "stmt": "alter table public.visitor_reading_list enable row level security;"
+    },
+    {
+      "file": "20261021000000_password_reset_codes.sql",
+      "line": 47,
+      "stmt": "alter table public.password_reset_codes enable row level security;"
+    },
+    {
+      "file": "20261104000000_login_attempt_lockout.sql",
+      "line": 14,
+      "stmt": "ENABLE ROW LEVEL SECURITY;"
+    },
+    {
+      "file": "20261106000000_due_followup_and_announcement_cache.sql",
+      "line": 41,
+      "stmt": "alter table public.due_date_notifications enable row level security;"
+    },
+    {
+      "file": "20261108160959_fine_schema_prerequisite.sql",
+      "line": 95,
+      "stmt": "ALTER TABLE public.fine_payments ENABLE ROW LEVEL SECURITY;"
+    },
+    {
+      "file": "20261108214558_subscription_renewal_followups.sql",
+      "line": 29,
+      "stmt": "ALTER TABLE public.subscription_renewal_follows ENABLE ROW LEVEL SECURITY;"
+    },
+    {
+      "file": "20261108214558_subscription_renewal_followups.sql",
+      "line": 30,
+      "stmt": "ALTER TABLE public.staff_notifications ENABLE ROW LEVEL SECURITY;"
+    },
+    {
+      "file": "20261122000000_book_rating_aggregates.sql",
+      "line": 7,
+      "stmt": "ALTER TABLE public.book_rating_aggregates ENABLE ROW LEVEL SECURITY;"
+    },
+    {
+      "file": "20261124000000_enable_community_request_rls.sql",
+      "line": 3,
+      "stmt": "ALTER TABLE public.community_book_requests ENABLE ROW LEVEL SECURITY;"
+    },
+    {
+      "file": "20261204000000_create_external_catalog_books.sql",
+      "line": 16,
+      "stmt": "alter table public.external_catalog_books enable row level security;"
+    },
+    {
+      "file": "20261211000000_terms_acknowledgment_versions.sql",
+      "line": 102,
+      "stmt": "alter table public.staff_terms_acceptances enable row level security;"
+    },
+    {
+      "file": "20261223000000_admin_editable_terms_documents.sql",
+      "line": 9,
+      "stmt": "alter table public.system_terms_documents enable row level security;"
+    },
+    {
+      "file": "20261224000000_manual_fine_payment_ledger.sql",
+      "line": 25,
+      "stmt": "ALTER TABLE public.fine_payments ENABLE ROW LEVEL SECURITY;"
+    },
+    {
+      "file": "20261225000000_fine_review_and_library_subscriptions.sql",
+      "line": 21,
+      "stmt": "ALTER TABLE public.fine_review_events ENABLE ROW LEVEL SECURITY;"
+    },
+    {
+      "file": "20261225000000_fine_review_and_library_subscriptions.sql",
+      "line": 239,
+      "stmt": "ALTER TABLE public.library_subscriptions ENABLE ROW LEVEL SECURITY;"
+    },
+    {
+      "file": "20261225000000_fine_review_and_library_subscriptions.sql",
+      "line": 240,
+      "stmt": "ALTER TABLE public.library_subscription_events ENABLE ROW LEVEL SECURITY;"
+    },
+    {
+      "file": "20261225000000_fine_review_and_library_subscriptions.sql",
+      "line": 241,
+      "stmt": "ALTER TABLE public.subscription_upgrade_requests ENABLE ROW LEVEL SECURITY;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 63,
+      "stmt": "ALTER TABLE public.visitor_otp_delivery_intents ENABLE ROW LEVEL SECURITY;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 79,
+      "stmt": "ALTER TABLE public.visitor_otp_resend_capabilities ENABLE ROW LEVEL SECURITY;"
+    }
+  ],
+  "policies": [
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 523,
+      "name": "libraries are publicly readable",
+      "on": "public.libraries"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 525,
+      "name": "superadmins manage libraries",
+      "on": "public.libraries"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 529,
+      "name": "books are publicly readable",
+      "on": "public.books"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 531,
+      "name": "staff manage books in branch",
+      "on": "public.books"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 536,
+      "name": "visitor and staff read scoped visitor profiles",
+      "on": "public.visitors"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 542,
+      "name": "visitors and branch staff read requests",
+      "on": "public.borrow_requests"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 556,
+      "name": "visitors and branch staff read attendance",
+      "on": "public.attendance_logs"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 569,
+      "name": "published announcements are public",
+      "on": "public.announcements"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 571,
+      "name": "staff manage announcements",
+      "on": "public.announcements"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 589,
+      "name": "authenticated visitors submit feedback",
+      "on": "public.visitor_feedback"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 599,
+      "name": "visitors and branch staff read feedback",
+      "on": "public.visitor_feedback"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 604,
+      "name": "branch staff respond to feedback",
+      "on": "public.visitor_feedback"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 610,
+      "name": "staff read own profile",
+      "on": "public.staff_profiles"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 615,
+      "name": "read public reviews",
+      "on": "public.book_reviews"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 617,
+      "name": "visitors manage own reviews",
+      "on": "public.book_reviews"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 622,
+      "name": "owners and public listings read personal books",
+      "on": "public.personal_books"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 628,
+      "name": "visitors manage own personal books",
+      "on": "public.personal_books"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 633,
+      "name": "superadmins read audit logs",
+      "on": "public.audit_logs"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 635,
+      "name": "staff insert own audit events",
+      "on": "public.audit_logs"
+    },
+    {
+      "file": "20261002000100_visitor_qr_activation.sql",
+      "line": 97,
+      "name": "visitor and staff read scoped visitor profiles",
+      "on": "public.visitors"
+    },
+    {
+      "file": "20261002000100_visitor_qr_activation.sql",
+      "line": 105,
+      "name": "authenticated visitors submit feedback",
+      "on": "public.visitor_feedback"
+    },
+    {
+      "file": "20261002000100_visitor_qr_activation.sql",
+      "line": 116,
+      "name": "visitors and branch staff read feedback",
+      "on": "public.visitor_feedback"
+    },
+    {
+      "file": "20261002000100_visitor_qr_activation.sql",
+      "line": 129,
+      "name": "visitors manage own reviews",
+      "on": "public.book_reviews"
+    },
+    {
+      "file": "20261002000100_visitor_qr_activation.sql",
+      "line": 147,
+      "name": "visitors manage own personal books",
+      "on": "public.personal_books"
+    },
+    {
+      "file": "20261002000100_visitor_qr_activation.sql",
+      "line": 165,
+      "name": "visitors and branch staff read requests",
+      "on": "public.borrow_requests"
+    },
+    {
+      "file": "20261002000100_visitor_qr_activation.sql",
+      "line": 183,
+      "name": "visitors and branch staff read attendance",
+      "on": "public.attendance_logs"
+    },
+    {
+      "file": "20261006000000_community_book_visibility.sql",
+      "line": 25,
+      "name": "books visible to catalog and owners",
+      "on": "public.books"
+    },
+    {
+      "file": "20261008000000_fix_community_books_rls.sql",
+      "line": 4,
+      "name": "public catalog books readable",
+      "on": "public.books"
+    },
+    {
+      "file": "20261008000000_fix_community_books_rls.sql",
+      "line": 11,
+      "name": "books visible to catalog and owners",
+      "on": "public.books"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 151,
+      "name": "visitor and staff read scoped visitor profiles",
+      "on": "public.visitors"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 159,
+      "name": "visitors and branch staff read requests",
+      "on": "public.borrow_requests"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 177,
+      "name": "authenticated visitors submit feedback",
+      "on": "public.visitor_feedback"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 188,
+      "name": "visitors and branch staff read feedback",
+      "on": "public.visitor_feedback"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 201,
+      "name": "visitors and staff read attendance",
+      "on": "public.attendance_logs"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 214,
+      "name": "visitors manage own reviews",
+      "on": "public.book_reviews"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 232,
+      "name": "staff read own or superadmin",
+      "on": "public.staff_profiles"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 240,
+      "name": "staff manage by superadmin",
+      "on": "public.staff_profiles"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 247,
+      "name": "staff manage libraries",
+      "on": "public.libraries"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 253,
+      "name": "staff manage books",
+      "on": "public.books"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 259,
+      "name": "staff manage visitors",
+      "on": "public.visitors"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 266,
+      "name": "staff read branch audit log",
+      "on": "public.audit_logs"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 270,
+      "name": "staff write branch audit log",
+      "on": "public.audit_logs"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 278,
+      "name": "staff manage announcements",
+      "on": "public.announcements"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 285,
+      "name": "visitors manage own personal books",
+      "on": "public.personal_books"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 304,
+      "name": "community request participants read",
+      "on": "public.community_book_requests"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 358,
+      "name": "visitor and staff read scoped visitor profiles",
+      "on": "public.visitors"
+    },
+    {
+      "file": "20261027000000_announcement_expiration.sql",
+      "line": 9,
+      "name": "published announcements are public",
+      "on": "public.announcements"
+    },
+    {
+      "file": "20261105000000_restore_subadmin_announcement_writes.sql",
+      "line": 54,
+      "name": "staff manage announcements",
+      "on": "public.announcements"
+    },
+    {
+      "file": "20261106000000_due_followup_and_announcement_cache.sql",
+      "line": 5,
+      "name": "staff manage announcements",
+      "on": "public.announcements"
+    },
+    {
+      "file": "20261107082403_optimize_staff_dashboard_rls.sql",
+      "line": 15,
+      "name": "SHELF admin MFA required",
+      "on": "public."
+    },
+    {
+      "file": "20261107082403_optimize_staff_dashboard_rls.sql",
+      "line": 20,
+      "name": "superadmins read all visitors",
+      "on": "public.visitors"
+    },
+    {
+      "file": "20261107082403_optimize_staff_dashboard_rls.sql",
+      "line": 22,
+      "name": "superadmins read all borrow requests",
+      "on": "public.borrow_requests"
+    },
+    {
+      "file": "20261107082403_optimize_staff_dashboard_rls.sql",
+      "line": 24,
+      "name": "superadmins read all attendance",
+      "on": "public.attendance_logs"
+    },
+    {
+      "file": "20261107082403_optimize_staff_dashboard_rls.sql",
+      "line": 26,
+      "name": "superadmins read all books",
+      "on": "public.books"
+    },
+    {
+      "file": "20261223000000_admin_editable_terms_documents.sql",
+      "line": 182,
+      "name": "SHELF admin MFA required",
+      "on": "public."
+    },
+    {
+      "file": "20270102001800_fail_closed_staff_claims_and_handover.sql",
+      "line": 375,
+      "name": "staff manage announcements",
+      "on": "public.announcements"
+    }
+  ],
+  "triggers": [
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 166,
+      "name": "on_auth_user_visitor_link_insert"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 170,
+      "name": "on_auth_user_visitor_confirm"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 423,
+      "name": "audit_borrow_request_insert_delete"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 427,
+      "name": "audit_borrow_request_status"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 432,
+      "name": "audit_attendance_insert"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 436,
+      "name": "audit_attendance_checkout"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 441,
+      "name": "audit_inventory_insert_delete"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 445,
+      "name": "audit_inventory_update"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 450,
+      "name": "audit_feedback_insert_delete"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 454,
+      "name": "audit_feedback_update"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 459,
+      "name": "audit_announcement_changes"
+    },
+    {
+      "file": "20261003000300_community_book_copy_inventory.sql",
+      "line": 340,
+      "name": "require_available_community_book_copy"
+    },
+    {
+      "file": "20261003000300_community_book_copy_inventory.sql",
+      "line": 347,
+      "name": "community_book_copy_availability"
+    },
+    {
+      "file": "20261004000000_auth_inventory_geography_fixes.sql",
+      "line": 150,
+      "name": "set_book_updated_at"
+    },
+    {
+      "file": "20261004000000_auth_inventory_geography_fixes.sql",
+      "line": 195,
+      "name": "enforce_book_copy_inventory"
+    },
+    {
+      "file": "20261013000000_visitor_registration_recovery_and_audit.sql",
+      "line": 171,
+      "name": "audit_visitor_registration_insert"
+    },
+    {
+      "file": "20261013000000_visitor_registration_recovery_and_audit.sql",
+      "line": 176,
+      "name": "audit_visitor_verification"
+    },
+    {
+      "file": "20261013000000_visitor_registration_recovery_and_audit.sql",
+      "line": 186,
+      "name": "audit_visitor_active"
+    },
+    {
+      "file": "20261013000000_visitor_registration_recovery_and_audit.sql",
+      "line": 196,
+      "name": "audit_visitor_registration_delete"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 563,
+      "name": "on_auth_user_visitor_link_insert"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 568,
+      "name": "on_auth_user_visitor_confirm"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 706,
+      "name": "audit_visitor_registration_insert"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 711,
+      "name": "audit_visitor_verification"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 721,
+      "name": "audit_visitor_active"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 731,
+      "name": "audit_visitor_registration_delete"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 736,
+      "name": "audit_borrow_request_insert_delete"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 741,
+      "name": "audit_borrow_request_status"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 746,
+      "name": "audit_attendance_insert"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 751,
+      "name": "audit_attendance_checkout"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 756,
+      "name": "audit_inventory_insert_delete"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 761,
+      "name": "audit_inventory_update"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 766,
+      "name": "audit_feedback_insert_delete"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 771,
+      "name": "audit_feedback_update"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 776,
+      "name": "audit_announcement_changes"
+    },
+    {
+      "file": "20261105000000_restore_subadmin_announcement_writes.sql",
+      "line": 45,
+      "name": "on_auth_user_visitor_domain_validate"
+    },
+    {
+      "file": "20261120000000_enforce_book_copy_inventory_on_insert.sql",
+      "line": 52,
+      "name": "enforce_book_copy_inventory"
+    },
+    {
+      "file": "20261122000000_book_rating_aggregates.sql",
+      "line": 51,
+      "name": "maintain_book_rating_aggregates"
+    },
+    {
+      "file": "20261129000000_cache_popular_borrowed_book_counts.sql",
+      "line": 96,
+      "name": "maintain_borrowed_book_counts"
+    },
+    {
+      "file": "20261206000000_restrict_visitor_registration_to_partner_domains.sql",
+      "line": 137,
+      "name": "on_auth_user_visitor_domain_validate"
+    },
+    {
+      "file": "20261222000000_auto_reject_community_requests_without_copies.sql",
+      "line": 35,
+      "name": "reject_pending_community_requests_without_copies"
+    },
+    {
+      "file": "20261228000000_persist_borrow_request_library.sql",
+      "line": 74,
+      "name": "set_borrow_request_library_id"
+    }
+  ],
+  "grants": [
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 109,
+      "stmt": "grant execute on function public.is_active_staff_for_branch(text) to authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 223,
+      "stmt": "grant execute on function public.register_visitor(uuid, text, text, text, text, text)"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 302,
+      "stmt": "grant execute on function public.add_personal_book("
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 647,
+      "stmt": "grant select on public.libraries, public.books, public.announcements to anon, authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 648,
+      "stmt": "grant select on public.visitors to authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 649,
+      "stmt": "grant select on public.staff_profiles to authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 650,
+      "stmt": "grant select on public.borrow_requests, public.attendance_logs to authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 651,
+      "stmt": "grant select, insert, update on public.visitor_feedback to authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 652,
+      "stmt": "grant select, insert, update, delete on public.book_reviews, public.personal_books to authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 653,
+      "stmt": "grant select, insert on public.audit_logs to authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 654,
+      "stmt": "grant insert, update, delete on public.books, public.libraries, public.announcements to authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 706,
+      "stmt": "grant execute on function public.get_visitor_feedback_replies(text, text) to authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 727,
+      "stmt": "grant execute on function public.find_visitor_by_qr(text, text) to authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 768,
+      "stmt": "grant execute on function public.request_borrow(text, text) to authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 802,
+      "stmt": "grant execute on function public.cancel_borrow_request(text, text) to authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 841,
+      "stmt": "grant execute on function public.toggle_attendance(text, text) to authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 862,
+      "stmt": "grant execute on function public.confirm_pickup(text, text) to authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 886,
+      "stmt": "grant execute on function public.confirm_return(text, text) to authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 906,
+      "stmt": "grant execute on function public.write_audit_log(text, text, jsonb) to authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 929,
+      "stmt": "grant execute on function public.auto_expire_pickups() to service_role;"
+    },
+    {
+      "file": "20261002000100_visitor_qr_activation.sql",
+      "line": 238,
+      "stmt": "grant execute on function public.request_borrow(text, text) to authenticated;"
+    },
+    {
+      "file": "20261002000100_visitor_qr_activation.sql",
+      "line": 266,
+      "stmt": "grant execute on function public.get_visitor_feedback_replies(text, text) to authenticated;"
+    },
+    {
+      "file": "20261002000100_visitor_qr_activation.sql",
+      "line": 287,
+      "stmt": "grant execute on function public.find_visitor_by_qr(text, text) to authenticated;"
+    },
+    {
+      "file": "20261002000100_visitor_qr_activation.sql",
+      "line": 350,
+      "stmt": "grant execute on function public.toggle_attendance(text, text) to authenticated;"
+    },
+    {
+      "file": "20261003000200_community_borrower_transaction_details.sql",
+      "line": 63,
+      "stmt": "grant execute on function public.fetch_my_community_book_requests(text)"
+    },
+    {
+      "file": "20261003000300_community_book_copy_inventory.sql",
+      "line": 153,
+      "stmt": "grant execute on function public.add_personal_book("
+    },
+    {
+      "file": "20261003000300_community_book_copy_inventory.sql",
+      "line": 229,
+      "stmt": "grant execute on function public.add_personal_book("
+    },
+    {
+      "file": "20261004000000_auth_inventory_geography_fixes.sql",
+      "line": 281,
+      "stmt": "grant execute on function public.register_visitor(uuid, text, text, text, text, text)"
+    },
+    {
+      "file": "20261004000000_auth_inventory_geography_fixes.sql",
+      "line": 334,
+      "stmt": "grant execute on function public.fetch_my_community_book_requests(text)"
+    },
+    {
+      "file": "20261004000000_auth_inventory_geography_fixes.sql",
+      "line": 405,
+      "stmt": "grant execute on function public.add_personal_book("
+    },
+    {
+      "file": "20261004000000_auth_inventory_geography_fixes.sql",
+      "line": 451,
+      "stmt": "grant execute on function public.add_personal_book("
+    },
+    {
+      "file": "20261004000000_auth_inventory_geography_fixes.sql",
+      "line": 564,
+      "stmt": "grant execute on function public.update_inventory_book(text, timestamptz, jsonb)"
+    },
+    {
+      "file": "20261005000000_registration_rpc_hardening.sql",
+      "line": 57,
+      "stmt": "grant execute on function public.register_visitor(uuid, text, text, text, text, text)"
+    },
+    {
+      "file": "20261005110900_visitor_scan_details.sql",
+      "line": 37,
+      "stmt": "grant execute on function public.find_visitor_by_qr(text, text) to authenticated;"
+    },
+    {
+      "file": "20261006000000_community_book_visibility.sql",
+      "line": 99,
+      "stmt": "grant execute on function public.add_personal_book("
+    },
+    {
+      "file": "20261006000000_community_book_visibility.sql",
+      "line": 108,
+      "stmt": "grant execute on function public.add_personal_book("
+    },
+    {
+      "file": "20261006000000_community_book_visibility.sql",
+      "line": 116,
+      "stmt": "grant execute on function public.add_personal_book("
+    },
+    {
+      "file": "20261006000000_community_book_visibility.sql",
+      "line": 156,
+      "stmt": "grant execute on function public.set_personal_book_visibility(text, text, boolean)"
+    },
+    {
+      "file": "20261007000000_community_request_text_id_rpcs.sql",
+      "line": 64,
+      "stmt": "grant execute on function public.fetch_owner_community_book_requests(text)"
+    },
+    {
+      "file": "20261007000000_community_request_text_id_rpcs.sql",
+      "line": 143,
+      "stmt": "grant execute on function public.approve_community_book_request(uuid, text, text)"
+    },
+    {
+      "file": "20261007000000_community_request_text_id_rpcs.sql",
+      "line": 222,
+      "stmt": "grant execute on function public.reject_community_book_request(uuid, text, text)"
+    },
+    {
+      "file": "20261008000000_fix_community_books_rls.sql",
+      "line": 24,
+      "stmt": "grant select on public.visitors to authenticated;"
+    },
+    {
+      "file": "20261011000000_fix_visitor_qr_lookup_result_types.sql",
+      "line": 35,
+      "stmt": "grant execute on function public.find_visitor_by_qr(text, text) to authenticated;"
+    },
+    {
+      "file": "20261012000000_fix_attendance_visitor_id_ambiguity.sql",
+      "line": 67,
+      "stmt": "grant execute on function public.toggle_attendance(text, text) to authenticated;"
+    },
+    {
+      "file": "20261013000000_visitor_registration_recovery_and_audit.sql",
+      "line": 303,
+      "stmt": "grant execute on function public.verify_visitor_otp(text, text) to anon, authenticated;"
+    },
+    {
+      "file": "20261013000000_visitor_registration_recovery_and_audit.sql",
+      "line": 358,
+      "stmt": "grant execute on function public.resend_otp(text) to anon, authenticated;"
+    },
+    {
+      "file": "20261013000000_visitor_registration_recovery_and_audit.sql",
+      "line": 433,
+      "stmt": "grant execute on function public.abort_visitor_registration(text, text) to anon, authenticated;"
+    },
+    {
+      "file": "20261013000000_visitor_registration_recovery_and_audit.sql",
+      "line": 460,
+      "stmt": "grant execute on function public.find_unverified_visitor(text) to anon, authenticated;"
+    },
+    {
+      "file": "20261013000000_visitor_registration_recovery_and_audit.sql",
+      "line": 470,
+      "stmt": "grant execute on function public.verify_visitor_otp(text, text) to anon, authenticated;"
+    },
+    {
+      "file": "20261013000000_visitor_registration_recovery_and_audit.sql",
+      "line": 471,
+      "stmt": "grant execute on function public.resend_otp(text) to anon, authenticated;"
+    },
+    {
+      "file": "20261013000000_visitor_registration_recovery_and_audit.sql",
+      "line": 472,
+      "stmt": "grant execute on function public.write_audit_log(text, text, jsonb) to authenticated;"
+    },
+    {
+      "file": "20261014000000_visitor_session_repair.sql",
+      "line": 249,
+      "stmt": "grant execute on function public.get_visitor_borrow_requests(text)"
+    },
+    {
+      "file": "20261014000000_visitor_session_repair.sql",
+      "line": 251,
+      "stmt": "grant execute on function public.fetch_my_community_book_requests(text)"
+    },
+    {
+      "file": "20261014000000_visitor_session_repair.sql",
+      "line": 253,
+      "stmt": "grant execute on function public.fetch_owner_community_book_requests(text)"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 189,
+      "stmt": "grant execute on function public.verify_visitor_otp(text, text) to anon, authenticated;"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 233,
+      "stmt": "grant execute on function public.resend_otp(text) to anon, authenticated;"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 295,
+      "stmt": "grant execute on function public.abort_visitor_registration(text, text) to anon, authenticated;"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 314,
+      "stmt": "grant execute on function public.find_unverified_visitor(text) to anon, authenticated;"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 375,
+      "stmt": "grant execute on function public.get_visitor_borrow_requests(text) to authenticated;"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 442,
+      "stmt": "grant execute on function public.fetch_my_community_book_requests(text) to authenticated;"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 501,
+      "stmt": "grant execute on function public.fetch_owner_community_book_requests(text) to authenticated;"
+    },
+    {
+      "file": "20261017000000_fix_verify_visitor_otp_ambiguous_id.sql",
+      "line": 128,
+      "stmt": "grant execute on function public.verify_visitor_otp(text, text) to anon, authenticated;"
+    },
+    {
+      "file": "20261018000000_persist_otp_attempt_lockout.sql",
+      "line": 197,
+      "stmt": "grant execute on function public.verify_visitor_otp(text, text) to anon, authenticated;"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 65,
+      "stmt": "grant execute on function public.is_active_staff_for_branch(text) to authenticated;"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 100,
+      "stmt": "grant execute on function public.get_visitor_feedback_replies(text, text) to authenticated;"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 138,
+      "stmt": "grant execute on function public.find_visitor_by_qr(text, text) to authenticated;"
+    },
+    {
+      "file": "20261021000100_community_book_queue_contacts.sql",
+      "line": 162,
+      "stmt": "grant execute on function public.request_community_book(text, text)"
+    },
+    {
+      "file": "20261021000100_community_book_queue_contacts.sql",
+      "line": 242,
+      "stmt": "grant execute on function public.fetch_my_community_book_requests(text)"
+    },
+    {
+      "file": "20261021000100_community_book_queue_contacts.sql",
+      "line": 328,
+      "stmt": "grant execute on function public.approve_community_book_request(uuid, text, text)"
+    },
+    {
+      "file": "20261022000000_grant_reset_functions_to_service_role.sql",
+      "line": 24,
+      "stmt": "grant execute on function public.issue_password_reset_code(text, text, text, timestamptz)"
+    },
+    {
+      "file": "20261022000000_grant_reset_functions_to_service_role.sql",
+      "line": 27,
+      "stmt": "grant execute on function public.verify_password_reset_code(text, text)"
+    },
+    {
+      "file": "20261022000000_grant_reset_functions_to_service_role.sql",
+      "line": 30,
+      "stmt": "grant execute on function public.consume_password_reset_code(text)"
+    },
+    {
+      "file": "20261022000000_grant_reset_functions_to_service_role.sql",
+      "line": 33,
+      "stmt": "grant execute on function public.purge_password_reset_codes()"
+    },
+    {
+      "file": "20261023000000_fix_issue_password_reset_variable.sql",
+      "line": 141,
+      "stmt": "grant execute on function public.issue_password_reset_code(text, text, text, timestamptz)"
+    },
+    {
+      "file": "20261030000000_fix_community_request_rpc_result_types.sql",
+      "line": 118,
+      "stmt": "grant execute on function public.request_community_book(text, text)"
+    },
+    {
+      "file": "20261030000000_fix_community_request_rpc_result_types.sql",
+      "line": 227,
+      "stmt": "grant execute on function public.fetch_my_community_book_requests(text)"
+    },
+    {
+      "file": "20261031000000_visitor_terms_acceptance.sql",
+      "line": 34,
+      "stmt": "grant execute on function public.get_visitor_terms_accepted_at()"
+    },
+    {
+      "file": "20261031000000_visitor_terms_acceptance.sql",
+      "line": 67,
+      "stmt": "grant execute on function public.accept_visitor_terms()"
+    },
+    {
+      "file": "20261101000000_fix_personal_book_creation.sql.sql",
+      "line": 97,
+      "stmt": "grant execute on function public.add_personal_book("
+    },
+    {
+      "file": "20261102000000_manage_personal_books.sql.sql",
+      "line": 115,
+      "stmt": "grant execute on function public.update_personal_book("
+    },
+    {
+      "file": "20261102000000_manage_personal_books.sql.sql",
+      "line": 177,
+      "stmt": "grant execute on function public.delete_personal_book(text, text)"
+    },
+    {
+      "file": "20261103000000_fix_community_pickup_confirmation_result.sql",
+      "line": 85,
+      "stmt": "grant execute on function public.confirm_community_book_pickup(uuid, text)"
+    },
+    {
+      "file": "20261104000000_login_attempt_lockout.sql",
+      "line": 146,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.check_login_lockout(TEXT)"
+    },
+    {
+      "file": "20261104000000_login_attempt_lockout.sql",
+      "line": 148,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.record_login_failure(TEXT)"
+    },
+    {
+      "file": "20261104000000_login_attempt_lockout.sql",
+      "line": 150,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.clear_login_failures(TEXT)"
+    },
+    {
+      "file": "20261105100000_manage_visitor_active_status.sql",
+      "line": 51,
+      "stmt": "grant execute on function public.set_visitor_active(text, boolean)"
+    },
+    {
+      "file": "20261108000000_popular_borrowed_book_counts.sql",
+      "line": 24,
+      "stmt": "grant execute on function public.get_popular_borrowed_book_counts(integer)"
+    },
+    {
+      "file": "20261108161030_fine_dashboard_query_indexes.sql",
+      "line": 71,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_fine_payment_alert_targets(text) TO authenticated, service_role;"
+    },
+    {
+      "file": "20261108161623_filter_fine_dashboard_candidates.sql",
+      "line": 90,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_fine_payment_dashboard(text) TO authenticated, service_role;"
+    },
+    {
+      "file": "20261108165442_automatic_fines_for_valid_rates.sql",
+      "line": 101,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.confirm_return(uuid, text)"
+    },
+    {
+      "file": "20261108165442_automatic_fines_for_valid_rates.sql",
+      "line": 201,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_fine_payment_dashboard(text) TO authenticated, service_role;"
+    },
+    {
+      "file": "20261108165442_automatic_fines_for_valid_rates.sql",
+      "line": 262,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_fine_payment_alert_targets(text) TO authenticated, service_role;"
+    },
+    {
+      "file": "20261108165442_automatic_fines_for_valid_rates.sql",
+      "line": 366,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.record_fine_payment(text, numeric, text, text, text) TO authenticated, service_role;"
+    },
+    {
+      "file": "20261108172734_fine_alert_status_and_visitor_notifications.sql",
+      "line": 57,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_fine_payment_alert_targets(text) TO authenticated, service_role;"
+    },
+    {
+      "file": "20261108175109_preserve_recorded_return_fines.sql",
+      "line": 101,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_fine_payment_dashboard(text) TO authenticated, service_role;"
+    },
+    {
+      "file": "20261108214558_subscription_renewal_followups.sql",
+      "line": 33,
+      "stmt": "GRANT SELECT ON public.subscription_renewal_follows, public.staff_notifications TO authenticated;"
+    },
+    {
+      "file": "20261108214558_subscription_renewal_followups.sql",
+      "line": 201,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.follow_library_subscription_renewal(uuid) TO authenticated, service_role;"
+    },
+    {
+      "file": "20261108214558_subscription_renewal_followups.sql",
+      "line": 202,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.mark_subscription_renewal_notification_read(uuid) TO authenticated, service_role;"
+    },
+    {
+      "file": "20261109125841_align_fine_alert_targets.sql",
+      "line": 59,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_fine_payment_alert_targets(text) TO authenticated, service_role;"
+    },
+    {
+      "file": "20261109131908_fine_dashboard_snapshot_only.sql",
+      "line": 109,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_fine_payment_dashboard(text) TO authenticated, service_role;"
+    },
+    {
+      "file": "20261111500000_prepare_visitor_rpc_hardening.sql",
+      "line": 135,
+      "stmt": "grant execute on function public.request_borrow(uuid, text) to postgres;"
+    },
+    {
+      "file": "20261111500000_prepare_visitor_rpc_hardening.sql",
+      "line": 186,
+      "stmt": "grant execute on function public.get_visitor_borrow_requests(uuid) to postgres;"
+    },
+    {
+      "file": "20261111500000_prepare_visitor_rpc_hardening.sql",
+      "line": 223,
+      "stmt": "grant execute on function public.cancel_community_book_request(uuid, text) to postgres;"
+    },
+    {
+      "file": "20261111500000_prepare_visitor_rpc_hardening.sql",
+      "line": 279,
+      "stmt": "grant execute on function public.find_visitor_by_qr(text, uuid)"
+    },
+    {
+      "file": "20261111500000_prepare_visitor_rpc_hardening.sql",
+      "line": 306,
+      "stmt": "grant execute on function public.auto_cancel_expired_borrow_requests()"
+    },
+    {
+      "file": "20261111500000_prepare_visitor_rpc_hardening.sql",
+      "line": 382,
+      "stmt": "grant execute on function public.confirm_community_book_return(uuid, text)"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 266,
+      "stmt": "grant execute on function public.request_borrow(uuid, text) to authenticated, service_role;"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 267,
+      "stmt": "grant execute on function public.get_visitor_borrow_requests(uuid) to authenticated, service_role;"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 268,
+      "stmt": "grant execute on function public.fetch_visitor_reading_list(uuid) to authenticated, service_role;"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 269,
+      "stmt": "grant execute on function public.toggle_reading_list_item(uuid, text) to authenticated, service_role;"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 270,
+      "stmt": "grant execute on function public.set_personal_book_visibility(text, text, boolean) to authenticated, service_role;"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 271,
+      "stmt": "grant execute on function public.cancel_borrow_request(text, text) to authenticated, service_role;"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 272,
+      "stmt": "grant execute on function public.cancel_community_book_request(uuid, text, text)"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 277,
+      "stmt": "grant execute on function public.auto_cancel_expired_borrow_requests() to service_role;"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 283,
+      "stmt": "grant execute on function public.find_visitor_by_qr(text, uuid) to authenticated;"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 284,
+      "stmt": "grant execute on function public.confirm_community_book_pickup(uuid, text) to authenticated;"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 285,
+      "stmt": "grant execute on function public.confirm_community_book_return(uuid, text) to authenticated;"
+    },
+    {
+      "file": "20261114000000_secure_visitor_qr_passes.sql",
+      "line": 35,
+      "stmt": "grant execute on function public.generate_visitor_qr_code()"
+    },
+    {
+      "file": "20261114000000_secure_visitor_qr_passes.sql",
+      "line": 137,
+      "stmt": "grant execute on function public.consume_visitor_qr_login_attempt(text)"
+    },
+    {
+      "file": "20261115000000_restore_six_digit_visitor_qr_with_password_login.sql",
+      "line": 33,
+      "stmt": "grant execute on function public.generate_visitor_qr_code()"
+    },
+    {
+      "file": "20261117000000_visitor_covers_and_terms_backfill.sql",
+      "line": 163,
+      "stmt": "grant execute on function public.add_personal_book_with_cover("
+    },
+    {
+      "file": "20261117000000_visitor_covers_and_terms_backfill.sql",
+      "line": 229,
+      "stmt": "grant execute on function public.update_personal_book_with_cover("
+    },
+    {
+      "file": "20261118000000_visitor_library_assignment.sql",
+      "line": 93,
+      "stmt": "grant execute on function public.register_visitor("
+    },
+    {
+      "file": "20261120100000_book_rating_summaries.sql",
+      "line": 26,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_book_rating_summaries(text[])"
+    },
+    {
+      "file": "20261121000000_include_reserved_copies_in_inventory_validation.sql",
+      "line": 72,
+      "stmt": "GRANT EXECUTE ON FUNCTION \"public\".\"enforce_book_copy_inventory\"() TO \"postgres\", \"service_role\";"
+    },
+    {
+      "file": "20261121000000_include_reserved_copies_in_inventory_validation.sql",
+      "line": 282,
+      "stmt": "GRANT EXECUTE ON FUNCTION \"public\".\"update_inventory_book\"(text, timestamp WITH time zone, jsonb) TO \"authenticated\", \"postgres\", \"service_role\";"
+    },
+    {
+      "file": "20261121000000_include_reserved_copies_in_inventory_validation.sql",
+      "line": 460,
+      "stmt": "GRANT EXECUTE ON FUNCTION \"shelf_private\".\"request_borrow_unchecked\"(uuid, text) TO \"postgres\";"
+    },
+    {
+      "file": "20261121000000_include_reserved_copies_in_inventory_validation.sql",
+      "line": 596,
+      "stmt": "GRANT EXECUTE ON FUNCTION \"public\".\"approve_community_book_request\"(uuid, text, text) TO \"authenticated\", \"postgres\", \"service_role\";"
+    },
+    {
+      "file": "20261121000000_include_reserved_copies_in_inventory_validation.sql",
+      "line": 728,
+      "stmt": "GRANT EXECUTE ON FUNCTION \"public\".\"release_copy_and_promote\"(text) TO \"postgres\", \"service_role\";"
+    },
+    {
+      "file": "20261121000000_include_reserved_copies_in_inventory_validation.sql",
+      "line": 729,
+      "stmt": "GRANT EXECUTE ON FUNCTION \"public\".\"release_copy_and_promote\"(uuid) TO \"postgres\", \"service_role\";"
+    },
+    {
+      "file": "20261121000000_include_reserved_copies_in_inventory_validation.sql",
+      "line": 814,
+      "stmt": "GRANT EXECUTE ON FUNCTION \"public\".\"update_community_book_copy_availability\"() TO \"postgres\", \"service_role\";"
+    },
+    {
+      "file": "20261121000000_include_reserved_copies_in_inventory_validation.sql",
+      "line": 891,
+      "stmt": "GRANT EXECUTE ON FUNCTION \"public\".\"confirm_community_book_return\"(uuid, text) TO \"authenticated\", \"postgres\", \"service_role\";"
+    },
+    {
+      "file": "20261122000000_book_rating_aggregates.sql",
+      "line": 72,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_book_rating_summaries(text[])"
+    },
+    {
+      "file": "20261123000000_allow_landing_general_feedback.sql",
+      "line": 4,
+      "stmt": "GRANT INSERT ("
+    },
+    {
+      "file": "20261129000000_cache_popular_borrowed_book_counts.sql",
+      "line": 73,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.maintain_borrowed_book_counts()"
+    },
+    {
+      "file": "20261129000000_cache_popular_borrowed_book_counts.sql",
+      "line": 121,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_popular_borrowed_book_counts(integer)"
+    },
+    {
+      "file": "20261129999999_community_pickup_return_contract_prerequisite.sql",
+      "line": 303,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.confirm_community_book_pickup(uuid, text)"
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 144,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.confirm_pickup(uuid, text)"
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 264,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.confirm_return(uuid, text)"
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 376,
+      "stmt": "GRANT EXECUTE ON FUNCTION"
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 467,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.confirm_community_book_return(uuid, text)"
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 542,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.add_personal_book("
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 622,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.add_personal_book_with_cover("
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 702,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.update_personal_book("
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 784,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.update_personal_book_with_cover("
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 870,
+      "stmt": "GRANT EXECUTE ON FUNCTION shelf_private.get_visitor_borrow_requests_unchecked(uuid)"
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 914,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_visitor_borrow_requests(uuid)"
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 1046,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.fetch_my_community_book_requests(text)"
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 1151,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.fetch_owner_community_book_requests(text)"
+    },
+    {
+      "file": "20261203000000_fix_visitor_borrow_request_rpc_id_type.sql",
+      "line": 80,
+      "stmt": "GRANT EXECUTE ON FUNCTION shelf_private.get_visitor_borrow_requests_unchecked(uuid)"
+    },
+    {
+      "file": "20261203000000_fix_visitor_borrow_request_rpc_id_type.sql",
+      "line": 124,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_visitor_borrow_requests(uuid)"
+    },
+    {
+      "file": "20261204000000_create_external_catalog_books.sql",
+      "line": 27,
+      "stmt": "grant select on public.external_catalog_books to anon, authenticated;"
+    },
+    {
+      "file": "20261204000100_disable_community_queue_when_unavailable.sql",
+      "line": 118,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.request_community_book(text, text)"
+    },
+    {
+      "file": "20261205000000_fix_library_book_pickup_confirmation.sql",
+      "line": 110,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.confirm_pickup(uuid, text)"
+    },
+    {
+      "file": "20261206000000_restrict_visitor_registration_to_partner_domains.sql",
+      "line": 132,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.register_visitor("
+    },
+    {
+      "file": "20261211000000_terms_acknowledgment_versions.sql",
+      "line": 75,
+      "stmt": "grant execute on function public.get_visitor_terms_accepted_at()"
+    },
+    {
+      "file": "20261211000000_terms_acknowledgment_versions.sql",
+      "line": 80,
+      "stmt": "grant execute on function public.accept_visitor_terms()"
+    },
+    {
+      "file": "20261211000000_terms_acknowledgment_versions.sql",
+      "line": 123,
+      "stmt": "grant select on table public.staff_terms_acceptances to authenticated;"
+    },
+    {
+      "file": "20261211000000_terms_acknowledgment_versions.sql",
+      "line": 217,
+      "stmt": "grant execute on function public.get_subadmin_terms_accepted_at()"
+    },
+    {
+      "file": "20261211000000_terms_acknowledgment_versions.sql",
+      "line": 222,
+      "stmt": "grant execute on function public.accept_subadmin_terms()"
+    },
+    {
+      "file": "20261212000000_visitor_profile_images_and_self_update.sql",
+      "line": 4,
+      "stmt": "grant select on public.visitors to authenticated;"
+    },
+    {
+      "file": "20261212000000_visitor_profile_images_and_self_update.sql",
+      "line": 8,
+      "stmt": "grant update (contact_number, address, profile_image_path)"
+    },
+    {
+      "file": "20261219000000_staff_attendance_kiosk_profile_photos.sql",
+      "line": 58,
+      "stmt": "grant execute on function public.find_visitor_by_qr(text, uuid)"
+    },
+    {
+      "file": "20261220000000_fix_kiosk_attendance_checkout.sql",
+      "line": 64,
+      "stmt": "grant execute on function public.toggle_attendance(text, text) to authenticated;"
+    },
+    {
+      "file": "20261222000000_auto_reject_community_requests_without_copies.sql",
+      "line": 30,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.reject_pending_community_requests_without_copies()"
+    },
+    {
+      "file": "20261223000000_admin_editable_terms_documents.sql",
+      "line": 31,
+      "stmt": "grant execute on function public.is_shelf_superadmin() to authenticated, service_role;"
+    },
+    {
+      "file": "20261223000000_admin_editable_terms_documents.sql",
+      "line": 39,
+      "stmt": "grant select on public.system_terms_documents to anon, authenticated;"
+    },
+    {
+      "file": "20261223000000_admin_editable_terms_documents.sql",
+      "line": 40,
+      "stmt": "grant insert, update, delete on public.system_terms_documents to authenticated;"
+    },
+    {
+      "file": "20261223000000_admin_editable_terms_documents.sql",
+      "line": 65,
+      "stmt": "grant execute on function public.get_visitor_terms_accepted_at() to authenticated, postgres, service_role;"
+    },
+    {
+      "file": "20261223000000_admin_editable_terms_documents.sql",
+      "line": 88,
+      "stmt": "grant execute on function public.accept_visitor_terms() to authenticated, postgres, service_role;"
+    },
+    {
+      "file": "20261223000000_admin_editable_terms_documents.sql",
+      "line": 112,
+      "stmt": "grant execute on function public.get_subadmin_terms_accepted_at() to authenticated, postgres, service_role;"
+    },
+    {
+      "file": "20261223000000_admin_editable_terms_documents.sql",
+      "line": 141,
+      "stmt": "grant execute on function public.accept_subadmin_terms() to authenticated, postgres, service_role;"
+    },
+    {
+      "file": "20261223000000_admin_editable_terms_documents.sql",
+      "line": 163,
+      "stmt": "grant execute on function public.shelf_admin_mfa_access_allowed() to authenticated, service_role;"
+    },
+    {
+      "file": "20261224000000_manual_fine_payment_ledger.sql",
+      "line": 237,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_fine_payment_dashboard(text) TO authenticated, service_role;"
+    },
+    {
+      "file": "20261224000000_manual_fine_payment_ledger.sql",
+      "line": 238,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.record_fine_payment(text, numeric, text, text, text) TO authenticated, service_role;"
+    },
+    {
+      "file": "20261225000000_fine_review_and_library_subscriptions.sql",
+      "line": 110,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.resolve_fine_review(text, text, numeric, text) TO authenticated, service_role;"
+    },
+    {
+      "file": "20261225000000_fine_review_and_library_subscriptions.sql",
+      "line": 192,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_fine_payment_dashboard(text) TO authenticated, service_role;"
+    },
+    {
+      "file": "20261225000000_fine_review_and_library_subscriptions.sql",
+      "line": 423,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_library_subscription_dashboard(text) TO authenticated, service_role;"
+    },
+    {
+      "file": "20261225000000_fine_review_and_library_subscriptions.sql",
+      "line": 424,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.update_library_subscription(uuid, text, text, text, date, date, integer, boolean, date, text) TO authenticated, service_role;"
+    },
+    {
+      "file": "20261225000000_fine_review_and_library_subscriptions.sql",
+      "line": 425,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.request_subscription_upgrade(text, text) TO authenticated, service_role;"
+    },
+    {
+      "file": "20261225000000_fine_review_and_library_subscriptions.sql",
+      "line": 426,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.decide_subscription_upgrade(uuid, text, text) TO authenticated, service_role;"
+    },
+    {
+      "file": "20261227000000_fine_alert_visitor_keys.sql",
+      "line": 35,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_fine_payment_alert_targets(text) TO authenticated, service_role;"
+    },
+    {
+      "file": "20261228000000_persist_borrow_request_library.sql",
+      "line": 180,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_fine_payment_dashboard(text) TO authenticated, service_role;"
+    },
+    {
+      "file": "20261229000000_remove_synthetic_borrow_transactions.sql",
+      "line": 76,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.maintain_borrowed_book_counts() TO postgres, service_role;"
+    },
+    {
+      "file": "20261230000000_terminate_library_subscriptions.sql",
+      "line": 50,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.terminate_library_subscription(uuid, text) TO authenticated, service_role;"
+    },
+    {
+      "file": "20270101000000_attendance_security_hardening.sql",
+      "line": 39,
+      "stmt": "GRANT shelf_attendance_rpc_owner TO postgres;"
+    },
+    {
+      "file": "20270101000000_attendance_security_hardening.sql",
+      "line": 40,
+      "stmt": "GRANT USAGE, CREATE ON SCHEMA public TO shelf_attendance_rpc_owner;"
+    },
+    {
+      "file": "20270101000000_attendance_security_hardening.sql",
+      "line": 41,
+      "stmt": "GRANT USAGE ON SCHEMA auth TO shelf_attendance_rpc_owner;"
+    },
+    {
+      "file": "20270101000000_attendance_security_hardening.sql",
+      "line": 45,
+      "stmt": "GRANT SELECT ("
+    },
+    {
+      "file": "20270101000000_attendance_security_hardening.sql",
+      "line": 49,
+      "stmt": "GRANT SELECT (id, role, library_id, is_active)"
+    },
+    {
+      "file": "20270101000000_attendance_security_hardening.sql",
+      "line": 51,
+      "stmt": "GRANT SELECT (id, visitor_id, library_id, checked_out_at, time_in),"
+    },
+    {
+      "file": "20270101000000_attendance_security_hardening.sql",
+      "line": 55,
+      "stmt": "GRANT EXECUTE ON FUNCTION auth.uid() TO shelf_attendance_rpc_owner;"
+    },
+    {
+      "file": "20270101000000_attendance_security_hardening.sql",
+      "line": 56,
+      "stmt": "GRANT EXECUTE ON FUNCTION auth.jwt() TO shelf_attendance_rpc_owner;"
+    },
+    {
+      "file": "20270101000000_attendance_security_hardening.sql",
+      "line": 266,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.find_visitor_by_qr(text, uuid)"
+    },
+    {
+      "file": "20270101000000_attendance_security_hardening.sql",
+      "line": 270,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.toggle_attendance(text, text)"
+    },
+    {
+      "file": "20270102000000_attendance_legacy_rpc_lockdown.sql",
+      "line": 28,
+      "stmt": "GRANT USAGE, CREATE ON SCHEMA public TO shelf_attendance_rpc_owner;"
+    },
+    {
+      "file": "20270102000000_attendance_legacy_rpc_lockdown.sql",
+      "line": 32,
+      "stmt": "GRANT shelf_attendance_rpc_owner TO postgres;"
+    },
+    {
+      "file": "20270102000000_attendance_legacy_rpc_lockdown.sql",
+      "line": 172,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.find_visitor_by_qr(text, text)"
+    },
+    {
+      "file": "20270102000000_attendance_legacy_rpc_lockdown.sql",
+      "line": 177,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.lookup_attendance_visitor_v2(text, text)"
+    },
+    {
+      "file": "20270102000000_attendance_legacy_rpc_lockdown.sql",
+      "line": 182,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.scan_attendance(text, text)"
+    },
+    {
+      "file": "20270102000100_fine_payment_privacy.sql",
+      "line": 329,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_fine_payment_dashboard(text)"
+    },
+    {
+      "file": "20270102000100_fine_payment_privacy.sql",
+      "line": 333,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_fine_payment_alert_targets(text)"
+    },
+    {
+      "file": "20270102000100_fine_payment_privacy.sql",
+      "line": 337,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.record_fine_payment(text, numeric, text, text, text)"
+    },
+    {
+      "file": "20270102000100_fine_payment_privacy.sql",
+      "line": 341,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.resolve_fine_review(text, text, numeric, text)"
+    },
+    {
+      "file": "20270102000100_fine_payment_privacy.sql",
+      "line": 345,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_fine_payment_analytics(text)"
+    },
+    {
+      "file": "20270102000300_book_reviews_privacy.sql",
+      "line": 47,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.shelf_rpc_request_uid()"
+    },
+    {
+      "file": "20270102000300_book_reviews_privacy.sql",
+      "line": 50,
+      "stmt": "GRANT USAGE, CREATE ON SCHEMA public TO shelf_book_reviews_rpc_owner;"
+    },
+    {
+      "file": "20270102000300_book_reviews_privacy.sql",
+      "line": 52,
+      "stmt": "GRANT SELECT (id, auth_user_id, full_name, otp_verified, is_active)"
+    },
+    {
+      "file": "20270102000300_book_reviews_privacy.sql",
+      "line": 54,
+      "stmt": "GRANT SELECT (id, book_id, visitor_id, visitor_name, rating, comment, created_at)"
+    },
+    {
+      "file": "20270102000300_book_reviews_privacy.sql",
+      "line": 56,
+      "stmt": "GRANT INSERT (book_id, visitor_id, visitor_name, rating, comment)"
+    },
+    {
+      "file": "20270102000300_book_reviews_privacy.sql",
+      "line": 58,
+      "stmt": "GRANT UPDATE (rating, comment, updated_at)"
+    },
+    {
+      "file": "20270102000300_book_reviews_privacy.sql",
+      "line": 60,
+      "stmt": "GRANT DELETE ON TABLE public.book_reviews TO shelf_book_reviews_rpc_owner;"
+    },
+    {
+      "file": "20270102000300_book_reviews_privacy.sql",
+      "line": 251,
+      "stmt": "GRANT CREATE ON SCHEMA public TO shelf_book_reviews_rpc_owner;"
+    },
+    {
+      "file": "20270102000300_book_reviews_privacy.sql",
+      "line": 252,
+      "stmt": "GRANT shelf_book_reviews_rpc_owner TO postgres;"
+    },
+    {
+      "file": "20270102000300_book_reviews_privacy.sql",
+      "line": 263,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_book_reviews(text, integer, integer)"
+    },
+    {
+      "file": "20270102000300_book_reviews_privacy.sql",
+      "line": 267,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.save_my_book_review(text, integer, text)"
+    },
+    {
+      "file": "20270102000300_book_reviews_privacy.sql",
+      "line": 271,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.delete_my_book_review(uuid)"
+    },
+    {
+      "file": "20270102000400_rpc_owner_auth_claim_access.sql",
+      "line": 31,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.shelf_rpc_request_uid()"
+    },
+    {
+      "file": "20270102000400_rpc_owner_auth_claim_access.sql",
+      "line": 33,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.shelf_rpc_request_jwt()"
+    },
+    {
+      "file": "20270102000400_rpc_owner_auth_claim_access.sql",
+      "line": 35,
+      "stmt": "GRANT SELECT (id) ON TABLE public.books TO shelf_book_reviews_rpc_owner;"
+    },
+    {
+      "file": "20270102000700_fine_payment_rpc_authorization.sql",
+      "line": 254,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_fine_payment_dashboard(text) TO authenticated;"
+    },
+    {
+      "file": "20270102000700_fine_payment_rpc_authorization.sql",
+      "line": 257,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_fine_payment_alert_targets(text) TO authenticated;"
+    },
+    {
+      "file": "20270102000700_fine_payment_rpc_authorization.sql",
+      "line": 260,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.record_fine_payment(text, numeric, text, text, text) TO authenticated;"
+    },
+    {
+      "file": "20270102000700_fine_payment_rpc_authorization.sql",
+      "line": 263,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.resolve_fine_review(text, text, numeric, text) TO authenticated;"
+    },
+    {
+      "file": "20270102000700_fine_payment_rpc_authorization.sql",
+      "line": 269,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_fine_payment_analytics(text) TO authenticated;"
+    },
+    {
+      "file": "20270102001100_attendance_claims_review_labels_and_table_acl.sql",
+      "line": 273,
+      "stmt": "GRANT SELECT ON TABLE public.books TO anon, authenticated;"
+    },
+    {
+      "file": "20270102001100_attendance_claims_review_labels_and_table_acl.sql",
+      "line": 274,
+      "stmt": "GRANT INSERT, DELETE ON TABLE public.books TO authenticated;"
+    },
+    {
+      "file": "20270102001100_attendance_claims_review_labels_and_table_acl.sql",
+      "line": 275,
+      "stmt": "GRANT UPDATE (total_copies, available_copies, call_number)"
+    },
+    {
+      "file": "20270102001100_attendance_claims_review_labels_and_table_acl.sql",
+      "line": 281,
+      "stmt": "GRANT SELECT ON TABLE public.staff_profiles TO authenticated;"
+    },
+    {
+      "file": "20270102001300_request_borrow_v2.sql",
+      "line": 53,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.request_borrow_v2(text) TO authenticated;"
+    },
+    {
+      "file": "20270102001400_borrow_handover_v2_rpcs.sql",
+      "line": 115,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.confirm_pickup_v2(text,text) TO authenticated;"
+    },
+    {
+      "file": "20270102001400_borrow_handover_v2_rpcs.sql",
+      "line": 116,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.confirm_return_v2(text,text) TO authenticated;"
+    },
+    {
+      "file": "20270102001700_public_community_visitor_registration.sql",
+      "line": 296,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.register_visitor_v2(uuid, text, text, text, text, text, uuid, text)"
+    },
+    {
+      "file": "20270102001700_public_community_visitor_registration.sql",
+      "line": 378,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.verify_visitor_otp(text, text) TO anon, authenticated;"
+    },
+    {
+      "file": "20270102001700_public_community_visitor_registration.sql",
+      "line": 536,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.approve_community_visitor(text) TO authenticated;"
+    },
+    {
+      "file": "20270102001700_public_community_visitor_registration.sql",
+      "line": 573,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.set_visitor_active(text, boolean) TO authenticated;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 341,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.request_visitor_otp_recovery(text, text) TO anon, authenticated;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 458,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.issue_visitor_resend_capability(text, text) TO anon, authenticated;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 517,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.find_unverified_visitor(text) TO anon, authenticated;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 530,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.resend_otp(text) TO anon, authenticated;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 588,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.abort_visitor_registration(text, text) TO anon, authenticated;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 693,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.verify_visitor_otp(text, text) TO anon, authenticated;"
+    },
+    {
+      "file": "20270102002000_attendance_read_rpc_hardening.sql",
+      "line": 189,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_attendance_logs_v1() TO authenticated, service_role;"
+    },
+    {
+      "file": "20270102002000_attendance_read_rpc_hardening.sql",
+      "line": 191,
+      "stmt": "GRANT EXECUTE ON FUNCTION public.get_visitor_attendance_logs_v1(integer, timestamptz, text, timestamptz, timestamptz, text) TO authenticated, service_role;"
+    }
+  ],
+  "revokes": [
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 108,
+      "stmt": "revoke all on function public.is_active_staff_for_branch(text) from public;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 161,
+      "stmt": "revoke all on function public.link_visitor_auth_user() from public, anon, authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 222,
+      "stmt": "revoke all on function public.register_visitor(uuid, text, text, text, text, text) from public;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 299,
+      "stmt": "revoke all on function public.add_personal_book("
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 420,
+      "stmt": "revoke all on function public.capture_shelf_audit_event() from public, anon, authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 641,
+      "stmt": "revoke all on public.visitors from anon, authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 642,
+      "stmt": "revoke all on public.borrow_requests from anon, authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 643,
+      "stmt": "revoke all on public.attendance_logs from anon, authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 644,
+      "stmt": "revoke all on public.book_reviews from anon, authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 645,
+      "stmt": "revoke all on public.personal_books from anon, authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 646,
+      "stmt": "revoke all on public.audit_logs from anon, authenticated;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 705,
+      "stmt": "revoke all on function public.get_visitor_feedback_replies(text, text) from public, anon;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 726,
+      "stmt": "revoke all on function public.find_visitor_by_qr(text, text) from public, anon;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 767,
+      "stmt": "revoke all on function public.request_borrow(text, text) from public, anon;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 801,
+      "stmt": "revoke all on function public.cancel_borrow_request(text, text) from public, anon;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 840,
+      "stmt": "revoke all on function public.toggle_attendance(text, text) from public, anon;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 861,
+      "stmt": "revoke all on function public.confirm_pickup(text, text) from public, anon;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 885,
+      "stmt": "revoke all on function public.confirm_return(text, text) from public, anon;"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 928,
+      "stmt": "revoke all on function public.auto_expire_pickups() from public, anon, authenticated;"
+    },
+    {
+      "file": "20261002000100_visitor_qr_activation.sql",
+      "line": 237,
+      "stmt": "revoke all on function public.request_borrow(text, text) from public, anon;"
+    },
+    {
+      "file": "20261002000100_visitor_qr_activation.sql",
+      "line": 265,
+      "stmt": "revoke all on function public.get_visitor_feedback_replies(text, text) from public, anon;"
+    },
+    {
+      "file": "20261002000100_visitor_qr_activation.sql",
+      "line": 286,
+      "stmt": "revoke all on function public.find_visitor_by_qr(text, text) from public, anon;"
+    },
+    {
+      "file": "20261002000100_visitor_qr_activation.sql",
+      "line": 349,
+      "stmt": "revoke all on function public.toggle_attendance(text, text) from public, anon;"
+    },
+    {
+      "file": "20261003000300_community_book_copy_inventory.sql",
+      "line": 150,
+      "stmt": "revoke all on function public.add_personal_book("
+    },
+    {
+      "file": "20261003000300_community_book_copy_inventory.sql",
+      "line": 215,
+      "stmt": "revoke all on function public.add_personal_book("
+    },
+    {
+      "file": "20261003000300_community_book_copy_inventory.sql",
+      "line": 333,
+      "stmt": "revoke all on function public.update_community_book_copy_availability()"
+    },
+    {
+      "file": "20261003000300_community_book_copy_inventory.sql",
+      "line": 335,
+      "stmt": "revoke all on function public.require_available_community_book_copy()"
+    },
+    {
+      "file": "20261004000000_auth_inventory_geography_fixes.sql",
+      "line": 192,
+      "stmt": "revoke all on function public.enforce_book_copy_inventory() from public, anon, authenticated;"
+    },
+    {
+      "file": "20261004000000_auth_inventory_geography_fixes.sql",
+      "line": 201,
+      "stmt": "revoke update on public.books from anon, authenticated;"
+    },
+    {
+      "file": "20261004000000_auth_inventory_geography_fixes.sql",
+      "line": 280,
+      "stmt": "revoke all on function public.register_visitor(uuid, text, text, text, text, text) from public;"
+    },
+    {
+      "file": "20261004000000_auth_inventory_geography_fixes.sql",
+      "line": 333,
+      "stmt": "revoke all on function public.fetch_my_community_book_requests(text) from public;"
+    },
+    {
+      "file": "20261004000000_auth_inventory_geography_fixes.sql",
+      "line": 402,
+      "stmt": "revoke all on function public.add_personal_book("
+    },
+    {
+      "file": "20261004000000_auth_inventory_geography_fixes.sql",
+      "line": 448,
+      "stmt": "revoke all on function public.add_personal_book("
+    },
+    {
+      "file": "20261004000000_auth_inventory_geography_fixes.sql",
+      "line": 563,
+      "stmt": "revoke all on function public.update_inventory_book(text, timestamptz, jsonb) from public, anon;"
+    },
+    {
+      "file": "20261005000000_registration_rpc_hardening.sql",
+      "line": 55,
+      "stmt": "revoke all on function public.register_visitor(uuid, text, text, text, text, text)"
+    },
+    {
+      "file": "20261005110900_visitor_scan_details.sql",
+      "line": 36,
+      "stmt": "revoke all on function public.find_visitor_by_qr(text, text) from public, anon;"
+    },
+    {
+      "file": "20261006000000_community_book_visibility.sql",
+      "line": 95,
+      "stmt": "revoke all on function public.add_personal_book("
+    },
+    {
+      "file": "20261006000000_community_book_visibility.sql",
+      "line": 104,
+      "stmt": "revoke all on function public.add_personal_book("
+    },
+    {
+      "file": "20261006000000_community_book_visibility.sql",
+      "line": 113,
+      "stmt": "revoke all on function public.add_personal_book("
+    },
+    {
+      "file": "20261006000000_community_book_visibility.sql",
+      "line": 154,
+      "stmt": "revoke all on function public.set_personal_book_visibility(text, text, boolean)"
+    },
+    {
+      "file": "20261006000000_community_book_visibility.sql",
+      "line": 190,
+      "stmt": "revoke all on function public.require_available_community_book_copy()"
+    },
+    {
+      "file": "20261007000000_community_request_text_id_rpcs.sql",
+      "line": 62,
+      "stmt": "revoke all on function public.fetch_owner_community_book_requests(text)"
+    },
+    {
+      "file": "20261007000000_community_request_text_id_rpcs.sql",
+      "line": 141,
+      "stmt": "revoke all on function public.approve_community_book_request(uuid, text, text)"
+    },
+    {
+      "file": "20261007000000_community_request_text_id_rpcs.sql",
+      "line": 220,
+      "stmt": "revoke all on function public.reject_community_book_request(uuid, text, text)"
+    },
+    {
+      "file": "20261009000000_restore_six_digit_visitor_qr.sql",
+      "line": 20,
+      "stmt": "revoke all on function public.generate_visitor_qr_code() from public, anon, authenticated;"
+    },
+    {
+      "file": "20261009000000_restore_six_digit_visitor_qr.sql",
+      "line": 122,
+      "stmt": "revoke all on function public.link_visitor_auth_user() from public, anon, authenticated;"
+    },
+    {
+      "file": "20261010000000_restore_shelf_qr_prefix.sql",
+      "line": 20,
+      "stmt": "revoke all on function public.generate_visitor_qr_code() from public, anon, authenticated;"
+    },
+    {
+      "file": "20261010000000_restore_shelf_qr_prefix.sql",
+      "line": 138,
+      "stmt": "revoke all on function public.link_visitor_auth_user() from public, anon, authenticated;"
+    },
+    {
+      "file": "20261011000000_fix_visitor_qr_lookup_result_types.sql",
+      "line": 34,
+      "stmt": "revoke all on function public.find_visitor_by_qr(text, text) from public, anon;"
+    },
+    {
+      "file": "20261012000000_fix_attendance_visitor_id_ambiguity.sql",
+      "line": 66,
+      "stmt": "revoke all on function public.toggle_attendance(text, text) from public, anon;"
+    },
+    {
+      "file": "20261013000000_visitor_registration_recovery_and_audit.sql",
+      "line": 168,
+      "stmt": "revoke all on function public.capture_shelf_audit_event() from public, anon, authenticated;"
+    },
+    {
+      "file": "20261013000000_visitor_registration_recovery_and_audit.sql",
+      "line": 302,
+      "stmt": "revoke all on function public.verify_visitor_otp(text, text) from public;"
+    },
+    {
+      "file": "20261013000000_visitor_registration_recovery_and_audit.sql",
+      "line": 357,
+      "stmt": "revoke all on function public.resend_otp(text) from public;"
+    },
+    {
+      "file": "20261013000000_visitor_registration_recovery_and_audit.sql",
+      "line": 432,
+      "stmt": "revoke all on function public.abort_visitor_registration(text, text) from public;"
+    },
+    {
+      "file": "20261013000000_visitor_registration_recovery_and_audit.sql",
+      "line": 459,
+      "stmt": "revoke all on function public.find_unverified_visitor(text) from public;"
+    },
+    {
+      "file": "20261014000000_visitor_session_repair.sql",
+      "line": 91,
+      "stmt": "revoke all on function public.get_visitor_borrow_requests(text)"
+    },
+    {
+      "file": "20261014000000_visitor_session_repair.sql",
+      "line": 169,
+      "stmt": "revoke all on function public.fetch_my_community_book_requests(text)"
+    },
+    {
+      "file": "20261014000000_visitor_session_repair.sql",
+      "line": 239,
+      "stmt": "revoke all on function public.fetch_owner_community_book_requests(text)"
+    },
+    {
+      "file": "20261015000000_stop_auth_email_confirming_visitors.sql",
+      "line": 82,
+      "stmt": "revoke all on function public.link_visitor_auth_user() from public, anon, authenticated;"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 96,
+      "stmt": "revoke all on function public.generate_visitor_qr_code() from public, anon, authenticated;"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 188,
+      "stmt": "revoke all on function public.verify_visitor_otp(text, text) from public;"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 232,
+      "stmt": "revoke all on function public.resend_otp(text) from public;"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 294,
+      "stmt": "revoke all on function public.abort_visitor_registration(text, text) from public;"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 313,
+      "stmt": "revoke all on function public.find_unverified_visitor(text) from public;"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 374,
+      "stmt": "revoke all on function public.get_visitor_borrow_requests(text) from public, anon;"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 441,
+      "stmt": "revoke all on function public.fetch_my_community_book_requests(text) from public, anon;"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 500,
+      "stmt": "revoke all on function public.fetch_owner_community_book_requests(text) from public, anon;"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 560,
+      "stmt": "revoke all on function public.link_visitor_auth_user() from public, anon, authenticated;"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 703,
+      "stmt": "revoke all on function public.capture_shelf_audit_event() from public, anon, authenticated;"
+    },
+    {
+      "file": "20261017000000_fix_verify_visitor_otp_ambiguous_id.sql",
+      "line": 127,
+      "stmt": "revoke all on function public.verify_visitor_otp(text, text) from public;"
+    },
+    {
+      "file": "20261018000000_persist_otp_attempt_lockout.sql",
+      "line": 196,
+      "stmt": "revoke all on function public.verify_visitor_otp(text, text) from public;"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 64,
+      "stmt": "revoke all on function public.is_active_staff_for_branch(text) from public;"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 99,
+      "stmt": "revoke all on function public.get_visitor_feedback_replies(text, text) from public, anon;"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 137,
+      "stmt": "revoke all on function public.find_visitor_by_qr(text, text) from public, anon;"
+    },
+    {
+      "file": "20261021000000_password_reset_codes.sql",
+      "line": 49,
+      "stmt": "revoke all on public.password_reset_codes from anon, authenticated;"
+    },
+    {
+      "file": "20261021000000_password_reset_codes.sql",
+      "line": 181,
+      "stmt": "revoke all on function public.issue_password_reset_code(text, text, text, timestamptz)"
+    },
+    {
+      "file": "20261021000000_password_reset_codes.sql",
+      "line": 263,
+      "stmt": "revoke all on function public.verify_password_reset_code(text, text)"
+    },
+    {
+      "file": "20261021000000_password_reset_codes.sql",
+      "line": 302,
+      "stmt": "revoke all on function public.consume_password_reset_code(text)"
+    },
+    {
+      "file": "20261021000000_password_reset_codes.sql",
+      "line": 331,
+      "stmt": "revoke all on function public.purge_password_reset_codes() from public, anon, authenticated;"
+    },
+    {
+      "file": "20261021000100_community_book_queue_contacts.sql",
+      "line": 160,
+      "stmt": "revoke all on function public.request_community_book(text, text)"
+    },
+    {
+      "file": "20261021000100_community_book_queue_contacts.sql",
+      "line": 240,
+      "stmt": "revoke all on function public.fetch_my_community_book_requests(text)"
+    },
+    {
+      "file": "20261021000100_community_book_queue_contacts.sql",
+      "line": 326,
+      "stmt": "revoke all on function public.approve_community_book_request(uuid, text, text)"
+    },
+    {
+      "file": "20261023000000_fix_issue_password_reset_variable.sql",
+      "line": 138,
+      "stmt": "revoke all on function public.issue_password_reset_code(text, text, text, timestamptz)"
+    },
+    {
+      "file": "20261030000000_fix_community_request_rpc_result_types.sql",
+      "line": 116,
+      "stmt": "revoke all on function public.request_community_book(text, text)"
+    },
+    {
+      "file": "20261030000000_fix_community_request_rpc_result_types.sql",
+      "line": 225,
+      "stmt": "revoke all on function public.fetch_my_community_book_requests(text)"
+    },
+    {
+      "file": "20261031000000_visitor_terms_acceptance.sql",
+      "line": 32,
+      "stmt": "revoke all on function public.get_visitor_terms_accepted_at()"
+    },
+    {
+      "file": "20261031000000_visitor_terms_acceptance.sql",
+      "line": 65,
+      "stmt": "revoke all on function public.accept_visitor_terms()"
+    },
+    {
+      "file": "20261101000000_fix_personal_book_creation.sql.sql",
+      "line": 93,
+      "stmt": "revoke all on function public.add_personal_book("
+    },
+    {
+      "file": "20261102000000_manage_personal_books.sql.sql",
+      "line": 111,
+      "stmt": "revoke all on function public.update_personal_book("
+    },
+    {
+      "file": "20261102000000_manage_personal_books.sql.sql",
+      "line": 175,
+      "stmt": "revoke all on function public.delete_personal_book(text, text)"
+    },
+    {
+      "file": "20261103000000_fix_community_pickup_confirmation_result.sql",
+      "line": 83,
+      "stmt": "revoke all on function public.confirm_community_book_pickup(uuid, text)"
+    },
+    {
+      "file": "20261104000000_login_attempt_lockout.sql",
+      "line": 18,
+      "stmt": "REVOKE ALL ON TABLE public.login_attempt_lockouts"
+    },
+    {
+      "file": "20261104000000_login_attempt_lockout.sql",
+      "line": 139,
+      "stmt": "REVOKE ALL ON FUNCTION public.check_login_lockout(TEXT)"
+    },
+    {
+      "file": "20261104000000_login_attempt_lockout.sql",
+      "line": 141,
+      "stmt": "REVOKE ALL ON FUNCTION public.record_login_failure(TEXT)"
+    },
+    {
+      "file": "20261104000000_login_attempt_lockout.sql",
+      "line": 143,
+      "stmt": "REVOKE ALL ON FUNCTION public.clear_login_failures(TEXT)"
+    },
+    {
+      "file": "20261105000000_restore_subadmin_announcement_writes.sql",
+      "line": 42,
+      "stmt": "revoke all on function public.enforce_visitor_email_domain() from public, anon, authenticated;"
+    },
+    {
+      "file": "20261105100000_manage_visitor_active_status.sql",
+      "line": 49,
+      "stmt": "revoke all on function public.set_visitor_active(text, boolean)"
+    },
+    {
+      "file": "20261108000000_popular_borrowed_book_counts.sql",
+      "line": 22,
+      "stmt": "revoke all on function public.get_popular_borrowed_book_counts(integer)"
+    },
+    {
+      "file": "20261108160959_fine_schema_prerequisite.sql",
+      "line": 96,
+      "stmt": "REVOKE ALL ON public.fine_payments FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20261108161030_fine_dashboard_query_indexes.sql",
+      "line": 70,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_fine_payment_alert_targets(text) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261108161623_filter_fine_dashboard_candidates.sql",
+      "line": 89,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_fine_payment_dashboard(text) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261108165442_automatic_fines_for_valid_rates.sql",
+      "line": 103,
+      "stmt": "REVOKE ALL ON FUNCTION public.confirm_return(uuid, text) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261108165442_automatic_fines_for_valid_rates.sql",
+      "line": 200,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_fine_payment_dashboard(text) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261108165442_automatic_fines_for_valid_rates.sql",
+      "line": 261,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_fine_payment_alert_targets(text) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261108165442_automatic_fines_for_valid_rates.sql",
+      "line": 365,
+      "stmt": "REVOKE ALL ON FUNCTION public.record_fine_payment(text, numeric, text, text, text) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261108172734_fine_alert_status_and_visitor_notifications.sql",
+      "line": 56,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_fine_payment_alert_targets(text) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261108175109_preserve_recorded_return_fines.sql",
+      "line": 100,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_fine_payment_dashboard(text) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261108214558_subscription_renewal_followups.sql",
+      "line": 32,
+      "stmt": "REVOKE ALL ON public.subscription_renewal_follows, public.staff_notifications FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20261108214558_subscription_renewal_followups.sql",
+      "line": 197,
+      "stmt": "REVOKE ALL ON FUNCTION public.deliver_subscription_renewal_followup(uuid, date) FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20261108214558_subscription_renewal_followups.sql",
+      "line": 198,
+      "stmt": "REVOKE ALL ON FUNCTION public.follow_library_subscription_renewal(uuid) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261108214558_subscription_renewal_followups.sql",
+      "line": 199,
+      "stmt": "REVOKE ALL ON FUNCTION public.dispatch_subscription_renewal_followups() FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20261108214558_subscription_renewal_followups.sql",
+      "line": 200,
+      "stmt": "REVOKE ALL ON FUNCTION public.mark_subscription_renewal_notification_read(uuid) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261109125841_align_fine_alert_targets.sql",
+      "line": 58,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_fine_payment_alert_targets(text) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261109130133_trigger_function_prerequisites.sql",
+      "line": 170,
+      "stmt": "REVOKE ALL ON FUNCTION public.set_borrow_request_library_id()"
+    },
+    {
+      "file": "20261109130133_trigger_function_prerequisites.sql",
+      "line": 172,
+      "stmt": "REVOKE ALL ON FUNCTION public.maintain_book_rating_aggregates()"
+    },
+    {
+      "file": "20261109130134_harden_definer_function_grants.sql",
+      "line": 2,
+      "stmt": "REVOKE ALL ON FUNCTION public.set_borrow_request_library_id()"
+    },
+    {
+      "file": "20261109130134_harden_definer_function_grants.sql",
+      "line": 4,
+      "stmt": "REVOKE ALL ON FUNCTION public.maintain_book_rating_aggregates()"
+    },
+    {
+      "file": "20261109130134_harden_definer_function_grants.sql",
+      "line": 9,
+      "stmt": "REVOKE EXECUTE ON FUNCTION public.is_active_staff_for_branch(text)"
+    },
+    {
+      "file": "20261109131908_fine_dashboard_snapshot_only.sql",
+      "line": 108,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_fine_payment_dashboard(text) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261111500000_prepare_visitor_rpc_hardening.sql",
+      "line": 136,
+      "stmt": "revoke all on function public.request_borrow(uuid, text) from public;"
+    },
+    {
+      "file": "20261111500000_prepare_visitor_rpc_hardening.sql",
+      "line": 187,
+      "stmt": "revoke all on function public.get_visitor_borrow_requests(uuid) from public;"
+    },
+    {
+      "file": "20261111500000_prepare_visitor_rpc_hardening.sql",
+      "line": 224,
+      "stmt": "revoke all on function public.cancel_community_book_request(uuid, text) from public;"
+    },
+    {
+      "file": "20261111500000_prepare_visitor_rpc_hardening.sql",
+      "line": 281,
+      "stmt": "revoke all on function public.find_visitor_by_qr(text, uuid) from public;"
+    },
+    {
+      "file": "20261111500000_prepare_visitor_rpc_hardening.sql",
+      "line": 308,
+      "stmt": "revoke all on function public.auto_cancel_expired_borrow_requests() from public;"
+    },
+    {
+      "file": "20261111500000_prepare_visitor_rpc_hardening.sql",
+      "line": 384,
+      "stmt": "revoke all on function public.confirm_community_book_return(uuid, text)"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 2,
+      "stmt": "revoke all on schema shelf_private from public, anon, authenticated, service_role;"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 17,
+      "stmt": "revoke all on function shelf_private.request_borrow_unchecked(uuid, text)"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 19,
+      "stmt": "revoke all on function shelf_private.get_visitor_borrow_requests_unchecked(uuid)"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 21,
+      "stmt": "revoke all on function shelf_private.fetch_visitor_reading_list_unchecked(uuid)"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 23,
+      "stmt": "revoke all on function shelf_private.toggle_reading_list_item_unchecked(uuid, text)"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 25,
+      "stmt": "revoke all on function shelf_private.set_personal_book_visibility_unchecked(text, text, boolean)"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 27,
+      "stmt": "revoke all on function shelf_private.cancel_community_book_request_unchecked(uuid, text)"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 258,
+      "stmt": "revoke all on function public.request_borrow(uuid, text) from public, anon;"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 259,
+      "stmt": "revoke all on function public.get_visitor_borrow_requests(uuid) from public, anon;"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 260,
+      "stmt": "revoke all on function public.fetch_visitor_reading_list(uuid) from public, anon;"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 261,
+      "stmt": "revoke all on function public.toggle_reading_list_item(uuid, text) from public, anon;"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 262,
+      "stmt": "revoke all on function public.set_personal_book_visibility(text, text, boolean) from public, anon;"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 263,
+      "stmt": "revoke all on function public.cancel_borrow_request(text, text) from public, anon;"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 264,
+      "stmt": "revoke all on function public.cancel_community_book_request(uuid, text, text) from public, anon;"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 275,
+      "stmt": "revoke all on function public.auto_cancel_expired_borrow_requests()"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 279,
+      "stmt": "revoke all on function public.find_visitor_by_qr(text, uuid) from public, anon;"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 280,
+      "stmt": "revoke all on function public.confirm_community_book_pickup(uuid, text) from public, anon;"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 281,
+      "stmt": "revoke all on function public.confirm_community_book_return(uuid, text) from public, anon;"
+    },
+    {
+      "file": "20261114000000_secure_visitor_qr_passes.sql",
+      "line": 33,
+      "stmt": "revoke all on function public.generate_visitor_qr_code()"
+    },
+    {
+      "file": "20261114000000_secure_visitor_qr_passes.sql",
+      "line": 59,
+      "stmt": "revoke all on table shelf_private.visitor_qr_login_rate_limits"
+    },
+    {
+      "file": "20261114000000_secure_visitor_qr_passes.sql",
+      "line": 135,
+      "stmt": "revoke all on function public.consume_visitor_qr_login_attempt(text)"
+    },
+    {
+      "file": "20261115000000_restore_six_digit_visitor_qr_with_password_login.sql",
+      "line": 31,
+      "stmt": "revoke all on function public.generate_visitor_qr_code()"
+    },
+    {
+      "file": "20261117000000_visitor_covers_and_terms_backfill.sql",
+      "line": 159,
+      "stmt": "revoke all on function public.add_personal_book_with_cover("
+    },
+    {
+      "file": "20261117000000_visitor_covers_and_terms_backfill.sql",
+      "line": 225,
+      "stmt": "revoke all on function public.update_personal_book_with_cover("
+    },
+    {
+      "file": "20261118000000_visitor_library_assignment.sql",
+      "line": 89,
+      "stmt": "revoke all on function public.register_visitor("
+    },
+    {
+      "file": "20261120000000_enforce_book_copy_inventory_on_insert.sql",
+      "line": 48,
+      "stmt": "revoke all on function public.enforce_book_copy_inventory()"
+    },
+    {
+      "file": "20261120100000_book_rating_summaries.sql",
+      "line": 24,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_book_rating_summaries(text[])"
+    },
+    {
+      "file": "20261121000000_include_reserved_copies_in_inventory_validation.sql",
+      "line": 74,
+      "stmt": "REVOKE ALL ON FUNCTION \"public\".\"enforce_book_copy_inventory\"() FROM PUBLIC;"
+    },
+    {
+      "file": "20261121000000_include_reserved_copies_in_inventory_validation.sql",
+      "line": 284,
+      "stmt": "REVOKE ALL ON FUNCTION \"public\".\"update_inventory_book\"(text, timestamp WITH time zone, jsonb) FROM PUBLIC;"
+    },
+    {
+      "file": "20261121000000_include_reserved_copies_in_inventory_validation.sql",
+      "line": 462,
+      "stmt": "REVOKE ALL ON FUNCTION \"shelf_private\".\"request_borrow_unchecked\"(uuid, text) FROM PUBLIC;"
+    },
+    {
+      "file": "20261121000000_include_reserved_copies_in_inventory_validation.sql",
+      "line": 598,
+      "stmt": "REVOKE ALL ON FUNCTION \"public\".\"approve_community_book_request\"(uuid, text, text) FROM PUBLIC;"
+    },
+    {
+      "file": "20261121000000_include_reserved_copies_in_inventory_validation.sql",
+      "line": 730,
+      "stmt": "REVOKE ALL ON FUNCTION \"public\".\"release_copy_and_promote\"(text) FROM PUBLIC;"
+    },
+    {
+      "file": "20261121000000_include_reserved_copies_in_inventory_validation.sql",
+      "line": 731,
+      "stmt": "REVOKE ALL ON FUNCTION \"public\".\"release_copy_and_promote\"(uuid) FROM PUBLIC;"
+    },
+    {
+      "file": "20261121000000_include_reserved_copies_in_inventory_validation.sql",
+      "line": 815,
+      "stmt": "REVOKE ALL ON FUNCTION \"public\".\"update_community_book_copy_availability\"() FROM PUBLIC;"
+    },
+    {
+      "file": "20261121000000_include_reserved_copies_in_inventory_validation.sql",
+      "line": 893,
+      "stmt": "REVOKE ALL ON FUNCTION \"public\".\"confirm_community_book_return\"(uuid, text) FROM PUBLIC;"
+    },
+    {
+      "file": "20261122000000_book_rating_aggregates.sql",
+      "line": 70,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_book_rating_summaries(text[])"
+    },
+    {
+      "file": "20261123000000_allow_landing_general_feedback.sql",
+      "line": 3,
+      "stmt": "REVOKE ALL ON TABLE public.visitor_feedback FROM anon, PUBLIC;"
+    },
+    {
+      "file": "20261129000000_cache_popular_borrowed_book_counts.sql",
+      "line": 8,
+      "stmt": "REVOKE ALL ON TABLE public.borrowed_book_counts"
+    },
+    {
+      "file": "20261129000000_cache_popular_borrowed_book_counts.sql",
+      "line": 71,
+      "stmt": "REVOKE ALL ON FUNCTION public.maintain_borrowed_book_counts()"
+    },
+    {
+      "file": "20261129000000_cache_popular_borrowed_book_counts.sql",
+      "line": 119,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_popular_borrowed_book_counts(integer)"
+    },
+    {
+      "file": "20261129999999_community_pickup_return_contract_prerequisite.sql",
+      "line": 305,
+      "stmt": "REVOKE ALL ON FUNCTION public.confirm_community_book_pickup(uuid, text)"
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 147,
+      "stmt": "REVOKE ALL ON FUNCTION public.confirm_pickup(uuid, text)"
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 266,
+      "stmt": "REVOKE ALL ON FUNCTION public.confirm_return(uuid, text) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 380,
+      "stmt": "REVOKE ALL ON FUNCTION"
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 469,
+      "stmt": "REVOKE ALL ON FUNCTION public.confirm_community_book_return(uuid, text)"
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 547,
+      "stmt": "REVOKE ALL ON FUNCTION public.add_personal_book("
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 627,
+      "stmt": "REVOKE ALL ON FUNCTION public.add_personal_book_with_cover("
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 707,
+      "stmt": "REVOKE ALL ON FUNCTION public.update_personal_book("
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 789,
+      "stmt": "REVOKE ALL ON FUNCTION public.update_personal_book_with_cover("
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 873,
+      "stmt": "REVOKE ALL ON FUNCTION shelf_private.get_visitor_borrow_requests_unchecked(uuid)"
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 917,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_visitor_borrow_requests(uuid)"
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 1049,
+      "stmt": "REVOKE ALL ON FUNCTION public.fetch_my_community_book_requests(text)"
+    },
+    {
+      "file": "20261130000000_book_fine_rate_checkout_and_return.sql",
+      "line": 1154,
+      "stmt": "REVOKE ALL ON FUNCTION public.fetch_owner_community_book_requests(text)"
+    },
+    {
+      "file": "20261203000000_fix_visitor_borrow_request_rpc_id_type.sql",
+      "line": 82,
+      "stmt": "REVOKE ALL ON FUNCTION shelf_private.get_visitor_borrow_requests_unchecked(uuid)"
+    },
+    {
+      "file": "20261203000000_fix_visitor_borrow_request_rpc_id_type.sql",
+      "line": 126,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_visitor_borrow_requests(uuid)"
+    },
+    {
+      "file": "20261204000100_disable_community_queue_when_unavailable.sql",
+      "line": 120,
+      "stmt": "REVOKE ALL ON FUNCTION public.request_community_book(text, text)"
+    },
+    {
+      "file": "20261205000000_fix_library_book_pickup_confirmation.sql",
+      "line": 112,
+      "stmt": "REVOKE ALL ON FUNCTION public.confirm_pickup(uuid, text)"
+    },
+    {
+      "file": "20261206000000_restrict_visitor_registration_to_partner_domains.sql",
+      "line": 45,
+      "stmt": "REVOKE ALL ON FUNCTION public.enforce_visitor_email_domain()"
+    },
+    {
+      "file": "20261206000000_restrict_visitor_registration_to_partner_domains.sql",
+      "line": 129,
+      "stmt": "REVOKE ALL ON FUNCTION public.register_visitor("
+    },
+    {
+      "file": "20261211000000_terms_acknowledgment_versions.sql",
+      "line": 73,
+      "stmt": "revoke all on function public.get_visitor_terms_accepted_at()"
+    },
+    {
+      "file": "20261211000000_terms_acknowledgment_versions.sql",
+      "line": 78,
+      "stmt": "revoke all on function public.accept_visitor_terms()"
+    },
+    {
+      "file": "20261211000000_terms_acknowledgment_versions.sql",
+      "line": 121,
+      "stmt": "revoke all on table public.staff_terms_acceptances from anon, public;"
+    },
+    {
+      "file": "20261211000000_terms_acknowledgment_versions.sql",
+      "line": 122,
+      "stmt": "revoke all on table public.staff_terms_acceptances from authenticated;"
+    },
+    {
+      "file": "20261211000000_terms_acknowledgment_versions.sql",
+      "line": 215,
+      "stmt": "revoke all on function public.get_subadmin_terms_accepted_at()"
+    },
+    {
+      "file": "20261211000000_terms_acknowledgment_versions.sql",
+      "line": 220,
+      "stmt": "revoke all on function public.accept_subadmin_terms()"
+    },
+    {
+      "file": "20261212000000_visitor_profile_images_and_self_update.sql",
+      "line": 5,
+      "stmt": "revoke update on public.visitors from authenticated;"
+    },
+    {
+      "file": "20261212000000_visitor_profile_images_and_self_update.sql",
+      "line": 6,
+      "stmt": "revoke update (contact_number, address, profile_image_path)"
+    },
+    {
+      "file": "20261214000000_keep_visitor_address_read_only.sql",
+      "line": 1,
+      "stmt": "revoke update (address)"
+    },
+    {
+      "file": "20261219000000_staff_attendance_kiosk_profile_photos.sql",
+      "line": 60,
+      "stmt": "revoke all on function public.find_visitor_by_qr(text, uuid) from public, anon;"
+    },
+    {
+      "file": "20261220000000_fix_kiosk_attendance_checkout.sql",
+      "line": 63,
+      "stmt": "revoke all on function public.toggle_attendance(text, text) from public, anon;"
+    },
+    {
+      "file": "20261222000000_auto_reject_community_requests_without_copies.sql",
+      "line": 28,
+      "stmt": "REVOKE ALL ON FUNCTION public.reject_pending_community_requests_without_copies()"
+    },
+    {
+      "file": "20261223000000_admin_editable_terms_documents.sql",
+      "line": 30,
+      "stmt": "revoke all on function public.is_shelf_superadmin() from public, anon;"
+    },
+    {
+      "file": "20261223000000_admin_editable_terms_documents.sql",
+      "line": 66,
+      "stmt": "revoke all on function public.get_visitor_terms_accepted_at() from public, anon;"
+    },
+    {
+      "file": "20261223000000_admin_editable_terms_documents.sql",
+      "line": 89,
+      "stmt": "revoke all on function public.accept_visitor_terms() from public, anon;"
+    },
+    {
+      "file": "20261223000000_admin_editable_terms_documents.sql",
+      "line": 113,
+      "stmt": "revoke all on function public.get_subadmin_terms_accepted_at() from public, anon;"
+    },
+    {
+      "file": "20261223000000_admin_editable_terms_documents.sql",
+      "line": 142,
+      "stmt": "revoke all on function public.accept_subadmin_terms() from public, anon;"
+    },
+    {
+      "file": "20261223000000_admin_editable_terms_documents.sql",
+      "line": 162,
+      "stmt": "revoke all on function public.shelf_admin_mfa_access_allowed() from public, anon;"
+    },
+    {
+      "file": "20261224000000_manual_fine_payment_ledger.sql",
+      "line": 26,
+      "stmt": "REVOKE ALL ON public.fine_payments FROM anon, authenticated;"
+    },
+    {
+      "file": "20261224000000_manual_fine_payment_ledger.sql",
+      "line": 235,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_fine_payment_dashboard(text) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261224000000_manual_fine_payment_ledger.sql",
+      "line": 236,
+      "stmt": "REVOKE ALL ON FUNCTION public.record_fine_payment(text, numeric, text, text, text) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261225000000_fine_review_and_library_subscriptions.sql",
+      "line": 22,
+      "stmt": "REVOKE ALL ON public.fine_review_events FROM anon, authenticated;"
+    },
+    {
+      "file": "20261225000000_fine_review_and_library_subscriptions.sql",
+      "line": 109,
+      "stmt": "REVOKE ALL ON FUNCTION public.resolve_fine_review(text, text, numeric, text) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261225000000_fine_review_and_library_subscriptions.sql",
+      "line": 242,
+      "stmt": "REVOKE ALL ON public.library_subscriptions, public.library_subscription_events,"
+    },
+    {
+      "file": "20261225000000_fine_review_and_library_subscriptions.sql",
+      "line": 419,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_library_subscription_dashboard(text) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261225000000_fine_review_and_library_subscriptions.sql",
+      "line": 420,
+      "stmt": "REVOKE ALL ON FUNCTION public.update_library_subscription(uuid, text, text, text, date, date, integer, boolean, date, text) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261225000000_fine_review_and_library_subscriptions.sql",
+      "line": 421,
+      "stmt": "REVOKE ALL ON FUNCTION public.request_subscription_upgrade(text, text) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261225000000_fine_review_and_library_subscriptions.sql",
+      "line": 422,
+      "stmt": "REVOKE ALL ON FUNCTION public.decide_subscription_upgrade(uuid, text, text) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261227000000_fine_alert_visitor_keys.sql",
+      "line": 34,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_fine_payment_alert_targets(text) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261228000000_persist_borrow_request_library.sql",
+      "line": 179,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_fine_payment_dashboard(text) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261229000000_remove_synthetic_borrow_transactions.sql",
+      "line": 42,
+      "stmt": "REVOKE ALL ON FUNCTION public.capture_shelf_audit_event() FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20261229000000_remove_synthetic_borrow_transactions.sql",
+      "line": 77,
+      "stmt": "REVOKE ALL ON FUNCTION public.maintain_borrowed_book_counts() FROM anon, authenticated, PUBLIC;"
+    },
+    {
+      "file": "20261230000000_terminate_library_subscriptions.sql",
+      "line": 49,
+      "stmt": "REVOKE ALL ON FUNCTION public.terminate_library_subscription(uuid, text) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20261231000000_fix_attendance_audit_trigger_record_fields.sql",
+      "line": 87,
+      "stmt": "REVOKE ALL ON FUNCTION public.capture_shelf_audit_event()"
+    },
+    {
+      "file": "20270101000000_attendance_security_hardening.sql",
+      "line": 87,
+      "stmt": "REVOKE SELECT ON TABLE public.attendance_logs FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20270101000000_attendance_security_hardening.sql",
+      "line": 264,
+      "stmt": "REVOKE ALL ON FUNCTION public.find_visitor_by_qr(text, uuid)"
+    },
+    {
+      "file": "20270101000000_attendance_security_hardening.sql",
+      "line": 268,
+      "stmt": "REVOKE ALL ON FUNCTION public.toggle_attendance(text, text)"
+    },
+    {
+      "file": "20270101000000_attendance_security_hardening.sql",
+      "line": 273,
+      "stmt": "REVOKE CREATE ON SCHEMA public FROM shelf_attendance_rpc_owner;"
+    },
+    {
+      "file": "20270101000000_attendance_security_hardening.sql",
+      "line": 274,
+      "stmt": "REVOKE shelf_attendance_rpc_owner FROM postgres;"
+    },
+    {
+      "file": "20270102000000_attendance_legacy_rpc_lockdown.sql",
+      "line": 168,
+      "stmt": "REVOKE CREATE ON SCHEMA public FROM shelf_attendance_rpc_owner;"
+    },
+    {
+      "file": "20270102000000_attendance_legacy_rpc_lockdown.sql",
+      "line": 170,
+      "stmt": "REVOKE ALL ON FUNCTION public.find_visitor_by_qr(text, text)"
+    },
+    {
+      "file": "20270102000000_attendance_legacy_rpc_lockdown.sql",
+      "line": 175,
+      "stmt": "REVOKE ALL ON FUNCTION public.lookup_attendance_visitor_v2(text, text)"
+    },
+    {
+      "file": "20270102000000_attendance_legacy_rpc_lockdown.sql",
+      "line": 180,
+      "stmt": "REVOKE ALL ON FUNCTION public.scan_attendance(text, text)"
+    },
+    {
+      "file": "20270102000100_fine_payment_privacy.sql",
+      "line": 13,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_fine_payment_dashboard_detail_internal(text)"
+    },
+    {
+      "file": "20270102000100_fine_payment_privacy.sql",
+      "line": 15,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_fine_payment_alert_targets_detail_internal(text)"
+    },
+    {
+      "file": "20270102000100_fine_payment_privacy.sql",
+      "line": 17,
+      "stmt": "REVOKE ALL ON FUNCTION public.record_fine_payment_subadmin_internal(text, numeric, text, text, text)"
+    },
+    {
+      "file": "20270102000100_fine_payment_privacy.sql",
+      "line": 19,
+      "stmt": "REVOKE ALL ON FUNCTION public.resolve_fine_review_subadmin_internal(text, text, numeric, text)"
+    },
+    {
+      "file": "20270102000100_fine_payment_privacy.sql",
+      "line": 327,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_fine_payment_dashboard(text)"
+    },
+    {
+      "file": "20270102000100_fine_payment_privacy.sql",
+      "line": 331,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_fine_payment_alert_targets(text)"
+    },
+    {
+      "file": "20270102000100_fine_payment_privacy.sql",
+      "line": 335,
+      "stmt": "REVOKE ALL ON FUNCTION public.record_fine_payment(text, numeric, text, text, text)"
+    },
+    {
+      "file": "20270102000100_fine_payment_privacy.sql",
+      "line": 339,
+      "stmt": "REVOKE ALL ON FUNCTION public.resolve_fine_review(text, text, numeric, text)"
+    },
+    {
+      "file": "20270102000100_fine_payment_privacy.sql",
+      "line": 343,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_fine_payment_analytics(text)"
+    },
+    {
+      "file": "20270102000200_least_privilege_default_privileges.sql",
+      "line": 6,
+      "stmt": "REVOKE ALL ON TABLES FROM anon, authenticated;"
+    },
+    {
+      "file": "20270102000200_least_privilege_default_privileges.sql",
+      "line": 8,
+      "stmt": "REVOKE ALL ON SEQUENCES FROM anon, authenticated;"
+    },
+    {
+      "file": "20270102000200_least_privilege_default_privileges.sql",
+      "line": 10,
+      "stmt": "REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20270102000200_least_privilege_default_privileges.sql",
+      "line": 13,
+      "stmt": "REVOKE ALL ON TABLES FROM anon, authenticated;"
+    },
+    {
+      "file": "20270102000200_least_privilege_default_privileges.sql",
+      "line": 15,
+      "stmt": "REVOKE ALL ON SEQUENCES FROM anon, authenticated;"
+    },
+    {
+      "file": "20270102000200_least_privilege_default_privileges.sql",
+      "line": 17,
+      "stmt": "REVOKE EXECUTE ON FUNCTIONS FROM anon, authenticated;"
+    },
+    {
+      "file": "20270102000300_book_reviews_privacy.sql",
+      "line": 45,
+      "stmt": "REVOKE ALL ON FUNCTION public.shelf_rpc_request_uid()"
+    },
+    {
+      "file": "20270102000300_book_reviews_privacy.sql",
+      "line": 74,
+      "stmt": "REVOKE ALL ON TABLE public.book_reviews FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20270102000300_book_reviews_privacy.sql",
+      "line": 259,
+      "stmt": "REVOKE CREATE ON SCHEMA public FROM shelf_book_reviews_rpc_owner;"
+    },
+    {
+      "file": "20270102000300_book_reviews_privacy.sql",
+      "line": 261,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_book_reviews(text, integer, integer)"
+    },
+    {
+      "file": "20270102000300_book_reviews_privacy.sql",
+      "line": 265,
+      "stmt": "REVOKE ALL ON FUNCTION public.save_my_book_review(text, integer, text)"
+    },
+    {
+      "file": "20270102000300_book_reviews_privacy.sql",
+      "line": 269,
+      "stmt": "REVOKE ALL ON FUNCTION public.delete_my_book_review(uuid)"
+    },
+    {
+      "file": "20270102000400_rpc_owner_auth_claim_access.sql",
+      "line": 29,
+      "stmt": "REVOKE ALL ON FUNCTION public.shelf_rpc_request_uid() FROM PUBLIC, anon, authenticated, service_role;"
+    },
+    {
+      "file": "20270102000400_rpc_owner_auth_claim_access.sql",
+      "line": 30,
+      "stmt": "REVOKE ALL ON FUNCTION public.shelf_rpc_request_jwt() FROM PUBLIC, anon, authenticated, service_role;"
+    },
+    {
+      "file": "20270102000700_fine_payment_rpc_authorization.sql",
+      "line": 243,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_fine_payment_dashboard_detail_internal(text)"
+    },
+    {
+      "file": "20270102000700_fine_payment_rpc_authorization.sql",
+      "line": 245,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_fine_payment_alert_targets_detail_internal(text)"
+    },
+    {
+      "file": "20270102000700_fine_payment_rpc_authorization.sql",
+      "line": 247,
+      "stmt": "REVOKE ALL ON FUNCTION public.record_fine_payment_subadmin_internal(text, numeric, text, text, text)"
+    },
+    {
+      "file": "20270102000700_fine_payment_rpc_authorization.sql",
+      "line": 249,
+      "stmt": "REVOKE ALL ON FUNCTION public.resolve_fine_review_subadmin_internal(text, text, numeric, text)"
+    },
+    {
+      "file": "20270102000700_fine_payment_rpc_authorization.sql",
+      "line": 252,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_fine_payment_dashboard(text)"
+    },
+    {
+      "file": "20270102000700_fine_payment_rpc_authorization.sql",
+      "line": 255,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_fine_payment_alert_targets(text)"
+    },
+    {
+      "file": "20270102000700_fine_payment_rpc_authorization.sql",
+      "line": 258,
+      "stmt": "REVOKE ALL ON FUNCTION public.record_fine_payment(text, numeric, text, text, text)"
+    },
+    {
+      "file": "20270102000700_fine_payment_rpc_authorization.sql",
+      "line": 261,
+      "stmt": "REVOKE ALL ON FUNCTION public.resolve_fine_review(text, text, numeric, text)"
+    },
+    {
+      "file": "20270102000700_fine_payment_rpc_authorization.sql",
+      "line": 267,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_fine_payment_analytics(text)"
+    },
+    {
+      "file": "20270102000800_postgres_default_privilege_hardening.sql",
+      "line": 11,
+      "stmt": "REVOKE ALL ON TABLES FROM PUBLIC, anon, authenticated, service_role;"
+    },
+    {
+      "file": "20270102000800_postgres_default_privilege_hardening.sql",
+      "line": 13,
+      "stmt": "REVOKE ALL ON SEQUENCES FROM PUBLIC, anon, authenticated, service_role;"
+    },
+    {
+      "file": "20270102000800_postgres_default_privilege_hardening.sql",
+      "line": 15,
+      "stmt": "REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon, authenticated, service_role;"
+    },
+    {
+      "file": "20270102000800_postgres_default_privilege_hardening.sql",
+      "line": 18,
+      "stmt": "REVOKE ALL ON TABLES FROM PUBLIC, anon, authenticated, service_role;"
+    },
+    {
+      "file": "20270102000800_postgres_default_privilege_hardening.sql",
+      "line": 20,
+      "stmt": "REVOKE ALL ON SEQUENCES FROM PUBLIC, anon, authenticated, service_role;"
+    },
+    {
+      "file": "20270102000800_postgres_default_privilege_hardening.sql",
+      "line": 22,
+      "stmt": "REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon, authenticated, service_role;"
+    },
+    {
+      "file": "20270102001100_attendance_claims_review_labels_and_table_acl.sql",
+      "line": 272,
+      "stmt": "REVOKE ALL PRIVILEGES ON TABLE public.books FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20270102001100_attendance_claims_review_labels_and_table_acl.sql",
+      "line": 280,
+      "stmt": "REVOKE ALL PRIVILEGES ON TABLE public.staff_profiles FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20270102001300_request_borrow_v2.sql",
+      "line": 51,
+      "stmt": "REVOKE ALL ON FUNCTION public.request_borrow_v2(text)"
+    },
+    {
+      "file": "20270102001400_borrow_handover_v2_rpcs.sql",
+      "line": 111,
+      "stmt": "REVOKE ALL ON FUNCTION public.confirm_pickup_v2(text,text)"
+    },
+    {
+      "file": "20270102001400_borrow_handover_v2_rpcs.sql",
+      "line": 113,
+      "stmt": "REVOKE ALL ON FUNCTION public.confirm_return_v2(text,text)"
+    },
+    {
+      "file": "20270102001500_fine_alert_and_category_rate_runtime_fixes.sql",
+      "line": 178,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_category_fine_rate(text)"
+    },
+    {
+      "file": "20270102001700_public_community_visitor_registration.sql",
+      "line": 112,
+      "stmt": "REVOKE ALL ON FUNCTION public.enforce_visitor_email_domain()"
+    },
+    {
+      "file": "20270102001700_public_community_visitor_registration.sql",
+      "line": 197,
+      "stmt": "REVOKE ALL ON FUNCTION public.link_visitor_auth_user()"
+    },
+    {
+      "file": "20270102001700_public_community_visitor_registration.sql",
+      "line": 294,
+      "stmt": "REVOKE ALL ON FUNCTION public.register_visitor_v2(uuid, text, text, text, text, text, uuid, text)"
+    },
+    {
+      "file": "20270102001700_public_community_visitor_registration.sql",
+      "line": 377,
+      "stmt": "REVOKE ALL ON FUNCTION public.verify_visitor_otp(text, text) FROM PUBLIC;"
+    },
+    {
+      "file": "20270102001700_public_community_visitor_registration.sql",
+      "line": 534,
+      "stmt": "REVOKE ALL ON FUNCTION public.approve_community_visitor(text)"
+    },
+    {
+      "file": "20270102001700_public_community_visitor_registration.sql",
+      "line": 572,
+      "stmt": "REVOKE ALL ON FUNCTION public.set_visitor_active(text, boolean) FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 64,
+      "stmt": "REVOKE ALL ON TABLE public.visitor_otp_delivery_intents FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 80,
+      "stmt": "REVOKE ALL ON TABLE public.visitor_otp_resend_capabilities FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 94,
+      "stmt": "REVOKE ALL ON FUNCTION public.shelf_normalize_email(text) FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 107,
+      "stmt": "REVOKE ALL ON FUNCTION public.shelf_hash_secret(text) FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 138,
+      "stmt": "REVOKE ALL ON FUNCTION public.shelf_visitor_otp_hmac(text, text) FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 196,
+      "stmt": "REVOKE ALL ON FUNCTION public.shelf_visitor_otp_rate_limit_check(text, text, text, text) FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 286,
+      "stmt": "REVOKE ALL ON FUNCTION public.verify_visitor_registration_send_proof(text, text) FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 309,
+      "stmt": "REVOKE ALL ON FUNCTION public.consume_visitor_registration_send_proof(text, text) FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 340,
+      "stmt": "REVOKE ALL ON FUNCTION public.request_visitor_otp_recovery(text, text) FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 396,
+      "stmt": "REVOKE ALL ON FUNCTION public.issue_visitor_recovery_capability(text, text) FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 457,
+      "stmt": "REVOKE ALL ON FUNCTION public.issue_visitor_resend_capability(text, text) FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 502,
+      "stmt": "REVOKE ALL ON FUNCTION public.consume_visitor_resend_capability(text) FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 516,
+      "stmt": "REVOKE ALL ON FUNCTION public.find_unverified_visitor(text) FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 529,
+      "stmt": "REVOKE ALL ON FUNCTION public.resend_otp(text) FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 587,
+      "stmt": "REVOKE ALL ON FUNCTION public.abort_visitor_registration(text, text) FROM PUBLIC, anon, authenticated;"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 692,
+      "stmt": "REVOKE ALL ON FUNCTION public.verify_visitor_otp(text, text) FROM PUBLIC;"
+    },
+    {
+      "file": "20270102002000_attendance_read_rpc_hardening.sql",
+      "line": 188,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_attendance_logs_v1() FROM PUBLIC, anon;"
+    },
+    {
+      "file": "20270102002000_attendance_read_rpc_hardening.sql",
+      "line": 190,
+      "stmt": "REVOKE ALL ON FUNCTION public.get_visitor_attendance_logs_v1(integer, timestamptz, text, timestamptz, timestamptz, text) FROM PUBLIC, anon;"
+    }
+  ],
+  "latest_functions": [
+    {
+      "file": "20261223000000_admin_editable_terms_documents.sql",
+      "line": 115,
+      "name": "public.accept_subadmin_terms()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public, pg_temp",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261223000000_admin_editable_terms_documents.sql",
+      "line": 68,
+      "name": "public.accept_visitor_terms()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public, pg_temp",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102001700_public_community_visitor_registration.sql",
+      "line": 492,
+      "name": "public.approve_community_visitor(p_visitor_id text)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102002100_secdef_search_path_hardening.sql",
+      "line": 213,
+      "name": "public.auto_cancel_expired_borrow_requests()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 908,
+      "name": "public.auto_expire_pickups()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 770,
+      "name": "public.cancel_borrow_request(p_request_id text, p_reason text default 'cancelled')",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102001200_audit_trigger_visitor_coverage.sql",
+      "line": 155,
+      "name": "public.capture_shelf_audit_event()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "pg_catalog, public, pg_temp",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102001400_borrow_handover_v2_rpcs.sql",
+      "line": 20,
+      "name": "public.confirm_pickup_v2(p_request_id text, p_staff_name text)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 843,
+      "name": "public.confirm_pickup(p_request_id text, p_staff_name text)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102001400_borrow_handover_v2_rpcs.sql",
+      "line": 64,
+      "name": "public.confirm_return_v2(p_request_id text, p_staff_name text)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261002000000_security_features.sql",
+      "line": 864,
+      "name": "public.confirm_return(p_request_id text, p_staff_name text)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261021000000_password_reset_codes.sql",
+      "line": 275,
+      "name": "public.consume_password_reset_code(p_email text)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public, auth",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102002100_secdef_search_path_hardening.sql",
+      "line": 407,
+      "name": "public.decide_subscription_upgrade(p_request_id uuid, p_decision text, p_note text DEFAULT NULL)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102000400_rpc_owner_auth_claim_access.sql",
+      "line": 348,
+      "name": "public.delete_my_book_review(p_review_id uuid)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102002100_secdef_search_path_hardening.sql",
+      "line": 144,
+      "name": "public.dispatch_subscription_renewal_followups()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102002100_secdef_search_path_hardening.sql",
+      "line": 64,
+      "name": "public.enforce_book_copy_inventory()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102001700_public_community_visitor_registration.sql",
+      "line": 56,
+      "name": "public.enforce_visitor_email_domain()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 377,
+      "name": "public.fetch_my_community_book_requests(p_requester_visitor_id text)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 444,
+      "name": "public.fetch_owner_community_book_requests(p_owner_visitor_id text)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102001700_public_community_visitor_registration.sql",
+      "line": 382,
+      "name": "public.fetch_visitor_reading_list(p_visitor_id uuid)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "sql"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 505,
+      "name": "public.find_unverified_visitor(p_email text)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 104,
+      "name": "public.find_visitor_by_qr(p_qr text, p_library_id text)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102002100_secdef_search_path_hardening.sql",
+      "line": 110,
+      "name": "public.follow_library_subscription_renewal(p_library_id uuid)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261115000000_restore_six_digit_visitor_qr_with_password_login.sql",
+      "line": 3,
+      "name": "public.generate_visitor_qr_code()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102002000_attendance_read_rpc_hardening.sql",
+      "line": 15,
+      "name": "public.get_attendance_logs_v1()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261122000000_book_rating_aggregates.sql",
+      "line": 55,
+      "name": "public.get_book_rating_summaries(p_book_ids text[])",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public, pg_temp",
+      "lang": "sql"
+    },
+    {
+      "file": "20270102001500_fine_alert_and_category_rate_runtime_fixes.sql",
+      "line": 139,
+      "name": "public.get_category_fine_rate(p_category text)",
+      "secdef": false,
+      "invoker": true,
+      "search_path": "pg_catalog",
+      "lang": "sql"
+    },
+    {
+      "file": "20270102000700_fine_payment_rpc_authorization.sql",
+      "line": 70,
+      "name": "public.get_fine_payment_alert_targets(p_library_id text DEFAULT NULL)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public, pg_temp",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102000500_fine_analytics_count_types.sql",
+      "line": 3,
+      "name": "public.get_fine_payment_analytics(p_library_id text DEFAULT NULL)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public, pg_temp",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102000700_fine_payment_rpc_authorization.sql",
+      "line": 6,
+      "name": "public.get_fine_payment_dashboard(p_library_id text DEFAULT NULL)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public, pg_temp",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102002100_secdef_search_path_hardening.sql",
+      "line": 325,
+      "name": "public.get_library_subscription_dashboard(p_library_id text DEFAULT NULL)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261223000000_admin_editable_terms_documents.sql",
+      "line": 91,
+      "name": "public.get_subadmin_terms_accepted_at()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public, pg_temp",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261016000000_drop_stale_visitor_rpc_overloads.sql",
+      "line": 320,
+      "name": "public.get_visitor_borrow_requests(p_visitor_id text)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261112000000_harden_visitor_rpc_access.sql",
+      "line": 61,
+      "name": "public.get_visitor_borrow_requests(p_visitor_id uuid)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public, pg_temp",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 73,
+      "name": "public.get_visitor_feedback_replies(p_visitor_id text, p_email text)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261223000000_admin_editable_terms_documents.sql",
+      "line": 42,
+      "name": "public.get_visitor_terms_accepted_at()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public, pg_temp",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102001100_attendance_claims_review_labels_and_table_acl.sql",
+      "line": 95,
+      "name": "public.is_active_staff_for_branch(p_branch_id text DEFAULT NULL::text)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public",
+      "lang": "sql"
+    },
+    {
+      "file": "20261020000000_restore_functions_and_policies_lost_to_cascade.sql",
+      "line": 43,
+      "name": "public.is_active_staff_for_branch(p_branch_id text default null)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public",
+      "lang": "sql"
+    },
+    {
+      "file": "20270102001100_attendance_claims_review_labels_and_table_acl.sql",
+      "line": 121,
+      "name": "public.is_shelf_superadmin()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public, pg_temp",
+      "lang": "sql"
+    },
+    {
+      "file": "20270102001700_public_community_visitor_registration.sql",
+      "line": 117,
+      "name": "public.link_visitor_auth_user()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261122000000_book_rating_aggregates.sql",
+      "line": 18,
+      "name": "public.maintain_book_rating_aggregates()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public, pg_temp",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102002100_secdef_search_path_hardening.sql",
+      "line": 238,
+      "name": "public.maintain_borrowed_book_counts()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102002100_secdef_search_path_hardening.sql",
+      "line": 169,
+      "name": "public.mark_subscription_renewal_notification_read(p_notification_id uuid)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261021000000_password_reset_codes.sql",
+      "line": 312,
+      "name": "public.purge_password_reset_codes()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102002100_secdef_search_path_hardening.sql",
+      "line": 297,
+      "name": "public.reject_pending_community_requests_without_copies()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102001300_request_borrow_v2.sql",
+      "line": 18,
+      "name": "public.request_borrow_v2(p_book_id text)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261002000100_visitor_qr_activation.sql",
+      "line": 196,
+      "name": "public.request_borrow(p_visitor_id text, p_book_id text)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102002100_secdef_search_path_hardening.sql",
+      "line": 380,
+      "name": "public.request_subscription_upgrade(p_requested_plan text, p_note text DEFAULT NULL)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261006000000_community_book_visibility.sql",
+      "line": 159,
+      "name": "public.require_available_community_book_copy()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 519,
+      "name": "public.resend_otp(p_visitor_id text)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261004000000_auth_inventory_geography_fixes.sql",
+      "line": 135,
+      "name": "public.set_book_updated_at()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102002100_secdef_search_path_hardening.sql",
+      "line": 191,
+      "name": "public.set_borrow_request_library_id()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102001700_public_community_visitor_registration.sql",
+      "line": 540,
+      "name": "public.set_visitor_active(p_visitor_id text, p_is_active boolean)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261223000000_admin_editable_terms_documents.sql",
+      "line": 148,
+      "name": "public.shelf_admin_mfa_access_allowed()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public, pg_temp",
+      "lang": "sql"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 96,
+      "name": "public.shelf_hash_secret(p_value text)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "sql"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 86,
+      "name": "public.shelf_normalize_email(p_email text)",
+      "secdef": false,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "sql"
+    },
+    {
+      "file": "20270102000400_rpc_owner_auth_claim_access.sql",
+      "line": 17,
+      "name": "public.shelf_rpc_request_jwt()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "sql"
+    },
+    {
+      "file": "20270102000400_rpc_owner_auth_claim_access.sql",
+      "line": 5,
+      "name": "public.shelf_rpc_request_uid()",
+      "secdef": false,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "sql"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 114,
+      "name": "public.shelf_visitor_otp_hmac(p_visitor_id text, p_otp text)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261220000000_fix_kiosk_attendance_checkout.sql",
+      "line": 1,
+      "name": "public.toggle_attendance(p_qr text, p_library_id text)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102002100_secdef_search_path_hardening.sql",
+      "line": 11,
+      "name": "public.update_community_book_copy_availability()",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20261021000000_password_reset_codes.sql",
+      "line": 198,
+      "name": "public.verify_password_reset_code(p_email text, p_code_hash text)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "public, auth",
+      "lang": "plpgsql"
+    },
+    {
+      "file": "20270102001900_visitor_otp_delivery_hardening.sql",
+      "line": 593,
+      "name": "public.verify_visitor_otp(p_visitor_id text, p_code text)",
+      "secdef": true,
+      "invoker": false,
+      "search_path": "''",
+      "lang": "plpgsql"
+    }
+  ],
+  "source_issues": []
+}

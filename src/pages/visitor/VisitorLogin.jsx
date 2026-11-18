@@ -14,9 +14,13 @@ import { useAuth } from '../../context/useAuth.js';
 
 import { validateVisitorFullName } from '../../lib/visitorValidation.js';
 import { fetchLibraries } from '../../data/store.js';
+import {
+  validateVisitorRegistrationEmail,
+  VISITOR_REGISTRATION_TYPES,
+} from '../../lib/visitorRegistration.js';
 
 const OTP_CODE_TTL_SECONDS = 10 * 60;
-const OTP_RESEND_COOLDOWN_SECONDS = 60;
+const OTP_RESEND_COOLDOWN_SECONDS = 120;
 const RESET_CODE_TTL_SECONDS = 10 * 60;
 const RESET_CODE_RESEND_COOLDOWN_SECONDS = 60;
 const preventPasswordClipboard = (event) => event.preventDefault();
@@ -93,6 +97,7 @@ export default function VisitorLogin({ initialView = 'login' }) {
   const [librariesLoading, setLibrariesLoading] = useState(true);
   const [libraryLoadError, setLibraryLoadError] = useState('');
   const [selectedLibraryId, setSelectedLibraryId] = useState('');
+  const [registrationType, setRegistrationType] = useState(VISITOR_REGISTRATION_TYPES.INSTITUTIONAL);
   const [canResendVisitorOtp, setCanResendVisitorOtp] =
     useState(false);
   const [otpExpiresAt, setOtpExpiresAt] = useState(null);
@@ -259,11 +264,7 @@ useEffect(() => {
     fetchLibraries()
       .then((libraryList) => {
         if (!cancelled) {
-          setLibraries(
-            libraryList.filter((library) =>
-              String(library.emailDomain || '').trim()
-            )
-          );
+          setLibraries(libraryList);
         }
       })
       .catch((loadError) => {
@@ -565,6 +566,10 @@ useEffect(() => {
       }
 
       if (
+        result?.pendingApproval
+      ) {
+        navigate(`/visitor/pending-approval?visitor_id=${result.visitorId}`);
+      } else if (
         result?.role ===
         'visitor'
       ) {
@@ -637,6 +642,8 @@ useEffect(() => {
         setMfaPending(result);
         setMfaCode('');
         setView('mfa');
+      } else if (result?.pendingApproval) {
+        navigate(`/visitor/pending-approval?visitor_id=${result.visitorId}`);
       } else if (result?.role === 'visitor') {
         navigate(getInternalReturnPath(location.state?.from) || '/visitor');
       } else {
@@ -702,41 +709,20 @@ useEffect(() => {
       );
 
       try {
-        const result =
-          await resendVisitorOtpByEmail(
-            email
-          );
+        await resendVisitorOtpByEmail(
+          email
+        );
 
         setCanResendVisitorOtp(
           false
         );
 
-        // Only route to the code entry screen when a
-        // registration was actually found. The response
-        // is intentionally the same either way so the form
-        // does not reveal which emails are registered.
-        if (result?.visitorId) {
-          setPendingVisitorId(
-            result.visitorId
-          );
-
-          setPendingEmail(email);
-          setOtpInput('');
-          setError('');
-          setView('otp');
-
-          return;
-        }
-
+        // Generic recovery must not disclose account existence or route by
+        // leaked visitor identifiers. Keep the user on the current flow.
         setError(
           'If an unverified registration exists for that address, a new verification code is on its way.'
         );
       } catch (err) {
-        console.error(
-          'RESEND UNCONFIRMED VISITOR OTP ERROR:',
-          err
-        );
-
         setError(
           err?.message ||
             'Unable to send a new verification code. Please try again.'
@@ -839,29 +825,19 @@ useEffect(() => {
 
     if (!selectedLibraryId) {
       errors.libraryId =
-        'Please select your participating library or school.';
+        'Please select your preferred library.';
     } else if (!libraries.some((library) => library.id === selectedLibraryId)) {
       errors.libraryId =
-        'Select a participating library with a configured email domain.';
+        'Select a valid library.';
     } else {
       const selectedLibrary = libraries.find(
         (library) => library.id === selectedLibraryId
       );
-      const emailDomain = trimmedEmail.toLowerCase().split('@')[1] || '';
-      const allowedDomain = String(selectedLibrary?.emailDomain || '')
-        .toLowerCase()
-        .trim()
-        .replace(/^@+/, '')
-        .replace(/\.+$/, '');
-      if (
-        emailDomain === 'gmail.com' ||
-        !allowedDomain ||
-        (emailDomain !== allowedDomain &&
-          !emailDomain.endsWith(`.${allowedDomain}`))
-      ) {
-        errors.email =
-          'Use an email address belonging to the selected partner library or school.';
-      }
+      errors.email = validateVisitorRegistrationEmail(
+        trimmedEmail,
+        registrationType,
+        selectedLibrary?.emailDomain,
+      );
     }
 
     // -------------------------------------------------------
@@ -936,11 +912,6 @@ useEffect(() => {
       `${trimmedBarangay}, ${selectedCity}, ${selectedProvince}`;
 
     try {
-      console.log(
-        'VISITOR REGISTRATION STARTED:',
-        trimmedEmail
-      );
-
       // IMPORTANT:
       // Do not spread ...formData here.
       // confirmPassword is frontend-only and should not
@@ -962,14 +933,11 @@ useEffect(() => {
           libraryId:
             selectedLibraryId,
 
+          registrationType,
+
           password:
             formData.password,
         });
-
-      console.log(
-        'VISITOR REGISTRATION SUCCESS:',
-        result
-      );
 
       if (
         !result?.visitorId
@@ -986,6 +954,7 @@ useEffect(() => {
       setPendingEmail(
         trimmedEmail
       );
+      setRegistrationType(result.registrationType || registrationType);
 
       const now = Date.now();
       const expiresAt =
@@ -1015,11 +984,6 @@ setOtpResendRemaining(
       setError('');
       setView('otp');
     } catch (err) {
-      console.error(
-        'VISITOR REGISTRATION ERROR:',
-        err
-      );
-
       const registrationMessage =
         err?.message ||
         err?.error_description ||
@@ -1041,10 +1005,6 @@ setOtpResendRemaining(
         false;
 
       setIsRegistering(false);
-
-      console.log(
-        'VISITOR REGISTRATION LOCK RELEASED'
-      );
     }
   };
 
@@ -1093,18 +1053,20 @@ setOtpResendRemaining(
           cleanOtp
         );
 
-      setRegisteredVisitor(
-        visitor
-      );
+      // For community visitors pending approval, redirect to pending-approval page
+      // instead of showing success view. The verifyVisitorOtp RPC doesn't return
+      // communityApprovalPending, so we need to check the registration type.
+      // If it's a community registration, the account will be pending approval.
+      if (registrationType === VISITOR_REGISTRATION_TYPES.COMMUNITY) {
+        navigate(`/visitor/pending-approval?visitor_id=${visitor.id}`);
+        return;
+      }
+
+      setRegisteredVisitor({ ...visitor, registrationType });
 
       setError('');
       setView('success');
     } catch (err) {
-      console.error(
-        'VERIFY OTP ERROR:',
-        err
-      );
-
       setError(
         err?.message ||
           'Invalid or expired verification code.'
@@ -1165,11 +1127,6 @@ setOtpResendRemaining(
           'A new verification code has been sent to your email.'
         );
       } catch (err) {
-        console.error(
-          'RESEND OTP ERROR:',
-          err
-        );
-
         setError(
           err?.message ||
             'Unable to resend verification code.'
@@ -1264,11 +1221,6 @@ setOtpResendRemaining(
         // the visitor was told to expect.
         setResetStep('verify');
       } catch (err) {
-        console.error(
-          'REQUEST RESET CODE ERROR:',
-          err
-        );
-
         setError(
           err?.message ||
             'Unable to send the verification code. Please try again.'
@@ -1316,7 +1268,6 @@ setOtpResendRemaining(
         'A new verification code has been requested. Any previous code is no longer valid.'
       );
     } catch (err) {
-      console.error('RESEND RESET CODE ERROR:', err);
       setError(
         err?.message ||
           'Unable to resend the verification code. Please try again.'
@@ -1373,11 +1324,6 @@ setOtpResendRemaining(
         setError('');
         setResetStep('password');
       } catch (err) {
-        console.error(
-          'VERIFY RESET CODE ERROR:',
-          err
-        );
-
         setError(
           err?.message ||
             'Unable to verify the code. Please try again.'
@@ -1446,11 +1392,6 @@ setOtpResendRemaining(
 
         setResetStep('done');
       } catch (err) {
-        console.error(
-          'APPLY NEW PASSWORD ERROR:',
-          err
-        );
-
         setError(
           err?.message ||
             'Unable to update your password. Please try again.'
@@ -1667,8 +1608,9 @@ setOtpResendRemaining(
               {view === 'otp' &&
                 'Enter the one-time verification code sent to your email.'}
 
-              {view === 'success' &&
-                'Your QR pass is for library attendance, borrowing, and returns. Keep it private and present it at the library when requested.'}
+              {view === 'success' && (registeredVisitor?.registrationType === VISITOR_REGISTRATION_TYPES.COMMUNITY
+                ? 'Your email is verified. Your preferred library must approve your community account before visitor services and a QR pass are enabled.'
+                : 'Your QR pass is for library attendance, borrowing, pickup, and returns. Keep it private and present it at the library when requested.')}
 
               {view === 'forgot' &&
                 resetStep === 'request' &&
@@ -1737,7 +1679,7 @@ setOtpResendRemaining(
                   !
                 </h3>
 
-                <div className="flex justify-center">
+                {registeredVisitor.registrationType !== VISITOR_REGISTRATION_TYPES.COMMUNITY && registeredVisitor.qrCode && <div className="flex justify-center">
                   <div className="p-4 bg-white rounded-lg shadow-sm inline-block border border-slate-200 max-w-full overflow-hidden">
                     <QRCodeSVG
                       value={
@@ -1751,17 +1693,15 @@ setOtpResendRemaining(
                       className="w-full h-auto max-w-50"
                     />
                   </div>
-                </div>
+                </div>}
 
-                <p className="text-xs font-mono font-bold text-shelf-primary break-all">
-                  {
-                    registeredVisitor.qrCode
-                  }
-                </p>
+                {registeredVisitor.registrationType !== VISITOR_REGISTRATION_TYPES.COMMUNITY && registeredVisitor.qrCode && <p className="text-xs font-mono font-bold text-shelf-primary break-all">{registeredVisitor.qrCode}</p>}
 
-                <p className="text-xs text-slate-500">
-                  Your QR pass is for library attendance, book pickup, and returns. Sign in with your school email and password.
-                </p>
+                {registeredVisitor.registrationType === VISITOR_REGISTRATION_TYPES.COMMUNITY ? (
+                  <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-left text-xs text-blue-900">
+                    Your account is pending approval by the selected library. You may sign in for limited access to the public catalog and approval status; borrowing, reviews, attendance identification, and your QR pass stay unavailable until approval.
+                  </p>
+                ) : <p className="text-xs text-slate-500">Your QR pass is for library attendance, borrowing, pickup, and returns. Sign in with your institutional email and password.</p>}
 
                 <button
                   type="button"
@@ -1776,7 +1716,7 @@ setOtpResendRemaining(
                   }}
                   className="w-full bg-shelf-primary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition"
                 >
-                  Sign in to library portal
+                  {registeredVisitor.registrationType === VISITOR_REGISTRATION_TYPES.COMMUNITY ? 'Sign in for limited access' : 'Sign in to library portal'}
                 </button>
               </div>
             )}
@@ -1893,6 +1833,30 @@ setOtpResendRemaining(
             >
               {/* FULL NAME */}
 
+              <fieldset className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <legend className="px-1 text-xs font-semibold text-slate-700">Registration type</legend>
+                <label className="flex cursor-pointer items-start gap-2 py-1 text-sm text-slate-700">
+                  <input
+                    type="radio"
+                    name="registration_type"
+                    value={VISITOR_REGISTRATION_TYPES.INSTITUTIONAL}
+                    checked={registrationType === VISITOR_REGISTRATION_TYPES.INSTITUTIONAL}
+                    onChange={() => setRegistrationType(VISITOR_REGISTRATION_TYPES.INSTITUTIONAL)}
+                  />
+                  <span><strong>Institutional Visitor</strong><span className="block text-xs text-slate-500">Use an email address matching your selected library’s institution.</span></span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-2 py-1 text-sm text-slate-700">
+                  <input
+                    type="radio"
+                    name="registration_type"
+                    value={VISITOR_REGISTRATION_TYPES.COMMUNITY}
+                    checked={registrationType === VISITOR_REGISTRATION_TYPES.COMMUNITY}
+                    onChange={() => setRegistrationType(VISITOR_REGISTRATION_TYPES.COMMUNITY)}
+                  />
+                  <span><strong>Public / Community Visitor</strong><span className="block text-xs text-slate-500">Use a personal email. Email verification is required; your selected library must approve the account before visitor services are enabled.</span></span>
+                </label>
+              </fieldset>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Full Name
@@ -2002,7 +1966,7 @@ setOtpResendRemaining(
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  School email address
+                  Email address
                 </label>
 
                 <input
@@ -2075,7 +2039,9 @@ setOtpResendRemaining(
                   </p>
                 ) : (
                   <p className="mt-1 text-xs text-slate-500">
-                    Registration is limited to email domains configured for participating libraries and schools.
+                    {registrationType === VISITOR_REGISTRATION_TYPES.COMMUNITY
+                      ? 'Choose your preferred library. Any valid email domain is accepted after email ownership verification; visitor services remain locked until library approval.'
+                      : 'Institutional registration requires an email domain configured for the selected participating library.'}
                   </p>
                 )}
                 {fieldErrors.libraryId && (

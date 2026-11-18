@@ -26,7 +26,7 @@ test('sub-admin announcements are visitor-only and branch-scoped', () => {
     saveHandlerEnd
   );
   assert.match(saveHandler, /audience:\s*isSubAdmin\s*\?\s*'visitor'/);
-  assert.match(saveHandler, /library_id:\s*isSubAdmin\s*\?\s*currentLibraryId/);
+  assert.match(saveHandler, /libraryId:\s*isSubAdmin\s*\?\s*currentLibraryId\s*:\s*null/);
 });
 
 test('public landing announcements exclude branch-specific announcements', () => {

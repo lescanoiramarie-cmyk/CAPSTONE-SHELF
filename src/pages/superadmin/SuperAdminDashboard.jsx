@@ -7,7 +7,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Bar,
   Line,
@@ -44,7 +43,7 @@ import {
   UsersRound,
 } from 'lucide-react';
 import { useAuth } from '../../context/useAuth.js';
-import { getDashboardPath } from '../../routes/roleHome.js';
+import ShelfHeader from '../../component/ShelfHeader.jsx';
 import {
   useLibraryData,
   useLibrary,
@@ -59,6 +58,9 @@ import FinePayments from '../../component/FinePayments.jsx';
 import SubscriptionManagement from '../../component/SubscriptionManagement.jsx';
 import VisitorTermsContent, { VISITOR_TERMS_VERSION } from '../../component/VisitorTermsContent.jsx';
 import SubAdminTermsContent, { SUBADMIN_TERMS_VERSION } from '../../component/SubAdminTermsContent.jsx';
+import {
+  upsertSystemTermsDocument,
+} from '../../data/store.js';
 import { supabase } from '../../lib/supabaseClient.js';
 import { formatBookCategory } from '../../lib/bookCategory.js';
 import { sendDueDateFollowUp } from '../../lib/dueDateFollowUp.js';
@@ -77,6 +79,9 @@ import {
   buildAttendanceSummary,
   buildSystemAttendanceAnalytics,
 } from '../../lib/attendanceReportUtils.js';
+import {
+  getRequestLibraryId,
+} from '../../lib/dashboardAnalytics.js';
 
 const VisitorAccountManagement = lazy(
   () => import('../../component/VisitorAccountManagement.jsx')
@@ -164,30 +169,14 @@ function formatStaffRole(role) {
 }
 
 export default function SuperAdminDashboard() {
-  const navigate = useNavigate();
   const mainScrollRef = useRef(null);
   const {
     user,
-    logout,
   } = useAuth();
   const superAdminName =
     user?.role === 'superadmin'
       ? 'Jeffrey Castillo'
       : user?.name || 'System Super Administrator';
-
-  const handleSuperAdminLogout = async () => {
-    mainScrollRef.current?.scrollTo({
-      top: 0,
-      left: 0,
-      behavior: 'instant',
-    });
-    window.scrollTo({
-      top: 0,
-      left: 0,
-      behavior: 'instant',
-    });
-    await logout();
-  };
 
   const {
     importBooksBulk,
@@ -196,6 +185,7 @@ export default function SuperAdminDashboard() {
     deleteLibrary,
     loading: libraryLoading,
     initialDataReady,
+    attendanceLoadError,
     connectionError,
     refreshAll,
   } = useLibrary();
@@ -267,7 +257,7 @@ export default function SuperAdminDashboard() {
         startDate: new Date(),
         endDate: new Date(),
         asOf: isInventory,
-        ...(isAttendance ? { dateRange: 'Latest 5,000 available records' } : {}),
+        ...(isAttendance ? { dateRange: 'All loaded attendance records' } : {}),
         summary: [[isInventory ? 'Total Titles' : 'Total Visits', data.length]],
         ...(isInventory ? {
           orientation: 'landscape',
@@ -366,14 +356,12 @@ export default function SuperAdminDashboard() {
     setTermsEditorMessage('');
     try {
       const nextVersion = `v-${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}`;
-      const { error } = await supabase.from('system_terms_documents').upsert({
-        document_key: termsDocumentKey,
+      await upsertSystemTermsDocument({
+        documentKey: termsDocumentKey,
         version: nextVersion,
         content: termsDocumentContent.trim(),
-        updated_at: new Date().toISOString(),
-        updated_by: user?.id || null,
-      }, { onConflict: 'document_key' });
-      if (error) throw error;
+        updatedBy: user?.id || null,
+      });
       setTermsDocumentVersion(nextVersion);
       setTermsEditorMessage('Terms saved. Users will be asked to acknowledge this updated version.');
     } catch (error) {
@@ -512,27 +500,20 @@ export default function SuperAdminDashboard() {
     campus: '',
     address: '',
     emailDomain: '',
-    lat: '14.085000',
-    lng: '121.149000',
+    lat: '',
+    lng: '',
     hours: '8:00 AM - 5:00 PM',
     status: 'Open',
   });
-  const [mapPosition, setMapPosition] = useState([14.0850, 121.1490]);
+  const [mapPosition, setMapPosition] = useState([14.5995, 120.9842]); // Manila center
   const [libraryPage, setLibraryPage] = useState(1);
   const librariesPerPage = 10;
   const libraryPageCount = Math.max(1, Math.ceil(libraries.length / librariesPerPage));
+  const visibleLibraryPage = Math.min(libraryPage, libraryPageCount);
   const paginatedLibraries = libraries.slice(
-    (libraryPage - 1) * librariesPerPage,
-    libraryPage * librariesPerPage
+    (visibleLibraryPage - 1) * librariesPerPage,
+    visibleLibraryPage * librariesPerPage
   );
-
-  useEffect(() => {
-    setLibraryPage((page) => Math.min(page, libraryPageCount));
-  }, [libraryPageCount]);
-
-  useEffect(() => {
-    setLibraryPage(1);
-  }, [section]);
 
   const handleCoordinateChange = (lat, lng) => {
     setLibraryForm((previous) => ({
@@ -998,8 +979,8 @@ const handleEditStaff = (staff) => {
           campus: '',
           address: '',
           emailDomain: '',
-          lat: '14.085000',
-          lng: '121.149000',
+          lat: '',
+          lng: '',
           hours:
             '8:00 AM - 5:00 PM',
           status: 'Open',
@@ -1075,8 +1056,8 @@ const handleEditStaff = (staff) => {
         campus: '',
         address: '',
         emailDomain: '',
-        lat: '14.085000',
-        lng: '121.149000',
+        lat: '',
+        lng: '',
         hours: '8:00 AM - 5:00 PM',
         status: 'Open',
       });
@@ -1287,13 +1268,14 @@ const handleEditStaff = (staff) => {
       weeks[weekIndex][field] += 1;
     };
 
-    attendanceLogs.forEach((attendance) => addToWeek(attendance.timeIn, 'visitCount'));
-    borrowRequests.forEach((request) => addToWeek(request.borrowDate, 'borrowCount'));
+    attendanceLogs.forEach((attendance) => addToWeek(attendance.timeIn || attendance.time_in, 'visitCount'));
+    borrowRequests.forEach((request) => addToWeek(request.borrowDate || request.borrow_date, 'borrowCount'));
     return {
       monthLabel,
       labels: weeks.map((week) => week.label),
       visitCounts: weeks.map((week) => week.visitCount),
       borrowCounts: weeks.map((week) => week.borrowCount),
+      hasActivity: weeks.some((week) => week.visitCount > 0 || week.borrowCount > 0),
     };
   }, [
     attendanceLogs,
@@ -1326,14 +1308,11 @@ const handleEditStaff = (staff) => {
       if (branch && isInRange(attendance.timeIn || attendance.time_in)) branch.checkIns += 1;
     });
 
-    const bookLibraryById = new Map(
-      books.map((book) => [String(book.id), String(book.libraryId || book.library_id || '')])
-    );
+    const booksById = new Map(books.map((book) => [String(book.id), book]));
     borrowRequests.forEach((request) => {
-      const transactionDate = request.requestDate || request.request_date || request.borrowDate || request.borrow_date;
+      const transactionDate = request.borrowDate || request.borrow_date || request.requestDate || request.request_date;
       if (!isInRange(transactionDate)) return;
-      const bookLibraryId = bookLibraryById.get(String(request.bookId || request.book_id || ''));
-      const branchId = String(request.libraryId || request.library_id || bookLibraryId || '');
+      const branchId = getRequestLibraryId(request, booksById);
       const branch = counts.get(branchId);
       if (branch) branch.transactions += 1;
     });
@@ -1394,318 +1373,323 @@ const handleEditStaff = (staff) => {
   }
 
   return (
-    <div className="superadmin-dashboard flex h-dvh min-h-0 overflow-hidden bg-shelf-bg text-slate-800">
-      {/* SIDEBAR */}
-      <aside className="superadmin-sidebar fixed inset-y-0 left-0 z-40 flex h-dvh w-60 shrink-0 flex-col overflow-hidden bg-shelf-primary text-white">
-        <div className="border-b border-white/10 p-5">
-          <button
-            type="button"
-            onClick={() => navigate(getDashboardPath(user?.role))}
-            aria-label="Go to SHELF home"
-            className="flex items-center gap-2 text-left text-white"
-          >
-            <img src="/shelf-logo.png" alt="" className="h-9 w-9 object-contain" />
-            <p className="font-extrabold tracking-wider">SHELF</p>
-          </button>
-          <div className="mt-4 border-l-[3px] border-blue-400 pl-3">
-            <p className="text-base font-bold leading-tight tracking-wide text-white">Super admin</p>
-            <p className="mt-1 text-xs font-medium text-blue-100/75">System console</p>
+    <div className="superadmin-dashboard flex h-dvh min-h-0 overflow-hidden bg-shelf-bg text-slate-800 flex-col">
+      {/* GLOBAL SHELF HEADER */}
+      <ShelfHeader
+        notificationCount={superAdminNotifications.length}
+        notificationItems={superAdminNotifications.map((n) => ({
+          id: n.id,
+          message: n.message,
+          created_at: new Date(n.timestamp).toISOString(),
+          read: false,
+        }))}
+        onNotificationClick={(item) => {
+          if (item.targetSection) setSection(item.targetSection);
+          if (item.targetTab) setActiveTab(item.targetTab);
+          if (item.recordId) setFocusedNotificationRequestId(item.recordId);
+          if (item.type) setFocusedNotificationType(item.type);
+          setNotificationFocusVersion((v) => v + 1);
+        }}
+        showDarkModeToggle={true}
+      />
+
+      {/* SIDEBAR + MAIN CONTENT */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* SIDEBAR */}
+        <aside className="superadmin-sidebar fixed top-16 inset-y-0 left-0 z-40 flex h-[calc(100vh-4rem)] w-60 shrink-0 flex-col overflow-hidden bg-shelf-primary text-white">
+          <div className="border-b border-white/10 p-5">
+            <div className="mt-4 border-l-[3px] border-blue-400 pl-3">
+              <p className="text-base font-bold leading-tight tracking-wide text-white">Super admin</p>
+              <p className="mt-1 text-xs font-medium text-blue-100/75">System console</p>
+            </div>
           </div>
-        </div>
 
-        {/* NAVIGATION */}
-        <nav className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1">
-          {/* OVERVIEW */}
-          <button
-            type="button"
-            onClick={() => {
-              setSection('overview');
-              setStaffError('');
-              setStaffMessage('');
-            }}
-            className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
-              section === 'overview'
-                ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
-                : 'text-slate-300 hover:bg-white/5'
-            }`}
-          >
-            <Activity size={18} className="mr-3 inline-block align-[-3px]" />
-            Overview & analytics
-          </button>
-
-          {/* INVENTORY */}
-          <button
-            type="button"
-            onClick={() => {
-              setSection('inventory');
-              setStaffError('');
-              setStaffMessage('');
-            }}
-            className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
-              section === 'inventory'
-                ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
-                : 'text-slate-300 hover:bg-white/5'
-            }`}
-          >
-            <BookOpen size={18} className="mr-3 inline-block align-[-3px]" />
-            Inventory
-          </button>
-
-          {/* LIBRARIES & MAP */}
-          <button
-            type="button"
-            onClick={() => {
-              setSection('map');
-              setStaffError('');
-              setStaffMessage('');
-            }}
-            className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
-              section === 'map'
-                ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
-                : 'text-slate-300 hover:bg-white/5'
-            }`}
-          >
-            <MapPinned size={18} className="mr-3 inline-block align-[-3px]" />
-            Libraries & map
-          </button>
-
-          {/* STAFF ACCOUNTS */}
-          <button
-            type="button"
-            onClick={() => {
-              setSection('accounts');
-              setStaffError('');
-              setStaffMessage('');
-            }}
-            className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
-              section === 'accounts'
-                ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
-                : 'text-slate-300 hover:bg-white/5'
-            }`}
-          >
-            <ShieldCheck size={18} className="mr-3 inline-block align-[-3px]" />
-            Staff accounts
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setSection('visitor-accounts');
-              setStaffError('');
-              setStaffMessage('');
-            }}
-            className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
-              section === 'visitor-accounts'
-                ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
-                : 'text-slate-300 hover:bg-white/5'
-            }`}
-          >
-            <UsersRound size={18} className="mr-3 inline-block align-[-3px]" />
-            Visitor accounts
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setSection('fines')}
-            className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${section === 'fines' ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]' : 'text-slate-300 hover:bg-white/5'}`}
-          >
-            <CircleDollarSign size={18} className="mr-3 inline-block align-[-3px]" />
-            Fine Payments
-          </button>
-          <button
-            type="button"
-            onClick={() => setSection('subscriptions')}
-            className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${section === 'subscriptions' ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]' : 'text-slate-300 hover:bg-white/5'}`}
-          >
-            <Building2 size={18} className="mr-3 inline-block align-[-3px]" aria-hidden="true" />
-            Subscriptions
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setSection('settings')}
-            className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${section === 'settings' ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]' : 'text-slate-300 hover:bg-white/5'}`}
-          >
-            <Settings size={18} className="mr-3 inline-block align-[-3px]" />
-            Settings
-          </button>
-
-          {/* REPORTS & SERVICES COLLAPSIBLE */}
-          <div>
+          {/* NAVIGATION */}
+          <nav className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1">
+            {/* OVERVIEW */}
             <button
               type="button"
-              onClick={() => setWorkspaceOpen((prev) => !prev)}
-              className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm transition ${
-                section === 'workspace'
+              onClick={() => {
+                setSection('overview');
+                setStaffError('');
+                setStaffMessage('');
+              }}
+              className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
+                section === 'overview'
                   ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
                   : 'text-slate-300 hover:bg-white/5'
               }`}
             >
-              <span className="flex items-center gap-3">
-                <FileSpreadsheet size={18} />
-                Reports & services
-              </span>
-              {workspaceOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              <Activity size={18} className="mr-3 inline-block align-[-3px]" />
+              Overview & analytics
             </button>
 
-            {workspaceOpen && (
-              <div className="ml-5 mt-1 space-y-1 border-l border-white/20 pl-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSection('workspace');
-                    setActiveTab('reports');
-                  }}
-                  className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition ${
-                    section === 'workspace' && activeTab === 'reports'
-                      ? 'bg-shelf-accent/25 font-bold text-white shadow-[inset_2px_0_0_0_#bfdbfe]'
-                      : 'text-slate-300 hover:text-white'
-                  }`}
-                >
-                  Reports
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSection('workspace');
-                    setActiveTab('analytics');
-                  }}
-                  className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition ${
-                    section === 'workspace' && activeTab === 'analytics'
-                      ? 'bg-shelf-accent/25 font-bold text-white shadow-[inset_2px_0_0_0_#bfdbfe]'
-                      : 'text-slate-300 hover:text-white'
-                  }`}
-                >
-                  Analytics
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* COMMUNICATION COLLAPSIBLE */}
-          <div>
+            {/* INVENTORY */}
             <button
               type="button"
-              onClick={() => setCommunicationOpen((prev) => !prev)}
-              className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm transition ${
-                section === 'communication'
+              onClick={() => {
+                setSection('inventory');
+                setStaffError('');
+                setStaffMessage('');
+              }}
+              className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
+                section === 'inventory'
                   ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
                   : 'text-slate-300 hover:bg-white/5'
               }`}
             >
-              <span className="flex items-center gap-3">
-                <MessageSquare size={18} />
-                Communication
-              </span>
-              {communicationOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              <BookOpen size={18} className="mr-3 inline-block align-[-3px]" />
+              Inventory
             </button>
 
-            {communicationOpen && (
-              <div className="ml-5 mt-1 space-y-1 border-l border-white/20 pl-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSection('communication');
-                    setActiveTab('feedback');
-                  }}
-                  className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition ${
-                    section === 'communication' && activeTab === 'feedback'
-                      ? 'bg-shelf-accent/25 font-bold text-white shadow-[inset_2px_0_0_0_#bfdbfe]'
-                      : 'text-slate-300 hover:text-white'
-                  }`}
-                >
-                  Feedback
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSection('communication');
-                    setActiveTab('announcements');
-                  }}
-                  className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition ${
-                    section === 'communication' && activeTab === 'announcements'
-                      ? 'bg-shelf-accent/25 font-bold text-white shadow-[inset_2px_0_0_0_#bfdbfe]'
-                      : 'text-slate-300 hover:text-white'
-                  }`}
-                >
-                  Announcements
-                </button>
-              </div>
-            )}
-          </div>
-        </nav>
+            {/* LIBRARIES & MAP */}
+            <button
+              type="button"
+              onClick={() => {
+                setSection('map');
+                setStaffError('');
+                setStaffMessage('');
+              }}
+              className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
+                section === 'map'
+                  ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
+                  : 'text-slate-300 hover:bg-white/5'
+              }`}
+            >
+              <MapPinned size={18} className="mr-3 inline-block align-[-3px]" />
+              Libraries & map
+            </button>
 
-        <div className="space-y-2 border-t border-white/10 p-4">
-          <p className="text-xs text-slate-300">
-            Signed in as
-          </p>
-          <p className="text-sm font-bold">
-            {superAdminName}
-          </p>
-          <button
-            type="button"
-            onClick={handleSuperAdminLogout}
-            className="w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs transition hover:bg-white/20"
-          >
-            Sign out
-          </button>
-        </div>
-      </aside>
+            {/* STAFF ACCOUNTS */}
+            <button
+              type="button"
+              onClick={() => {
+                setSection('accounts');
+                setStaffError('');
+                setStaffMessage('');
+              }}
+              className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
+                section === 'accounts'
+                  ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
+                  : 'text-slate-300 hover:bg-white/5'
+              }`}
+            >
+              <ShieldCheck size={18} className="mr-3 inline-block align-[-3px]" />
+              Staff accounts
+            </button>
 
-      {/* MAIN CONTENT */}
-      <main
-        ref={mainScrollRef}
-        className={`ml-60 min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8 ${section === 'overview' ? '' : '!pt-0'}`}
-      >
-        {section !== 'overview' && (
-          <header className="sticky top-0 z-40 -mx-4 flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 bg-shelf-bg/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-            <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm">
+            <button
+              type="button"
+              onClick={() => {
+                setSection('visitor-accounts');
+                setStaffError('');
+                setStaffMessage('');
+              }}
+              className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
+                section === 'visitor-accounts'
+                  ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
+                  : 'text-slate-300 hover:bg-white/5'
+              }`}
+            >
+              <UsersRound size={18} className="mr-3 inline-block align-[-3px]" />
+              Visitor accounts
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSection('fines')}
+              className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${section === 'fines' ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]' : 'text-slate-300 hover:bg-white/5'}`}
+            >
+              <CircleDollarSign size={18} className="mr-3 inline-block align-[-3px]" />
+              Fine Payments
+            </button>
+            <button
+              type="button"
+              onClick={() => setSection('subscriptions')}
+              className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${section === 'subscriptions' ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]' : 'text-slate-300 hover:bg-white/5'}`}
+            >
+              <Building2 size={18} className="mr-3 inline-block align-[-3px]" aria-hidden="true" />
+              Subscriptions
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSection('settings')}
+              className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${section === 'settings' ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]' : 'text-slate-300 hover:bg-white/5'}`}
+            >
+              <Settings size={18} className="mr-3 inline-block align-[-3px]" />
+              Settings
+            </button>
+
+            {/* REPORTS & SERVICES COLLAPSIBLE */}
+            <div>
               <button
                 type="button"
-                onClick={() => setSection('overview')}
-                className="shrink-0 font-medium text-slate-500 transition hover:text-shelf-accent"
+                onClick={() => setWorkspaceOpen((prev) => !prev)}
+                className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm transition ${
+                  section === 'workspace'
+                    ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
+                    : 'text-slate-300 hover:bg-white/5'
+                }`}
               >
-                Dashboard
+                <span className="flex items-center gap-3">
+                  <FileSpreadsheet size={18} />
+                  Reports & services
+                </span>
+                {workspaceOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               </button>
-              <span aria-hidden="true" className="text-slate-300">/</span>
-              <span className="truncate font-semibold text-shelf-primary">
-                {section === 'workspace'
-                  ? (activeTab === 'analytics' ? 'Analytics' : 'Reports')
-                  : section === 'communication'
-                    ? (activeTab === 'announcements' ? 'Announcements' : 'Feedback')
-                    : ({ inventory: 'Inventory', map: 'Libraries & map', accounts: 'Staff accounts', 'visitor-accounts': 'Visitor accounts', fines: 'Fine Payments', subscriptions: 'Subscriptions', settings: 'Settings' }[section] || 'Dashboard')}
-              </span>
-            </nav>
-            <span className="flex max-w-full min-w-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">
-              <Globe size={14} className="shrink-0 text-shelf-accent" aria-hidden="true" />
-              <span className="truncate">All libraries</span>
-            </span>
-          </header>
-        )}
-        {section === 'overview' && <DashboardWelcome
-          name={superAdminName.split(' ')[0]}
-          description="System metrics, library operations, staff accounts, and reports at a glance."
-          notifications={superAdminNotifications}
-          onNotificationFollowUp={handleOverdueFollowUp}
-          onNotificationClick={(notification) => {
-            setFocusedNotificationRequestId(
-              notification.recordId || notification.requestId
-            );
-            setFocusedNotificationType(notification.type);
-            setNotificationFocusVersion((version) => version + 1);
-            setSection(notification.targetSection);
-            setActiveTab(notification.targetTab);
-          }}
-          actions={[
-            { label: 'View Inventory', Icon: BookOpen, onClick: () => setSection('inventory') },
-            { label: 'Manage Staff', Icon: ShieldCheck, onClick: () => setSection('accounts') },
-            { label: 'Open Reports', Icon: FileSpreadsheet, onClick: () => { setSection('workspace'); setActiveTab('reports'); } },
-          ]}
-        />}
 
-        {/* OVERVIEW */}
-        {section === 'overview' && (
-          <div className="space-y-6">
+              {workspaceOpen && (
+                <div className="ml-5 mt-1 space-y-1 border-l border-white/20 pl-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSection('workspace');
+                      setActiveTab('reports');
+                    }}
+                    className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition ${
+                      section === 'workspace' && activeTab === 'reports'
+                        ? 'bg-shelf-accent/25 font-bold text-white shadow-[inset_2px_0_0_0_#bfdbfe]'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    Reports
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSection('workspace');
+                      setActiveTab('analytics');
+                    }}
+                    className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition ${
+                      section === 'workspace' && activeTab === 'analytics'
+                        ? 'bg-shelf-accent/25 font-bold text-white shadow-[inset_2px_0_0_0_#bfdbfe]'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    Analytics
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* COMMUNICATION COLLAPSIBLE */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setCommunicationOpen((prev) => !prev)}
+                className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm transition ${
+                  section === 'communication'
+                    ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
+                    : 'text-slate-300 hover:bg-white/5'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <MessageSquare size={18} />
+                  Communication
+                </span>
+                {communicationOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </button>
+
+              {communicationOpen && (
+                <div className="ml-5 mt-1 space-y-1 border-l border-white/20 pl-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSection('communication');
+                      setActiveTab('feedback');
+                    }}
+                    className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition ${
+                      section === 'communication' && activeTab === 'feedback'
+                        ? 'bg-shelf-accent/25 font-bold text-white shadow-[inset_2px_0_0_0_#bfdbfe]'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    Feedback
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSection('communication');
+                      setActiveTab('announcements');
+                    }}
+                    className={`w-full rounded-md px-3 py-1.5 text-left text-xs transition ${
+                      section === 'communication' && activeTab === 'announcements'
+                        ? 'bg-shelf-accent/25 font-bold text-white shadow-[inset_2px_0_0_0_#bfdbfe]'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    Announcements
+                  </button>
+                </div>
+              )}
+            </div>
+          </nav>
+
+          <div className="space-y-2 border-t border-white/10 p-4">
+            <p className="text-xs text-slate-300">
+              Signed in as
+            </p>
+            <p className="text-sm font-bold">
+              {superAdminName}
+            </p>
+          </div>
+        </aside>
+
+        {/* MAIN CONTENT */}
+        <main
+          ref={mainScrollRef}
+          className={`ml-60 min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8 pt-16 ${section === 'overview' ? '' : 'pt-16!'}`}
+        >
+          {section !== 'overview' && (
+            <header className="sticky top-16 z-30 -mx-4 flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 bg-shelf-bg/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+              <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm">
+                <button
+                  type="button"
+                  onClick={() => setSection('overview')}
+                  className="shrink-0 font-medium text-slate-500 transition hover:text-shelf-accent"
+                >
+                  Dashboard
+                </button>
+                <span aria-hidden="true" className="text-slate-300">/</span>
+                <span className="truncate font-semibold text-shelf-primary">
+                  {section === 'workspace'
+                    ? (activeTab === 'analytics' ? 'Analytics' : 'Reports')
+                    : section === 'communication'
+                      ? (activeTab === 'announcements' ? 'Announcements' : 'Feedback')
+                      : ({ inventory: 'Inventory', map: 'Libraries & map', accounts: 'Staff accounts', 'visitor-accounts': 'Visitor accounts', fines: 'Fine Payments', subscriptions: 'Subscriptions', settings: 'Settings' }[section] || 'Dashboard')}
+                </span>
+              </nav>
+              <span className="flex max-w-full min-w-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">
+                <Globe size={14} className="shrink-0 text-shelf-accent" aria-hidden="true" />
+                <span className="truncate">All libraries</span>
+              </span>
+            </header>
+          )}
+          {section === 'overview' && <DashboardWelcome
+            name={superAdminName.split(' ')[0]}
+            description="System metrics, library operations, staff accounts, and reports at a glance."
+            notifications={superAdminNotifications}
+            onNotificationFollowUp={handleOverdueFollowUp}
+            onNotificationClick={(notification) => {
+              setFocusedNotificationRequestId(
+                notification.recordId || notification.requestId
+              );
+              setFocusedNotificationType(notification.type);
+              setNotificationFocusVersion((version) => version + 1);
+              setSection(notification.targetSection);
+              setActiveTab(notification.targetTab);
+            }}
+            actions={[
+              { label: 'View Inventory', Icon: BookOpen, onClick: () => setSection('inventory') },
+              { label: 'Manage Staff', Icon: ShieldCheck, onClick: () => setSection('accounts') },
+              { label: 'Open Reports', Icon: FileSpreadsheet, onClick: () => { setSection('workspace'); setActiveTab('reports'); } },
+            ]}
+          />}
+
+          {/* OVERVIEW */}
+          {section === 'overview' && (
+            <div className="space-y-6">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
               <StatCard label="Registered Visitors" value={visitorCount ?? '—'} tone="blue" />
               <StatCard label="Titles in Catalog" value={books.length} />
@@ -1741,6 +1725,11 @@ const handleEditStaff = (staff) => {
                     }}
                   />
                 </div>
+                {!trendData.hasActivity && (
+                  <p className="mt-2 text-center text-xs text-slate-500">
+                    No attendance or completed borrowing activity was recorded for {trendData.monthLabel}.
+                  </p>
+                )}
               </div>
               <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <h3 className="mb-3 text-sm font-bold text-slate-800">Catalog by Category</h3>
@@ -1792,11 +1781,11 @@ const handleEditStaff = (staff) => {
               </div>
               <div className="h-full rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
                 <div className="mb-3">
-                  <h3 className="text-sm font-bold text-slate-800">Top 5 Branches — Check-ins & Book Transactions</h3>
-                  <p className="mt-1 text-xs text-slate-500">Branch comparison for the last 7 days. Transactions are counted by the branch that owns the requested book.</p>
+                  <h3 className="text-sm font-bold text-slate-800">Top 5 Branches — Check-ins & Book Requests/Borrows</h3>
+                  <p className="mt-1 text-xs text-slate-500">Branch comparison for the last 7 calendar days. Request/borrow records with conflicting request and book branches are excluded.</p>
                 </div>
                 {branchActivityData.labels.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-slate-500">No branch check-ins or book transactions were recorded in the last 7 days.</p>
+                  <p className="py-8 text-center text-sm text-slate-500">No branch check-ins or request/borrow activity was recorded in the last 7 days.</p>
                 ) : (
                   <div className="h-80">
                     <Bar
@@ -1804,7 +1793,7 @@ const handleEditStaff = (staff) => {
                         labels: branchActivityData.labels,
                         datasets: [
                           { label: 'Visitor check-ins', data: branchActivityData.checkIns, backgroundColor: '#2563eb', borderRadius: 5 },
-                          { label: 'Book transactions', data: branchActivityData.transactions, backgroundColor: '#f59e0b', borderRadius: 5 },
+                          { label: 'Book request/borrow records', data: branchActivityData.transactions, backgroundColor: '#f59e0b', borderRadius: 5 },
                         ],
                       }}
                       options={{
@@ -1882,7 +1871,7 @@ const handleEditStaff = (staff) => {
                       <Activity size={14} className="mr-1.5 inline-block align-[-2px]" aria-hidden="true" />
                       Total Attendance
                     </p>
-                    <p className="text-xs text-slate-500">Recent attendance records (up to 5,000): {attendanceLogs.length}</p>
+                    <p className="text-xs text-slate-500">Attendance records loaded: {attendanceLogs.length.toLocaleString()}</p>
                   </div>
                   <div className="flex gap-2">
                     <button type="button" disabled={Boolean(exportingReport)} onClick={() => exportSystemReport('attendance', 'xlsx')} className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-emerald-700">{exportingReport === 'attendance-xlsx' ? 'Exporting…' : 'Excel'}</button>
@@ -2297,22 +2286,22 @@ const handleEditStaff = (staff) => {
                 {libraries.length > 0 && (
                   <div className="flex flex-col gap-3 rounded-xl border border-shelf-border bg-white px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-slate-600">
-                      Showing {(libraryPage - 1) * librariesPerPage + 1}–{Math.min(libraryPage * librariesPerPage, libraries.length)} of {libraries.length} libraries
+                      Showing {(visibleLibraryPage - 1) * librariesPerPage + 1}–{Math.min(visibleLibraryPage * librariesPerPage, libraries.length)} of {libraries.length} libraries
                     </p>
                     <div className="flex items-center justify-between gap-3 sm:justify-end">
                       <button
                         type="button"
-                        onClick={() => setLibraryPage((page) => Math.max(1, page - 1))}
-                        disabled={libraryPage === 1}
+                        onClick={() => setLibraryPage((page) => Math.max(1, Math.min(page, libraryPageCount) - 1))}
+                        disabled={visibleLibraryPage === 1}
                         className="rounded-lg border border-shelf-border px-3 py-2 font-semibold text-shelf-primary transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Previous
                       </button>
-                      <span className="whitespace-nowrap text-slate-600">Page {libraryPage} of {libraryPageCount}</span>
+                      <span className="whitespace-nowrap text-slate-600">Page {visibleLibraryPage} of {libraryPageCount}</span>
                       <button
                         type="button"
-                        onClick={() => setLibraryPage((page) => Math.min(libraryPageCount, page + 1))}
-                        disabled={libraryPage === libraryPageCount}
+                        onClick={() => setLibraryPage((page) => Math.min(libraryPageCount, Math.min(page, libraryPageCount) + 1))}
+                        disabled={visibleLibraryPage === libraryPageCount}
                         className="rounded-lg border border-shelf-border px-3 py-2 font-semibold text-shelf-primary transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Next
@@ -2676,6 +2665,7 @@ const handleEditStaff = (staff) => {
             books={books}
             borrowRequests={borrowRequests}
             attendanceLogs={attendanceLogs}
+            attendanceDataComplete={initialDataReady && !attendanceLoadError}
             focusedNotificationRequestId={focusedNotificationRequestId}
             focusedNotificationType={focusedNotificationType}
           />
@@ -2691,9 +2681,11 @@ const handleEditStaff = (staff) => {
             books={books}
             borrowRequests={borrowRequests}
             attendanceLogs={attendanceLogs}
+            attendanceDataComplete={initialDataReady && !attendanceLoadError}
           />
         )}
       </main>
     </div>
+  </div>
   );
 }

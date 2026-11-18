@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabaseClient.js';
 
 const VISITOR_ACCOUNTS_CACHE_TTL_MS = 15_000;
+const VISITOR_ACCOUNTS_CACHE_MAX_SIZE = 100;
 const visitorAccountsCache = new Map();
 
 function mapVisitor(row) {
@@ -13,6 +14,8 @@ function mapVisitor(row) {
     libraryId: row.library_id ?? null,
     otpVerified: row.otp_verified,
     isActive: row.is_active,
+    registrationType: row.registration_type || 'institutional',
+    approvalStatus: row.approval_status || 'approved',
     qrCode: row.qr_code,
     registeredAt: row.registered_at,
   };
@@ -36,34 +39,91 @@ export async function setVisitorActive(visitorId, isActive) {
   return isActive;
 }
 
+export async function approveCommunityVisitor(visitorId) {
+  const { data, error } = await supabase.rpc('approve_community_visitor', {
+    p_visitor_id: visitorId,
+  });
+  if (error) throw new Error(error.message || 'Unable to approve this community visitor.');
+  if (data !== true) throw new Error('The community visitor was not approved.');
+  invalidateVisitorAccountsCache();
+  return true;
+}
+
+function pruneExpiredCacheEntries() {
+  const now = Date.now();
+  const expiredKeys = [];
+  for (const [key, entry] of visitorAccountsCache) {
+    if (entry.expiresAt <= now) {
+      expiredKeys.push(key);
+    }
+  }
+  for (const key of expiredKeys) {
+    visitorAccountsCache.delete(key);
+  }
+}
+
+function enforceCacheSizeLimit() {
+  if (visitorAccountsCache.size < VISITOR_ACCOUNTS_CACHE_MAX_SIZE) {
+    return;
+  }
+  let oldestKey = null;
+  let oldestExpiresAt = Infinity;
+  for (const [key, entry] of visitorAccountsCache) {
+    if (entry.expiresAt < oldestExpiresAt) {
+      oldestExpiresAt = entry.expiresAt;
+      oldestKey = key;
+    }
+  }
+  if (oldestKey !== null) {
+    visitorAccountsCache.delete(oldestKey);
+  }
+}
+
 export async function fetchVisitorAccounts({
   libraryId,
   page = 1,
   pageSize = 10,
   search = '',
 } = {}) {
-  const {
-    data: sessionData,
-    error: sessionError,
-  } = await supabase.auth.getSession();
+  // Use the new secure RPC to validate the current user's role
+  // with AAL2 enforcement for staff operations.
+  const { data: roleData, error: roleError } = await supabase.rpc('get_current_user_role');
 
-  if (sessionError) {
-    throw new Error(
-      sessionError.message || 'Unable to check the current authentication session.'
-    );
+  if (roleError) {
+    throw new Error(roleError.message || 'Unable to verify your access to visitor accounts.');
   }
 
-  const userId = sessionData?.session?.user?.id;
-  if (!userId) {
+  if (!roleData || roleData.length === 0) {
     throw new Error('Sign in to view visitor accounts.');
+  }
+
+  const roleInfo = roleData[0];
+  const userType = roleInfo.user_type;
+  const libraryIdFromRole = roleInfo.library_id;
+  const isActive = roleInfo.is_active;
+
+  if (!isActive || (userType !== 'superadmin' && userType !== 'subadmin')) {
+    throw new Error('Active library staff access is required to view visitor accounts.');
+  }
+
+  // Determine effective library scope:
+  // - superadmin: can view all libraries or filter by provided libraryId
+  // - subadmin: scoped to their assigned branch (libraryIdFromRole)
+  let effectiveLibraryId = libraryId;
+  if (userType === 'subadmin') {
+    if (libraryId !== undefined && libraryId !== null && libraryId !== libraryIdFromRole) {
+      throw new Error('You can only view visitors from your assigned branch.');
+    }
+    effectiveLibraryId = libraryIdFromRole;
   }
 
   const safePage = Math.max(1, Math.floor(Number(page) || 1));
   const safePageSize = Math.min(50, Math.max(1, Math.floor(Number(pageSize) || 10)));
   const normalizedSearch = String(search || '').trim().slice(0, 100);
   const cacheKey = JSON.stringify([
-    userId,
-    libraryId === undefined ? 'all' : libraryId,
+    roleInfo.visitor_id || roleInfo.role, // Use role as cache key basis
+    userType,
+    effectiveLibraryId === undefined ? 'all' : effectiveLibraryId,
     safePage,
     safePageSize,
     normalizedSearch.toLowerCase(),
@@ -77,15 +137,15 @@ export async function fetchVisitorAccounts({
   let query = supabase
     .from('visitors')
     .select(
-      'id, full_name, contact_number, email, address, otp_verified, is_active, qr_code, registered_at, library_id',
+      'id, full_name, contact_number, email, address, otp_verified, is_active, qr_code, registered_at, library_id, registration_type, approval_status',
       { count: 'exact' }
     )
     .order('registered_at', { ascending: false });
 
-  if (libraryId === null) {
+  if (effectiveLibraryId === null) {
     query = query.is('library_id', null);
-  } else if (libraryId !== undefined) {
-    query = query.eq('library_id', libraryId);
+  } else if (effectiveLibraryId !== undefined) {
+    query = query.eq('library_id', effectiveLibraryId);
   }
 
   const safeSearch = normalizedSearch
@@ -115,13 +175,9 @@ export async function fetchVisitorAccounts({
     visitors: (data || []).map(mapVisitor),
     total: count || 0,
   };
-  for (const [key, entry] of visitorAccountsCache) {
-    if (entry.expiresAt <= Date.now()) visitorAccountsCache.delete(key);
-  }
-  if (visitorAccountsCache.size >= 50) {
-    const oldestKey = visitorAccountsCache.keys().next().value;
-    if (oldestKey !== undefined) visitorAccountsCache.delete(oldestKey);
-  }
+
+  pruneExpiredCacheEntries();
+  enforceCacheSizeLimit();
   visitorAccountsCache.set(cacheKey, {
     value: result,
     expiresAt: Date.now() + VISITOR_ACCOUNTS_CACHE_TTL_MS,

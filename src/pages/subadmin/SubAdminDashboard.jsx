@@ -40,7 +40,7 @@ import SubAdminTermsContent, {
   SUBADMIN_TERMS_VERSION,
 } from '../../component/SubAdminTermsContent.jsx';
 import { useAuth } from '../../context/useAuth.js';
-import { getDashboardPath } from '../../routes/roleHome.js';
+import ShelfHeader from '../../component/ShelfHeader.jsx';
 import { useLibrary, useLibraryData } from '../../context/useLibrary.js';
 import AttendanceScanner from '../../component/AttendanceScanner.jsx';
 import BookInventory from '../../component/BookInventory.jsx';
@@ -67,6 +67,10 @@ import {
   buildAttendanceSummary,
   buildSubAdminAttendanceAnalytics,
 } from '../../lib/attendanceReportUtils.js';
+import {
+  filterRequestsForLibrary,
+  filterRowsForLibrary,
+} from '../../lib/dashboardAnalytics.js';
 
 const VisitorAccountManagement = lazy(
   () => import('../../component/VisitorAccountManagement.jsx')
@@ -1113,6 +1117,7 @@ export default function SubAdminDashboard() {
     confirmReturn,
     loading: libraryLoading,
     initialDataReady,
+    attendanceLoadError,
     connectionError,
     refreshAll,
   } = useLibrary();
@@ -1323,28 +1328,22 @@ export default function SubAdminDashboard() {
   const branchBooks = useMemo(() => {
     if (!currentLibraryId) return [];
     return books.filter(
-      (b) => b.libraryId === currentLibraryId || b.library_id === currentLibraryId
+      (b) => String(b.libraryId ?? b.library_id ?? '') === String(currentLibraryId)
     );
   }, [books, currentLibraryId]);
 
   const branchAttendance = useMemo(() => {
-    if (!currentLibraryId) return [];
-    return attendanceLogs.filter(
-      (a) => a.libraryId === currentLibraryId || a.library_id === currentLibraryId
-    );
+    return filterRowsForLibrary(attendanceLogs, currentLibraryId);
   }, [attendanceLogs, currentLibraryId]);
 
-  const branchBookIds = useMemo(
-    () => new Set(branchBooks.map((book) => String(book.id))),
-    [branchBooks]
+  const branchBooksById = useMemo(
+    () => new Map(books.map((book) => [String(book.id), book])),
+    [books]
   );
 
   const branchBorrowRequests = useMemo(
-    () =>
-      borrowRequests.filter((request) =>
-        branchBookIds.has(String(request.bookId || request.book_id))
-      ),
-    [borrowRequests, branchBookIds]
+    () => filterRequestsForLibrary(borrowRequests, branchBooksById, currentLibraryId),
+    [borrowRequests, branchBooksById, currentLibraryId]
   );
 
   useEffect(() => {
@@ -1533,7 +1532,7 @@ export default function SubAdminDashboard() {
         startDate: new Date(),
         endDate: new Date(),
         asOf: isBooksReport,
-        ...(report === 'attendance' ? { dateRange: 'Latest 5,000 available records' } : {}),
+        ...(report === 'attendance' ? { dateRange: 'All loaded branch attendance records' } : {}),
         summary: [[isBooksReport ? 'Total Titles' : 'Total Visits', reportRows.length]],
         ...(isBooksReport ? {
           columns: [
@@ -1691,122 +1690,123 @@ export default function SubAdminDashboard() {
   }
 
   return (
-    <div className="subadmin-dashboard flex h-dvh min-h-0 w-full overflow-hidden bg-shelf-bg text-slate-800">
-      {/* SIDEBAR */}
-      <aside className="subadmin-sidebar sticky top-0 flex h-full w-60 shrink-0 flex-col border-r border-white/10 bg-shelf-primary text-white shadow-lg">
-        <div className="p-5 border-b border-white/10">
-          <button
-            type="button"
-            onClick={() => navigate(getDashboardPath(user?.role))}
-            aria-label="Go to SHELF home"
-            className="flex items-center gap-2 text-left text-white"
-          >
-            <img src="/shelf-logo.png" alt="" className="h-9 w-9 object-contain" />
-            <p className="font-extrabold tracking-wider">SHELF</p>
-          </button>
-          <div className="mt-4 min-w-0 border-l-[3px] border-blue-400 pl-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <p className="min-w-0 truncate text-sm font-bold leading-tight text-white">{user?.name || 'Sub-admin'}</p>
-              <span className="shrink-0 rounded-full border border-blue-200/40 bg-blue-400/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-100">Sub-admin</span>
-            </div>
-            <p className="mt-1 text-xs font-medium text-blue-100/75">Library console</p>
-            <div className="mt-2 flex items-start gap-2">
-              <Building2 size={13} className="mt-0.5 shrink-0 text-amber-300" aria-hidden="true" />
-              <p className="min-w-0 text-xs text-slate-300 wrap-break-words">{currentBranchName || 'Branch not found'}</p>
+    <div className="subadmin-dashboard flex h-dvh min-h-0 w-full overflow-hidden bg-shelf-bg text-slate-800 flex-col">
+      {/* GLOBAL SHELF HEADER */}
+      <ShelfHeader
+        notificationCount={branchNotifications.length}
+        notificationItems={branchNotifications.map((n) => ({
+          id: n.id,
+          message: n.message,
+          created_at: new Date(n.timestamp).toISOString(),
+          read: false,
+        }))}
+        onNotificationClick={(item) => {
+          if (item.targetSection) navigateToSection(item.targetSection);
+          if (item.targetTab) setWorkspaceTab(item.targetTab);
+          if (item.recordId) setFocusRequestId(item.recordId);
+          if (item.type) setFocusNotificationType(item.type);
+        }}
+        showDarkModeToggle={true}
+      />
+
+      {/* SIDEBAR + MAIN CONTENT */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* SIDEBAR */}
+        <aside className="subadmin-sidebar fixed top-16 inset-y-0 left-0 z-40 flex h-[calc(100vh-4rem)] w-60 shrink-0 flex-col border-r border-white/10 bg-shelf-primary text-white shadow-lg">
+          <div className="p-5 border-b border-white/10">
+            <div className="mt-4 min-w-0 border-l-[3px] border-blue-400 pl-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <p className="min-w-0 truncate text-sm font-bold leading-tight text-white">{user?.name || 'Sub-admin'}</p>
+                <span className="shrink-0 rounded-full border border-blue-200/40 bg-blue-400/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-100">Sub-admin</span>
+              </div>
+              <p className="mt-1 text-xs font-medium text-blue-100/75">Library console</p>
+              <div className="mt-2 flex items-start gap-2">
+                <Building2 size={13} className="mt-0.5 shrink-0 text-amber-300" aria-hidden="true" />
+                <p className="min-w-0 text-xs text-slate-300 wrap-break-words">{currentBranchName || 'Branch not found'}</p>
+              </div>
             </div>
           </div>
-        </div>
-        <nav className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1">
-          {NAV.map(({ Icon, ...item }) => (
+          <nav className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1">
+            {NAV.map(({ Icon, ...item }) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => navigateToSection(item.id)}
+                className={`w-full text-left text-sm px-3 py-2.5 rounded-lg transition ${
+                  section === item.id
+                    ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
+                    : 'text-slate-300 hover:bg-white/5'
+                }`}
+              >
+                <Icon size={18} className="mr-3 inline-block align-[-3px]" aria-hidden="true" />
+                {item.label}
+              </button>
+            ))}
+
+            {/* REPORTS & SERVICES */}
             <button
-              key={item.id}
               type="button"
-              onClick={() => navigateToSection(item.id)}
-              className={`w-full text-left text-sm px-3 py-2.5 rounded-lg transition ${
-                section === item.id
-                  ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]'
-                  : 'text-slate-300 hover:bg-white/5'
-              }`}
+              onClick={() => setExpandedGroups((prev) => ({ ...prev, reports: !prev.reports }))}
+              aria-expanded={expandedGroups.reports}
+              className="w-full flex items-center justify-between text-left text-sm px-3 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 transition"
             >
-              <Icon size={18} className="mr-3 inline-block align-[-3px]" aria-hidden="true" />
-              {item.label}
+              <span>Reports & services</span>
+              <ChevronDown size={16} className={`transition-transform ${expandedGroups.reports ? 'rotate-180' : ''}`} />
             </button>
-          ))}
+            {expandedGroups.reports && (
+              <div className="ml-3 border-l border-white/15 pl-2 space-y-1">
+                {[{ id: 'reports', label: 'Reports' }, { id: 'analytics', label: 'Analytics' }].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => { setWorkspaceTab(item.id); navigateToSection('workspace'); }}
+                    className={`w-full text-left text-sm px-3 py-2 rounded-lg transition ${
+                      section === 'workspace' && workspaceTab === item.id
+                        ? 'bg-shelf-accent/25 font-bold text-white shadow-[inset_2px_0_0_0_#bfdbfe]'
+                        : 'text-slate-300 hover:bg-white/5'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
 
-          {/* REPORTS & SERVICES */}
-          <button
-            type="button"
-            onClick={() => setExpandedGroups((prev) => ({ ...prev, reports: !prev.reports }))}
-            aria-expanded={expandedGroups.reports}
-            className="w-full flex items-center justify-between text-left text-sm px-3 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 transition"
-          >
-            <span>Reports & services</span>
-            <ChevronDown size={16} className={`transition-transform ${expandedGroups.reports ? 'rotate-180' : ''}`} />
-          </button>
-          {expandedGroups.reports && (
-            <div className="ml-3 border-l border-white/15 pl-2 space-y-1">
-              {[{ id: 'reports', label: 'Reports' }, { id: 'analytics', label: 'Analytics' }].map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => { setWorkspaceTab(item.id); navigateToSection('workspace'); }}
-                  className={`w-full text-left text-sm px-3 py-2 rounded-lg transition ${
-                    section === 'workspace' && workspaceTab === item.id
-                      ? 'bg-shelf-accent/25 font-bold text-white shadow-[inset_2px_0_0_0_#bfdbfe]'
-                      : 'text-slate-300 hover:bg-white/5'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* COMMUNICATION */}
-          <button
-            type="button"
-            onClick={() => setExpandedGroups((prev) => ({ ...prev, communication: !prev.communication }))}
-            aria-expanded={expandedGroups.communication}
-            className="w-full flex items-center justify-between text-left text-sm px-3 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 transition"
-          >
-            <span>Communication</span>
-            <ChevronDown size={16} className={`transition-transform ${expandedGroups.communication ? 'rotate-180' : ''}`} />
-          </button>
-          {expandedGroups.communication && (
-            <div className="ml-3 border-l border-white/15 pl-2 space-y-1">
-              {[{ id: 'feedback', label: 'Feedback' }, { id: 'announcements', label: 'Announcements' }].map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => { setWorkspaceTab(item.id); navigateToSection('workspace'); }}
-                  className={`w-full text-left text-sm px-3 py-2 rounded-lg transition ${
-                    section === 'workspace' && workspaceTab === item.id
-                      ? 'bg-shelf-accent/25 font-bold text-white shadow-[inset_2px_0_0_0_#bfdbfe]'
-                      : 'text-slate-300 hover:bg-white/5'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          )}
+            {/* COMMUNICATION */}
+            <button
+              type="button"
+              onClick={() => setExpandedGroups((prev) => ({ ...prev, communication: !prev.communication }))}
+              aria-expanded={expandedGroups.communication}
+              className="w-full flex items-center justify-between text-left text-sm px-3 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 transition"
+            >
+              <span>Communication</span>
+              <ChevronDown size={16} className={`transition-transform ${expandedGroups.communication ? 'rotate-180' : ''}`} />
+            </button>
+            {expandedGroups.communication && (
+              <div className="ml-3 border-l border-white/15 pl-2 space-y-1">
+                {[{ id: 'feedback', label: 'Feedback' }, { id: 'announcements', label: 'Announcements' }].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => { setWorkspaceTab(item.id); navigateToSection('workspace'); }}
+                    className={`w-full text-left text-sm px-3 py-2 rounded-lg transition ${
+                      section === 'workspace' && workspaceTab === item.id
+                        ? 'bg-shelf-accent/25 font-bold text-white shadow-[inset_2px_0_0_0_#bfdbfe]'
+                        : 'text-slate-300 hover:bg-white/5'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
         </nav>
-       
-        <div className="mt-auto shrink-0 border-t border-white/10 p-4">
-          <button
-            type="button"
-            onClick={logout}
-            className="w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2.5 text-sm font-semibold transition hover:bg-white/20"
-          >
-            Sign out
-          </button>
-        </div>
       </aside>
 
       {/* MAIN CONTENT */}
-      <main ref={mainContentRef} className={`min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8 ${section === 'overview' ? '' : '!pt-0'}`}>
+      <main ref={mainContentRef} className={`min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8 pt-16 ${section === 'overview' ? '' : '!pt-16'}`}>
         {section !== 'overview' && (
-          <header className="sticky top-0 z-40 -mx-4 flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 bg-shelf-bg/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+          <header className="sticky top-16 z-30 -mx-4 flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 bg-shelf-bg/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
             <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm">
               <button
                 type="button"
@@ -2058,7 +2058,7 @@ export default function SubAdminDashboard() {
                 <div className="p-3.5 border border-slate-100 bg-slate-50/50 rounded-lg flex items-center justify-between">
                   <div>
                     <p className="flex items-center gap-1.5 text-xs font-bold text-slate-700"><Activity size={14} aria-hidden="true" /> Branch Visitor Attendance</p>
-                    <p className="text-xs text-slate-500">Recent attendance records (up to 5,000): {branchAttendance.length}</p>
+                    <p className="text-xs text-slate-500">Branch attendance records loaded: {branchAttendance.length.toLocaleString()}</p>
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -2232,6 +2232,7 @@ export default function SubAdminDashboard() {
             books={branchBooks}
             borrowRequests={borrowRequests}
             attendanceLogs={branchAttendance}
+            attendanceDataComplete={initialDataReady && !attendanceLoadError}
           />
           </PremiumFeatureGate>
         )}
@@ -2327,5 +2328,6 @@ export default function SubAdminDashboard() {
         </div>
       )}
     </div>
+  </div>
   );
 }

@@ -11,6 +11,11 @@ import {
   Tooltip,
 } from 'chart.js';
 import { Download, FileSpreadsheet, FileCode, FileText } from 'lucide-react';
+import {
+  createAnnouncement,
+  updateAnnouncement,
+  deleteAnnouncement,
+} from '../data/store.js';
 import { supabase } from '../lib/supabaseClient.js';
 import { exportReport } from '../lib/excelUtils.js';
 import AnalyticsDateFilter from './AnalyticsDateFilter.jsx';
@@ -23,6 +28,15 @@ import {
 import { getForecastNarrative } from '../lib/forecastNarrative.js';
 import { getAnalyticsApiUrl } from '../lib/analyticsApi.js';
 import { formatBookCategory } from '../lib/bookCategory.js';
+import {
+  buildOperationalRecommendations,
+  canRunVisitorForecast,
+  filterAttendanceForAnalytics,
+  filterRequestsForLibrary,
+  filterRowsForLibrary,
+  getRequestDate,
+  getRequestStatus,
+} from '../lib/dashboardAnalytics.js';
 
 ChartJS.register(
   CategoryScale,
@@ -111,12 +125,13 @@ export default function AdminWorkspace({
   libraries = [],
   books = [],
   attendanceLogs = [],
+  attendanceDataComplete = false,
   borrowRequests = [],
   focusedNotificationRequestId = null,
   focusedNotificationType = null,
 }) {
   const isSubAdmin = user?.role === 'subadmin';
-  const currentLibraryId = user?.libraryId || user?.assignedBranch || '';
+  const currentLibraryId = user?.libraryId || user?.library_id || user?.assignedBranch || user?.assigned_branch || '';
   const [tab, setTab] = useState(initialTab);
   const [previousInitialTab, setPreviousInitialTab] = useState(initialTab);
 
@@ -145,6 +160,7 @@ export default function AdminWorkspace({
   const [customEndDate, setCustomEndDate] = useState('');
   const [reportSort, setReportSort] = useState('time');
   const [activityHistoryPage, setActivityHistoryPage] = useState(1);
+  const [activityHistoryPageSize, setActivityHistoryPageSize] = useState(20);
   const [feedback, setFeedback] = useState([]);
   const [feedbackTotal, setFeedbackTotal] = useState(0);
   const [feedbackPage, setFeedbackPage] = useState(1);
@@ -185,10 +201,12 @@ export default function AdminWorkspace({
     // Clear previously prepared files when the selected analytics range changes.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPreparedAnalyticsExports([]);
+    // A forecast must always describe the currently selected range and branch.
+    setForecast(null);
   }, [analyticsLibraryId, customEndDate, customStartDate, timeframe]);
 
   const booksById = useMemo(
-    () => new Map(books.map((book) => [book.id, book])),
+    () => new Map(books.map((book) => [String(book.id), book])),
     [books]
   );
   const focusedNotificationRequest = borrowRequests.find(
@@ -230,21 +248,15 @@ export default function AdminWorkspace({
 
   const scopedAttendance = useMemo(
     () =>
-      attendanceLogs.filter((item) =>
-        isSubAdmin ? String(item.libraryId) === String(currentLibraryId) : true
-      ),
+      isSubAdmin ? filterRowsForLibrary(attendanceLogs, currentLibraryId) : attendanceLogs,
     [attendanceLogs, currentLibraryId, isSubAdmin]
   );
 
   const scopedBorrows = useMemo(
     () =>
-      borrowRequests.filter((item) => {
-        const book = booksById.get(item.bookId);
-        if (isSubAdmin) {
-          return String(book?.libraryId) === String(currentLibraryId);
-        }
-        return true;
-      }),
+      isSubAdmin
+        ? filterRequestsForLibrary(borrowRequests, booksById, currentLibraryId)
+        : borrowRequests,
     [booksById, borrowRequests, currentLibraryId, isSubAdmin]
   );
 
@@ -266,11 +278,11 @@ export default function AdminWorkspace({
     const transactionRows = scopedBorrows
       .filter((item) => isDateInsideWindow(item.requestDate, analyticsWindow))
       .map((item) => ({
-        type: 'Book transaction',
-        time: item.requestDate,
+        type: 'Book request',
+        time: getRequestDate(item),
         person: getReportVisitorName(item.visitorName),
-        detail: item.bookTitle || 'Book transaction',
-        branch: getLibraryName(libraries, booksById.get(item.bookId)?.libraryId),
+        detail: item.bookTitle || 'Book request',
+        branch: getLibraryName(libraries, booksById.get(String(item.bookId ?? item.book_id ?? ''))?.libraryId),
         status: formatStatus(item.status),
         dataClassification: item.isTestData ? 'Test data' : 'Operational data',
       }));
@@ -308,7 +320,6 @@ export default function AdminWorkspace({
       : reportRows.filter((row) => row.type === activityTypeFilter),
     [activityTypeFilter, reportRows]
   );
-  const activityHistoryPageSize = 20;
   const activityHistoryPageCount = Math.max(1, Math.ceil(filteredReportRows.length / activityHistoryPageSize));
   const visibleActivityHistoryPage = Math.min(activityHistoryPage, activityHistoryPageCount);
   const visibleFeedbackPage = Math.min(feedbackPage, Math.max(1, Math.ceil(feedbackTotal / feedbackPageSize)));
@@ -435,43 +446,32 @@ export default function AdminWorkspace({
 
   const effectiveAnalyticsLibraryId = isSubAdmin ? currentLibraryId : analyticsLibraryId;
 
-  const analyticsScopedAttendance = useMemo(
-    () =>
-      attendanceLogs.filter((item) => {
-        if (isSubAdmin) {
-          return String(item.libraryId) === String(currentLibraryId);
-        }
-        if (!analyticsLibraryId) return true;
-        return String(item.libraryId) === String(analyticsLibraryId);
-      }),
-    [attendanceLogs, currentLibraryId, isSubAdmin, analyticsLibraryId]
-  );
-
   const analyticsScopedBorrows = useMemo(
     () =>
-      borrowRequests.filter((item) => {
-        const book = booksById.get(item.bookId);
-        if (isSubAdmin) {
-          return String(book?.libraryId) === String(currentLibraryId);
-        }
-        if (!analyticsLibraryId) return true;
-        return String(book?.libraryId) === String(analyticsLibraryId);
-      }),
+      isSubAdmin
+        ? filterRequestsForLibrary(borrowRequests, booksById, currentLibraryId)
+        : analyticsLibraryId
+          ? filterRequestsForLibrary(borrowRequests, booksById, analyticsLibraryId)
+          : borrowRequests,
     [booksById, borrowRequests, currentLibraryId, isSubAdmin, analyticsLibraryId]
   );
 
   const analyticsAttendance = useMemo(
-    () =>
-      analyticsScopedAttendance.filter((item) =>
-        isDateInsideWindow(item.timeIn, analyticsWindow)
-      ),
-    [analyticsScopedAttendance, analyticsWindow]
+    () => analyticsWindow.valid
+      ? filterAttendanceForAnalytics(attendanceLogs, {
+          libraryId: effectiveAnalyticsLibraryId,
+          requireLibraryId: isSubAdmin || Boolean(analyticsLibraryId),
+          start: analyticsWindow.start,
+          endExclusive: analyticsWindow.endExclusive,
+        })
+      : [],
+    [attendanceLogs, analyticsLibraryId, analyticsWindow, effectiveAnalyticsLibraryId, isSubAdmin]
   );
 
   const analyticsBorrows = useMemo(
     () =>
       analyticsScopedBorrows.filter((item) =>
-        isDateInsideWindow(item.requestDate, analyticsWindow)
+        isDateInsideWindow(getRequestDate(item), analyticsWindow)
       ),
     [analyticsScopedBorrows, analyticsWindow]
   );
@@ -485,11 +485,11 @@ export default function AdminWorkspace({
     const transactionCounts = new Map();
 
     analyticsAttendance.forEach((item) => {
-      const key = getTimeframeBucketKey(item.timeIn, timeframe);
+      const key = getTimeframeBucketKey(item.timeIn ?? item.time_in, timeframe);
       visitCounts.set(key, (visitCounts.get(key) || 0) + 1);
     });
     analyticsBorrows.forEach((item) => {
-      const key = getTimeframeBucketKey(item.requestDate, timeframe);
+      const key = getTimeframeBucketKey(getRequestDate(item), timeframe);
       transactionCounts.set(key, (transactionCounts.get(key) || 0) + 1);
     });
 
@@ -518,11 +518,20 @@ export default function AdminWorkspace({
     if (!forecastHistoryDays) return [];
     const counts = new Map();
     analyticsAttendance.forEach((item) => {
-      const key = getTimeframeBucketKey(item.timeIn, 'custom');
+      const key = getTimeframeBucketKey(item.timeIn ?? item.time_in, 'custom');
       counts.set(key, (counts.get(key) || 0) + 1);
     });
     return forecastHistoryBuckets.map((bucket) => counts.get(bucket.key) || 0);
   }, [analyticsAttendance, forecastHistoryBuckets, forecastHistoryDays]);
+
+  const forecastObservedVisitDays = forecastDailyVisitorCounts.filter((count) => count > 0).length;
+  const forecastTotalVisits = forecastDailyVisitorCounts.reduce((total, count) => total + count, 0);
+  const forecastCanRun = canRunVisitorForecast({
+    historyDays: forecastHistoryDays,
+    observedVisitDays: forecastObservedVisitDays,
+    totalVisits: forecastTotalVisits,
+    attendanceComplete: attendanceDataComplete,
+  });
 
   const forecastChartData = useMemo(() => {
     if (!forecast?.forecasts?.length || !forecastDailyVisitorCounts.length) return null;
@@ -562,7 +571,8 @@ export default function AdminWorkspace({
   const categoryDemand = useMemo(() => {
     const counts = new Map();
     analyticsBorrows.forEach((request) => {
-      const category = booksById.get(request.bookId)?.category || 'Uncategorized';
+      const bookId = String(request.bookId ?? request.book_id ?? '');
+      const category = booksById.get(bookId)?.category || 'Uncategorized';
       counts.set(category, (counts.get(category) || 0) + 1);
     });
     return [...counts].sort((a, b) => b[1] - a[1]);
@@ -599,45 +609,14 @@ export default function AdminWorkspace({
   const forecastNarrative = useMemo(() => getForecastNarrative(forecast), [forecast]);
 
   const demandRecommendations = useMemo(() => {
-    if (!analyticsWindow.valid) {
-      return [analyticsWindow.error || 'Select a valid analytics date range.'];
-    }
-    const visitTimes = analyticsAttendance
-      .map((item) => new Date(item.timeIn).getTime())
-      .filter((value) => Number.isFinite(value));
-    const latestVisit = Math.max(...visitTimes, 0);
-
-    if (!latestVisit) {
-      return [
-        'There is not yet enough visitor activity in the selected date range to generate a demand recommendation.',
-      ];
-    }
-    const recent = analyticsAttendance.filter(
-      (item) => latestVisit - new Date(item.timeIn).getTime() < 7 * 86400000
-    ).length;
-    const prior = analyticsAttendance.filter((item) => {
-      const age = latestVisit - new Date(item.timeIn).getTime();
-      return age >= 7 * 86400000 && age < 14 * 86400000;
-    }).length;
-
-    const suggestions = [];
-    if (recent > prior * 1.2 && recent >= 5) {
-      suggestions.push(
-        'Visitor volume is up at least 20% week over week. Consider adding front-desk coverage during peak hours.'
-      );
-    }
-    if (topCategories[0]) {
-      suggestions.push(
-        `Review copy levels for ${topCategories[0][0]}, the highest-demand category in the selected transaction data.`
-      );
-    }
-    if (suggestions.length === 0) {
-      suggestions.push(
-        'Demand is steady or there is not yet enough activity to recommend a staffing change. Continue collecting branch activity.'
-      );
-    }
-    return suggestions;
-  }, [analyticsAttendance, analyticsWindow, topCategories]);
+    if (!analyticsWindow.valid) return [analyticsWindow.error || 'Select a valid analytics date range.'];
+    return buildOperationalRecommendations({
+      attendance: analyticsAttendance,
+      categoryDemand,
+      windowEnd: analyticsWindow.endExclusive,
+      attendanceComplete: attendanceDataComplete,
+    });
+  }, [analyticsAttendance, analyticsWindow, attendanceDataComplete, categoryDemand]);
 
   const handleExport = async (format) => {
     if (!analyticsWindow.valid) {
@@ -675,7 +654,7 @@ export default function AdminWorkspace({
         ],
         summary: [
           ['Total Visits', analyticsAttendance.length],
-          ['Total Borrows', analyticsBorrows.length],
+          ['Total Book Requests', analyticsBorrows.length],
         ],
       });
       setMessage('Report exported successfully.');
@@ -732,7 +711,7 @@ export default function AdminWorkspace({
         columns: [
           { key: 'period', label: 'Period' },
           { key: 'visitors', label: 'Visitors', type: 'number' },
-          { key: 'bookTransactions', label: 'Book Transactions', type: 'number' },
+          { key: 'bookTransactions', label: 'Book Requests', type: 'number' },
         ],
         totalRow: {
           period: 'Total',
@@ -742,13 +721,13 @@ export default function AdminWorkspace({
         totalColumns: ['visitors', 'bookTransactions'],
         summary: [
           ['Visitors', analyticsAttendance.length],
-          ['Book Transactions', analyticsBorrows.length],
-          ['Active Loans', analyticsBorrows.filter((item) => item.status === 'borrowed').length],
+          ['Book Requests', analyticsBorrows.length],
+          ['Active Loans', analyticsBorrows.filter((item) => getRequestStatus(item) === 'borrowed').length],
         ],
         chartImages,
         chartTitles: ['Branch demand', 'Most requested categories', 'Visitor forecast'],
         chartDescriptions: [
-          'Compares visitor attendance with book transactions across the selected reporting periods.',
+          'Compares visitor attendance with book requests across the selected reporting periods.',
           'Shows which book categories received the most requests during the selected date range.',
           'Projects visitor activity for the next seven days using the selected history period.',
         ],
@@ -808,10 +787,6 @@ export default function AdminWorkspace({
     event.preventDefault();
     setError('');
     setMessage('');
-    if (!supabase) {
-      setError('Supabase connection is unavailable.');
-      return;
-    }
     const title = announcementForm.title.trim();
     const messageText = announcementForm.message.trim();
     if (!title || !messageText) {
@@ -836,25 +811,24 @@ export default function AdminWorkspace({
         : editingAnnouncementId && !announcementExpirationChanged
           ? announcementForm.expiresAt
           : getAnnouncementExpirationDate(duration, announcementForm.durationUnit);
-      const values = {
-        title,
-        message: messageText,
-        audience: isSubAdmin ? 'visitor' : announcementForm.audience,
-        library_id: isSubAdmin ? currentLibraryId : null,
-        created_by: user?.name || user?.email || 'Admin',
-        published: true,
-        expires_at: expiresAt,
-      };
-      const result = editingAnnouncementId
-        ? await supabase
-            .from('announcements')
-            .update({ ...values, updated_at: new Date().toISOString() })
-            .eq('id', editingAnnouncementId)
-        : await supabase.from('announcements').insert(values);
 
-      if (result.error) {
-        setError(`Unable to publish announcement: ${result.error.message}`);
-        return;
+      if (editingAnnouncementId) {
+        await updateAnnouncement(editingAnnouncementId, {
+          title,
+          message: messageText,
+          audience: isSubAdmin ? 'visitor' : announcementForm.audience,
+          libraryId: isSubAdmin ? currentLibraryId : null,
+          expiresAt,
+        });
+      } else {
+        await createAnnouncement({
+          title,
+          message: messageText,
+          audience: isSubAdmin ? 'visitor' : announcementForm.audience,
+          libraryId: isSubAdmin ? currentLibraryId : null,
+          createdBy: user?.name || user?.email || 'Admin',
+          expiresAt,
+        });
       }
 
       setAnnouncementsPage(1);
@@ -882,22 +856,11 @@ export default function AdminWorkspace({
   };
 
   const handleAnnouncementDelete = async (id) => {
-    if (!supabase) {
-      setError('Supabase connection is unavailable.');
-      return;
-    }
     setError('');
     setMessage('');
     try {
-      const { error: deleteError } = await supabase
-        .from('announcements')
-        .delete()
-        .eq('id', id);
+      await deleteAnnouncement(id);
 
-      if (deleteError) {
-        setError(`Unable to delete announcement: ${deleteError.message}`);
-        return;
-      }
       setAnnouncements((current) => current.filter((item) => item.id !== id));
       setAnnouncementsTotal((current) => Math.max(0, current - 1));
       setMessage('Announcement deleted successfully.');
@@ -967,8 +930,10 @@ export default function AdminWorkspace({
       setError(analyticsWindow.error || 'Please select a valid date range.');
       return;
     }
-    if (forecastHistoryDays < 14) {
-      setError('Select at least 14 days of history to generate a visitor forecast.');
+    if (!forecastCanRun) {
+      setError(!attendanceDataComplete
+        ? 'Forecasting is unavailable because the attendance history did not load completely.'
+        : 'Insufficient actual attendance history. Forecasting requires 14 days, at least 14 visits across 7 active days, and a complete feed.');
       return;
     }
 
@@ -988,9 +953,9 @@ export default function AdminWorkspace({
         );
         const weeklyDemand = Array(weekCount).fill(0);
         analyticsBorrows.forEach((request) => {
-          const requestCategory = booksById.get(request.bookId)?.category || 'Uncategorized';
+          const requestCategory = booksById.get(String(request.bookId ?? request.book_id ?? ''))?.category || 'Uncategorized';
           if (requestCategory !== category) return;
-          const requestTime = new Date(request.requestDate).getTime();
+          const requestTime = new Date(getRequestDate(request) ?? '').getTime();
           if (!Number.isFinite(requestTime)) return;
 
           const ageDays = Math.floor(
@@ -1022,7 +987,21 @@ export default function AdminWorkspace({
         const errorResponse = await response.json().catch(() => ({}));
         throw new Error(errorResponse.detail || `Forecast service returned ${response.status}.`);
       }
-      setForecast(await response.json());
+      const forecastResult = await response.json();
+      if (!Array.isArray(forecastResult?.forecasts) || forecastResult.forecasts.length !== 7) {
+        throw new Error('Forecast service did not return exactly seven daily estimates.');
+      }
+      const validForecasts = forecastResult.forecasts.every((item, index) => {
+        const expectedDate = new Date(analyticsWindow.endExclusive);
+        expectedDate.setDate(expectedDate.getDate() + index);
+        return item?.date === formatLocalDateInput(expectedDate) &&
+          Number.isFinite(Number(item?.visitorCount)) && Number(item.visitorCount) >= 0;
+      });
+      if (!validForecasts) throw new Error('Forecast service returned invalid dates or visitor counts.');
+      setForecast({
+        ...forecastResult,
+        forecasts: forecastResult.forecasts.map((item) => ({ ...item, visitorCount: Number(item.visitorCount) })),
+      });
     } catch (forecastError) {
       const errorMessage = forecastError instanceof Error ? forecastError.message : '';
       setError(errorMessage || 'Forecast request failed.');
@@ -1221,7 +1200,7 @@ export default function AdminWorkspace({
                   >
                     <option value="all">All activities</option>
                     <option value="Visitor">Visitor check-ins</option>
-                    <option value="Book transaction">Book transactions</option>
+                    <option value="Book request">Book requests</option>
                     <option value="Book return">Book returns</option>
                   </select>
                 </label>
@@ -1309,14 +1288,14 @@ export default function AdminWorkspace({
                 <div>
                   <p className="text-sm font-medium text-slate-500">Book requests</p>
                   <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
-                    {filteredReportRows.filter((row) => row.type === 'Book transaction').length}
+                    {filteredReportRows.filter((row) => row.type === 'Book request').length}
                   </p>
                 </div>
                 <span className="rounded-xl bg-violet-50 px-3 py-2 text-lg font-extrabold text-violet-700 group-hover:bg-violet-600 group-hover:text-white transition-colors">
                   B
                 </span>
               </div>
-              <p className="mt-3 text-xs text-slate-500">Recorded book transactions</p>
+              <p className="mt-3 text-xs text-slate-500">Recorded book requests</p>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 cursor-pointer group">
@@ -1337,7 +1316,7 @@ export default function AdminWorkspace({
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 cursor-pointer group">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium text-slate-500">Active loans</p>
+                  <p className="text-sm font-medium text-slate-500">Active loans from selected requests</p>
                   <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
                     {scopedBorrows.filter(
                       (item) =>
@@ -1359,7 +1338,7 @@ export default function AdminWorkspace({
             <div className="flex flex-col gap-1 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-base font-bold text-slate-900">Activity history</h3>
-                <p className="mt-1 text-sm text-slate-500">Review visits, book transactions, and returns.</p>
+                <p className="mt-1 text-sm text-slate-500">Review visitor check-ins, book requests, and returns.</p>
               </div>
               <span className="mt-2 inline-flex w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 sm:mt-0">
                 {filteredReportRows.length} records
@@ -1436,7 +1415,22 @@ export default function AdminWorkspace({
                 <p className="text-sm text-slate-600">
                   Showing {activityHistoryStart + 1}–{Math.min(activityHistoryStart + activityHistoryPageSize, filteredReportRows.length)} of {filteredReportRows.length} activities
                 </p>
-                <nav className="flex flex-wrap items-center gap-1.5" aria-label="Activity history pages">
+                <div className="flex flex-wrap items-center justify-end gap-3">
+                  <label htmlFor="activity-history-page-size" className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                    Rows per page
+                    <select
+                      id="activity-history-page-size"
+                      value={activityHistoryPageSize}
+                      onChange={(event) => {
+                        setActivityHistoryPageSize(Number(event.target.value));
+                        setActivityHistoryPage(1);
+                      }}
+                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-700"
+                    >
+                      {[10, 20, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
+                    </select>
+                  </label>
+                  {activityHistoryPageCount > 1 && <nav className="flex flex-wrap items-center gap-1.5" aria-label="Activity history pages">
                   <button
                     type="button"
                     onClick={() => setActivityHistoryPage((page) => Math.max(1, page - 1))}
@@ -1473,7 +1467,8 @@ export default function AdminWorkspace({
                   >
                     Next
                   </button>
-                </nav>
+                </nav>}
+                </div>
               </div>
             )}
           </div>
@@ -1558,6 +1553,11 @@ export default function AdminWorkspace({
                 {analyticsWindow.error}
               </p>
             )}
+            {!attendanceDataComplete && (
+              <p className="mt-3 border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 rounded-lg">
+                Attendance data has not finished loading or could not be fully retrieved. Forecasts remain disabled until the complete feed is available.
+              </p>
+            )}
           </section>
 
           <section className="grid gap-5 xl:grid-cols-2">
@@ -1585,7 +1585,7 @@ export default function AdminWorkspace({
                         backgroundColor: '#0f766e',
                       },
                       {
-                        label: 'Book transactions',
+                        label: 'Book requests',
                         data: periodCounts.transactions,
                         backgroundColor: '#d97706',
                       },
@@ -1610,10 +1610,10 @@ export default function AdminWorkspace({
               )}
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 <Metric label="Visitors" value={analyticsAttendance.length} />
-                <Metric label="Book transactions" value={analyticsBorrows.length} />
+                <Metric label="Book requests" value={analyticsBorrows.length} />
                 <Metric
-                  label="Active loans"
-                  value={analyticsBorrows.filter((item) => item.status === 'borrowed').length}
+                  label="Active loans from selected requests"
+                  value={analyticsBorrows.filter((item) => getRequestStatus(item) === 'borrowed').length}
                 />
               </div>
             </div>
@@ -1708,18 +1708,19 @@ export default function AdminWorkspace({
                   <button
                     type="button"
                     onClick={runForecast}
-                    disabled={forecastLoading || !analyticsWindow.valid || forecastHistoryDays < 14}
+                    disabled={forecastLoading || !analyticsWindow.valid || !forecastCanRun}
                     className="bg-shelf-primary px-3 py-2 text-xs font-bold text-white rounded-lg transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {forecastLoading ? 'Forecasting...' : 'Run forecast'}
                   </button>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">
-                  Uses daily visits from the selected range, then projects the following 7 days. At least 14 days of history are needed.
+                  Uses actual visits from the selected range and the analytics service for the following 7 days. A forecast needs at least 14 calendar days, 14 visits across 7 active days, and a complete attendance feed.
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  History available: {forecastHistoryDays} day{forecastHistoryDays === 1 ? '' : 's'}.
+                  History available: {forecastHistoryDays} days · {forecastTotalVisits.toLocaleString()} visits across {forecastObservedVisitDays} active days.
                 </p>
+                {!attendanceDataComplete && <p className="mt-1 text-xs font-medium text-amber-700">The attendance feed is incomplete; forecasting is disabled until a complete history is loaded.</p>}
                 {forecast?.forecasts?.length ? (
                   <>
                     {forecastChartData && (
@@ -1748,7 +1749,9 @@ export default function AdminWorkspace({
                   </>
                 ) : (
                   <p className="mt-3 text-xs text-slate-500">
-                    Run the forecast to generate a seven-day visitor forecast.
+                    {forecastCanRun
+                      ? 'Run the forecast to estimate the next seven days from the selected actual attendance history.'
+                      : 'Insufficient complete attendance history for a reliable forecast.'}
                   </p>
                 )}
                 <div className="mt-5 grid gap-4 border-t border-slate-200 pt-4 lg:grid-cols-2">

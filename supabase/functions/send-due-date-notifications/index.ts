@@ -145,6 +145,15 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "Your session is invalid or expired." }, 401);
       }
 
+      const { data: assurance, error: assuranceError } =
+        await userClient.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (assuranceError || assurance?.currentLevel !== "aal2") {
+        return jsonResponse(
+          { error: "AAL2 authentication (MFA) is required to send follow-up notifications." },
+          403,
+        );
+      }
+
       const { data: staff, error: staffError } = await supabaseAdmin
         .from("staff_profiles")
         .select("id, role, library_id, is_active")
@@ -154,11 +163,15 @@ Deno.serve(async (req: Request) => {
         console.error("Follow-up staff profile lookup failed:", staffError);
         return jsonResponse({ error: "Unable to verify your staff profile." }, 500);
       }
-      if (!staff || staff.is_active !== true) {
-        return jsonResponse({ error: "Your staff account is not active." }, 403);
-      }
-      if (!["superadmin", "subadmin"].includes(staff.role)) {
-        return jsonResponse({ error: "Only active library staff can send a follow-up." }, 403);
+      const jwtRole = String(authData.user.app_metadata?.role || "").toLowerCase();
+      const staffRole = String(staff?.role || "").toLowerCase();
+      if (
+        !staff ||
+        staff.is_active !== true ||
+        !["superadmin", "subadmin"].includes(staffRole) ||
+        jwtRole !== staffRole
+      ) {
+        return jsonResponse({ error: "Active library staff access is required." }, 403);
       }
 
       const borrowRequestId = String(payload.borrowRequestId || "").trim();
@@ -174,7 +187,7 @@ Deno.serve(async (req: Request) => {
       if (lookupError || !request) {
         return jsonResponse({ error: "Borrow request not found." }, 404);
       }
-      if (staff.role === "subadmin") {
+      if (staffRole === "subadmin") {
         if (!staff.library_id || !request.book_id) {
           return jsonResponse({ error: "This request is not assigned to your branch." }, 403);
         }

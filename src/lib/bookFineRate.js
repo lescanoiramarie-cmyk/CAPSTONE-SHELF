@@ -115,6 +115,11 @@ export function resolveFineAtReturn({
   returnedAt,
   fineRateSnapshot,
 }) {
+  const historicalFine = Number(existingFineAmount);
+  if (Number.isFinite(historicalFine) && historicalFine > 0) {
+    return { fineAmount: historicalFine, fineReviewRequired: true };
+  }
+
   const calculatedFine = calculateOverdueFine(
     dueDate,
     returnedAt,

@@ -12,7 +12,10 @@
 // ============================================================================
 
 import { supabase } from '../lib/supabaseClient.js';
+import { normalizeVisitorRegistrationType, VISITOR_REGISTRATION_TYPES } from '../lib/visitorRegistration.js';
 import { normalizeBookCategory } from '../lib/bookCategory.js';
+import { normalizeCallNumber } from '../lib/callNumber.js';
+import { isValidBorrowRequestId } from '../lib/borrowRequestId.js';
 import {
   buildDuplicateBookImportUpdate,
   normalizeBookFineRate,
@@ -22,93 +25,12 @@ import { invalidateVisitorAccountsCache } from './visitorAccounts.js';
 export { fetchVisitorAccounts } from './visitorAccounts.js';
 
 // ============================================================================
-// COMPATIBILITY CREDENTIAL LISTS
+// COMPATIBILITY CREDENTIAL LISTS (REMOVED - no production credentials in source)
 // ============================================================================
-
-export const SUPER_ADMIN_CREDENTIALS = [
-  {
-    email: 'superadmin@shelf.com',
-    name: 'SUPER ADMIN',
-  },
-];
-
-export const SUB_ADMIN_CREDENTIALS = [
-  {
-    email: 'malvar.admin@shelf.edu',
-    name: 'Malvar Campus Sub-Admin',
-    libraryId: '277829af-1475-47ae-9e26-4b64c68f54f4',
-  },
-  {
-    email: 'lipa.admin@shelf.edu',
-    name: 'Lipa Campus Sub-Admin',
-    libraryId: '3ccf575d-4573-4ed9-acdb-c8d9cf8a949e',
-  },
-  {
-    email: 'lemery.admin@shelf.edu',
-    name: 'Lemery Campus Sub-Admin',
-    libraryId: '41dec6e1-28cd-4057-a046-982269698cdc',
-  },
-  {
-    email: 'sanjuan.admin@shelf.edu',
-    name: 'San Juan Campus Sub-Admin',
-    libraryId: '4226ff5c-21f1-48bd-9cf8-a5a272c81e3d',
-  },
-  {
-    email: 'mabini.admin@shelf.edu',
-    name: 'Mabini Campus Sub-Admin',
-    libraryId: '66ea1120-0789-410f-bb87-ae22d115ce1e',
-  },
-  {
-    email: 'nasugbu.admin@shelf.edu',
-    name: 'Nasugbu Campus Sub-Admin',
-    libraryId: '67487fb6-6988-433c-aeef-9b770f59f010',
-  },
-  {
-    email: 'batangascity.admin@shelf.edu',
-    name: 'Batangas City Library Staff',
-    libraryId: '78c0a005-06cd-48f5-92d2-daa06fe36e12',
-  },
-  {
-    email: 'lobo.admin@shelf.edu',
-    name: 'Lobo Campus Sub-Admin',
-    libraryId: '7c23ab9b-b42d-4420-b5b7-fdc71c49792a',
-  },
-  {
-    email: 'alangilan.admin@shelf.edu',
-    name: 'Alangilan Campus Sub-Admin',
-    libraryId: '84819f90-5923-4bd8-8aa0-1805e7613e81',
-  },
-  {
-    email: 'balayan.admin@shelf.edu',
-    name: 'Balayan Campus Sub-Admin',
-    libraryId: '971893c8-5670-46b5-833c-398b2968ad1c',
-  },
-  {
-    email: 'provincial.admin@shelf.edu',
-    name: 'Provincial Library Staff',
-    libraryId: '9c82c34b-6059-47e1-983a-d03755cb830b',
-  },
-  {
-    email: 'pabloborbon.admin@shelf.edu',
-    name: 'Pablo Borbon Campus Sub-Admin',
-    libraryId: 'bde57b8b-d3b8-4676-823e-7573f80d3a36',
-  },
-  {
-    email: 'rosario.admin@shelf.edu',
-    name: 'Rosario Campus Sub-Admin',
-    libraryId: 'c5613110-237e-4e93-b27b-95b41da95f3a',
-  },
-  {
-    email: 'librarian@shelf.edu',
-    name: 'Maria Santos',
-    libraryId: '78c0a005-06cd-48f5-92d2-daa06fe36e12',
-  },
-  {
-    email: 'circdesk@shelf.edu',
-    name: 'Circulation Desk Staff',
-    libraryId: '9c82c34b-6059-47e1-983a-d03755cb830b',
-  },
-];
+// These were removed to prevent credential exposure. Use test fixtures in
+// isolated staging environments instead.
+export const SUPER_ADMIN_CREDENTIALS = [];
+export const SUB_ADMIN_CREDENTIALS = [];
 
 // ============================================================================
 // TUNABLE BUSINESS RULES
@@ -130,6 +52,18 @@ function invalidateLibrariesCache() {
   librariesCache = null;
   librariesCacheExpiresAt = 0;
   librariesRequest = null;
+}
+
+function invalidatePopularBorrowCountsCache() {
+  popularBorrowCountsCache = null;
+  popularBorrowCountsCacheExpiresAt = 0;
+  popularBorrowCountsPromise = null;
+}
+
+export function invalidateClientCaches() {
+  invalidateLibrariesCache();
+  invalidatePopularBorrowCountsCache();
+  invalidateVisitorAccountsCache();
 }
 
 // ============================================================================
@@ -227,9 +161,9 @@ const isValidVisitorId = (value) =>
   Boolean(normalizeText(value));
 
 const VISITOR_PROFILE_COLUMNS =
-  'id, full_name, contact_number, email, address, profile_image_path, otp_verified, qr_code, registered_at, library_id';
+  'id, full_name, contact_number, email, address, profile_image_path, otp_verified, qr_code, registered_at, library_id, registration_type, approval_status, is_active';
 const LEGACY_VISITOR_PROFILE_COLUMNS =
-  'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at, library_id';
+  'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at, library_id, registration_type, approval_status, is_active';
 
 function isMissingVisitorProfileImageColumn(error) {
   const message = normalizeText(error?.message || error);
@@ -330,6 +264,7 @@ export const mapBook = (r) => ({
   category: r.category ?? null,
   fineRate: r.fine_rate == null ? null : Number(r.fine_rate),
   isbn: r.isbn,
+  callNumber: r.call_number ?? null,
   shelfLocation: r.shelf_location,
   libraryId: r.library_id,
   totalCopies: r.total_copies,
@@ -381,9 +316,13 @@ const mapVisitor = (r) => ({
   otpVerified: r.otp_verified,
   qrCode: r.qr_code,
   registeredAt: r.registered_at,
+  registrationType: r.registration_type || 'institutional',
+  approvalStatus: r.approval_status || 'approved',
+  isActive: r.is_active,
+  communityApprovalPending: r.registration_type === 'community' && r.approval_status === 'pending',
 });
 
-export const isFineReviewRequired = (request) => {
+export const isFineReviewRequired = () => {
   // Legacy flags remain in the database for compatibility, but they no longer
   // create a manual review state in visitor-facing flows.
   return false;
@@ -432,44 +371,38 @@ const mapAttendance = (r) => ({
 
 const FETCH_PAGE_SIZE = 1000;
 const FETCH_PAGE_BATCH_SIZE = 2;
-const ATTENDANCE_INITIAL_ROW_LIMIT = 5000;
 
 async function getAuthenticatedDataScope() {
-  const {
-    data: sessionData,
-    error: sessionError,
-  } = await supabase.auth.getSession();
+  const { data: roleData, error: roleError } = await supabase.rpc('get_current_user_role');
 
-  if (sessionError) {
-    throw cleanErr(sessionError, 'Unable to check the current authentication session.');
+  if (roleError) {
+    throw cleanErr(roleError, 'Unable to resolve the current user role.');
   }
 
-  const authUserId = sessionData?.session?.user?.id;
-  if (!authUserId) return { type: 'anonymous' };
+  if (!roleData || roleData.length === 0) {
+    return { type: 'anonymous' };
+  }
 
-  const { data: staff, error: staffError } = await supabase
-    .from('staff_profiles')
-    .select('id, role, library_id, is_active')
-    .eq('id', authUserId)
-    .maybeSingle();
+  const roleInfo = roleData[0];
+  const userType = roleInfo.user_type;
+  const role = roleInfo.role;
+  const libraryId = roleInfo.library_id;
+  const visitorId = roleInfo.visitor_id;
+  const isActive = roleInfo.is_active;
 
-  if (staffError) throw cleanErr(staffError, 'Unable to resolve the staff data scope.');
-  if (staff?.is_active) {
+  if (!isActive) {
+    return { type: 'anonymous' };
+  }
+
+  if (userType === 'superadmin' || userType === 'subadmin') {
     return {
-      type: staff.role === 'superadmin' ? 'superadmin' : 'subadmin',
-      libraryId: staff.library_id,
+      type: role === 'superadmin' ? 'superadmin' : 'subadmin',
+      libraryId,
     };
   }
 
-  const { data: visitor, error: visitorError } = await supabase
-    .from('visitors')
-    .select('id, otp_verified, is_active')
-    .eq('auth_user_id', authUserId)
-    .maybeSingle();
-
-  if (visitorError) throw cleanErr(visitorError, 'Unable to resolve the visitor data scope.');
-  if (visitor?.otp_verified && visitor.is_active) {
-    return { type: 'visitor', visitorId: visitor.id };
+  if (userType === 'visitor') {
+    return { type: 'visitor', visitorId };
   }
 
   return { type: 'anonymous' };
@@ -506,38 +439,6 @@ async function fetchAllRowsInPages(buildQuery, resourceName) {
   }
 }
 
-async function fetchLatestRowsInPages(buildQuery, resourceName, maxRows) {
-  const rows = [];
-
-  for (
-    let batchOffset = 0;
-    batchOffset < maxRows;
-    batchOffset += FETCH_PAGE_SIZE * FETCH_PAGE_BATCH_SIZE
-  ) {
-    const pages = await Promise.all(
-      Array.from({ length: FETCH_PAGE_BATCH_SIZE }, (_, pageIndex) => {
-        const from = batchOffset + pageIndex * FETCH_PAGE_SIZE;
-        if (from >= maxRows) return Promise.resolve({ data: [], error: null });
-        const to = Math.min(from + FETCH_PAGE_SIZE - 1, maxRows - 1);
-        return buildQuery().range(from, to);
-      })
-    );
-
-    for (const page of pages) {
-      if (page.error) {
-        throw cleanErr(page.error, `Unable to fetch ${resourceName}.`);
-      }
-      rows.push(...(page.data || []));
-    }
-
-    if (pages.some((page) => (page.data || []).length < FETCH_PAGE_SIZE)) {
-      return rows.slice(0, maxRows);
-    }
-  }
-
-  return rows.slice(0, maxRows);
-}
-
 async function getBorrowRequestsForSession(loadRows) {
   const rows = await loadRows();
   return rows.map(mapBorrowRequest);
@@ -550,77 +451,26 @@ const BORROW_DASHBOARD_ACTIVE_STATUSES = [
   'borrowed',
 ];
 const BORROW_DASHBOARD_RECENT_DAYS = 35;
-const BORROW_REQUEST_DASHBOARD_SELECT =
-  'id, book_id, book_title, visitor_id, visitor_name, library_id, status, request_date, pickup_deadline, queue_position, borrow_date, due_date, return_date, fine_amount, confirmed_by, return_confirmed_by, fine_rate_snapshot, fine_review_required, fine_review_resolved_at';
 
 async function fetchStaffBorrowRequestRows(authenticatedUserId, signal) {
-  let staffQuery = supabase
-    .from('staff_profiles')
-    .select('id, role, library_id, is_active')
-    .eq('id', authenticatedUserId)
-    .maybeSingle();
-  if (signal) staffQuery = staffQuery.abortSignal(signal);
-  const { data: staff, error: staffError } = await staffQuery;
+  // Use the new secure RPC for staff borrowing history
+  // which handles AAL2 enforcement, role validation, and branch scoping server-side.
+  const { data, error } = await supabase.rpc('get_staff_borrowing_history', {
+    p_recent_days: BORROW_DASHBOARD_RECENT_DAYS,
+    p_active_statuses: BORROW_DASHBOARD_ACTIVE_STATUSES,
+  });
 
-  if (staffError) {
-    throw cleanErr(staffError, 'Unable to verify staff access to borrowing history.');
-  }
-  if (!staff?.is_active || !['subadmin', 'superadmin'].includes(staff.role)) {
-    throw new Error('An active staff account is required to load borrowing history.');
+  if (signal?.aborted) {
+    const abortError = new Error('Request aborted');
+    abortError.name = 'AbortError';
+    throw abortError;
   }
 
-  let branchBookIds = null;
-  if (staff.role === 'subadmin') {
-    if (!staff.library_id) {
-      throw new Error('Your staff account has no assigned library branch.');
-    }
-
-    let booksQuery = supabase
-      .from('books')
-      .select('id')
-      .eq('library_id', staff.library_id)
-      .eq('book_type', 'library');
-    if (signal) booksQuery = booksQuery.abortSignal(signal);
-    const { data: books, error: booksError } = await booksQuery;
-    if (booksError) {
-      throw cleanErr(booksError, 'Unable to load books for your assigned branch.');
-    }
-    branchBookIds = (books || []).map((book) => book.id).filter(Boolean);
-    if (!branchBookIds.length) return [];
+  if (error) {
+    throw cleanErr(error, 'Unable to load staff borrowing history.');
   }
 
-  const recentStart = new Date();
-  recentStart.setDate(recentStart.getDate() - BORROW_DASHBOARD_RECENT_DAYS);
-  const recentStartIso = recentStart.toISOString();
-  const buildQuery = () => {
-    let query = supabase
-      .from('borrow_requests')
-      .select(BORROW_REQUEST_DASHBOARD_SELECT);
-    if (branchBookIds) query = query.in('book_id', branchBookIds);
-    return query;
-  };
-  const pageRows = async (buildScopedQuery, label) =>
-    fetchAllRowsInPages(() => {
-      let query = buildScopedQuery()
-        .order('request_date', { ascending: false })
-        .order('id', { ascending: true });
-      if (signal) query = query.abortSignal(signal);
-      return query;
-    }, label);
-
-  const [recentRows, activeRows] = await Promise.all([
-    pageRows(
-      () => buildQuery().gte('request_date', recentStartIso),
-      'recent borrowing history'
-    ),
-    pageRows(
-      () => buildQuery().in('status', BORROW_DASHBOARD_ACTIVE_STATUSES),
-      'active borrowing requests'
-    ),
-  ]);
-  return Array.from(
-    new Map([...recentRows, ...activeRows].map((row) => [String(row.id), row])).values()
-  );
+  return data || [];
 }
 
 // ============================================================================
@@ -825,21 +675,89 @@ export async function deleteLibrary(libraryId) {
 // ============================================================================
 
 export async function fetchBooks() {
-  const {
-    data,
-    error,
-  } = await supabase
-    .from('books')
-    .select('*')
-    .order('created_at', {
-      ascending: false,
-    });
+  const pageSize = 1000;
+  const data = [];
+  let offset = 0;
+  let consecutiveErrors = 0;
+  const maxConsecutiveErrors = 3;
 
-  if (error) {
-    throw cleanErr(error);
+  while (true) {
+    const { data: page, error } = await supabase
+      .from('books')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) {
+      consecutiveErrors++;
+      if (consecutiveErrors >= maxConsecutiveErrors) {
+        throw cleanErr(error);
+      }
+      // Brief delay before retry
+      await new Promise((resolve) => setTimeout(resolve, 100 * consecutiveErrors));
+      continue;
+    }
+
+    consecutiveErrors = 0;
+    data.push(...(page || []));
+    if (!page || page.length < pageSize) break;
+    offset += pageSize;
   }
 
-  return (data || []).map(mapBook);
+  return data.map(mapBook);
+}
+
+// ============================================================================
+// FETCH BOOK COUNTS VIA RPC (exact, server-side)
+// ============================================================================
+
+export async function fetchOpacLibraryBookCount() {
+  const { data, error } = await supabase.rpc('get_opac_library_book_count');
+  if (error) throw cleanErr(error);
+  return Number(data ?? 0);
+}
+
+export async function fetchOpacTotalBookCount() {
+  const { data, error } = await supabase.rpc('get_opac_total_book_count');
+  if (error) throw cleanErr(error);
+  return Number(data ?? 0);
+}
+
+export async function fetchOpacLibraryBookCountByLibrary(libraryId) {
+  if (!libraryId) return 0;
+  const { data, error } = await supabase.rpc('get_opac_library_book_count_by_library', {
+    p_library_id: libraryId,
+  });
+  if (error) throw cleanErr(error);
+  return Number(data ?? 0);
+}
+
+export async function fetchOpacFilteredBookCount({
+  search = '',
+  category = 'All',
+  libraryId = null,
+  availability = 'All',
+} = {}) {
+  const { data, error } = await supabase.rpc('get_opac_filtered_book_count', {
+    p_search: search,
+    p_category: category,
+    p_library_id: libraryId,
+    p_availability: availability,
+  });
+  if (error) throw cleanErr(error);
+  return Number(data ?? 0);
+}
+
+export async function fetchOpacCategoryBookCounts(libraryId = null) {
+  const { data, error } = await supabase.rpc('get_opac_category_book_counts', {
+    p_library_id: libraryId,
+  });
+  if (error) throw cleanErr(error);
+  return (data || []).map((row) => ({
+    label: row.category,
+    count: Number(row.book_count) || 0,
+  }));
 }
 
 const POPULAR_BORROW_COUNTS_CACHE_MS = 60_000;
@@ -871,8 +789,8 @@ export async function fetchPopularBorrowedBookCounts(limit = 40) {
       if (error) throw cleanErr(error);
 
       popularBorrowCountsCache = (data || []).map((row) => ({
-        bookId: String(row.book_id),
-        borrowCount: Number(row.borrow_count) || 0,
+        book_id: String(row.book_id),
+        borrow_count: Number(row.borrow_count) || 0,
       }));
       popularBorrowCountsCacheExpiresAt = Date.now() + POPULAR_BORROW_COUNTS_CACHE_MS;
       return popularBorrowCountsCache;
@@ -885,7 +803,6 @@ export async function fetchPopularBorrowedBookCounts(limit = 40) {
   } finally {
     popularBorrowCountsPromise = null;
   }
-
 }
 
 // ============================================================================
@@ -970,12 +887,54 @@ export async function fetchCommunityBooks() {
 }
 
 // ============================================================================
+// COMMUNITY BOOKS - READ LATER / SAVED BOOKS
+// ============================================================================
+
+export async function saveCommunityBookForLater(communityBookId) {
+  const { data, error } = await supabase.rpc('save_community_book_for_later', {
+    p_community_book_id: communityBookId,
+  });
+
+  if (error) {
+    throw cleanErr(error, 'Unable to save book for later.');
+  }
+
+  const result = (data || [])[0];
+  return { success: result?.success === true, message: result?.message || '' };
+}
+
+export async function unsaveCommunityBookForLater(communityBookId) {
+  const { data, error } = await supabase.rpc('unsave_community_book_for_later', {
+    p_community_book_id: communityBookId,
+  });
+
+  if (error) {
+    throw cleanErr(error, 'Unable to remove book from saved list.');
+  }
+
+  const result = (data || [])[0];
+  return { success: result?.success === true, message: result?.message || '' };
+}
+
+export async function getSavedCommunityBooks() {
+  const { data, error } = await supabase.rpc('get_saved_community_books');
+
+  if (error) {
+    throw cleanErr(error, 'Unable to load saved community books.');
+  }
+
+  return data || [];
+}
+
+// ============================================================================
 // FETCH VISITORS
 // ============================================================================
 
 export async function fetchVisitors(visitorId = null, knownVisitor = null) {
   const normalizedVisitorId = normalizeText(visitorId);
 
+  // When a specific visitorId is provided (staff looking up a visitor),
+  // continue using direct table access with proper RLS/grants.
   if (normalizedVisitorId) {
     if (
       knownVisitor?.id &&
@@ -999,14 +958,25 @@ export async function fetchVisitors(visitorId = null, knownVisitor = null) {
         .maybeSingle());
     }
 
-    if (error) throw cleanErr(error, 'Unable to fetch your visitor profile.');
+    if (error) throw cleanErr(error, 'Unable to fetch the visitor profile.');
 
     return data ? [mapVisitor(data)] : [];
   }
 
+  // No specific visitorId: return current user's own profile (visitor)
+  // or list of visitors (staff) using RPC for current visitor profile.
   const scope = await getAuthenticatedDataScope();
   if (scope.type === 'anonymous') return [];
 
+  // Visitor fetching their own profile - use RPC
+  if (scope.type === 'visitor') {
+    const { data, error } = await supabase.rpc('get_visitor_profile');
+    if (error) throw cleanErr(error, 'Unable to fetch your visitor profile.');
+    return data ? [mapVisitor(data[0])] : [];
+  }
+
+  // Staff fetching list of visitors - continue using direct table access
+  // with RLS scoping (subadmin limited to their branch)
   const buildQuery = (columns) => {
       let query = supabase
         .from('visitors')
@@ -1016,12 +986,10 @@ export async function fetchVisitors(visitorId = null, knownVisitor = null) {
 
       if (scope.type === 'subadmin') {
         query = query.eq('library_id', scope.libraryId);
-      } else if (scope.type === 'visitor') {
-        query = query.eq('id', scope.visitorId);
       }
 
       return query;
-  };
+    };
   let data;
   try {
     data = await fetchAllRowsInPages(
@@ -1108,11 +1076,8 @@ export async function fetchBorrowRequests({
         rawSession
       );
     }
-  } catch (storageError) {
-    console.error(
-      'SHELF — unable to read local session:',
-      storageError
-    );
+  } catch {
+    console.error('SHELF — unable to read local session:');
   }
 
   // ==========================================================================
@@ -1137,135 +1102,101 @@ export async function fetchBorrowRequests({
     normalizeText(visitorId) || null;
   let authenticatedUserId;
 
-  try {
-    // ------------------------------------------------------------------------
-    // 2A. FIRST: TRY SUPABASE AUTH
-    // ------------------------------------------------------------------------
+  // ------------------------------------------------------------------------
+  // 2A. FIRST: TRY SUPABASE AUTH
+  // ------------------------------------------------------------------------
 
-    const {
-      data: sessionData,
-      error: sessionError,
-    } = await supabase.auth.getSession();
+  const {
+    data: sessionData,
+    error: sessionError,
+  } = await supabase.auth.getSession();
 
-    if (sessionError) {
-      throw cleanErr(
-        sessionError,
-        'Unable to check the current authentication session.'
-      );
-    }
-
-    const authUserId =
-      sessionData?.session?.user?.id ||
-      null;
-    authenticatedUserId = authUserId;
-
-    // ------------------------------------------------------------------------
-    // 2B. RESOLVE AUTH USER →’ SHELF VISITOR
-    // ------------------------------------------------------------------------
-
-    if (
-      !skipVisitorResolution &&
-      !normalizedVisitorId &&
-      authUserId &&
-      isValidUuid(authUserId)
-    ) {
-      try {
-        const visitor =
-          await getVisitor(
-            authUserId
-          );
-
-        if (
-          visitor?.id &&
-          isValidVisitorId(
-            normalizeText(
-              visitor.id
-            )
-          )
-        ) {
-          normalizedVisitorId =
-            normalizeText(
-              visitor.id
-            );
-
-          console.log(
-            'SHELF — resolved visitor from Supabase Auth:',
-            {
-              authUserId,
-              visitorId:
-                normalizedVisitorId,
-            }
-          );
-        }
-      } catch (visitorLookupError) {
-        console.warn(
-          'SHELF — unable to resolve Auth user to visitor:',
-          visitorLookupError
-        );
-        throw visitorLookupError;
-      }
-    }
-
-    // ------------------------------------------------------------------------
-    // 2C. FALLBACK: LOCAL SHELF SESSION
-    // ------------------------------------------------------------------------
-    //
-    // QR/local login normally stores the SHELF visitor ID.
-    // ========================================================================
-
-    if (
-      !skipVisitorResolution &&
-      !normalizedVisitorId
-    ) {
-      const localVisitorId =
-        localSession?.role &&
-        localSession.role !== 'visitor'
-          ? null
-          : localSession?.visitor?.id ||
-            localSession?.visitor?.visitorId ||
-            localSession?.user?.visitorId ||
-            localSession?.user?.visitor_id ||
-            localSession?.user?.id ||
-            localSession?.id ||
-            null;
-
-      if (
-        localVisitorId &&
-        isValidVisitorId(
-          normalizeText(
-            localVisitorId
-          )
-        )
-      ) {
-        normalizedVisitorId =
-          normalizeText(
-            localVisitorId
-          );
-
-        console.log(
-          'SHELF — resolved visitor from local session:',
-          {
-            visitorId:
-              normalizedVisitorId,
-          }
-        );
-      }
-    }
-
-  } catch (visitorResolveError) {
-    console.error(
-      'SHELF — VISITOR ID RESOLUTION ERROR:',
-      visitorResolveError
+  if (sessionError) {
+    throw cleanErr(
+      sessionError,
+      'Unable to check the current authentication session.'
     );
-    throw visitorResolveError;
   }
 
-  console.log(
-    'SHELF — FINAL VISITOR ID FOR REQUESTS:',
-    normalizedVisitorId
-  );
+  const authUserId =
+    sessionData?.session?.user?.id ||
+    null;
+  authenticatedUserId = authUserId;
 
-  // ==========================================================================
+  // ------------------------------------------------------------------------
+  // 2B. RESOLVE AUTH USER →’ SHELF VISITOR
+  // ------------------------------------------------------------------------
+
+  if (
+    !skipVisitorResolution &&
+    !normalizedVisitorId &&
+    authUserId &&
+    isValidUuid(authUserId)
+  ) {
+    const visitor =
+      await getVisitor(
+        authUserId
+      );
+
+    if (
+      visitor?.id &&
+      isValidVisitorId(
+        normalizeText(
+          visitor.id
+        )
+      )
+    ) {
+      normalizedVisitorId =
+        normalizeText(
+          visitor.id
+        );
+
+      // Visitor identity resolved from the authenticated session. Avoid
+      // logging identifiers to prevent PII leakage in client logs.
+    }
+  }
+
+  // ------------------------------------------------------------------------
+  // 2C. FALLBACK: LOCAL SHELF SESSION
+  // ------------------------------------------------------------------------
+  //
+  // Local visitor sessions normally store the SHELF visitor ID.
+  // ========================================================================
+
+  if (
+    !skipVisitorResolution &&
+    !normalizedVisitorId
+  ) {
+    const localVisitorId =
+      localSession?.role &&
+      localSession.role !== 'visitor'
+        ? null
+        : localSession?.visitor?.id ||
+          localSession?.visitor?.visitorId ||
+          localSession?.user?.visitorId ||
+          localSession?.user?.visitor_id ||
+          localSession?.user?.id ||
+          localSession?.id ||
+          null;
+
+    if (
+      localVisitorId &&
+      isValidVisitorId(
+        normalizeText(
+          localVisitorId
+        )
+      )
+    ) {
+      normalizedVisitorId =
+        normalizeText(
+          localVisitorId
+        );
+
+      // Visitor identity resolved from local session; avoid logging IDs.
+    }
+  }
+
+// ==========================================================================
   // 3. LOAD NORMAL LIBRARY BORROW REQUESTS
   // ==========================================================================
 
@@ -1284,24 +1215,24 @@ export async function fetchBorrowRequests({
         normalizedVisitorId &&
         isValidVisitorId(normalizedVisitorId)
       ) {
+        // Use the new secure RPC for visitor's own borrowing history
+        // which handles authorization and scoping server-side.
         normalRequests = await getBorrowRequestsForSession(async () => {
-          let query = supabase
-            .from('borrow_requests')
-            .select(
-              'id, book_id, book_title, visitor_id, visitor_name, library_id, status, request_date, pickup_deadline, queue_position, borrow_date, due_date, return_date, fine_amount, fine_paid_amount, confirmed_by, return_confirmed_by, fine_rate_snapshot, fine_review_required, fine_review_resolved_at'
-            )
-            .eq('visitor_id', normalizedVisitorId)
-            .order('request_date', { ascending: false });
-          if (signal) query = query.abortSignal(signal);
-          const { data, error } = await query;
-
+          const { data, error } = await supabase.rpc('get_visitor_borrowing_history');
+          if (signal) {
+            // Note: RPC doesn't support abort signal directly, but we check after
+            if (signal?.aborted) {
+              const abortError = new Error('Request aborted');
+              abortError.name = 'AbortError';
+              throw abortError;
+            }
+          }
           if (error) {
             throw cleanErr(
               error,
               'Unable to load your borrowing history.'
             );
           }
-
           return data || [];
         });
       } else {
@@ -1332,10 +1263,7 @@ export async function fetchBorrowRequests({
     if (signal?.aborted || normalError?.name === 'AbortError') {
       throw normalError;
     }
-    console.error(
-      'SHELF — NORMAL BORROW REQUESTS ERROR:',
-      normalError
-    );
+    console.error('SHELF — NORMAL BORROW REQUESTS ERROR:');
     throw normalError;
   }
 
@@ -1377,10 +1305,7 @@ export async function fetchBorrowRequests({
         );
 
         if (error) {
-          console.error(
-            'SHELF — COMMUNITY REQUEST RPC ERROR:',
-            error
-          );
+          console.error('SHELF — COMMUNITY REQUEST RPC ERROR:');
           throw cleanErr(
             error,
             'Unable to load your community book requests.'
@@ -1392,10 +1317,7 @@ export async function fetchBorrowRequests({
         // No community requests are loaded without an authenticated visitor session.
       }
     } catch (error) {
-      console.error(
-        'SHELF — COMMUNITY REQUEST FETCH ERROR:',
-        error
-      );
+      console.error('Unable to load community book requests.');
       throw error;
     }
   }
@@ -1636,35 +1558,13 @@ export async function fetchBorrowRequests({
       ).getTime()
   );
 
-  // ==========================================================================
-  // 10. FINAL DEBUG
-  // ==========================================================================
-
-  console.log(
-    'SHELF — FINAL REQUEST LIST:',
-    {
-      visitorId:
-        normalizedVisitorId,
-
-      normalCount:
-        mappedNormalRequests.length,
-
-      communityCount:
-        mappedCommunityRequests.length,
-
-      totalCount:
-        uniqueRequests.length,
-
-      communityRequests:
-        mappedCommunityRequests,
-    }
-  );
-
   return uniqueRequests;
 }
 
 // ============================================================================
 // FETCH ATTENDANCE LOGS
+// Server-side scoped RPCs enforce role, AAL2 (staff), ownership, and library
+// isolation. Direct attendance_logs table reads are not used here.
 // ============================================================================
 
 export async function fetchAttendanceLogs() {
@@ -1672,29 +1572,11 @@ export async function fetchAttendanceLogs() {
   if (scope.type === 'anonymous') return [];
   if (scope.type === 'subadmin' && !scope.libraryId) return [];
 
-  const buildAttendanceQuery = (libraryId) => {
-    let query = supabase
-        .from('attendance_logs')
-        .select('id, visitor_id, visitor_name, library_id, time_in, checked_out_at')
-        .order('time_in', { ascending: false })
-        .order('id', { ascending: true });
-
-    if (scope.type === 'visitor') {
-      query = query.eq('visitor_id', scope.visitorId);
-    } else if (libraryId) {
-      query = query.eq('library_id', libraryId);
-    }
-
-    return query;
-  };
-
-  const data = await fetchLatestRowsInPages(
-    () => buildAttendanceQuery(scope.type === 'superadmin' ? null : scope.libraryId),
-    'recent attendance records',
-    ATTENDANCE_INITIAL_ROW_LIMIT
-  );
-
-  return data.map(mapAttendance);
+  const { data, error } = await supabase.rpc('get_attendance_logs_v1');
+  if (error) {
+    throw cleanErr(error, 'Unable to load attendance records.');
+  }
+  return (Array.isArray(data) ? data : []).map(mapAttendance);
 }
 
 export async function fetchAttendanceLogsPage({
@@ -1710,34 +1592,23 @@ export async function fetchAttendanceLogsPage({
   }
 
   const safePageSize = Math.min(100, Math.max(1, Math.trunc(Number(pageSize) || 30)));
-  let query = supabase
-    .from('attendance_logs')
-    .select(
-      'id, visitor_id, visitor_name, library_id, time_in, checked_out_at',
-      cursor ? undefined : { count: 'exact' }
-    )
-    .eq('visitor_id', scope.visitorId)
-    .order('time_in', { ascending: false })
-    .order('id', { ascending: true });
-
-  if (libraryId) query = query.eq('library_id', libraryId);
-  if (fromTime) query = query.gte('time_in', fromTime);
-  if (beforeTime) query = query.lt('time_in', beforeTime);
-  if (cursor?.timeIn && cursor?.id) {
-    query = query.or(
-      `time_in.lt.${cursor.timeIn},and(time_in.eq.${cursor.timeIn},id.gt.${cursor.id})`
-    );
-  }
-
-  const { data, error, count } = await query.limit(safePageSize + 1);
+  const { data, error } = await supabase.rpc('get_visitor_attendance_logs_v1', {
+    p_limit: safePageSize,
+    p_cursor_time_in: cursor?.timeIn || null,
+    p_cursor_id: cursor?.id || null,
+    p_from_time: fromTime || null,
+    p_before_time: beforeTime || null,
+    p_library_id: libraryId ? String(libraryId) : null,
+  });
   if (error) {
     throw cleanErr(error, 'Unable to load your attendance history.');
   }
 
-  const rows = data || [];
+  const rows = Array.isArray(data) ? data : [];
   const hasMore = rows.length > safePageSize;
   const pageRows = rows.slice(0, safePageSize);
   const lastRow = pageRows.at(-1);
+  const totalCount = pageRows.length > 0 ? (pageRows[0].total_count ?? null) : (cursor ? null : 0);
 
   return {
     logs: pageRows.map(mapAttendance),
@@ -1745,7 +1616,7 @@ export async function fetchAttendanceLogsPage({
       ? { timeIn: lastRow.time_in, id: lastRow.id }
       : null,
     hasMore,
-    totalCount: cursor ? null : count ?? 0,
+    totalCount: cursor ? null : (totalCount == null ? null : Number(totalCount)),
   };
 }
 
@@ -1917,6 +1788,7 @@ export async function registerVisitor({
   address,
   password,
   libraryId = null,
+  registrationType = VISITOR_REGISTRATION_TYPES.INSTITUTIONAL,
 }) {
   const normalizedFullName =
     normalizeText(fullName);
@@ -1932,6 +1804,8 @@ export async function registerVisitor({
 
   const normalizedPassword =
     asString(password);
+  const normalizedRegistrationType = normalizeVisitorRegistrationType(registrationType);
+  if (!normalizedRegistrationType) throw new Error('Select a valid visitor registration type.');
 
   if (!normalizedFullName) {
     throw new Error(
@@ -1977,7 +1851,7 @@ export async function registerVisitor({
 
   const normalizedLibraryId = normalizeText(libraryId) || null;
   if (!normalizedLibraryId || !isValidUuid(normalizedLibraryId)) {
-    throw new Error('Select a valid participating library or school.');
+    throw new Error('Select a valid preferred library.');
   }
 
   const registrationNonce =
@@ -2001,6 +1875,7 @@ export async function registerVisitor({
       options: {
         data: {
           role: 'visitor',
+          registration_type: normalizedRegistrationType,
           library_id: normalizedLibraryId,
           full_name:
             normalizedFullName,
@@ -2015,10 +1890,7 @@ export async function registerVisitor({
     });
 
   if (authError) {
-    console.error(
-      'SUPABASE AUTH REGISTRATION ERROR:',
-      authError
-    );
+    console.error('SUPABASE AUTH REGISTRATION ERROR:');
 
     const message =
       normalizeText(
@@ -2071,7 +1943,7 @@ export async function registerVisitor({
     error: registrationError,
   } =
     await supabase.rpc(
-      'register_visitor',
+      'register_visitor_v2',
       {
         p_auth_user_id:
           authUserId,
@@ -2093,14 +1965,14 @@ export async function registerVisitor({
 
         p_library_id:
           normalizedLibraryId,
+
+        p_registration_type:
+          normalizedRegistrationType,
       }
     );
 
   if (registrationError) {
-    console.error(
-      'REGISTER VISITOR PROFILE ERROR:',
-      registrationError
-    );
+    console.error('REGISTER VISITOR PROFILE ERROR:');
 
     await safeSignOut();
 
@@ -2146,20 +2018,10 @@ export async function registerVisitor({
       {
         body: {
           visitorId,
+          registrationNonce,
         },
       }
     );
-
-  // ---------------------------------------------------------
-  // OTP EMAIL DELIVERY FAILURE
-  //
-  // The auth account and visitor profile are already
-  // committed at this point. Leaving them behind strands the
-  // visitor: re-registering fails with "This email is already
-  // registered" and login is blocked on an OTP they never
-  // received. Roll the registration back so the visitor can
-  // simply try again.
-  // ---------------------------------------------------------
 
   const otpDeliveryError =
     await readFunctionError(
@@ -2167,17 +2029,24 @@ export async function registerVisitor({
       emailData
     );
 
+  // Ambiguous delivery outcomes (timeout/unknown provider state) fail closed on
+  // the server and must not auto-abort registration; caller should wait/retry
+  // through the secure resend/recovery flow.
   if (otpDeliveryError) {
-    console.error(
-      'SEND VISITOR OTP ERROR:',
-      otpDeliveryError,
-      emailError
-    );
+    console.error('SEND VISITOR OTP ERROR:');
 
-    await abortVisitorRegistration(
-      visitorId,
-      registrationNonce
-    );
+    const message = normalizeText(otpDeliveryError);
+    const lower = message.toLowerCase();
+    const ambiguous =
+      lower.includes('could not be confirmed') ||
+      lower.includes('please wait before trying again');
+
+    if (!ambiguous) {
+      await abortVisitorRegistration(
+        visitorId,
+        registrationNonce
+      );
+    }
 
     throw new Error(
       otpDeliveryError
@@ -2186,6 +2055,8 @@ export async function registerVisitor({
 
   return {
     visitorId,
+    registrationNonce,
+    registrationType: normalizedRegistrationType,
     otpExpiresAt:
       normalizeText(emailData?.expiresAt) ||
       new Date(Date.now() + 10 * 60 * 1000).toISOString(),
@@ -2214,16 +2085,10 @@ async function abortVisitorRegistration(
       );
 
     if (error) {
-      console.error(
-        'ABORT VISITOR REGISTRATION ERROR:',
-        error
-      );
+      console.error('ABORT VISITOR REGISTRATION ERROR:');
     }
-  } catch (abortError) {
-    console.error(
-      'ABORT VISITOR REGISTRATION THREW:',
-      abortError
-    );
+  } catch {
+    console.error('ABORT VISITOR REGISTRATION THREW:');
   }
 }
 
@@ -2246,8 +2111,8 @@ async function readFunctionError(
   ) {
     try {
       responseData = await error.context.json();
-    } catch (responseError) {
-      console.warn('Unable to read Edge Function error details:', responseError);
+    } catch {
+      console.warn('Unable to read Edge Function error details:');
       responseData = null;
     }
   }
@@ -2321,18 +2186,27 @@ export async function resendOtp(
   }
 
   const {
-    error,
+    data: capabilityData,
+    error: capabilityError,
   } =
     await supabase.rpc(
-      'resend_otp',
+      'issue_visitor_resend_capability',
       {
         p_visitor_id:
           normalizedVisitorId,
       }
     );
 
-  if (error) {
-    throw cleanErr(error);
+  if (capabilityError) {
+    throw cleanErr(capabilityError);
+  }
+
+  const capabilityRow = firstRow(capabilityData);
+  const capability = normalizeText(capabilityRow?.capability);
+  if (!capability) {
+    throw new Error(
+      'Unable to request a new verification code right now.'
+    );
   }
 
   const {
@@ -2343,8 +2217,7 @@ export async function resendOtp(
       'send-visitor-otp',
       {
         body: {
-          visitorId:
-            normalizedVisitorId,
+          capability,
         },
       }
     );
@@ -2389,42 +2262,39 @@ export async function resendVisitorOtpByEmail(
   }
 
   const {
-    data,
-    error,
+    data: emailData,
+    error: emailError,
   } =
-    await supabase.rpc(
-      'find_unverified_visitor',
+    await supabase.functions.invoke(
+      'send-visitor-otp',
       {
-        p_email:
-          normalizedEmail,
+        body: {
+          email:
+            normalizedEmail,
+        },
       }
     );
 
-  if (error) {
-    throw cleanErr(error);
+  const otpDeliveryError =
+    await readFunctionError(
+      emailError,
+      emailData
+    );
+
+  if (otpDeliveryError) {
+    const message = normalizeText(otpDeliveryError);
+    const lower = message.toLowerCase();
+    if (
+      lower.includes('could not reach') ||
+      lower.includes('not configured')
+    ) {
+      throw new Error(message);
+    }
   }
-
-  const row =
-    firstRow(data);
-
-  if (!row?.visitor_id) {
-    // Never confirm whether an account exists.
-    return {
-      success: true,
-      visitorId: null,
-    };
-  }
-
-  await resendOtp(
-    row.visitor_id
-  );
 
   return {
     success: true,
-    visitorId:
-      normalizeText(
-        row.visitor_id
-      ),
+    visitorId: null,
   };
 }
 
@@ -2513,22 +2383,6 @@ export async function verifyVisitorOtp(
 
     otpVerified: true,
   };
-}
-
-// ============================================================================
-// ESTABLISH VISITOR SESSION FROM QR PASS
-//
-// A QR pass identifies the visitor but never authenticates on its own.
-// ============================================================================
-
-export async function establishVisitorSessionFromQr(
-  qrCode,
-  password
-) {
-  return loginVisitor({
-    identifier: qrCode,
-    password,
-  });
 }
 
 // ============================================================================
@@ -2761,190 +2615,8 @@ export async function loginVisitor({
 
   if (!normalizedIdentifier) {
     throw new Error(
-      'Email or visitor QR pass is required.'
+      'Email is required.'
     );
-  }
-
-  if (
-    isValidShelfQr(
-      normalizedIdentifier
-    )
-  ) {
-    if (!normalizedPassword) {
-      throw new Error(
-        'Password is required to sign in with a visitor QR pass.'
-      );
-    }
-
-    const normalizedQr =
-      normalizeQr(
-        normalizedIdentifier
-      );
-
-    const invokeQrLogin = () =>
-      supabase.functions.invoke(
-        'visitor-qr-login',
-        {
-          body: {
-            qrCode: normalizedQr,
-            password: normalizedPassword,
-          },
-        }
-      );
-
-    const isLocalDevelopmentOrigin =
-      typeof window !== 'undefined' &&
-      window.location.protocol === 'http:' &&
-      ['localhost', '127.0.0.1'].includes(window.location.hostname);
-
-    let qrLoginResponse =
-      await invokeQrLogin();
-
-    if (
-      qrLoginResponse.error?.name ===
-        'FunctionsFetchError' &&
-      !isLocalDevelopmentOrigin
-    ) {
-      await new Promise((resolve) =>
-        setTimeout(resolve, 800)
-      );
-      qrLoginResponse =
-        await invokeQrLogin();
-    }
-
-    const {
-      data: qrLoginData,
-      error: qrLoginError,
-    } = qrLoginResponse;
-
-    if (qrLoginError) {
-      console.error('QR sign-in request failed:', qrLoginError);
-
-      if (
-        qrLoginError.name ===
-        'FunctionsFetchError'
-      ) {
-        if (isLocalDevelopmentOrigin) {
-          throw new Error(
-            'QR sign-in is not accepting this local development address. Deploy the updated visitor-qr-login Edge Function, or sign in from the deployed site.'
-          );
-        }
-
-        throw new Error(
-          'Unable to connect to QR sign-in. Check your internet connection and try again.'
-        );
-      }
-
-      let serviceMessage = normalizeText(qrLoginData?.error);
-      if (!serviceMessage && typeof qrLoginError.context?.json === 'function') {
-        try {
-          const responseBody = await qrLoginError.context.json();
-          serviceMessage = normalizeText(responseBody?.error);
-        } catch (responseError) {
-          console.warn('Could not read QR sign-in response details:', responseError);
-        }
-      }
-
-      const normalizedMessage = serviceMessage.toLowerCase();
-      if (
-        normalizedMessage.includes('invalid qr pass or password')
-      ) {
-        throw new Error('The QR pass or password is not valid.');
-      }
-      if (normalizedMessage.includes('could not be used to sign in')) {
-        throw new Error('This visitor account was not found, is disabled, or the QR pass is no longer active.');
-      }
-      if (normalizedMessage.includes('too many qr sign-in attempts')) {
-        throw new Error('Too many QR sign-in attempts. Please wait before trying again.');
-      }
-      if (normalizedMessage.includes('origin is not allowed')) {
-        throw new Error('QR sign-in is not enabled for this site address. Reload the app from its configured URL.');
-      }
-      if (
-        normalizedMessage.includes('temporarily unavailable') ||
-        normalizedMessage.includes('unable to validate') ||
-        normalizedMessage.includes('unable to complete') ||
-        normalizedMessage.includes('unable to verify') ||
-        qrLoginError.name === 'FunctionsRelayError'
-      ) {
-        throw new Error('QR sign-in is temporarily unavailable. Please try again shortly.');
-      }
-
-      throw new Error('Unable to verify the visitor QR pass. Please try again.');
-    }
-
-    if (
-      !qrLoginData?.session?.access_token ||
-      !qrLoginData?.session?.refresh_token
-    ) {
-      console.error('QR sign-in returned an invalid session response.');
-      throw new Error('QR sign-in could not be completed. Please try again.');
-    }
-
-    const {
-      data: authData,
-      error: authError,
-    } = await supabase.auth.setSession(qrLoginData.session);
-
-    if (authError) {
-      console.error('QR sign-in session setup failed:', authError);
-      throw new Error('Unable to complete QR sign-in. Please try again.');
-    }
-
-    const authUserId =
-      normalizeText(authData?.user?.id);
-
-    if (!isValidUuid(authUserId)) {
-      await safeSignOut();
-
-      console.error('QR sign-in returned an invalid visitor account ID.');
-      throw new Error('QR sign-in could not be completed. Please try again.');
-    }
-
-    const {
-      data: visitor,
-      error: visitorError,
-    } = await supabase
-      .from('visitors')
-      .select(
-        'id, full_name, email, otp_verified, qr_code, is_active, auth_user_id'
-      )
-      .eq('auth_user_id', authUserId)
-      .maybeSingle();
-
-    if (visitorError) {
-      await safeSignOut();
-
-      console.error('QR sign-in visitor profile lookup failed:', visitorError);
-      throw new Error('Unable to load your visitor account. Please try again.');
-    }
-
-    if (
-      !visitor ||
-      visitor.qr_code !== normalizedQr ||
-      visitor.is_active !== true ||
-      visitor.otp_verified !== true
-    ) {
-      await safeSignOut();
-
-      throw new Error(
-        'This QR pass could not be used to sign in.'
-      );
-    }
-
-    return {
-      id:
-        visitor.id,
-
-      fullName:
-        visitor.full_name,
-
-      email:
-        visitor.email,
-
-      qrCode:
-        visitor.qr_code,
-    };
   }
 
   if (!normalizedPassword) {
@@ -2976,8 +2648,8 @@ if (
 
   try {
     details = await loginError?.context?.json?.();
-  } catch (error) {
-    console.warn('Unable to read visitor login error details:', error);
+  } catch {
+    console.warn('Unable to read visitor login error details:');
   }
 
   throw new Error(
@@ -3030,7 +2702,7 @@ const authData = {
     await supabase
       .from('visitors')
       .select(
-        'id, full_name, email, otp_verified, qr_code, is_active, auth_user_id'
+        'id, full_name, email, otp_verified, qr_code, is_active, auth_user_id, registration_type, approval_status'
       )
       .eq(
         'auth_user_id',
@@ -3055,9 +2727,12 @@ const authData = {
     );
   }
 
-  if (
-    visitor.is_active === false
-  ) {
+  const communityApprovalPending = visitor.registration_type === 'community'
+    && visitor.approval_status === 'pending'
+    && visitor.is_active === false
+    && visitor.otp_verified === true;
+
+  if (visitor.is_active === false && !communityApprovalPending) {
     await safeSignOut();
 
     throw new Error(
@@ -3086,7 +2761,10 @@ const authData = {
       visitor.email,
 
     qrCode:
-      visitor.qr_code,
+      communityApprovalPending ? null : visitor.qr_code,
+
+    registrationType: visitor.registration_type || 'institutional',
+    communityApprovalPending,
   };
 }
 
@@ -3097,18 +2775,23 @@ export async function fetchVisitorForPasskey(authUserId) {
   }
   const { data: visitor, error } = await supabase
     .from('visitors')
-    .select('id, full_name, email, otp_verified, qr_code, is_active, auth_user_id')
+    .select('id, full_name, email, otp_verified, qr_code, is_active, auth_user_id, registration_type, approval_status')
     .eq('auth_user_id', normalizedAuthUserId)
     .maybeSingle();
   if (error) throw cleanErr(error, 'Unable to load your visitor account.');
   if (!visitor) throw new Error('This passkey is not linked to a SHELF visitor account.');
-  if (visitor.is_active === false) throw new Error('This visitor account is currently inactive.');
   if (visitor.otp_verified !== true) throw new Error('Please verify your email before signing in.');
+  const communityApprovalPending = visitor.registration_type === 'community'
+    && visitor.approval_status === 'pending'
+    && visitor.is_active === false;
+  if (visitor.is_active === false && !communityApprovalPending) throw new Error('This visitor account is currently inactive.');
   return {
     id: visitor.id,
     fullName: visitor.full_name,
     email: visitor.email,
-    qrCode: visitor.qr_code,
+    qrCode: communityApprovalPending ? null : visitor.qr_code,
+    registrationType: visitor.registration_type || 'institutional',
+    communityApprovalPending,
   };
 }
 
@@ -3161,7 +2844,7 @@ export async function findVisitorByQr(
     error,
   } =
     await supabase.rpc(
-      'find_visitor_by_qr',
+      'lookup_attendance_visitor_v2',
       {
         p_qr:
           normalizedQrCode,
@@ -3266,8 +2949,8 @@ if (
 
   try {
     details = await loginError?.context?.json?.();
-  } catch (error) {
-    console.warn('Unable to read staff login error details:', error);
+  } catch {
+    console.warn('Unable to read staff login error details:');
   }
 
   const message =
@@ -3334,10 +3017,7 @@ const data = {
       .maybeSingle();
 
   if (profileError) {
-    console.error(
-      'STAFF PROFILE LOAD ERROR:',
-      profileError
-    );
+    console.error('STAFF PROFILE LOAD ERROR:');
 
     await safeSignOut();
 
@@ -3581,6 +3261,7 @@ export async function mergeOrInsertLibraryBooks(incomingRows) {
     const row = { ...source };
     row.category = preserveBookCategory(row.category);
     row.fine_rate = normalizeBookFineRate(row.fine_rate);
+    row.call_number = normalizeCallNumber(row.call_number ?? row.callNumber);
 
     const title = normalizeText(row.title);
     const author = normalizeText(row.author);
@@ -3652,7 +3333,7 @@ export async function mergeOrInsertLibraryBooks(incomingRows) {
     let query = supabase
       .from('books')
       .select(
-        'id, title, author, category, isbn, library_id, total_copies, available_copies, fine_rate, book_type'
+        'id, title, author, category, isbn, call_number, library_id, total_copies, available_copies, fine_rate, book_type'
       )
       .or('book_type.eq.library,book_type.is.null');
 
@@ -3723,6 +3404,9 @@ export async function mergeOrInsertLibraryBooks(incomingRows) {
           existingCategory: existing.category,
           importedCategory: incoming.category,
         });
+      }
+      if (!existing.call_number && incoming.call_number) {
+        copyUpdate.call_number = incoming.call_number;
       }
       const { data, error } = await supabase
         .from('books')
@@ -3799,6 +3483,7 @@ export async function addBook(book) {
       category,
       fine_rate: fineRate,
       isbn: normalizeText(book?.isbn) || null,
+      call_number: normalizeCallNumber(book?.callNumber),
       shelf_location: normalizeText(book?.shelfLocation) || null,
       library_id: libraryId || null,
       total_copies: totalCopies,
@@ -4036,10 +3721,7 @@ export async function addPersonalBook({
     );
 
   if (error) {
-    console.error(
-      'ADD PERSONAL BOOK RPC ERROR:',
-      error
-    );
+    console.error('ADD PERSONAL BOOK RPC ERROR:');
 
     throw cleanErr(
       error,
@@ -4086,10 +3768,7 @@ export async function setPersonalBookVisibility(
   );
 
   if (error) {
-    console.error(
-      'SET PERSONAL BOOK VISIBILITY RPC ERROR:',
-      error
-    );
+    console.error('SET PERSONAL BOOK VISIBILITY RPC ERROR:');
     throw cleanErr(
       error,
       'Unable to update the book visibility.'
@@ -4203,7 +3882,7 @@ export async function updatePersonalBook({
   );
 
   if (error) {
-    console.error('UPDATE PERSONAL BOOK RPC ERROR:', error);
+    console.error('UPDATE PERSONAL BOOK RPC ERROR:');
     throw cleanErr(error, 'Unable to update the personal book.');
   }
 
@@ -4231,7 +3910,7 @@ export async function deletePersonalBook(visitorId, bookId) {
   });
 
   if (error) {
-    console.error('DELETE PERSONAL BOOK RPC ERROR:', error);
+    console.error('DELETE PERSONAL BOOK RPC ERROR:');
     throw cleanErr(error, 'Unable to remove the personal book.');
   }
   if (data !== true) {
@@ -4319,19 +3998,7 @@ export async function requestCommunityBook(
     );
 
   if (error) {
-    console.error(
-  'COMMUNITY BOOK REQUEST RPC ERROR:',
-  [
-    `code=${String(error?.code ?? '')}`,
-    `message=${String(error?.message ?? '')}`,
-    `details=${String(error?.details ?? '')}`,
-    `hint=${String(error?.hint ?? '')}`,
-    `requesterVisitorId=${String(normalizedRequesterId ?? '')}`,
-    `resolvedRequesterId=${String(resolvedRequesterId ?? '')}`,
-    `bookId=${String(normalizedBookId ?? '')}`,
-    `bookIdType=${typeof normalizedBookId}`,
-  ].join('\n')
-);
+    console.error('COMMUNITY BOOK REQUEST RPC ERROR:');
     const message =
       normalizeText(
         error?.message
@@ -4534,10 +4201,7 @@ export async function fetchOwnerCommunityBookRequests(
   );
 
   if (error) {
-    console.error(
-      'FETCH OWNER COMMUNITY BOOK REQUESTS RPC ERROR:',
-      error
-    );
+    console.error('FETCH OWNER COMMUNITY BOOK REQUESTS RPC ERROR:');
 
     throw cleanErr(
       error,
@@ -4687,10 +4351,7 @@ export async function fetchMyCommunityBookRequests(visitorId) {
   );
 
   if (error) {
-    console.error(
-      'FETCH MY COMMUNITY BOOK REQUESTS RPC ERROR:',
-      error
-    );
+    console.error('FETCH MY COMMUNITY BOOK REQUESTS RPC ERROR:');
 
     throw cleanErr(
       error,
@@ -4778,10 +4439,7 @@ export async function approveCommunityBookRequest(
   );
 
   if (error) {
-    console.error(
-      'APPROVE COMMUNITY BOOK REQUEST RPC ERROR:',
-      error
-    );
+    console.error('APPROVE COMMUNITY BOOK REQUEST RPC ERROR:');
 
     throw cleanErr(
       error,
@@ -4863,10 +4521,7 @@ export async function rejectCommunityBookRequest(
   );
 
   if (error) {
-    console.error(
-      'REJECT COMMUNITY BOOK REQUEST RPC ERROR:',
-      error
-    );
+    console.error('REJECT COMMUNITY BOOK REQUEST RPC ERROR:');
 
     throw cleanErr(
       error,
@@ -4918,10 +4573,7 @@ export async function confirmCommunityBookPickup(
   );
 
   if (error) {
-    console.error(
-      'CONFIRM COMMUNITY BOOK PICKUP RPC ERROR:',
-      error
-    );
+    console.error('CONFIRM COMMUNITY BOOK PICKUP RPC ERROR:');
 
     throw cleanErr(
       error,
@@ -4979,26 +4631,7 @@ export async function confirmCommunityBookReturn(
   );
 
   if (error) {
-    const returnRpcError = [
-      `code=${String(error?.code ?? '')}`,
-      `message=${String(error?.message ?? '')}`,
-      `details=${String(error?.details ?? '')}`,
-      `hint=${String(error?.hint ?? '')}`,
-      `requestId=${String(
-        normalizedRequestId ?? ''
-      )}`,
-      `requestIdType=${typeof normalizedRequestId}`,
-      `ownerVisitorId=${String(
-        normalizedOwnerVisitorId ?? ''
-      )}`,
-      `ownerVisitorIdType=${typeof normalizedOwnerVisitorId}`,
-    ].join('\n');
-
-    console.error(
-      'CONFIRM COMMUNITY BOOK RETURN RPC ERROR:\n' +
-        returnRpcError
-    );
-
+    console.error('CONFIRM COMMUNITY BOOK RETURN RPC ERROR:');
     throw cleanErr(
       error,
       'Unable to confirm the community book return.'
@@ -5097,10 +4730,7 @@ export async function cancelCommunityBookRequest(
   );
 
   if (error) {
-    console.error(
-      'CANCEL COMMUNITY BOOK REQUEST RPC ERROR:',
-      error
-    );
+    console.error('CANCEL COMMUNITY BOOK REQUEST RPC ERROR:');
 
     const message =
       normalizeText(error?.message);
@@ -5448,6 +5078,10 @@ export async function updateBook(
 
   if (patch?.category !== undefined) {
     dbPatch.category = preserveBookCategory(patch.category);
+  }
+
+  if (patch?.callNumber !== undefined) {
+    dbPatch.call_number = normalizeCallNumber(patch.callNumber);
   }
 
   if (patch?.fine_rate !== undefined) {
@@ -5839,9 +5473,9 @@ export async function loadExternalCatalog(libraryId) {
           source_url: `https://openlibrary.org${key}`,
         });
       }
-    } catch (error) {
+    } catch {
       errors.push(`${category.label}: ${error.message}`);
-      console.error('Open Library category import failed:', error);
+      console.error('Open Library category import failed:');
     }
   }
 
@@ -5875,12 +5509,24 @@ export async function loadExternalCatalog(libraryId) {
 }
 
 export async function fetchExternalCatalogBooks() {
-  const { data, error } = await supabase
-    .from('external_catalog_books')
-    .select('*')
-    .order('title', { ascending: true });
+  const pageSize = 1000;
+  const data = [];
+  let offset = 0;
 
-  if (error) throw cleanErr(error);
+  while (true) {
+    const { data: page, error } = await supabase
+      .from('external_catalog_books')
+      .select('*')
+      .order('title', { ascending: true })
+      .order('openlibrary_key', { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) throw cleanErr(error);
+
+    data.push(...(page || []));
+    if (!page || page.length < pageSize) break;
+    offset += pageSize;
+  }
 
   return (data || []).map((record) => ({
     id: record.openlibrary_key,
@@ -5973,39 +5619,15 @@ export async function requestBorrow(
     error,
   } =
     await supabase.rpc(
-      'request_borrow',
+      'request_borrow_v2',
       {
-        p_visitor_id:
-          authenticatedUser.id,
-
         p_book_id:
           normalizedBookId,
       }
     );
 
   if (error) {
-    console.error(
-      'BORROW REQUEST RPC ERROR:',
-      {
-        code:
-          error?.code,
-
-        message:
-          error?.message,
-
-        details:
-          error?.details,
-
-        hint:
-          error?.hint,
-
-        visitorId:
-          normalizedVisitorId,
-
-        bookId:
-          normalizedBookId,
-      }
-    );
+    console.error('BORROW REQUEST RPC ERROR:');
 
     const message =
       normalizeText(
@@ -6188,10 +5810,7 @@ export async function requestBorrow(
     row.id &&
     !isValidUuid(row.id)
   ) {
-    console.error(
-      'INVALID BORROW REQUEST RETURNED BY RPC:',
-      row
-    );
+    console.error('INVALID BORROW REQUEST RETURNED BY RPC:');
 
     throw new Error(
       'The database returned an invalid borrow request.'
@@ -6215,7 +5834,7 @@ export async function cancelBorrowRequest(
     normalizeText(requestId);
 
   if (
-    !isValidUuid(
+    !isValidBorrowRequestId(
       normalizedRequestId
     )
   ) {
@@ -6266,7 +5885,7 @@ export async function confirmPickup(
     normalizeText(staffName);
 
   if (
-    !isValidUuid(
+    !isValidBorrowRequestId(
       normalizedRequestId
     )
   ) {
@@ -6285,7 +5904,7 @@ export async function confirmPickup(
     error,
   } =
     await supabase.rpc(
-      'confirm_pickup',
+      'confirm_pickup_v2',
       {
         p_request_id:
           normalizedRequestId,
@@ -6319,7 +5938,7 @@ export async function confirmReturn(
     normalizeText(staffName);
 
   if (
-    !isValidUuid(
+    !isValidBorrowRequestId(
       normalizedRequestId
     )
   ) {
@@ -6338,7 +5957,7 @@ export async function confirmReturn(
     error,
   } =
     await supabase.rpc(
-      'confirm_return',
+      'confirm_return_v2',
       {
         p_request_id:
           normalizedRequestId,
@@ -6355,4 +5974,316 @@ export async function confirmReturn(
   return {
     success: true,
   };
+}
+
+// ============================================================================
+// VISITOR FEEDBACK
+// ============================================================================
+
+export async function submitVisitorFeedback({
+  visitorId,
+  visitorName,
+  visitorEmail,
+  libraryId,
+  category,
+  subject,
+  message,
+}) {
+  if (!supabase) {
+    throw new Error('Feedback submission is unavailable until Supabase is configured.');
+  }
+
+  const normalizedVisitorId = normalizeText(visitorId);
+  const normalizedVisitorName = normalizeText(visitorName);
+  const normalizedVisitorEmail = normalizeText(visitorEmail);
+  const normalizedLibraryId = libraryId ? normalizeText(libraryId) : null;
+  const normalizedCategory = normalizeText(category);
+  const normalizedSubject = normalizeText(subject);
+  const normalizedMessage = normalizeText(message);
+
+  if (!normalizedVisitorId) {
+    throw new Error('Visitor ID is required.');
+  }
+  if (!normalizedVisitorName) {
+    throw new Error('Visitor name is required.');
+  }
+  if (!normalizedCategory) {
+    throw new Error('Category is required.');
+  }
+  if (!normalizedSubject) {
+    throw new Error('Subject is required.');
+  }
+  if (!normalizedMessage) {
+    throw new Error('Message is required.');
+  }
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from('visitor_feedback')
+    .insert({
+      visitor_id: normalizedVisitorId,
+      visitor_name: normalizedVisitorName,
+      visitor_email: normalizedVisitorEmail || null,
+      library_id: normalizedLibraryId,
+      category: normalizedCategory,
+      subject: normalizedSubject,
+      message: normalizedMessage,
+    })
+    .select('id, category, subject, message, library_id, status, admin_reply, replied_at, created_at')
+    .single();
+
+  if (error) {
+    throw cleanErr(error);
+  }
+
+  return data;
+}
+
+// ============================================================================
+// ANNOUNCEMENTS
+// ============================================================================
+
+export async function createAnnouncement({
+  title,
+  message,
+  audience,
+  libraryId,
+  createdBy,
+  expiresAt,
+}) {
+  if (!supabase) {
+    throw new Error('Announcement service is unavailable until Supabase is configured.');
+  }
+
+  const normalizedTitle = normalizeText(title);
+  const normalizedMessage = normalizeText(message);
+  const normalizedAudience = normalizeText(audience);
+  const normalizedLibraryId = libraryId ? normalizeText(libraryId) : null;
+  const normalizedCreatedBy = normalizeText(createdBy);
+  const normalizedExpiresAt = expiresAt ? normalizeText(expiresAt) : null;
+
+  if (!normalizedTitle) {
+    throw new Error('Title is required.');
+  }
+  if (!normalizedMessage) {
+    throw new Error('Message is required.');
+  }
+  if (!normalizedAudience) {
+    throw new Error('Audience is required.');
+  }
+  if (!normalizedCreatedBy) {
+    throw new Error('Creator is required.');
+  }
+
+  const values = {
+    title: normalizedTitle,
+    message: normalizedMessage,
+    audience: normalizedAudience,
+    library_id: normalizedLibraryId,
+    created_by: normalizedCreatedBy,
+    published: true,
+    expires_at: normalizedExpiresAt,
+  };
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from('announcements')
+    .insert(values)
+    .select('*')
+    .single();
+
+  if (error) {
+    throw cleanErr(error);
+  }
+
+  return data;
+}
+
+export async function updateAnnouncement(announcementId, {
+  title,
+  message,
+  audience,
+  libraryId,
+  expiresAt,
+}) {
+  if (!supabase) {
+    throw new Error('Announcement service is unavailable until Supabase is configured.');
+  }
+
+  const normalizedAnnouncementId = normalizeText(announcementId);
+  const normalizedTitle = normalizeText(title);
+  const normalizedMessage = normalizeText(message);
+  const normalizedAudience = normalizeText(audience);
+  const normalizedLibraryId = libraryId ? normalizeText(libraryId) : null;
+  const normalizedExpiresAt = expiresAt ? normalizeText(expiresAt) : null;
+
+  if (!normalizedAnnouncementId) {
+    throw new Error('Announcement ID is required.');
+  }
+  if (!normalizedTitle) {
+    throw new Error('Title is required.');
+  }
+  if (!normalizedMessage) {
+    throw new Error('Message is required.');
+  }
+  if (!normalizedAudience) {
+    throw new Error('Audience is required.');
+  }
+
+  const values = {
+    title: normalizedTitle,
+    message: normalizedMessage,
+    audience: normalizedAudience,
+    library_id: normalizedLibraryId,
+    updated_at: new Date().toISOString(),
+    expires_at: normalizedExpiresAt,
+  };
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from('announcements')
+    .update(values)
+    .eq('id', normalizedAnnouncementId)
+    .select('*')
+    .single();
+
+  if (error) {
+    throw cleanErr(error);
+  }
+
+  return data;
+}
+
+// ============================================================================
+// DELETE ANNOUNCEMENT
+// ============================================================================
+
+export async function deleteAnnouncement(announcementId) {
+  if (!supabase) {
+    throw new Error('Announcement service is unavailable until Supabase is configured.');
+  }
+
+  const normalizedAnnouncementId = normalizeText(announcementId);
+
+  if (!normalizedAnnouncementId) {
+    throw new Error('Announcement ID is required.');
+  }
+
+  const { error } = await supabase
+    .from('announcements')
+    .delete()
+    .eq('id', normalizedAnnouncementId);
+
+  if (error) {
+    throw cleanErr(error);
+  }
+
+  return { success: true };
+}
+
+// ============================================================================
+// SYSTEM TERMS DOCUMENTS
+// ============================================================================
+
+export async function upsertSystemTermsDocument({
+  documentKey,
+  version,
+  content,
+  updatedBy,
+}) {
+  if (!supabase) {
+    throw new Error('Terms document service is unavailable until Supabase is configured.');
+  }
+
+  const normalizedDocumentKey = normalizeText(documentKey);
+  const normalizedVersion = normalizeText(version);
+  const normalizedContent = normalizeText(content);
+  const normalizedUpdatedBy = updatedBy ? normalizeText(updatedBy) : null;
+
+  if (!normalizedDocumentKey) {
+    throw new Error('Document key is required.');
+  }
+  if (!normalizedVersion) {
+    throw new Error('Version is required.');
+  }
+  if (!normalizedContent) {
+    throw new Error('Content is required.');
+  }
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from('system_terms_documents')
+    .upsert({
+      document_key: normalizedDocumentKey,
+      version: normalizedVersion,
+      content: normalizedContent,
+      updated_at: new Date().toISOString(),
+      updated_by: normalizedUpdatedBy,
+    }, { onConflict: 'document_key' })
+    .select('*')
+    .single();
+
+  if (error) {
+    throw cleanErr(error);
+  }
+
+  return data;
+}
+
+// ============================================================================
+// VISITOR NOTIFICATIONS
+// ============================================================================
+
+const mapNotification = (r) => ({
+  id: r.id,
+  type: r.notification_type,
+  title: r.title,
+  message: r.message,
+  referenceId: r.reference_id,
+  referenceType: r.reference_type,
+  readAt: r.read_at,
+  createdAt: r.created_at,
+  expiresAt: r.expires_at,
+});
+
+export async function fetchVisitorNotifications({ limit = 50, offset = 0, unreadOnly = false } = {}) {
+  const { data, error } = await supabase.rpc('get_visitor_notifications', {
+    p_limit: limit,
+    p_offset: offset,
+    p_unread_only: unreadOnly,
+  });
+
+  if (error) {
+    throw cleanErr(error, 'Unable to load notifications.');
+  }
+
+  return (data || []).map(mapNotification);
+}
+
+export async function markVisitorNotificationRead(notificationId) {
+  const { error } = await supabase.rpc('mark_visitor_notification_read', {
+    p_notification_id: notificationId,
+  });
+
+  if (error) {
+    throw cleanErr(error, 'Unable to mark notification as read.');
+  }
+}
+
+export async function markAllVisitorNotificationsRead() {
+  const { data, error } = await supabase.rpc('mark_all_visitor_notifications_read');
+
+  if (error) {
+    throw cleanErr(error, 'Unable to mark all notifications as read.');
+  }
+
+  return Number(data) || 0;
 }

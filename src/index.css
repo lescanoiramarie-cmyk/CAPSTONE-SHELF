@@ -467,6 +467,71 @@ textarea::placeholder {
   align-items: center;
 }
 
+/* Save for Later button */
+.opac-book-card-save-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #64748b;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.opac-book-card-save-btn:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.opac-book-card-save-btn:focus-visible {
+  outline: 2px solid var(--color-primary, #2563eb);
+  outline-offset: 2px;
+}
+
+.opac-book-card-save-btn.opac-book-card-saved {
+  border-color: #86efac;
+  background: #dcfce7;
+  color: #166534;
+}
+
+.opac-book-card-save-btn.opac-book-card-saved:hover {
+  background: #bbf7d0;
+  border-color: #4ade80;
+  color: #15803d;
+}
+
+.dark .opac-book-card-save-btn {
+  border-color: #334155;
+  background: #1e293b;
+  color: #94a3b8;
+}
+
+.dark .opac-book-card-save-btn:hover {
+  border-color: #475569;
+  background: #334155;
+  color: #e2e8f0;
+}
+
+.dark .opac-book-card-save-btn.opac-book-card-saved {
+  border-color: #4ade80;
+  background: rgb(34 197 94 / 18%);
+  color: #bbf7d0;
+}
+
+.dark .opac-book-card-save-btn.opac-book-card-saved:hover {
+  background: rgb(34 197 94 / 28%);
+  border-color: #22c55e;
+  color: #86efac;
+}
+
 .opac-book-card-availability-label {
   flex: 0 1 auto;
   min-width: 0;

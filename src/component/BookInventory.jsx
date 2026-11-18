@@ -7,7 +7,7 @@ import { normalizeBookFineRate } from '../lib/bookFineRate.js';
 import { formatBookCategory } from '../lib/bookCategory.js';
 import { getBookInventoryScope } from '../lib/bookInventoryScope.js';
 
-const INVENTORY_PAGE_SIZE = 10;
+const INVENTORY_PAGE_SIZES = [10, 20, 50, 100];
 
 export default function BookInventory() {
   const { user } = useAuth();
@@ -31,6 +31,7 @@ export default function BookInventory() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [sortBy, setSortBy] = useState('title-asc');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(INVENTORY_PAGE_SIZES[0]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -205,6 +206,7 @@ export default function BookInventory() {
     title: '',
     author: '',
     isbn: '',
+    callNumber: '',
     category: '',
     fine_rate: '',
     copies: 1,
@@ -232,6 +234,7 @@ export default function BookInventory() {
       title: '',
       author: '',
       isbn: '',
+      callNumber: '',
       category: '',
       fine_rate: '',
       copies: 1,
@@ -254,6 +257,7 @@ export default function BookInventory() {
       title: book.title || '',
       author: book.author || '',
       isbn: book.isbn || '',
+      callNumber: book.callNumber || '',
       category: book.category || '',
       fine_rate: book.fineRate ?? book.fine_rate ?? '',
       copies: getBookCopies(book) || 1,
@@ -362,6 +366,7 @@ export default function BookInventory() {
         book.title?.toLowerCase().includes(q) ||
         book.author?.toLowerCase().includes(q) ||
         book.isbn?.toLowerCase().includes(q) ||
+        book.callNumber?.toLowerCase().includes(q) ||
         book.category?.toLowerCase().includes(q)
       );
       const matchesCategory = categoryFilter === 'all' ||
@@ -388,11 +393,11 @@ export default function BookInventory() {
 
       return 0;
     });
-  const pageCount = Math.max(1, Math.ceil(filteredBooks.length / INVENTORY_PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(filteredBooks.length / pageSize));
   const visiblePage = Math.min(page, pageCount);
   const visibleBooks = filteredBooks.slice(
-    (visiblePage - 1) * INVENTORY_PAGE_SIZE,
-    visiblePage * INVENTORY_PAGE_SIZE
+    (visiblePage - 1) * pageSize,
+    visiblePage * pageSize
   );
 
   useEffect(() => {
@@ -575,6 +580,11 @@ export default function BookInventory() {
                               ISBN: {book.isbn}
                             </div>
                           )}
+                          {book.callNumber && (
+                            <div className="mt-0.5 text-xs font-medium text-slate-500 wrap-anywhere">
+                              Call Number: {book.callNumber}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -641,26 +651,42 @@ export default function BookInventory() {
         </div>
         <footer className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
           <p aria-live="polite">
-            Showing {filteredBooks.length === 0 ? 0 : (visiblePage - 1) * INVENTORY_PAGE_SIZE + 1}–{Math.min(visiblePage * INVENTORY_PAGE_SIZE, filteredBooks.length)} of {filteredBooks.length} books
+            Showing {filteredBooks.length === 0 ? 0 : (visiblePage - 1) * pageSize + 1}–{Math.min(visiblePage * pageSize, filteredBooks.length)} of {filteredBooks.length} books
           </p>
-          <div className="flex items-center gap-2 self-end sm:self-auto">
-            <button
-              type="button"
-              onClick={() => setPage((current) => Math.max(1, current - 1))}
-              disabled={visiblePage <= 1}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          <div className="flex flex-wrap items-center justify-end gap-2 self-end sm:self-auto">
+            <label htmlFor="inventory-page-size" className="text-xs font-medium text-slate-600">Rows per page</label>
+            <select
+              id="inventory-page-size"
+              value={pageSize}
+              onChange={(event) => {
+                setPageSize(Number(event.target.value));
+                setPage(1);
+              }}
+              className="rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-700"
             >
-              <ChevronLeft size={16} aria-hidden="true" /> Previous
-            </button>
-            <span className="whitespace-nowrap text-xs font-medium">Page {visiblePage} of {pageCount}</span>
-            <button
-              type="button"
-              onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
-              disabled={visiblePage >= pageCount}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Next <ChevronRight size={16} aria-hidden="true" />
-            </button>
+              {INVENTORY_PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
+            </select>
+            {pageCount > 1 && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={visiblePage <= 1}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <ChevronLeft size={16} aria-hidden="true" /> Previous
+                </button>
+                <span className="whitespace-nowrap text-xs font-medium">Page {visiblePage} of {pageCount}</span>
+                <button
+                  type="button"
+                  onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+                  disabled={visiblePage >= pageCount}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Next <ChevronRight size={16} aria-hidden="true" />
+                </button>
+              </div>
+            )}
           </div>
         </footer>
       </div>
@@ -734,6 +760,25 @@ export default function BookInventory() {
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label htmlFor="book-call-number" className="block text-slate-700 font-semibold mb-1">
+                  Call Number
+                </label>
+                <input
+                  id="book-call-number"
+                  name="callNumber"
+                  type="text"
+                  maxLength={100}
+                  value={form.callNumber}
+                  onChange={(e) => setForm({ ...form, callNumber: e.target.value })}
+                  aria-describedby="book-call-number-help"
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                />
+                <p id="book-call-number-help" className="mt-1 text-slate-500">
+                  Optional shelf classification, up to 100 characters.
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

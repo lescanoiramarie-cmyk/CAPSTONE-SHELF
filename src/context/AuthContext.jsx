@@ -2,24 +2,36 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import * as store from '../data/store.js';
 import { AuthContext } from './authContext.js';
 import { supabase } from '../lib/supabaseClient.js';
+import {
+  normalizeVisitorRegistrationType,
+  validateVisitorRegistrationEmail,
+  VISITOR_REGISTRATION_TYPES,
+} from '../lib/visitorRegistration.js';
 
 const SESSION_KEY = 'shelf_ilms_session_v1';
 const SESSION_ACTIVITY_KEY = 'shelf_ilms_last_activity_v1';
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const IDLE_WARNING_TIMEOUT_MS = 5 * 60 * 1000;
 
-const notifyVisitorSessionChanged = () => {
-  try {
-    window.dispatchEvent(
-      new Event('shelf:visitor-session-changed')
-    );
-  } catch (error) {
-    console.warn(
-      'SHELF visitor session event failed:',
-      error
-    );
+const reportClientError = (context) => {
+  // Avoid logging tokens, credentials, OTPs, PII, or raw provider errors.
+  if (typeof console !== 'undefined' && typeof console.error === 'function') {
+    console.error(`[SHELF] ${context}`);
   }
 };
+
+const notifyVisitorSessionChanged = () => {
+  try {
+    window.dispatchEvent(new Event('shelf:visitor-session-changed'));
+  } catch {
+    reportClientError('Visitor session event dispatch failed.');
+  }
+};
+
+function getUserIdentityKey(user) {
+  if (!user) return 'anonymous';
+  return `${user.id}|${user.role}|${user.libraryId || 'none'}`;
+}
 
 export const AuthProvider = ({ children }) => {
   // =========================================================
@@ -44,11 +56,8 @@ export const AuthProvider = ({ children }) => {
         };
       }
       return restoredUser;
-    } catch (error) {
-      console.error(
-        'Failed to restore SHELF session:',
-        error
-      );
+    } catch {
+      reportClientError('Failed to restore local session state.');
       try {
         globalThis.localStorage.removeItem(SESSION_KEY);
       } catch {
@@ -62,27 +71,58 @@ export const AuthProvider = ({ children }) => {
   const [idleSecondsRemaining, setIdleSecondsRemaining] = useState(null);
   const resetIdleTimerRef = useRef(null);
   const idleWarningActiveRef = useRef(false);
+  const sessionGenerationRef = useRef(0);
+  const previousUserIdentityRef = useRef(getUserIdentityKey(user));
+
+  const clearClientSessionState = useCallback(() => {
+    pendingMfaLoginRef.current = null;
+    setIdleSecondsRemaining(null);
+    setUser(null);
+    try {
+      store.invalidateClientCaches();
+    } catch {
+      reportClientError('Failed to clear client caches.');
+    }
+    try {
+      globalThis.localStorage.removeItem(SESSION_KEY);
+      globalThis.localStorage.removeItem(SESSION_ACTIVITY_KEY);
+      globalThis.sessionStorage.clear();
+    } catch {
+      reportClientError('Failed to clear browser session state.');
+    }
+  }, []);
+
+  const setUserWithIdentityTracking = useCallback((newUser) => {
+    const nextIdentity = getUserIdentityKey(newUser);
+    const prevIdentity = previousUserIdentityRef.current;
+
+    if (nextIdentity !== prevIdentity) {
+      // User identity changed (different user, role, or library) - increment generation
+      // to invalidate any in-flight requests from the previous session
+      sessionGenerationRef.current += 1;
+      previousUserIdentityRef.current = nextIdentity;
+
+      // Clear caches when user/role/library changes
+      try {
+        store.invalidateClientCaches();
+      } catch {
+        reportClientError('Failed to clear client caches on identity change.');
+      }
+    }
+
+    setUser(newUser);
+  }, []);
 
   const logout = useCallback(async () => {
-    setIdleSecondsRemaining(null);
     try {
       if (supabase?.auth) {
         await supabase.auth.signOut();
       }
-    } catch (error) {
-      console.error('Supabase logout error:', error);
+    } catch {
+      reportClientError('Sign-out request failed.');
     }
-    setUser(null);
-    try {
-      globalThis.localStorage.removeItem(SESSION_KEY);
-      globalThis.sessionStorage.clear();
-    } catch (error) {
-      console.error(
-        'Failed to clear SHELF browser session:',
-        error
-      );
-    }
-  }, []);
+    clearClientSessionState();
+  }, [clearClientSessionState]);
 
   const keepSessionAlive = useCallback(() => {
     resetIdleTimerRef.current?.();
@@ -94,13 +134,17 @@ export const AuthProvider = ({ children }) => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session)) {
-        setUser(null);
+      if (event === 'SIGNED_OUT') {
+        clearClientSessionState();
+        return;
+      }
+      if (event === 'INITIAL_SESSION' && !session) {
+        setUser((current) => (current ? null : current));
       }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [clearClientSessionState]);
 
   useEffect(() => {
     if (!user?.id) return undefined;
@@ -149,8 +193,8 @@ export const AuthProvider = ({ children }) => {
             SESSION_ACTIVITY_KEY,
             String(lastBroadcastAt)
           );
-        } catch (error) {
-          console.error('Failed to sync SHELF session activity:', error);
+        } catch {
+      reportClientError('');
         }
       }
     };
@@ -184,11 +228,9 @@ export const AuthProvider = ({ children }) => {
     const stayLoggedIn = () => markActivity();
     resetIdleTimerRef.current = stayLoggedIn;
     window.addEventListener('pointerdown', handleActivity, { passive: true });
-    window.addEventListener('pointerdown', handleActivity, { passive: true });
     window.addEventListener('pointermove', handleActivity, { passive: true });
     window.addEventListener('keydown', handleActivity);
     window.addEventListener('touchstart', handleActivity, { passive: true });
-    window.addEventListener('storage', handleStorage);
     window.addEventListener('storage', handleStorage);
     markActivity();
 
@@ -200,50 +242,83 @@ export const AuthProvider = ({ children }) => {
       window.removeEventListener('pointermove', handleActivity);
       window.removeEventListener('keydown', handleActivity);
       window.removeEventListener('touchstart', handleActivity);
-      window.removeEventListener('scroll', handleActivity);
       window.removeEventListener('storage', handleStorage);
     };
   }, [user?.id, user?.role, logout]);
 
-  useEffect(() => {
+useEffect(() => {
     if (user?.role !== 'visitor' || !user.id) return undefined;
 
     let cancelled = false;
+    const refreshForUserId = user.id;
+    const refreshGeneration = sessionGenerationRef.current;
 
     const refreshVisitorProfile = async () => {
       try {
         const {
           data: { session },
-          error: sessionError,
         } = await supabase.auth.getSession();
 
-        if (sessionError) {
-          throw sessionError;
+        if (!session?.user?.id) {
+          if (!cancelled) clearClientSessionState();
+          return;
         }
 
-        if (!session?.user?.id) return;
-
         const visitor = await store.getVisitor(session.user.id);
-        if (!visitor || cancelled) return;
+        if (cancelled) return;
+        if (!visitor || String(visitor.id) !== String(refreshForUserId)) {
+          // Session/profile mismatch or missing profile: fail closed.
+          clearClientSessionState();
+          return;
+        }
 
-        setUser((current) => {
-          if (
-            current?.role !== 'visitor' ||
-            current.id !== visitor.id
-          ) {
+        // Prevent stale response from overwriting newer session state
+        if (refreshGeneration !== sessionGenerationRef.current) {
+          return;
+        }
+
+        // If visitor became a pending community visitor (should not happen for active sessions),
+        // clear the session and redirect to pending-approval.
+        if (visitor.communityApprovalPending === true) {
+          if (!cancelled) {
+            try {
+              globalThis.sessionStorage.setItem('pending_visitor_id', visitor.id);
+            } catch {
+              // Ignore
+            }
+            clearClientSessionState();
+          }
+          return;
+        }
+
+        setUserWithIdentityTracking((current) => {
+          if (!current || current.role !== 'visitor' || current.id !== visitor.id) {
             return current;
           }
-
+          // Validate critical eligibility fields - fail closed if account becomes ineligible
+          if (visitor.isActive === false) {
+            // Account deactivated: log out
+            setTimeout(() => clearClientSessionState(), 0);
+            return current;
+          }
+          if (visitor.otpVerified !== true) {
+            // Email verification revoked: log out
+            setTimeout(() => clearClientSessionState(), 0);
+            return current;
+          }
+          // Only update if the Supabase session still belongs to this visitor.
           return {
             ...current,
             name: visitor.fullName,
             email: visitor.email,
             qrCode: visitor.qrCode,
             libraryId: visitor.libraryId,
+            registrationType: visitor.registrationType || current.registrationType,
+            communityApprovalPending: false,
           };
         });
-      } catch (error) {
-        console.error('Refresh visitor profile error:', error);
+      } catch {
+        reportClientError('Visitor profile refresh failed.');
       }
     };
 
@@ -252,7 +327,7 @@ export const AuthProvider = ({ children }) => {
     return () => {
       cancelled = true;
     };
-  }, [user?.role, user?.id]);
+  }, [user?.role, user?.id, clearClientSessionState, setUserWithIdentityTracking]);
 
   // =========================================================
   // SESSION STORAGE
@@ -272,65 +347,50 @@ export const AuthProvider = ({ children }) => {
         persistedUserSnapshotRef.current = nextSnapshot;
         notifyVisitorSessionChanged();
       }
-    } catch (error) {
-      console.error(
-        'Failed to save SHELF session:',
-        error
-      );
+    } catch {
+      reportClientError('');
     }
   }, [user]);
 
   // =========================================================
-  // VISITOR REGISTRATION WITH STRICT DOMAIN CHECKING
+  // VISITOR REGISTRATION: server-side validation remains authoritative.
   // =========================================================
   const registerVisitor = async (formData) => {
     try {
       const targetEmail = (formData.email || formData.studentEmail || '').toLowerCase().trim();
-      const emailDomain = targetEmail.split('@')[1];
       const selectedLibraryId = String(formData.libraryId || '').trim();
+      const registrationType = formData.registrationType == null
+        ? VISITOR_REGISTRATION_TYPES.INSTITUTIONAL
+        : normalizeVisitorRegistrationType(formData.registrationType);
+      if (!registrationType) throw new Error('Select a valid visitor registration type.');
 
-      if (!targetEmail || !emailDomain) {
+      if (!targetEmail) {
         throw new Error('Please enter a valid email address.');
       }
       if (!selectedLibraryId) {
-        throw new Error('Select your participating library or school.');
+        throw new Error('Select your preferred library.');
       }
 
-      const { data: libraryRecords, error: libError } = await supabase
+      const { data: libraryRecords } = await supabase
         .from('libraries')
         .select('id, email_domain')
-        .eq('id', selectedLibraryId)
-        .not('email_domain', 'is', null)
-        .neq('email_domain', '');
+        .eq('id', selectedLibraryId);
 
-      if (libError) {
-        throw new Error(`Failed to verify your partner school email domain: ${libError.message}`);
-      }
+      if (!libraryRecords) { throw new Error('Failed to verify the selected library.'); }
 
       const selectedLibrary = libraryRecords?.[0];
-      const allowedDomain = String(selectedLibrary?.email_domain || '')
-        .toLowerCase()
-        .trim()
-        .replace(/^@+/, '')
-        .replace(/\.+$/, '');
-      const isDomainAllowed =
-        allowedDomain &&
-        emailDomain !== 'gmail.com' &&
-        (emailDomain === allowedDomain ||
-          emailDomain.endsWith(`.${allowedDomain}`));
+      if (!selectedLibrary) throw new Error('Select a valid preferred library.');
+      const emailError = validateVisitorRegistrationEmail(
+        targetEmail,
+        registrationType,
+        selectedLibrary.email_domain,
+      );
+      if (emailError) throw new Error(emailError);
 
-      if (!isDomainAllowed) {
-        throw new Error(
-          allowedDomain
-            ? `Use an email address belonging to your selected partner school domain (@${allowedDomain}).`
-            : 'The selected partner school does not have an email domain configured. Please contact the library.'
-        );
-      }
-
-      return await store.registerVisitor(formData);
-    } catch (error) {
-      console.error('Visitor registration error:', error);
-      throw error;
+      return await store.registerVisitor({ ...formData, registrationType });
+    } catch (e) {
+      reportClientError('Operation failed.');
+      throw e;
     }
   };
 
@@ -340,9 +400,9 @@ export const AuthProvider = ({ children }) => {
   const verifyVisitorOtp = async (visitorId, code) => {
     try {
       return await store.verifyVisitorOtp(visitorId, code);
-    } catch (error) {
-      console.error('Visitor OTP verification error:', error);
-      throw error;
+    } catch (e) {
+      reportClientError('Operation failed.');
+      throw e;
     }
   };
 
@@ -352,9 +412,9 @@ export const AuthProvider = ({ children }) => {
   const resendVisitorOtp = async (visitorId) => {
     try {
       return await store.resendOtp(visitorId);
-    } catch (error) {
-      console.error('Visitor OTP resend error:', error);
-      throw error;
+    } catch (e) {
+      reportClientError('Operation failed.');
+      throw e;
     }
   };
 
@@ -364,21 +424,9 @@ export const AuthProvider = ({ children }) => {
   const resendVisitorOtpByEmail = async (email) => {
     try {
       return await store.resendVisitorOtpByEmail(email);
-    } catch (error) {
-      console.error('Visitor OTP resend by email error:', error);
-      throw error;
-    }
-  };
-
-  // =========================================================
-  // ESTABLISH VISITOR SESSION FROM QR PASS
-  // =========================================================
-  const establishVisitorSessionFromQr = async (qrCode, password) => {
-    try {
-      return await store.establishVisitorSessionFromQr(qrCode, password);
-    } catch (error) {
-      console.error('Establish visitor session error:', error);
-      throw error;
+    } catch (e) {
+      reportClientError('Operation failed.');
+      throw e;
     }
   };
 
@@ -388,36 +436,47 @@ export const AuthProvider = ({ children }) => {
   const requestPasswordResetCode = async (email, accountKind) => {
     try {
       return await store.requestPasswordResetCode(email, accountKind);
-    } catch (error) {
-      console.error('Request password reset code error:', error);
-      throw error;
+    } catch (e) {
+      reportClientError('Operation failed.');
+      throw e;
     }
   };
 
   const verifyPasswordResetCode = async (email, code) => {
     try {
       return await store.verifyPasswordResetCode(email, code);
-    } catch (error) {
-      console.error('Verify password reset code error:', error);
-      throw error;
+    } catch (e) {
+      reportClientError('Operation failed.');
+      throw e;
     }
   };
 
   const applyPasswordReset = async (input) => {
     try {
       return await store.applyPasswordReset(input);
-    } catch (error) {
-      console.error('Apply password reset error:', error);
-      throw error;
+    } catch (e) {
+      reportClientError('Operation failed.');
+      throw e;
     }
   };
 
-  // =========================================================
+// =========================================================
   // BUILD VISITOR SESSION
   // =========================================================
   const createVisitorSession = (visitor) => {
     if (!visitor?.id) {
       throw new Error('Visitor information is incomplete.');
+    }
+    const communityApprovalPending = visitor.communityApprovalPending === true;
+    // Pending community visitors do NOT get a full session.
+    // They are redirected to the pending-approval page with visitor_id in query params.
+    if (communityApprovalPending) {
+      try {
+        globalThis.sessionStorage.setItem('pending_visitor_id', visitor.id);
+      } catch {
+        // Ignore storage errors
+      }
+      return null;
     }
     return {
       role: 'visitor',
@@ -426,6 +485,8 @@ export const AuthProvider = ({ children }) => {
       email: visitor.email,
       qrCode: visitor.qrCode,
       libraryId: visitor.libraryId,
+      registrationType: visitor.registrationType || VISITOR_REGISTRATION_TYPES.INSTITUTIONAL,
+      communityApprovalPending: false,
     };
   };
 
@@ -450,8 +511,7 @@ export const AuthProvider = ({ children }) => {
       if (required) throw new Error('Multi-factor authentication is unavailable. Contact your system administrator.');
       return null;
     }
-    const { data, error } = await supabase.auth.mfa.listFactors();
-    if (error) throw error;
+    const { data } = await supabase.auth.mfa.listFactors();
     const factors = data?.totp || data?.all || [];
     const verifiedFactor = factors.find((factor) => factor.status === 'verified');
     if (!verifiedFactor && !required) return null;
@@ -459,15 +519,14 @@ export const AuthProvider = ({ children }) => {
     if (!verifiedFactor) {
       const pendingFactors = factors.filter((factor) => factor.status === 'unverified');
       for (const pendingFactor of pendingFactors) {
-        const { error: unenrollError } = await supabase.auth.mfa.unenroll({ factorId: pendingFactor.id });
-        if (unenrollError) throw new Error('An unfinished authenticator setup is attached to this account. Sign in again, then retry MFA setup.');
+        const { error: _unenrollError } = await supabase.auth.mfa.unenroll({ factorId: pendingFactor.id });
+        if (_unenrollError) throw new Error('An unfinished authenticator setup is attached to this account. Sign in again, then retry MFA setup.');
       }
       const { data: enrollment, error: enrollmentError } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: `SHELF sign-in ${Date.now()}` });
       if (enrollmentError) {
         // Factor names are unique. Refresh once in case a previous setup left an
         // unverified factor behind or another request completed enrollment.
-        const { data: refreshed, error: refreshError } = await supabase.auth.mfa.listFactors();
-        if (refreshError) throw enrollmentError;
+        const { data: refreshed } = await supabase.auth.mfa.listFactors(); if (!refreshed) throw enrollmentError;
         const refreshedFactors = refreshed?.totp || refreshed?.all || [];
         const alreadyVerified = refreshedFactors.find((factor) => factor.status === 'verified');
         if (alreadyVerified) {
@@ -476,11 +535,11 @@ export const AuthProvider = ({ children }) => {
         }
         const staleFactors = refreshedFactors.filter((factor) => factor.status === 'unverified');
         for (const staleFactor of staleFactors) {
-          const { error: cleanupError } = await supabase.auth.mfa.unenroll({ factorId: staleFactor.id });
-          if (cleanupError) throw enrollmentError;
+          const { error: _cleanupError } = await supabase.auth.mfa.unenroll({ factorId: staleFactor.id });
+          if (_cleanupError) throw enrollmentError;
         }
-        const { data: retryEnrollment, error: retryError } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: `SHELF sign-in ${Date.now()}` });
-        if (retryError) throw retryError;
+        const { data: retryEnrollment } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: `SHELF sign-in ${Date.now()}` });
+        if (!retryEnrollment) throw enrollmentError;
         pendingMfaLoginRef.current = { user: sessionUser, factorId: retryEnrollment.id, isSetup: true };
         return { mfaRequired: true, mfaSetupRequired: true, mfaQrCode: retryEnrollment.totp?.qr_code, mfaSecret: retryEnrollment.totp?.secret, role: sessionUser.role };
       }
@@ -492,13 +551,26 @@ export const AuthProvider = ({ children }) => {
     return { mfaRequired: true, mfaSetupRequired: false, role: sessionUser.role };
   };
 
-  const completeMfaLogin = async (code) => {
+const completeMfaLogin = async (code) => {
     const pending = pendingMfaLoginRef.current;
     if (!pending) throw new Error('The MFA verification session expired. Sign in again.');
-    const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: pending.factorId, code: String(code || '').trim() });
-    if (error) throw error;
+    const { error: _challengeError } = await supabase.auth.mfa.challengeAndVerify({ factorId: pending.factorId, code: String(code || '').trim() });
+    if (_challengeError) throw _challengeError;
+
+    if (['subadmin', 'superadmin'].includes(pending.user?.role)) {
+      const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.user?.id || session.user.id !== pending.user.id) {
+        throw new Error('The verified staff session could not be confirmed. Sign in again.');
+      }
+
+      const { data: assurance } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (assurance?.currentLevel !== 'aal2') {
+        throw new Error('AAL2 verification was not confirmed. Complete MFA and try again.');
+      }
+    }
+
     pendingMfaLoginRef.current = null;
-    setUser(pending.user);
+    setUserWithIdentityTracking(pending.user);
     return pending.user;
   };
 
@@ -507,7 +579,7 @@ export const AuthProvider = ({ children }) => {
     await logout();
   };
 
-  // =========================================================
+// =========================================================
   // VISITOR LOGIN
   // =========================================================
   const loginVisitor = async ({ identifier, password }) => {
@@ -520,13 +592,17 @@ export const AuthProvider = ({ children }) => {
         throw new Error('Visitor account was not found.');
       }
       const visitorSession = createVisitorSession(visitor);
+      if (!visitorSession) {
+        // Pending community visitor - no session created, redirect to pending-approval
+        return { pendingApproval: true, visitorId: visitor.id };
+      }
       const mfaStep = await beginMfaLogin(visitorSession, false);
       if (mfaStep) return { ...visitor, ...mfaStep };
-      setUser(visitorSession);
-      return visitor;
-    } catch (error) {
-      console.error('Visitor login error:', error);
-      throw error;
+      setUserWithIdentityTracking(visitorSession);
+      return visitorSession;
+    } catch (e) {
+      reportClientError('Operation failed.');
+      throw e;
     }
   };
 
@@ -539,25 +615,29 @@ export const AuthProvider = ({ children }) => {
       if (error) throw error;
       const visitor = await store.fetchVisitorForPasskey(data?.user?.id);
       const visitorSession = createVisitorSession(visitor);
+      if (!visitorSession) {
+        return { pendingApproval: true, visitorId: visitor.id };
+      }
       const mfaStep = await beginMfaLogin(visitorSession, false);
       if (mfaStep) {
-        return { success: true, role: 'visitor', user: visitor, ...mfaStep };
+        return { success: true, role: visitorSession.role, user: visitor, ...mfaStep };
       }
-      setUser(visitorSession);
-      return { success: true, role: 'visitor', user: visitor };
-    } catch (error) {
-      await supabase?.auth?.signOut?.();
-      const message = String(error?.message || 'Passkey sign-in failed.');
+      setUserWithIdentityTracking(visitorSession);
+      return { success: true, role: visitorSession.role, user: visitor };
+    } catch (e) {
+      await supabase?.auth?.signOut?.().catch(() => {});
+      const message = String(e?.message || 'Passkey sign-in failed.');
       if (message.includes('passkey_disabled') || /passkeys? (?:are )?disabled/i.test(message)) {
-        throw new Error('Passkey sign-in is not enabled for SHELF yet. Use your password instead.', { cause: error });
+        throw new Error('Passkey sign-in is not enabled for SHELF yet. Use your password instead.', { cause: e });
       }
       if (message.includes('webauthn_credential_not_found')) {
-        throw new Error('No passkey is registered for this account yet. Sign in with your password and set up a passkey in Account security.', { cause: error });
+        throw new Error('No passkey is registered for this account yet. Sign in with your password and set up a passkey in Account security.', { cause: e });
       }
       if (message.includes('NotAllowedError') || message.toLowerCase().includes('ceremony')) {
-        throw new Error('Passkey sign-in was cancelled or could not be completed. Try again or use your password.', { cause: error });
+        throw new Error('Passkey sign-in was cancelled or could not be completed. Try again or use your password.', { cause: e });
       }
-      throw error;
+      reportClientError('Passkey sign-in failed.');
+      throw e;
     }
   };
 
@@ -569,7 +649,10 @@ export const AuthProvider = ({ children }) => {
       throw new Error('Visitor information is required.');
     }
     const visitorSession = createVisitorSession(visitor);
-    setUser(visitorSession);
+    if (!visitorSession) {
+      return { pendingApproval: true, visitorId: visitor.id };
+    }
+    setUserWithIdentityTracking(visitorSession);
     return visitorSession;
   };
 
@@ -598,13 +681,13 @@ export const AuthProvider = ({ children }) => {
       const staffSession = createStaffSession(staff);
       const mfaStep = await beginMfaLogin(staffSession, ['subadmin', 'superadmin'].includes(staff.role));
       if (mfaStep) return { ...staff, ...mfaStep };
-      setUser(staffSession);
+      setUserWithIdentityTracking(staffSession);
       return staff;
-    } catch (error) {
-      console.error('STAFF LOGIN ERROR:', error);
+    } catch (e) {
+      reportClientError('Staff login failed.');
       pendingMfaLoginRef.current = null;
-      await supabase?.auth?.signOut?.();
-      throw error;
+      await supabase?.auth?.signOut?.().catch(() => {});
+      throw e;
     }
   };
 
@@ -618,16 +701,16 @@ export const AuthProvider = ({ children }) => {
         if (supabase?.auth) {
           await supabase.auth.signOut();
         }
-      } catch (error) {
-        console.error('Sub-Admin sign-out error:', error);
+      } catch {
+      reportClientError('');
       }
-      setUser(null);
+      setUserWithIdentityTracking(null);
       throw new Error('This account is not registered as a Sub-Admin.');
     }
     return staff;
   };
 
-  // =========================================================
+// =========================================================
   // SUPER ADMIN LOGIN
   // =========================================================
   const loginSuperAdmin = async (email, password) => {
@@ -637,10 +720,10 @@ export const AuthProvider = ({ children }) => {
         if (supabase?.auth) {
           await supabase.auth.signOut();
         }
-      } catch (error) {
-        console.error('Super Admin sign-out error:', error);
+      } catch {
+      reportClientError('');
       }
-      setUser(null);
+      setUserWithIdentityTracking(null);
       throw new Error('This account is not registered as a Super Admin.');
     }
     return staff;
@@ -654,32 +737,11 @@ export const AuthProvider = ({ children }) => {
     const normalizedPassword = String(password || '');
 
     if (!normalizedIdentifier) {
-      throw new Error('Email or visitor QR pass is required.');
+      throw new Error('Email is required.');
     }
 
-    // QR LOGIN
     if (!normalizedIdentifier.includes('@')) {
-      try {
-        const visitor = await store.loginVisitor({
-          identifier: normalizedIdentifier,
-          password: normalizedPassword,
-        });
-        if (!visitor) {
-          throw new Error('Visitor account was not found.');
-        }
-        const visitorSession = createVisitorSession(visitor);
-        const mfaStep = await beginMfaLogin(visitorSession, false);
-        if (mfaStep) return { success: true, ...mfaStep, user: visitor };
-        setUser(visitorSession);
-        return {
-          success: true,
-          role: 'visitor',
-          user: visitor,
-        };
-      } catch (error) {
-        console.error('QR VISITOR LOGIN FAILED:', error);
-        throw error;
-      }
+      throw new Error('Sign in with your email address. QR passes are for library identification.');
     }
 
     if (!normalizedPassword) {
@@ -695,9 +757,13 @@ export const AuthProvider = ({ children }) => {
       });
       if (visitor) {
         const visitorSession = createVisitorSession(visitor);
+        if (!visitorSession) {
+          // Pending community visitor
+          return { pendingApproval: true, visitorId: visitor.id };
+        }
         const mfaStep = await beginMfaLogin(visitorSession, false);
         if (mfaStep) return { success: true, ...mfaStep, user: visitor };
-        setUser(visitorSession);
+        setUserWithIdentityTracking(visitorSession);
         return {
           success: true,
           role: 'visitor',
@@ -705,9 +771,9 @@ export const AuthProvider = ({ children }) => {
         };
       }
       visitorError = new Error('Visitor account was not found.');
-    } catch (error) {
-      visitorError = error;
-      console.error('VISITOR LOGIN ATTEMPT FAILED:', error);
+    } catch (e) {
+      visitorError = e;
+      reportClientError('Visitor login attempt failed.');
     }
 
     // Email/password authentication is shared by visitor and staff accounts.
@@ -741,7 +807,7 @@ export const AuthProvider = ({ children }) => {
         mfaSecret: staff.mfaSecret,
       };
     } catch (staffError) {
-      console.error('STAFF LOGIN ATTEMPT FAILED:', staffError);
+      reportClientError('');
 
       const staffErrorMessage = String(staffError?.message || '').trim();
 
@@ -774,7 +840,6 @@ export const AuthProvider = ({ children }) => {
         verifyVisitorOtp,
         resendVisitorOtp,
         resendVisitorOtpByEmail,
-        establishVisitorSessionFromQr,
         requestPasswordResetCode,
         verifyPasswordResetCode,
         applyPasswordReset,

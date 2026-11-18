@@ -71,9 +71,8 @@ test('authenticated visitor borrow history uses a visitor-scoped RLS query', () 
   );
   assert.ok(visitorRequestBranch, 'Expected a separate authenticated visitor request path.');
   assert.match(visitorRequestBranch[0], /normalizedVisitorId/);
-  assert.match(visitorRequestBranch[0], /\.from\('borrow_requests'\)/);
-  assert.match(visitorRequestBranch[0], /\.eq\('visitor_id',\s*normalizedVisitorId\)/);
-  assert.match(visitorRequestBranch[0], /\.abortSignal\(signal\)/);
+  assert.match(visitorRequestBranch[0], /get_visitor_borrowing_history/);
+  assert.match(visitorRequestBranch[0], /signal\?\./);
   assert.doesNotMatch(visitorRequestBranch[0], /'get_visitor_borrow_requests'/);
   assert.doesNotMatch(visitorRequestBranch[0], /fetchAllBorrowRequestRows/);
   assert.doesNotMatch(storeSource, /borrowRequestsFetchesInFlight/);
@@ -120,11 +119,9 @@ test('staff borrowing history is branch-scoped and limited to recent or active r
   );
   assert.ok(staffHistoryStart >= 0 && staffHistoryEnd > staffHistoryStart);
   const staffHistorySource = storeSource.slice(staffHistoryStart, staffHistoryEnd);
-  assert.match(staffHistorySource, /staff\.role === 'subadmin'/);
-  assert.match(staffHistorySource, /\.eq\('library_id',\s*staff\.library_id\)/);
-  assert.match(staffHistorySource, /\.in\('book_id',\s*branchBookIds\)/);
+  assert.match(staffHistorySource, /get_staff_borrowing_history/);
   assert.match(staffHistorySource, /BORROW_DASHBOARD_RECENT_DAYS/);
-  assert.match(staffHistorySource, /\.in\('status',\s*BORROW_DASHBOARD_ACTIVE_STATUSES\)/);
+  assert.match(staffHistorySource, /BORROW_DASHBOARD_ACTIVE_STATUSES/);
   assert.doesNotMatch(staffHistorySource, /\.select\('\*'\)/);
   assert.doesNotMatch(storeSource, /fetchAllBorrowRequestRows/);
   assert.match(
@@ -169,7 +166,7 @@ test('staff and visitor dashboards do not load every visitor profile into shared
   );
   assert.match(
     libraryContextSource,
-    /visitorCount:\s*Number\(data\.visitorCount\)\s*\|\|\s*0/
+    /visitorCount:\s*data\.visitorCount\s*==\s*null\s*\?\s*null\s*:\s*Number\(data\.visitorCount\)\s*\|\|\s*0/
   );
 });
 

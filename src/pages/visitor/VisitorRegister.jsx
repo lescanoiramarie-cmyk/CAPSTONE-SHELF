@@ -10,6 +10,7 @@ import {
   EyeOff,
   Camera,
   X,
+  ArrowLeft,
 } from 'lucide-react';
 import { useAuth } from '../../context/useAuth.js';
 import libraryBg from '../../assets/library.jpg';
@@ -200,6 +201,10 @@ export default function VisitorLogin() {
   const [resetError, setResetError] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
 
+  // OTP resend cooldown (2 minutes = 120 seconds)
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resetResendCooldown, setResetResendCooldown] = useState(0);
+
   const {
     registerVisitor,
     verifyVisitorOtp,
@@ -291,6 +296,45 @@ export default function VisitorLogin() {
   const resetPasswordsMatch =
     resetPassword.length > 0 &&
     resetPassword === resetConfirmPassword;
+
+  // OTP resend cooldown (2 minutes = 120 seconds)
+  // Persist in localStorage to survive page refreshes and multi-tab usage
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => {
+        setResendCooldown((prev) => Math.max(0, prev - 1));
+      }, 1000);
+      localStorage.setItem('shelf_otp_resend_cooldown', String(Date.now() + resendCooldown * 1000));
+      return () => clearTimeout(timer);
+    } else {
+      localStorage.removeItem('shelf_otp_resend_cooldown');
+    }
+  }, [resendCooldown]);
+
+  useEffect(() => {
+    if (resetResendCooldown > 0) {
+      const timer = setTimeout(() => {
+        setResetResendCooldown((prev) => Math.max(0, prev - 1));
+      }, 1000);
+      localStorage.setItem('shelf_reset_resend_cooldown', String(Date.now() + resetResendCooldown * 1000));
+      return () => clearTimeout(timer);
+    } else {
+      localStorage.removeItem('shelf_reset_resend_cooldown');
+    }
+  }, [resetResendCooldown]);
+
+  // Initialize cooldowns from localStorage on mount
+  useEffect(() => {
+    const otpCooldownEnd = Number(localStorage.getItem('shelf_otp_resend_cooldown') || '0');
+    const resetCooldownEnd = Number(localStorage.getItem('shelf_reset_resend_cooldown') || '0');
+    const now = Date.now();
+    if (otpCooldownEnd > now) {
+      setTimeout(() => setResendCooldown(Math.ceil((otpCooldownEnd - now) / 1000)), 0);
+    }
+    if (resetCooldownEnd > now) {
+      setTimeout(() => setResetResendCooldown(Math.ceil((resetCooldownEnd - now) / 1000)), 0);
+    }
+  }, []);
 
   // Load all provinces without requiring a Region selection.
   
@@ -616,6 +660,7 @@ useEffect(() => {
 
       await resendVisitorOtp(visitorId);
       setError('A new verification code has been requested.');
+      setResendCooldown(120);
     } catch (err) {
       setError(err.message || 'Unable to resend the verification code.');
     } finally {
@@ -706,6 +751,7 @@ useEffect(() => {
       setResetNotice(
         result?.message || 'If the account is eligible, a reset code will be sent to the email.'
       );
+      setResetResendCooldown(120);
     } catch (err) {
       setResetError(err.message || 'Unable to request a reset code.');
     } finally {
@@ -984,6 +1030,32 @@ useEffect(() => {
       {/* Main panel */}
       <div className="auth-form-panel flex w-full items-center justify-center overflow-y-auto p-4 sm:p-8 lg:w-1/2 lg:p-12">
         <div className="auth-form-card my-auto w-full max-w-md space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-xl sm:p-8">
+          {/* Sticky header with Back navigation */}
+          <div className="sticky top-0 z-20 -mt-1 flex items-center justify-between gap-2 bg-white pb-1">
+            {view !== 'register' && view !== 'otp' && view !== 'forgot' && (
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-shelf-primary"
+              >
+                <ArrowLeft size={16} aria-hidden="true" />
+                Back to home
+              </button>
+            )}
+            {(view === 'register' || view === 'otp' || view === 'forgot') && (
+              <button
+                type="button"
+                onClick={resetToLogin}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-shelf-primary"
+                aria-label={view === 'register' ? 'Back to Login' : 'Go back'}
+                title={view === 'register' ? 'Back to Login' : 'Go back'}
+              >
+                <ArrowLeft size={16} aria-hidden="true" />
+                {view === 'register' ? 'Back to sign in' : 'Back'}
+              </button>
+            )}
+          </div>
+
           {/* Header */}
           <div className="space-y-1 text-center lg:text-left">
             <h2 className="text-2xl font-bold text-shelf-text">
@@ -1002,7 +1074,7 @@ useEffect(() => {
               {view === 'success' &&
                 'Your registration has been verified.'}
               {view === 'login' &&
-                'Sign in using your email, account ID, or QR pass ID.'}
+                'Sign in using your school email and password.'}
               {view === 'forgot' &&
                 'Follow the steps below to reset your account password.'}
             </p>
@@ -1557,15 +1629,6 @@ useEffect(() => {
               >
                 {busy ? 'Processing...' : 'Send verification code'}
               </button>
-
-              {/* Back to Sign In */}
-              <button
-                type="button"
-                onClick={resetToLogin}
-                className="h-10 w-full rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
-              >
-                Back to sign in
-              </button>
               </form>
               )}
 
@@ -1606,24 +1669,18 @@ useEffect(() => {
                 {busy ? 'Verifying...' : 'Verify email'}
               </button>
 
-              <button
+<button
                 type="button"
-                disabled={busy}
+                disabled={busy || resendCooldown > 0}
                 onClick={handleResendOtp}
-                className="w-full text-sm font-semibold text-shelf-primary hover:underline disabled:opacity-50"
+                className="w-full text-sm font-semibold text-shelf-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Resend verification code
-              </button>
-
-              <button
-                type="button"
-                onClick={resetToLogin}
-                className="w-full text-sm font-semibold text-slate-600 hover:underline"
-              >
-                Back to sign in
+                {resendCooldown > 0
+                  ? `Resend in ${Math.floor(resendCooldown / 60)}:${String(resendCooldown % 60).padStart(2, '0')}`
+                  : 'Resend verification code'}
               </button>
             </form>
-          )}
+            )}
 
           {/* Registration success / QR pass */}
           {view === 'success' && (
@@ -1822,11 +1879,13 @@ useEffect(() => {
 
                   <button
                     type="button"
-                    disabled={resetLoading}
+                    disabled={resetLoading || resetResendCooldown > 0}
                     onClick={handleRequestResetCode}
-                    className="w-full text-sm font-semibold text-shelf-primary hover:underline disabled:opacity-50"
+                    className="w-full text-sm font-semibold text-shelf-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Resend reset code
+                    {resetResendCooldown > 0
+                      ? `Resend in ${Math.floor(resetResendCooldown / 60)}:${String(resetResendCooldown % 60).padStart(2, '0')}`
+                      : 'Resend reset code'}
                   </button>
                 </>
               )}
@@ -1946,7 +2005,7 @@ useEffect(() => {
                 </>
               )}
 
-              {resetStep === 'done' && (
+{resetStep === 'done' && (
                 <div className="space-y-3 text-center">
                   <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-700">
                     {resetNotice ||
@@ -1961,19 +2020,8 @@ useEffect(() => {
                   </button>
                 </div>
               )}
-
-              {resetStep !== 'done' && (
-                <button
-                  type="button"
-                  disabled={resetLoading}
-                  onClick={handleResetBackToLogin}
-                  className="w-full text-sm font-semibold text-slate-600 hover:text-shelf-primary hover:underline disabled:opacity-50"
-                >
-                  Back to sign in
-                </button>
-              )}
             </form>
-          )}
+            )}
         </div>
       </div>
     </div>

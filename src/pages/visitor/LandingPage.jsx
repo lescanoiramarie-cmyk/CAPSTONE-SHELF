@@ -3,10 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/useAuth.js';
 import { getDashboardPath } from '../../routes/roleHome.js';
 import { useLibraryData } from '../../context/useLibrary.js';
-import { fetchPopularBorrowedBookCounts } from '../../data/store.js';
+import {
+  fetchPopularBorrowedBookCounts,
+  submitVisitorFeedback,
+  fetchOpacLibraryBookCount,
+} from '../../data/store.js';
 import BookCover from '../../component/BookCover.jsx';
 import { formatBookCategory } from '../../lib/bookCategory.js';
-import { supabase } from '../../lib/supabaseClient.js';
 import { 
   Megaphone, 
   Sparkles, 
@@ -134,6 +137,7 @@ export default function LandingPage() {
   const { user } = useAuth();
   const { books = [], libraries = [] } = useLibraryData();
   const [popularBookCounts, setPopularBookCounts] = useState([]);
+  const [libraryBookCount, setLibraryBookCount] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -143,6 +147,14 @@ export default function LandingPage() {
       })
       .catch((error) => {
         console.warn('Popular book counts are unavailable:', error.message);
+      });
+
+    fetchOpacLibraryBookCount()
+      .then((count) => {
+        if (active) setLibraryBookCount(count);
+      })
+      .catch((error) => {
+        console.warn('Library book count unavailable:', error.message);
       });
 
     return () => {
@@ -281,28 +293,37 @@ const featuredBooks = books
     let active = true;
 
     async function loadLandingAnnouncements() {
-      if (!supabase) {
-        setAnnouncementsError('Announcements are unavailable until Supabase is configured.');
-        setAnnouncementsLoading(false);
-        return;
-      }
+      try {
+        // Use a direct RPC or store function for public announcements
+        // For now, keep the direct query since it's a public read
+        const { supabase } = await import('../../lib/supabaseClient.js');
+        if (!supabase) {
+          setAnnouncementsError('Announcements are unavailable until Supabase is configured.');
+          setAnnouncementsLoading(false);
+          return;
+        }
 
-      const { data, error } = await supabase
-        .from('announcements')
-        .select('id, title, message, created_at, expires_at')
-        .eq('published', true)
-        .in('audience', ['general', 'both'])
-        .is('library_id', null)
-        .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
-        .order('created_at', { ascending: false });
+        const { data, error } = await supabase
+          .from('announcements')
+          .select('id, title, message, created_at, expires_at')
+          .eq('published', true)
+          .in('audience', ['general', 'both'])
+          .is('library_id', null)
+          .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+          .order('created_at', { ascending: false });
 
-      if (!active) return;
-      if (error) {
+        if (!active) return;
+        if (error) {
+          setAnnouncementsError(error.message || 'Unable to load announcements.');
+        } else {
+          setAnnouncements(data || []);
+        }
+      } catch (error) {
+        if (!active) return;
         setAnnouncementsError(error.message || 'Unable to load announcements.');
-      } else {
-        setAnnouncements(data || []);
+      } finally {
+        setAnnouncementsLoading(false);
       }
-      setAnnouncementsLoading(false);
     }
 
     loadLandingAnnouncements().catch((error) => {
@@ -326,24 +347,19 @@ const featuredBooks = books
       return;
     }
     if (!e.currentTarget.reportValidity()) return;
-    if (!supabase) {
-      setFeedbackError('Feedback submission is unavailable until Supabase is configured.');
-      return;
-    }
 
     setFeedbackSubmitting(true);
     setFeedbackError('');
     try {
-      const { error } = await supabase.from('visitor_feedback').insert({
-        visitor_id: user.id,
-        library_id: null,
-        visitor_name: authenticatedName.trim(),
-        visitor_email: authenticatedEmail.trim(),
+      await submitVisitorFeedback({
+        visitorId: user.id,
+        visitorName: authenticatedName.trim(),
+        visitorEmail: authenticatedEmail.trim(),
+        libraryId: null,
         category: 'General',
         subject: 'Landing page feedback',
         message: feedback.message.trim(),
       });
-      if (error) throw error;
 
       setSubmitted(true);
       window.setTimeout(() => {
@@ -422,7 +438,7 @@ const featuredBooks = books
               className="px-3.5 py-2 border border-slate-700 bg-slate-800/80 text-slate-200 hover:text-white hover:bg-slate-700 hover:border-slate-600 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 shadow-sm"
             >
               <Search size={14} className="text-blue-400" />
-              <span>Browse catalog</span>
+              <span>Browse OPAC (sign-in required)</span>
             </button>
             <button
               onClick={() => navigate('/visitor-login')}
@@ -474,7 +490,7 @@ const featuredBooks = books
                   className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-bold text-slate-200 transition hover:bg-slate-700"
                 >
                   <Search size={15} className="text-blue-400" aria-hidden="true" />
-                  Browse catalog
+                  Browse OPAC (sign-in required)
                 </button>
                 <button
                   type="button"
@@ -525,7 +541,7 @@ const featuredBooks = books
               className="w-full sm:w-auto px-6 py-3.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-blue-600/30 transition-all duration-200 flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
             >
               <Search size={16} />
-              <span>Explore public catalog</span>
+              <span>Browse OPAC catalog (sign-in required)</span>
             </button>
 
             <button 
@@ -537,12 +553,14 @@ const featuredBooks = books
             </button>
           </div>
 
-          {/* QUICK STATS COUNTER */}          
+{/* QUICK STATS COUNTER */}
           <div className="mx-auto flex max-w-2xl flex-wrap items-center justify-center gap-x-6 gap-y-3 border-t border-slate-800/80 pt-6 text-xs font-semibold text-slate-400 sm:gap-x-10">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-blue-300"></span>
               <span>
-                {books.filter((book) => book.bookType === 'library').length.toLocaleString()} Books
+                {libraryBookCount !== null
+                  ? libraryBookCount.toLocaleString()
+                  : books.filter((book) => book.bookType === 'library').length.toLocaleString()} Books
               </span>
             </div>
 
@@ -555,7 +573,7 @@ const featuredBooks = books
 
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-              <span>24/7 OPAC Access</span>
+              <span>24/7 OPAC access after sign-in</span>
             </div>
           </div>
         </div>
@@ -579,7 +597,7 @@ const featuredBooks = books
               }
               className="inline-flex min-h-10 w-fit items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-shelf-primary shadow-sm transition hover:border-shelf-primary hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary focus-visible:ring-offset-2"
             >
-              Browse library catalog
+              Browse OPAC (sign-in required)
               <ArrowRight size={14} aria-hidden="true" />
             </button>
           </div>
@@ -709,7 +727,7 @@ const featuredBooks = books
                   </span>
                 </div>
                 <span className="mt-5 inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-shelf-primary py-2 text-xs font-bold text-white shadow-sm transition-colors group-hover:bg-blue-700">
-                  View in OPAC
+                  View in OPAC after sign-in
                 </span>
               </button>
             ))}
@@ -725,7 +743,7 @@ const featuredBooks = books
                 }
                 className="mt-4 rounded-lg bg-shelf-primary px-4 py-2 text-xs font-bold text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary focus-visible:ring-offset-2"
               >
-                Browse catalog
+                Browse OPAC (sign-in required)
               </button>
             </div>
           )}

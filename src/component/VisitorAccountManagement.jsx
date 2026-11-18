@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Search, ChevronLeft, ChevronRight, UsersRound } from 'lucide-react';
 import {
   fetchVisitorAccounts,
+  approveCommunityVisitor,
   setVisitorActive,
 } from '../data/visitorAccounts.js';
 
@@ -120,15 +121,18 @@ export default function VisitorAccountManagement({
     setActionMessage('');
 
     try {
-      await setVisitorActive(visitor.id, nextIsActive);
+      const isPendingCommunity = visitor.registrationType === 'community'
+        && visitor.approvalStatus === 'pending';
+      if (isPendingCommunity) await approveCommunityVisitor(visitor.id);
+      else await setVisitorActive(visitor.id, nextIsActive);
       setVisitors((current) =>
         current.map((item) =>
-          item.id === visitor.id ? { ...item, isActive: nextIsActive } : item
+          item.id === visitor.id
+            ? { ...item, isActive: true, approvalStatus: 'approved' }
+            : item
         )
       );
-      setActionMessage(
-        `Visitor account ${nextIsActive ? 'enabled' : 'disabled'} successfully.`
-      );
+      setActionMessage(isPendingCommunity ? 'Community visitor approved successfully.' : `Visitor account ${nextIsActive ? 'enabled' : 'disabled'} successfully.`);
     } catch (updateError) {
       console.error('Visitor account status update failed:', updateError);
       setActionError(
@@ -206,12 +210,13 @@ export default function VisitorAccountManagement({
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] divide-y divide-slate-200 text-left text-sm">
+          <table className="w-full min-w-[800px] divide-y divide-slate-200 text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3 font-semibold">Visitor</th>
                 <th className="px-4 py-3 font-semibold">Email</th>
                 <th className="px-4 py-3 font-semibold">Library</th>
+                <th className="px-4 py-3 font-semibold">Registration / approval</th>
                 <th className="px-4 py-3 font-semibold">Registration Date</th>
                 <th className="px-4 py-3 font-semibold">Action</th>
               </tr>
@@ -220,7 +225,7 @@ export default function VisitorAccountManagement({
               {loading && !missingBranch ? (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-4 py-10 text-center text-slate-500"
                   >
                     Loading visitor accounts…
@@ -229,7 +234,7 @@ export default function VisitorAccountManagement({
               ) : visibleVisitors.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-4 py-10 text-center text-slate-500"
                   >
                     <UsersRound size={22} className="mx-auto mb-2 text-slate-400" />
@@ -247,11 +252,15 @@ export default function VisitorAccountManagement({
                           (isSuperAdmin ? 'Library branch' : libraryName || 'Assigned library')
                         : isSuperAdmin ? 'Outside Visitor' : libraryName || 'No library assigned'}
                     </td>
+                    <td className="px-4 py-3 text-slate-600">
+                      <span className="block capitalize">{visitor.registrationType === 'community' ? 'Public / Community' : 'Institutional'}</span>
+                      {visitor.registrationType === 'community' && <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold ${visitor.approvalStatus === 'pending' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>{visitor.approvalStatus === 'pending' ? 'Approval pending' : 'Approved'}</span>}
+                    </td>
                     <td className="px-4 py-3 text-slate-600">{formatDate(visitor.registeredAt)}</td>
                     <td className="px-4 py-3">
                       <button
                         type="button"
-                        data-confirm-message={`${visitor.isActive ? 'Disable' : 'Enable'} the visitor account for "${visitor.fullName || visitor.email || 'this visitor'}"?`}
+                        data-confirm-message={`${visitor.registrationType === 'community' && visitor.approvalStatus === 'pending' ? 'Approve' : visitor.isActive ? 'Disable' : 'Enable'} the visitor account for "${visitor.fullName || visitor.email || 'this visitor'}"?`}
                         onClick={() => void handleToggleVisitor(visitor)}
                         disabled={Boolean(updatingVisitorId)}
                         className={`rounded-md border px-3 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
@@ -262,9 +271,11 @@ export default function VisitorAccountManagement({
                       >
                         {updatingVisitorId === visitor.id
                           ? 'Updating...'
-                          : visitor.isActive
-                            ? 'Disable'
-                            : 'Enable'}
+                          : visitor.registrationType === 'community' && visitor.approvalStatus === 'pending'
+                            ? 'Approve visitor'
+                            : visitor.isActive
+                              ? 'Disable'
+                              : 'Enable'}
                       </button>
                     </td>
                   </tr>

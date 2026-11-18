@@ -564,19 +564,14 @@ Deno.serve(async (req: Request) => {
 
       if (!resendResponse.ok) {
         console.error(
-          "Resend password reset error:",
-          {
-            status:
-              resendResponse.status,
-            data: resendData,
-          },
+          "Resend password reset email delivery failed.",
+          { status: resendResponse.status },
         );
 
         await writeAuditEvent(
           admin,
           "security.password_reset.email_failed",
           {
-            email,
             status:
               resendResponse.status,
           },
@@ -600,18 +595,9 @@ Deno.serve(async (req: Request) => {
         admin,
         "security.password_reset.code_sent",
         {
-          email,
           accountKind:
             result.account_kind ??
             accountKind,
-          expiresAt,
-        },
-      );
-
-      console.log(
-        "Password reset code sent.",
-        {
-          email,
           expiresAt,
         },
       );
@@ -714,7 +700,6 @@ Deno.serve(async (req: Request) => {
             admin,
             "security.password_reset.code_rejected",
             {
-              email,
               reason: "locked",
             },
           );
@@ -893,7 +878,6 @@ Deno.serve(async (req: Request) => {
           admin,
           "security.password_reset.code_rejected",
           {
-            email,
             reason:
               reason ?? "unknown",
           },
@@ -961,8 +945,7 @@ Deno.serve(async (req: Request) => {
         // Password has already changed successfully.
         // Log the issue instead of reporting a false password-update failure.
         console.error(
-          "consume_password_reset_code failed after successful password update:",
-          consumeError,
+          "consume_password_reset_code failed after successful password update.",
         );
       }
 
@@ -974,16 +957,8 @@ Deno.serve(async (req: Request) => {
         admin,
         "security.password_reset.completed",
         {
-          email,
           accountKind:
             row.account_kind,
-        },
-      );
-
-      console.log(
-        "Password reset completed.",
-        {
-          email,
         },
       );
 
@@ -1019,10 +994,7 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(
       {
         success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to process the request.",
+        error: "Unable to process the request.",
       },
       500,
     );

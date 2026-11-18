@@ -4,7 +4,7 @@ SHELF: A Shared Hub for Education and Library Fusion System is a library managem
 
 ## Features
 
-- Visitor registration, email verification, and QR sign-in
+- Visitor registration and email verification, with QR passes for in-library identification
 - Book catalog, borrowing requests, returns, due dates and fines
 - Personal Books Management, Community Books, and Read Later Books
 - Attendance, Inventory Management, and User Management
@@ -65,18 +65,34 @@ In Authentication → URL Configuration, set the Site URL to
 `https://shelf-system.vercel.app` and add that origin to the allowed redirect
 URLs. Keep any local development URLs needed for testing.
 
-Allow the current and legacy production frontend origins for the
-`visitor-qr-login` Edge Function:
+Visitor authentication uses email and password (or the supported passkey flow).
+Visitor QR passes identify visitors for attendance and circulation workflows;
+they are not login credentials. The existing `visitor-qr-login` Edge Function
+has not been retired server-side because external consumers have not yet been
+verified. Its retirement is pending a separate caller review.
 
-```bash
-supabase secrets set APP_ORIGINS="https://shelf-system.vercel.app,https://capstone-shelf.vercel.app"
-supabase functions deploy visitor-qr-login
-```
+For a clean Supabase database, replay the timestamped files in
+`supabase/migrations/` in order using the Supabase CLI. Do not apply
+`supabase/schema.sql` before that migration chain: both define base relations,
+and the first migration creates those relations without `IF NOT EXISTS`, so
+applying both paths can fail on duplicate objects. Treat `schema.sql` as a
+separate standalone bootstrap/snapshot, not an extra step in migration replay.
+For an existing database, compare its migration ledger and schema with the
+migrations before applying changes; never mark a migration applied based only
+on the presence of an object.
 
-Apply `supabase/schema.sql` once for a fresh database, then apply the timestamped
-migrations in order. For an existing database, review the applied migrations
-and deployment plan before applying changes; do not rerun the base schema after
-the security migrations.
+### Visitor registration types
+
+Registration offers Institutional Visitor and Public / Community Visitor.
+Institutional registration continues to require an email domain configured for
+the selected library. Community visitors may use a personal email domain, must
+select a preferred library, and must complete the existing visitor email OTP.
+After verification, community accounts remain limited to the pending-approval
+screen and public catalog. A branch-authorized librarian must approve the
+account before visitor services or a QR identification pass are enabled. The
+approval RPC enforces AAL2, active staff status, role-claim consistency, library
+scope, and rejection of self-approval. Existing institutional visitor access
+and QR identification workflows remain unchanged.
 
 ### Render analytics API
 

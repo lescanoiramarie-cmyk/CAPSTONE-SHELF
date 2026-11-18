@@ -12,9 +12,11 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth.js';
 import { getDashboardPath } from '../routes/roleHome.js';
+import { matchesCallNumberSearch } from '../lib/callNumber.js';
 import {
   BookOpen,
   Bookmark,
+  BookmarkCheck,
   ClipboardList,
   HandHeart,
   Eye,
@@ -53,7 +55,17 @@ import {
   normalizeBookFineRate,
 } from '../lib/bookFineRate.js';
 import { useProgressiveList } from '../hooks/useProgressiveList.js';
+import { useModalAccessibility } from '../hooks/useModalAccessibility.js';
 import ProgressiveListFooter from './ProgressiveListFooter.jsx';
+import {
+  fetchOpacLibraryBookCount,
+  fetchOpacTotalBookCount,
+  fetchOpacCategoryBookCounts,
+  fetchOpacFilteredBookCount,
+  saveCommunityBookForLater,
+  unsaveCommunityBookForLater,
+  getSavedCommunityBooks,
+} from '../data/store.js';
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend);
 
@@ -361,9 +373,104 @@ export default function OPACCatalog({
   const [selectedAvailability, setSelectedAvailability] = useState('All');
 
   // =========================================================
+  // SERVER-SIDE FILTERED BOOK COUNT
+  // =========================================================
+  const [filteredBookCount, setFilteredBookCount] = useState(null);
+  const [filteredBookCountLoading, setFilteredBookCountLoading] = useState(true);
+
+  // =========================================================
+  // DEBUG: TOTAL BOOK COUNTS (for diagnosing 983 vs 1983 discrepancy)
+  // =========================================================
+  const [totalLibraryBookCount, setTotalLibraryBookCount] = useState(null);
+  const [totalOpacBookCount, setTotalOpacBookCount] = useState(null);
+  const [totalCountsLoading, setTotalCountsLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    fetchOpacLibraryBookCount()
+      .then((count) => { if (active) setTotalLibraryBookCount(count); })
+      .catch((e) => console.warn('Total library book count unavailable:', e.message))
+      .finally(() => { if (active) setTotalCountsLoading(false); });
+
+    fetchOpacTotalBookCount()
+      .then((count) => { if (active) setTotalOpacBookCount(count); })
+      .catch((e) => console.warn('Total OPAC book count unavailable:', e.message));
+
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const libraryIdForFilter =
+      libraryFilter ||
+      (selectedLibrary !== 'All' ? selectedLibrary : null);
+
+    fetchOpacFilteredBookCount({
+      search: searchTerm,
+      category: selectedCategory,
+      libraryId: libraryIdForFilter,
+      availability: selectedAvailability,
+    })
+      .then((count) => {
+        if (active) {
+          setFilteredBookCount(count);
+          setFilteredBookCountLoading(false);
+        }
+      })
+      .catch((error) => {
+        console.warn('Filtered book count unavailable:', error.message);
+        if (active) {
+          setFilteredBookCountLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    searchTerm,
+    selectedCategory,
+    selectedLibrary,
+    selectedAvailability,
+    libraryFilter,
+  ]);
+
+  // =========================================================
+  // SERVER-SIDE CATEGORY BOOK COUNTS
+  // =========================================================
+  const [categorySummaries, setCategorySummaries] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+    const libraryIdForFilter =
+      libraryFilter ||
+      (selectedLibrary !== 'All' ? selectedLibrary : null);
+
+    fetchOpacCategoryBookCounts(libraryIdForFilter)
+      .then((summaries) => {
+        if (active) {
+          setCategorySummaries(summaries);
+        }
+      })
+      .catch((error) => {
+        console.warn('Category book counts unavailable:', error.message);
+        if (active) {
+          setCategorySummaries([]);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedLibrary, libraryFilter]);
+
+  // =========================================================
   // UI STATES
   // =========================================================
   const [selectedBook, setSelectedBook] = useState(null);
+  const bookModalRef = useRef(null);
+  const bookModalTriggerRef = useRef(null);
   const [readingListBookIds, setReadingListBookIds] = useState([]);
   const [readingListBooks, setReadingListBooks] = useState([]);
   const [readingListLoading, setReadingListLoading] = useState(false);
@@ -381,57 +488,83 @@ export default function OPACCatalog({
   const [submittingBorrowBookId, setSubmittingBorrowBookId] = useState(null);
   const [submittingCommunityRequest, setSubmittingCommunityRequest] = useState(false);
   const [updatingVisibilityBookId, setUpdatingVisibilityBookId] = useState(null);
+  const [clockNow, setClockNow] = useState(0);
+
+  // =========================================================
+  // COMMUNITY BOOKS - SAVED FOR LATER
+  // =========================================================
+  const [savedCommunityBookIds, setSavedCommunityBookIds] = useState(new Set());
+  const [savedCommunityBooksLoading, setSavedCommunityBooksLoading] = useState(false);
 
   useEffect(() => {
-    if (!selectedBook) return undefined;
+    if (!user?.id) return;
+    let active = true;
+    // eslint-disable-next-line -- Standard React pattern for loading states in effects
+    setSavedCommunityBooksLoading(true);
+    getSavedCommunityBooks()
+      .then((books) => {
+        if (active) {
+          setSavedCommunityBookIds(new Set(books.map((b) => String(b.book_id))));
+        }
+      })
+      .catch((error) => {
+        console.warn('Failed to load saved community books:', error.message);
+        if (active) {
+          setSavedCommunityBookIds(new Set());
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setSavedCommunityBooksLoading(false);
+        }
+      });
+    return () => { active = false; };
+  }, [user?.id]);
 
-    const dialog = document.querySelector(
-      '[aria-labelledby="visitor-book-modal-title"]'
-    );
-    if (!dialog) return undefined;
+  // Reset saved books when user logs out
+  useEffect(() => {
+    if (!user?.id) {
+      // eslint-disable-next-line -- Resetting state on logout is a standard pattern
+      setSavedCommunityBookIds(new Set());
+    }
+  }, [user?.id]);
 
-    const previousFocus = document.activeElement;
-    const focusableSelector =
-      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-    const focusables = () => [...dialog.querySelectorAll(focusableSelector)];
-    const closeButton = dialog.querySelector(
-      '[aria-label="Close book information"]'
-    );
-    closeButton?.focus();
-
-    const handleDialogKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        setSelectedBook(null);
-        return;
+  const handleSaveCommunityBook = async (communityBookId, currentlySaved) => {
+    if (!user?.id) return;
+    try {
+      if (currentlySaved) {
+        const result = await unsaveCommunityBookForLater(communityBookId);
+        if (result.success) {
+          setSavedCommunityBookIds((prev) => {
+            const next = new Set(prev);
+            next.delete(String(communityBookId));
+            return next;
+          });
+          setNotice('Book removed from saved list.');
+        } else {
+          setNotice(result.message || 'Unable to remove book from saved list.');
+        }
+      } else {
+        const result = await saveCommunityBookForLater(communityBookId);
+        if (result.success) {
+          setSavedCommunityBookIds((prev) => new Set(prev).add(String(communityBookId)));
+          setNotice('Book saved for later.');
+        } else {
+          setNotice(result.message || 'Unable to save book for later.');
+        }
       }
+    } catch (error) {
+      console.error('Save/unsave community book error:', error);
+      setNotice(currentlySaved ? 'Unable to remove book from saved list.' : 'Unable to save book for later.');
+    }
+  };
 
-      if (event.key !== 'Tab') return;
-      const items = focusables();
-      if (!items.length) {
-        event.preventDefault();
-        return;
-      }
-
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener('keydown', handleDialogKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleDialogKeyDown);
-      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
-        previousFocus.focus();
-      }
-    };
-  }, [selectedBook]);
+  useModalAccessibility(
+    !!selectedBook,
+    bookModalRef,
+    bookModalTriggerRef,
+    () => setSelectedBook(null)
+  );
 
   // =========================================================
   // PERSONAL / COMMUNITY BOOK STATES
@@ -452,6 +585,16 @@ export default function OPACCatalog({
   const [showRejectCommunityRequest, setShowRejectCommunityRequest] = useState(null);
   const [communityRequestResponse, setCommunityRequestResponse] = useState('');
   const [communityRequestNotice, setCommunityRequestNotice] = useState('');
+
+  useEffect(() => {
+    const refreshClock = () => setClockNow(Date.now());
+    const initialTimer = window.setTimeout(refreshClock, 0);
+    const interval = window.setInterval(refreshClock, 60_000);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(interval);
+    };
+  }, []);
 
   const setOwnerRequestError = (message) => {
     setOwnerCommunityRequestError(message);
@@ -600,6 +743,13 @@ export default function OPACCatalog({
       setSavingReadingListBookId(null);
     }
   };
+
+  const handleBookSelect = useCallback((book, event) => {
+    if (event?.currentTarget) {
+      bookModalTriggerRef.current = event.currentTarget;
+    }
+    setSelectedBook(book);
+  }, [setSelectedBook]);
 
   // =========================================================
   // PERSONAL BOOK FORM STATES
@@ -1030,40 +1180,8 @@ export default function OPACCatalog({
   // =========================================================
   // DYNAMIC FILTER OPTIONS
   // =========================================================
-  const uniqueBooksByCategory = new Map();
-  books.forEach((book) => {
-    const category = book.category?.trim() || 'Uncategorized';
-    const categoryKey = category.toLocaleLowerCase();
-    const normalizedIsbn = String(book.isbn || '')
-      .replace(/[^a-z0-9]/gi, '')
-      .toLocaleLowerCase();
-    const normalizedTitle = String(book.title || '')
-      .trim()
-      .replace(/\s+/g, ' ')
-      .toLocaleLowerCase();
-    const normalizedAuthor = String(book.author || '')
-      .trim()
-      .replace(/\s+/g, ' ')
-      .toLocaleLowerCase();
-    const bookKey = normalizedIsbn
-      ? `isbn:${normalizedIsbn}`
-      : normalizedTitle || normalizedAuthor
-        ? `title-author:${normalizedTitle}|${normalizedAuthor}`
-        : `id:${book.id}`;
-    if (!uniqueBooksByCategory.has(categoryKey)) {
-      uniqueBooksByCategory.set(categoryKey, {
-        label: category,
-        books: new Set(),
-      });
-    }
-    uniqueBooksByCategory.get(categoryKey).books.add(bookKey);
-  });
-  const categorySummaries = [...uniqueBooksByCategory.values()]
-    .map(({ label, books: uniqueBooks }) => ({
-      label,
-      count: uniqueBooks.size,
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+  // Category summaries are now loaded server-side via fetchOpacCategoryBookCounts
+  // to ensure pagination-safe counts beyond 1,000 records.
   const personalBookCategories = [
     ...new Map(
       categorySummaries
@@ -1153,11 +1271,11 @@ export default function OPACCatalog({
     let active = true;
     const fetchReviews = async () => {
       setLoadingReviews(true);
-      const { data, error } = await supabase
-        .from('book_reviews')
-        .select('*')
-        .eq('book_id', String(selectedBook.id))
-        .order('created_at', { ascending: false });
+      const { data, error } = await supabase.rpc('get_book_reviews', {
+        p_book_id: String(selectedBook.id),
+        p_limit: 50,
+        p_offset: 0,
+      });
       if (!active) return;
       if (error) {
         console.error('Error fetching reviews:', error.message);
@@ -1165,9 +1283,7 @@ export default function OPACCatalog({
         setCurrentUserReview(null);
       } else {
         const loadedReviews = data || [];
-        const ownReview = loadedReviews.find(
-          (review) => String(review.visitor_id) === String(user?.id)
-        ) || null;
+        const ownReview = loadedReviews.find((review) => review.is_own === true) || null;
         setReviews(loadedReviews);
         setCurrentUserReview(ownReview);
         setUserComment(ownReview?.comment || '');
@@ -1185,31 +1301,18 @@ export default function OPACCatalog({
       return;
     }
     setIsSubmitting(true);
-    const newReview = {
-      book_id: String(selectedBook.id),
-      visitor_id: String(user.id),
-      visitor_name: user?.full_name || user?.name || 'Anonymous Visitor',
-      rating: Number(userRating),
-      comment: userComment.trim(),
-    };
-    const result = currentUserReview
-      ? await supabase
-          .from('book_reviews')
-          .update({ rating: newReview.rating, comment: newReview.comment })
-          .eq('id', currentUserReview.id)
-          .select()
-      : await supabase
-          .from('book_reviews')
-          .insert([newReview])
-          .select();
-    const { data, error } = result;
+    const { data, error } = await supabase.rpc('save_my_book_review', {
+      p_book_id: String(selectedBook.id),
+      p_rating: Number(userRating),
+      p_comment: userComment.trim(),
+    });
     setIsSubmitting(false);
     if (error) {
       setNotice('Failed to save review: ' + error.message);
       return;
     }
-    if (data && data.length > 0) {
-      const savedReview = data[0];
+    if (data && (Array.isArray(data) ? data.length > 0 : true)) {
+      const savedReview = Array.isArray(data) ? data[0] : data;
       setReviews((currentReviews) => currentUserReview
         ? currentReviews.map((review) => review.id === savedReview.id ? savedReview : review)
         : [savedReview, ...currentReviews]);
@@ -1313,7 +1416,8 @@ export default function OPACCatalog({
         title.includes(normalizedSearch) ||
         author.includes(normalizedSearch) ||
         isbn.includes(normalizedSearch) ||
-        category.includes(normalizedSearch);
+        category.includes(normalizedSearch) ||
+        matchesCallNumberSearch(book, normalizedSearch);
       const matchesCategory =
         selectedCategory === 'All' ||
         String(book.category || 'Uncategorized')
@@ -1386,7 +1490,9 @@ export default function OPACCatalog({
       }
     });
 
-  const catalogTotalPages = Math.max(1, Math.ceil(filteredBooks.length / catalogPageSize));
+  const catalogTotalPages = Math.max(1, Math.ceil(
+      (filteredBookCount !== null ? filteredBookCount : filteredBooks.length) / catalogPageSize
+    ));
   const visibleCatalogPage = Math.min(catalogPage, catalogTotalPages);
   const visibleCatalogBooks = filteredBooks.slice(
     (visibleCatalogPage - 1) * catalogPageSize,
@@ -1611,24 +1717,21 @@ export default function OPACCatalog({
   const myRequestPageSize = 10;
   const [myRequestPage, setMyRequestPage] = useState(1);
   const myRequestPageCount = Math.max(1, Math.ceil(filteredMyRequests.length / myRequestPageSize));
+  const visibleMyRequestPage = Math.min(myRequestPage, myRequestPageCount);
   const visibleMyRequests = filteredMyRequests.slice(
-    (myRequestPage - 1) * myRequestPageSize,
-    myRequestPage * myRequestPageSize
+    (visibleMyRequestPage - 1) * myRequestPageSize,
+    visibleMyRequestPage * myRequestPageSize
   );
-  useEffect(() => {
-    setMyRequestPage(1);
-  }, [myRequestSearch, myRequestStatus]);
-  useEffect(() => {
-    setMyRequestPage((page) => Math.min(page, myRequestPageCount));
-  }, [myRequestPageCount]);
   useEffect(() => {
     if (!focusRequestId || activeView !== 'myBorrows') return;
     const focusedIndex = filteredMyRequests.findIndex(
       (request) => String(request.id) === String(focusRequestId)
     );
-    if (focusedIndex >= 0) {
+    if (focusedIndex < 0) return;
+    const frame = requestAnimationFrame(() => {
       setMyRequestPage(Math.floor(focusedIndex / myRequestPageSize) + 1);
-    }
+    });
+    return () => cancelAnimationFrame(frame);
   }, [activeView, filteredMyRequests, focusRequestId]);
   useEffect(() => {
     if (
@@ -1658,7 +1761,7 @@ export default function OPACCatalog({
         !term ||
         `${book.title || ''} ${book.author || ''} ${book.category || ''} ${book.isbn || ''}`
           .toLowerCase()
-          .includes(term);
+          .includes(term) || matchesCallNumberSearch(book, term);
       const matchesVisibility =
         personalBookVisibilityFilter === 'all' ||
         (personalBookVisibilityFilter === 'public' && Boolean(book.isPublic)) ||
@@ -1690,7 +1793,8 @@ export default function OPACCatalog({
         String(book.title || '').toLowerCase().includes(term) ||
         String(book.author || '').toLowerCase().includes(term) ||
         String(book.category || '').toLowerCase().includes(term) ||
-        String(book.isbn || '').toLowerCase().includes(term)
+        String(book.isbn || '').toLowerCase().includes(term) ||
+        matchesCallNumberSearch(book, term)
     );
   }, [communityBooks, searchTerm]);
   const readingListFilteredBooks = useMemo(() => {
@@ -1699,7 +1803,7 @@ export default function OPACCatalog({
     return readingListBooks.filter((book) =>
       `${book.title || ''} ${book.author || ''} ${book.category || ''} ${book.isbn || ''}`
         .toLowerCase()
-        .includes(term)
+        .includes(term) || matchesCallNumberSearch(book, term)
     );
   }, [readingListBooks, readingListSearch]);
   const readingList = useProgressiveList(readingListFilteredBooks, 12);
@@ -2134,7 +2238,8 @@ export default function OPACCatalog({
 
           <button
             type="button"
-            onClick={() => setSelectedBook({ ...book, bookType: 'personal' })}
+            ref={bookModalTriggerRef}
+            onClick={() => handleBookSelect({ ...book, bookType: 'personal' })}
             aria-label={`View details for ${book.title || 'personal book'}`}
             className="visitor-book-card-header visitor-personal-book-details-trigger"
           >
@@ -2224,6 +2329,8 @@ export default function OPACCatalog({
       book={book}
       onSelect={setSelectedBook}
       community
+      isSaved={savedCommunityBookIds.has(String(book.id))}
+      onSaveToggle={handleSaveCommunityBook}
     />
   );
 
@@ -2327,16 +2434,12 @@ export default function OPACCatalog({
           </div>
         )}
 
-        {(activeView === 'communityBooks' || activeView === 'personalBooks') && (
+        {activeView === 'communityBooks' && (
             <div className="flex min-w-0 flex-col gap-3 sm:flex-row">
             <form onSubmit={handleSearch} className="flex min-w-0 flex-1 gap-2">
               <input
                 type="text"
-                placeholder={
-                  activeView === 'communityBooks'
-                    ? 'Search community books...'
-                    : 'Search your personal books...'
-                }
+                placeholder="Search community books..."
                 value={searchInput}
                 onChange={handleSearchInputChange}
                 className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400"
@@ -2499,7 +2602,9 @@ export default function OPACCatalog({
                   Search results for: <strong className="text-slate-800">"{searchTerm}"</strong>
                 </span>
                 <span>
-                  {filteredBooks.length} {filteredBooks.length === 1 ? 'book' : 'books'} found
+                  {filteredBookCount !== null
+                    ? filteredBookCount
+                    : filteredBooks.length} {filteredBookCount !== null ? filteredBookCount === 1 : filteredBooks.length === 1 ? 'book' : 'books'} found
                 </span>
               </div>
             )}
@@ -2510,7 +2615,9 @@ export default function OPACCatalog({
                     Books in {formatBookCategory(selectedCategory)}
                   </h2>
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    {filteredBooks.length} catalog {filteredBooks.length === 1 ? 'entry' : 'entries'}
+                    {filteredBookCount !== null
+                      ? filteredBookCount
+                      : filteredBooks.length} catalog {filteredBookCount !== null ? filteredBookCount === 1 : filteredBooks.length === 1 ? 'entry' : 'entries'}
                   </p>
                 </div>
                 <button
@@ -2567,13 +2674,21 @@ export default function OPACCatalog({
             ) : (
               <div className="opac-book-grid book-card-grid grid min-w-0 gap-6">
                 {visibleCatalogBooks.map((book) => (
-                  <OPACBookCard key={book.id} book={book} onSelect={setSelectedBook} />
+                  <OPACBookCard key={book.id} book={book} onSelect={handleBookSelect} />
                 ))}
               </div>
             )}
             <nav className="visitor-catalog-pagination flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800" aria-label="Catalog pagination">
               <p className="text-xs text-slate-500 dark:text-slate-300">
-                Showing {filteredBooks.length === 0 ? 0 : (visibleCatalogPage - 1) * catalogPageSize + 1}–{Math.min(visibleCatalogPage * catalogPageSize, filteredBooks.length)} of {filteredBooks.length} books
+                {filteredBookCount !== null && filteredBookCountLoading === false ? (
+                  <>
+                    Showing {filteredBookCount === 0 ? 0 : (visibleCatalogPage - 1) * catalogPageSize + 1}–{Math.min(visibleCatalogPage * catalogPageSize, filteredBookCount)} of {filteredBookCount} books
+                  </>
+                ) : (
+                  <>
+                    Showing {filteredBooks.length === 0 ? 0 : (visibleCatalogPage - 1) * catalogPageSize + 1}–{Math.min(visibleCatalogPage * catalogPageSize, filteredBooks.length)} of {filteredBooks.length} books
+                  </>
+                )}
               </p>
               <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1">
                 <button
@@ -2607,6 +2722,23 @@ export default function OPACCatalog({
                 </button>
               </div>
             </nav>
+            {/* DEBUG: OPAC Count Discrepancy Diagnostics (development only) */}
+            {import.meta.env.DEV && (
+              <details className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs dark:border-amber-700 dark:bg-amber-900/30">
+                <summary className="font-semibold text-amber-800 dark:text-amber-200 cursor-pointer">
+                  OPAC Count Debug
+                </summary>
+                <div className="mt-2 grid gap-1 text-amber-900 dark:text-amber-100">
+                  <div>Filtered count (RPC): {filteredBookCount !== null ? filteredBookCount : 'loading...'}</div>
+                  <div>Client-side filteredBooks.length: {filteredBooks.length}</div>
+                  <div>Total library books (RPC): {totalLibraryBookCount !== null ? totalLibraryBookCount : totalCountsLoading ? 'loading...' : 'error'}</div>
+                  <div>Total OPAC books (RPC): {totalOpacBookCount !== null ? totalOpacBookCount : totalCountsLoading ? 'loading...' : 'error'}</div>
+                  <div>Active filters: search="{searchTerm}" category="{selectedCategory}" library="{selectedLibrary}" availability="{selectedAvailability}"</div>
+                  <div>libraryFilter prop: {libraryFilter || 'none'}</div>
+                  <div>User role: {user?.role || 'anonymous'}</div>
+                </div>
+              </details>
+            )}
           </div>
         ) : activeView === 'categories' ? (
           <section aria-labelledby="opac-category-heading" className="space-y-5">
@@ -2742,13 +2874,19 @@ export default function OPACCatalog({
                           <p className="visitor-reading-list-isbn tabular-nums">
                             ISBN: {book.isbn || '—'}
                           </p>
+                          {book.callNumber && (
+                            <p className="visitor-reading-list-isbn tabular-nums">
+                              Call Number: {book.callNumber}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="visitor-book-card-footer visitor-reading-list-footer">
                         <div className="visitor-book-card-reading-actions">
                           <button
                             type="button"
-                            onClick={() => setSelectedBook(book)}
+                            ref={bookModalTriggerRef}
+                            onClick={() => handleBookSelect(book, { currentTarget: bookModalTriggerRef.current })}
                             className="rounded-lg bg-shelf-primary px-3 py-2 text-sm font-bold text-white hover:opacity-90"
                           >
                             View Details
@@ -2820,6 +2958,45 @@ export default function OPACCatalog({
             ) : (
               <div className="opac-book-grid book-card-grid visitor-book-collection-grid visitor-community-book-grid">
                 {filteredCommunityBooks.map(renderCommunityBookCard)}
+              </div>
+            )}
+          </section>
+        ) : activeView === 'savedBooks' ? (
+          <section className="space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <BookmarkCheck size={20} className="text-slate-700 dark:text-slate-200" aria-hidden="true" />
+                  <h2 className="text-lg font-bold text-slate-800">
+                    Saved Books
+                  </h2>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  Community books you saved for later reading.
+                </p>
+              </div>
+            </div>
+            {savedCommunityBooksLoading ? (
+              <div className="rounded-xl border border-slate-200 bg-white p-10 text-center">
+                <p className="text-sm text-slate-500">
+                  Loading saved books...
+                </p>
+              </div>
+            ) : savedCommunityBookIds.size === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
+                <BookmarkCheck size={32} className="mx-auto text-slate-300" aria-hidden="true" />
+                <h3 className="mt-3 text-base font-bold text-slate-700">
+                  No saved books yet.
+                </h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  Click the bookmark icon on community books to save them for later.
+                </p>
+              </div>
+            ) : (
+              <div className="opac-book-grid book-card-grid visitor-book-collection-grid visitor-community-book-grid">
+                {communityBooks
+                  .filter((book) => savedCommunityBookIds.has(String(book.id)))
+                  .map(renderCommunityBookCard)}
               </div>
             )}
           </section>
@@ -3421,7 +3598,7 @@ export default function OPACCatalog({
                       request?.requestType === 'community';
                     const isOverdue =
                       request.status === 'borrowed' &&
-                      request.dueDate && new Date(request.dueDate).getTime() < Date.now();
+                      request.dueDate && clockNow > 0 && new Date(request.dueDate).getTime() < clockNow;
                     const overdueDays =
                       request.dueDate && isOverdue
                         ? calculateOverdueDays(request.dueDate)
@@ -3679,24 +3856,24 @@ export default function OPACCatalog({
                 className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-4 text-sm dark:border-slate-700"
               >
                 <p className="text-slate-600 dark:text-slate-300" aria-live="polite">
-                  Showing {filteredMyRequests.length === 0 ? 0 : (myRequestPage - 1) * myRequestPageSize + 1}–{Math.min(myRequestPage * myRequestPageSize, filteredMyRequests.length)} of {filteredMyRequests.length} requests
+                  Showing {filteredMyRequests.length === 0 ? 0 : (visibleMyRequestPage - 1) * myRequestPageSize + 1}–{Math.min(visibleMyRequestPage * myRequestPageSize, filteredMyRequests.length)} of {filteredMyRequests.length} requests
                 </p>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setMyRequestPage((page) => Math.max(1, page - 1))}
-                    disabled={myRequestPage <= 1}
+                    onClick={() => setMyRequestPage((page) => Math.max(1, Math.min(page, myRequestPageCount) - 1))}
+                    disabled={visibleMyRequestPage <= 1}
                     className="min-h-10 rounded-lg border border-slate-300 px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
                   >
                     Previous
                   </button>
                   <span className="whitespace-nowrap text-slate-600 dark:text-slate-300">
-                    Page {myRequestPage} of {myRequestPageCount}
+                    Page {visibleMyRequestPage} of {myRequestPageCount}
                   </span>
                   <button
                     type="button"
-                    onClick={() => setMyRequestPage((page) => Math.min(myRequestPageCount, page + 1))}
-                    disabled={myRequestPage >= myRequestPageCount}
+                    onClick={() => setMyRequestPage((page) => Math.min(myRequestPageCount, Math.min(page, myRequestPageCount) + 1))}
+                    disabled={visibleMyRequestPage >= myRequestPageCount}
                     className="min-h-10 rounded-lg border border-slate-300 px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
                   >
                     Next
@@ -4366,9 +4543,11 @@ export default function OPACCatalog({
       {selectedBook && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div
+            ref={bookModalRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="visitor-book-modal-title"
+            tabIndex={-1}
             className="visitor-book-modal relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800"
           >
             <button
@@ -4413,6 +4592,11 @@ export default function OPACCatalog({
                 <p className="text-xs tabular-nums text-slate-700 dark:text-slate-200">
                   ISBN: {selectedBook.isbn || '—'}
                 </p>
+                {selectedBook.callNumber && (
+                  <p className="text-xs tabular-nums text-slate-700 dark:text-slate-200">
+                    Call Number: {selectedBook.callNumber}
+                  </p>
+                )}
               </div>
             </div>
             {selectedBook.bookType === 'personal' && (
@@ -4723,7 +4907,7 @@ export default function OPACCatalog({
                     <div key={review.id} className="p-3 bg-white rounded-lg border border-slate-100 shadow-sm text-xs space-y-1">
                       <div className="flex justify-between items-center gap-3">
                         <span className="font-bold text-slate-800">
-                          {review.visitor_name}
+                          {review.visitor_name || 'Verified Reader'}
                         </span>
                         <span className="inline-flex items-center gap-0.5 text-amber-500" aria-label={`${Math.max(0, Math.min(5, Number(review.rating) || 0))} out of 5 stars`}>
                           {Array.from({ length: 5 }, (_, index) => (

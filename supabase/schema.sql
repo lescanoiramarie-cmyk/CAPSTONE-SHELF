@@ -403,9 +403,11 @@ $$;
 -- ---------------------------------------------------------------------------
 -- Seed the library network (Tanauan City integrated network — sample coords,
 -- swap in surveyed GPS coordinates for each real branch before go-live)
+-- VERIFIED: BatStateU JPLPC Malvar Campus coordinates corrected from Darasa, Tanauan
+-- Actual JPLPC: 14.04482, 121.15677 (source: Wikipedia, OpenStreetMap, PhilAtlas)
 -- ---------------------------------------------------------------------------
 insert into libraries (id, name, campus, address, lat, lng, hours, status, is_sample_location) values
-  ('277829af-1475-47ae-9e26-4b64c68f54f4', 'BatStateU JPLPC – Malvar Campus Library', 'Malvar Campus', 'Batangas State University, JPLPC – Malvar Campus, Malvar, Batangas', 14.0672, 121.1597, '7:00 AM – 6:00 PM (Mon–Fri)', 'Open', true),
+  ('277829af-1475-47ae-9e26-4b64c68f54f4', 'BatStateU JPLPC – Malvar Campus Library', 'Malvar Campus', 'Batangas State University, JPLPC – Malvar Campus, G. Leviste St., Poblacion, Malvar, Batangas', 14.04482, 121.15677, '7:00 AM – 6:00 PM (Mon–Fri)', 'Open', true),
   ('00000000-0000-4000-8000-000000000002', 'Tanauan City Public Library', 'Tanauan City Hall Complex', 'P. Gomez St, Poblacion, Tanauan City, Batangas', 14.0860, 121.1497, '8:00 AM – 5:00 PM (Mon–Sat)', 'Open', true),
   ('bde57b8b-d3b8-4676-823e-7573f80d3a36', 'BatStateU Batangas City Main Campus Library', 'Batangas City (Main Campus)', 'Rizal Avenue Extension, Batangas City, Batangas', 13.7565, 121.0583, '8:00 AM – 5:00 PM (Mon–Fri)', 'Closed', true)
 on conflict (id) do nothing;

@@ -2,6 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, CircleDollarSign, History, Search, X, Bell, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient.js';
 import { sendFineReminder } from '../lib/fineReminder.js';
+import {
+  buildFinePaymentAnalyticsArgs,
+  FINE_PAYMENT_ANALYTICS_RPC,
+  sanitizeFinePaymentAnalyticsRows,
+} from '../lib/finePaymentAnalytics.js';
 
 const peso = (value) => `₱${Number(value || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const PAGE_SIZE = 10;
@@ -14,6 +19,7 @@ function getFineStatus(row) {
 
 export default function FinePayments({ libraryId = null, libraryName = '', isSuperAdmin = false, libraries = [] }) {
   const [rows, setRows] = useState([]);
+  const [analyticsRows, setAnalyticsRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
@@ -46,6 +52,24 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
     setLoadError('');
     setVisitorIdsByRequest({});
     setAlertedTodayRequestIds(new Set());
+    if (isSuperAdmin) {
+      const { data, error } = await supabase.rpc(
+        FINE_PAYMENT_ANALYTICS_RPC,
+        buildFinePaymentAnalyticsArgs(activeLibraryId)
+      );
+      if (error) {
+        setLoadError(['PGRST202', '42883'].includes(error.code)
+          ? 'The aggregate fine analytics endpoint is not available. Confirm the fine-payment privacy migration is deployed and the PostgREST schema cache has reloaded.'
+          : error.message || 'Unable to load aggregate fine analytics.');
+        setAnalyticsRows([]);
+      } else {
+        setAnalyticsRows(sanitizeFinePaymentAnalyticsRows(data));
+      }
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+    setAnalyticsRows([]);
     const dashboardResult = await supabase.rpc('get_fine_payment_dashboard', { p_library_id: activeLibraryId ? String(activeLibraryId) : null });
     const { data, error } = dashboardResult;
     if (error) {
@@ -73,7 +97,10 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
     setLoading(false);
   }, [activeLibraryId, isSuperAdmin]);
 
-  useEffect(() => { void loadRows(); }, [loadRows]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void loadRows(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadRows]);
 
   const libraryRows = useMemo(() => rows.filter((row) => {
     const matchesLibrary = !isSuperAdmin || selectedLibraryId === 'all' || String(row.library_id) === String(selectedLibraryId);
@@ -93,8 +120,8 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
     });
   }, [libraryRows, search, statusFilter]);
   const pageCount = Math.max(1, Math.ceil(visibleRows.length / PAGE_SIZE));
-  const pageRows = visibleRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  useEffect(() => { setPage(1); }, [search, statusFilter, selectedLibraryId]);
+  const visiblePage = Math.min(page, pageCount);
+  const pageRows = visibleRows.slice((visiblePage - 1) * PAGE_SIZE, visiblePage * PAGE_SIZE);
 
   const totals = useMemo(() => rows.filter((row) => Number(row.fine_amount) > 0 || Number(row.fine_paid_amount) > 0).reduce((result, row) => {
     result.totalAssessed += Number(row.fine_amount || 0);
@@ -155,7 +182,7 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
       if (!visitors.has(key)) visitors.set(key, row);
     });
     return [...visitors.values()];
-  }, [dueFineRows, visitorIdsByRequest, alertedTodayRequestIds, rows, wasVisitorAlertedToday]);
+  }, [dueFineRows, visitorIdsByRequest, wasVisitorAlertedToday]);
   const sendSingleAlert = async (row) => {
     setAlertingId(String(row.request_id));
     setFeedback({ error: '', message: '' });
@@ -194,6 +221,79 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
     else setFeedback({ error: '', message: `Fine alerts sent for ${sent} visitor(s); existing alerts were marked as already sent today.` });
     setAlertingAll(false);
   };
+
+  if (isSuperAdmin) {
+    const summaries = analyticsRows.filter((row) => row.report_kind === 'summary');
+    const overall = summaries.find((row) => !row.branch_id) || {};
+    const branchSummaries = summaries.filter((row) => row.branch_id);
+    const monthlyRows = analyticsRows
+      .filter((row) => row.report_kind === 'monthly')
+      .sort((left, right) => String(right.period_month).localeCompare(String(left.period_month)));
+    const fmtMonth = (value) => value
+      ? new Date(`${value}T00:00:00`).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+      : '—';
+    const metricCards = [
+      ['Fines assessed', overall.fines_assessed],
+      ['Fines collected', overall.fines_collected],
+      ['Outstanding', overall.outstanding_balance],
+      ['Paid / partial / unpaid', `${overall.paid_request_count || 0} / ${overall.partially_paid_request_count || 0} / ${overall.unpaid_request_count || 0}`],
+    ];
+    return (
+      <section className="space-y-5">
+        <header className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">Fine Payment Analytics</h2>
+            <p className="mt-1 text-sm text-slate-600">Aggregate totals and trends across libraries.</p>
+          </div>
+          <label className="w-72 max-w-full">
+            <span className="sr-only">Filter analytics by library</span>
+            <select value={selectedLibraryId} onChange={(event) => setSelectedLibraryId(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+              <option value="all">All partner libraries</option>
+              {libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}
+            </select>
+          </label>
+        </header>
+        {loading ? <p className="text-sm text-slate-500">Loading aggregate analytics…</p> : null}
+        {loadError ? <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{loadError}</p> : null}
+        {!loading && !loadError && (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {metricCards.map(([label, value]) => (
+                <article key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+                  <p className="mt-2 text-xl font-bold text-slate-900">{typeof value === 'number' || (value != null && label !== 'Paid / partial / unpaid') ? peso(value) : value ?? '—'}</p>
+                </article>
+              ))}
+            </div>
+            <article className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <div className="border-b border-slate-100 px-4 py-3"><h3 className="font-bold text-slate-900">Branch comparison</h3></div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Library</th><th className="px-4 py-3">Assessed</th><th className="px-4 py-3">Collected</th><th className="px-4 py-3">Outstanding</th><th className="px-4 py-3">Paid / partial / unpaid</th><th className="px-4 py-3">Cash / transfer / other</th></tr></thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {branchSummaries.map((row) => <tr key={row.branch_id}><td className="px-4 py-3 font-medium">{row.branch_name}</td><td className="px-4 py-3">{peso(row.fines_assessed)}</td><td className="px-4 py-3">{peso(row.fines_collected)}</td><td className="px-4 py-3">{peso(row.outstanding_balance)}</td><td className="px-4 py-3">{row.paid_request_count} / {row.partially_paid_request_count} / {row.unpaid_request_count}</td><td className="px-4 py-3">{peso(row.cash_collected)} / {peso(row.bank_transfer_collected)} / {peso(row.other_collected)}</td></tr>)}
+                    {branchSummaries.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">No aggregate fine data is available.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </article>
+            <article className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <div className="border-b border-slate-100 px-4 py-3"><h3 className="font-bold text-slate-900">Monthly collection trend</h3></div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Month</th><th className="px-4 py-3">Library</th><th className="px-4 py-3">Collected</th><th className="px-4 py-3">Cash / transfer / other</th></tr></thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {monthlyRows.map((row, index) => <tr key={`${row.period_month}-${row.branch_id || 'all'}-${index}`}><td className="px-4 py-3">{fmtMonth(row.period_month)}</td><td className="px-4 py-3">{row.branch_name}</td><td className="px-4 py-3">{peso(row.fines_collected)}</td><td className="px-4 py-3">{peso(row.cash_collected)} / {peso(row.bank_transfer_collected)} / {peso(row.other_collected)}</td></tr>)}
+                    {monthlyRows.length === 0 && <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-500">No collection history is available.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </article>
+          </>
+        )}
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-5">
@@ -280,7 +380,7 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
         </div>
       )}
 
-      {!loading && visibleRows.length > 0 && <nav aria-label="Fine payments pagination" className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-600">Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, visibleRows.length)} of {visibleRows.length} fine records</p><div className="flex items-center justify-between gap-3 sm:justify-end"><button type="button" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft size={16}/>Previous</button><span className="text-sm font-medium text-slate-700">Page {page} of {pageCount}</span><button type="button" disabled={page >= pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40">Next<ChevronRight size={16}/></button></div></nav>}
+      {!loading && visibleRows.length > 0 && <nav aria-label="Fine payments pagination" className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-600">Showing {(visiblePage - 1) * PAGE_SIZE + 1}–{Math.min(visiblePage * PAGE_SIZE, visibleRows.length)} of {visibleRows.length} fine records</p><div className="flex items-center justify-between gap-3 sm:justify-end"><button type="button" disabled={visiblePage === 1} onClick={() => setPage((current) => Math.max(1, Math.min(current, pageCount) - 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft size={16}/>Previous</button><span className="text-sm font-medium text-slate-700">Page {visiblePage} of {pageCount}</span><button type="button" disabled={visiblePage >= pageCount} onClick={() => setPage((current) => Math.min(pageCount, Math.min(current, pageCount) + 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40">Next<ChevronRight size={16}/></button></div></nav>}
 
       {selectedFine && <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setSelectedFine(null); }}>
         <section role="dialog" aria-modal="true" aria-labelledby="fine-payment-dialog-title" className="my-auto w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl sm:p-6">

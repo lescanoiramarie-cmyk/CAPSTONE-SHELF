@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient.js';
+import { submitVisitorFeedback } from '../data/store.js';
 import { findFAQResponse } from '../data/faqData.js';
 import { useProgressiveList } from '../hooks/useProgressiveList.js';
 import ProgressiveListFooter from './ProgressiveListFooter.jsx';
@@ -132,8 +133,8 @@ export default function VisitorServices({ user, libraries = [] }) {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!supabase) {
-      setError('Feedback submission is unavailable until Supabase is configured.');
+    if (!user?.id) {
+      setError('Please sign in to submit feedback.');
       return;
     }
 
@@ -141,16 +142,15 @@ export default function VisitorServices({ user, libraries = [] }) {
     setError('');
     setNotice('');
     try {
-      const { data: submittedFeedback, error: insertError } = await supabase.from('visitor_feedback').insert({
-        visitor_id: user?.id || null,
-        visitor_name: user?.name || 'Visitor',
-        visitor_email: user?.email || null,
-        library_id: form.libraryId || null,
+      const submittedFeedback = await submitVisitorFeedback({
+        visitorId: user.id,
+        visitorName: user.name || 'Visitor',
+        visitorEmail: user.email || null,
+        libraryId: form.libraryId || null,
         category: form.category,
         subject: form.subject.trim(),
         message: form.message.trim(),
-      }).select('id, category, subject, message, library_id, status, admin_reply, replied_at, created_at').single();
-      if (insertError) throw insertError;
+      });
       if (submittedFeedback) {
         setFeedbackItems((current) => [submittedFeedback, ...current]);
         setFeedbackPage(1);
