@@ -79,4 +79,6 @@ ALTER FUNCTION public.get_current_user_role() OWNER TO postgres;
 REVOKE ALL ON FUNCTION public.get_current_user_role() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_current_user_role() TO authenticated, service_role;
 
+NOTIFY pgrst, 'reload schema';
+
 COMMIT;

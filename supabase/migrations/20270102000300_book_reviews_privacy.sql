@@ -55,7 +55,7 @@ GRANT SELECT (id, book_id, visitor_id, visitor_name, rating, comment, created_at
   ON TABLE public.book_reviews TO shelf_book_reviews_rpc_owner;
 GRANT INSERT (book_id, visitor_id, visitor_name, rating, comment)
   ON TABLE public.book_reviews TO shelf_book_reviews_rpc_owner;
-GRANT UPDATE (rating, comment, updated_at)
+GRANT UPDATE (rating, comment)
   ON TABLE public.book_reviews TO shelf_book_reviews_rpc_owner;
 GRANT DELETE ON TABLE public.book_reviews TO shelf_book_reviews_rpc_owner;
 
@@ -186,8 +186,7 @@ BEGIN
   IF FOUND THEN
     UPDATE public.book_reviews AS review
     SET rating = p_rating::smallint,
-        comment = COALESCE(p_comment, ''),
-        updated_at = pg_catalog.now()
+        comment = COALESCE(p_comment, '')
     WHERE review.id = v_review_id;
   ELSE
     INSERT INTO public.book_reviews (book_id, visitor_id, visitor_name, rating, comment)

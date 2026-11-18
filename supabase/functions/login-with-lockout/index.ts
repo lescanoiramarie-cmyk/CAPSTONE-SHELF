@@ -93,7 +93,7 @@ Deno.serve(async (request: Request) => {
       });
 
     if (lockoutError) {
-      console.error('Login lockout check failed:', lockoutError);
+      console.error('Login lockout check failed.');
       return jsonResponse(
         { error: 'Unable to verify login status. Try again later.' },
         500,
@@ -134,7 +134,7 @@ Deno.serve(async (request: Request) => {
         });
 
       if (failureError) {
-        console.error('Failed to record login failure:', failureError);
+        console.error('Failed to record login failure.');
         return jsonResponse(
           { error: 'Unable to process login. Please try again.' },
           500,
@@ -176,7 +176,7 @@ Deno.serve(async (request: Request) => {
     );
 
     if (clearError) {
-      console.error('Failed to clear login failures:', clearError);
+      console.error('Failed to clear login failures.');
       await authClient.auth.signOut();
       return jsonResponse(
         { error: 'Unable to complete login. Please try again.' },
@@ -189,8 +189,8 @@ Deno.serve(async (request: Request) => {
       session: authData.session,
       user: authData.user,
     });
-  } catch (error) {
-    console.error('Login with lockout failed:', error);
+  } catch {
+    console.error('Login with lockout failed.');
     return jsonResponse(
       { error: 'Unable to complete login. Please try again.' },
       500,

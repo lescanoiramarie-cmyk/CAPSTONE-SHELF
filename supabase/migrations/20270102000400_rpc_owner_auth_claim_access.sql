@@ -316,8 +316,7 @@ BEGIN
   IF FOUND THEN
     UPDATE public.book_reviews AS review
     SET rating = p_rating::smallint,
-        comment = COALESCE(p_comment, ''),
-        updated_at = pg_catalog.now()
+        comment = COALESCE(p_comment, '')
     WHERE review.id = v_review_id;
   ELSE
     INSERT INTO public.book_reviews (book_id, visitor_id, visitor_name, rating, comment)

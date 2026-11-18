@@ -371,41 +371,64 @@ const mapAttendance = (r) => ({
 
 const FETCH_PAGE_SIZE = 1000;
 const FETCH_PAGE_BATCH_SIZE = 2;
+const authenticatedDataScopeRequests = new Map();
 
 async function getAuthenticatedDataScope() {
-  const { data: roleData, error: roleError } = await supabase.rpc('get_current_user_role');
-
-  if (roleError) {
-    throw cleanErr(roleError, 'Unable to resolve the current user role.');
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) {
+    throw cleanErr(sessionError, 'Unable to resolve the current user session.');
   }
 
-  if (!roleData || roleData.length === 0) {
-    return { type: 'anonymous' };
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) return { type: 'anonymous' };
+
+  let request = authenticatedDataScopeRequests.get(accessToken);
+  if (!request) {
+    request = (async () => {
+      const { data: roleData, error: roleError } = await supabase.rpc('get_current_user_role');
+
+      if (roleError) {
+        throw cleanErr(roleError, 'Unable to resolve the current user role.');
+      }
+
+      if (!roleData || roleData.length === 0) {
+        return { type: 'anonymous' };
+      }
+
+      const roleInfo = roleData[0];
+      const userType = roleInfo.user_type;
+      const role = roleInfo.role;
+      const libraryId = roleInfo.library_id;
+      const visitorId = roleInfo.visitor_id;
+      const isActive = roleInfo.is_active;
+
+      if (!isActive) {
+        return { type: 'anonymous' };
+      }
+
+      if (userType === 'superadmin' || userType === 'subadmin') {
+        return {
+          type: role === 'superadmin' ? 'superadmin' : 'subadmin',
+          libraryId,
+        };
+      }
+
+      if (userType === 'visitor') {
+        return { type: 'visitor', visitorId };
+      }
+
+      return { type: 'anonymous' };
+    })();
+    authenticatedDataScopeRequests.set(accessToken, request);
   }
 
-  const roleInfo = roleData[0];
-  const userType = roleInfo.user_type;
-  const role = roleInfo.role;
-  const libraryId = roleInfo.library_id;
-  const visitorId = roleInfo.visitor_id;
-  const isActive = roleInfo.is_active;
-
-  if (!isActive) {
-    return { type: 'anonymous' };
+  try {
+    return await request;
+  } finally {
+    if (authenticatedDataScopeRequests.get(accessToken) === request) {
+      authenticatedDataScopeRequests.delete(accessToken);
+    }
   }
-
-  if (userType === 'superadmin' || userType === 'subadmin') {
-    return {
-      type: role === 'superadmin' ? 'superadmin' : 'subadmin',
-      libraryId,
-    };
-  }
-
-  if (userType === 'visitor') {
-    return { type: 'visitor', visitorId };
-  }
-
-  return { type: 'anonymous' };
 }
 
 async function fetchAllRowsInPages(buildQuery, resourceName) {
