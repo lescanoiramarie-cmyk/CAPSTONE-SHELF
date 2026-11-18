@@ -4,9 +4,13 @@ import logging
 import os
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlparse
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+import httpx
 from fastapi.middleware.cors import CORSMiddleware
 from google import genai
 from google.genai import errors, types
@@ -80,6 +84,7 @@ class FAQAnswer(BaseModel):
 
 
 app = FastAPI(title="SHELF Analytics", version="1.0.0")
+bearer_scheme = HTTPBearer(auto_error=False)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -308,6 +313,70 @@ def health():
     }
 
 
+def require_active_staff(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> str:
+    """Validate the Supabase access token and require an active AAL2 staff profile."""
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        raise HTTPException(status_code=401, detail="An authenticated staff session is required.")
+
+    supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    anon_key = os.getenv("SUPABASE_ANON_KEY", "")
+    if not supabase_url or not anon_key:
+        raise HTTPException(status_code=503, detail="Staff authorization is not configured.")
+    parsed_url = urlparse(supabase_url)
+    if parsed_url.scheme != "https" and not (
+        parsed_url.scheme == "http" and parsed_url.hostname in ("localhost", "127.0.0.1", "::1")
+    ):
+        raise HTTPException(status_code=503, detail="Staff authorization requires a TLS-protected Supabase URL.")
+
+    headers = {
+        "apikey": anon_key,
+        "Authorization": f"Bearer {credentials.credentials}",
+        "Accept": "application/json",
+    }
+    try:
+        with httpx.Client(timeout=5.0, follow_redirects=False) as client:
+            user_response = client.get(f"{supabase_url}/auth/v1/user", headers=headers)
+            if user_response.status_code in (401, 403):
+                raise HTTPException(status_code=401, detail="The staff session is invalid or expired.")
+            user_response.raise_for_status()
+            user = user_response.json()
+            if not isinstance(user, dict) or not user.get("id"):
+                raise HTTPException(status_code=401, detail="The staff session is invalid or expired.")
+            app_metadata = user.get("app_metadata")
+            claim_role = app_metadata.get("role") if isinstance(app_metadata, dict) else None
+            if not isinstance(claim_role, str) or claim_role.strip().lower() not in ("superadmin", "subadmin"):
+                raise HTTPException(status_code=403, detail="An active AAL2 staff session is required.")
+
+            role_response = client.post(
+                f"{supabase_url}/rest/v1/rpc/get_current_user_role",
+                headers=headers,
+                json={},
+            )
+            if role_response.status_code in (401, 403):
+                raise HTTPException(status_code=403, detail="An active AAL2 staff session is required.")
+            role_response.raise_for_status()
+            role_rows = role_response.json()
+    except HTTPException:
+        raise
+    except (httpx.HTTPError, ValueError):
+        logger.warning("Analytics staff authorization service unavailable.")
+        raise HTTPException(status_code=503, detail="Staff authorization is temporarily unavailable.") from None
+
+    if (
+        not isinstance(role_rows, list)
+        or len(role_rows) != 1
+        or not isinstance(role_rows[0], dict)
+        or role_rows[0].get("user_type") not in ("superadmin", "subadmin")
+        or role_rows[0].get("role") not in ("superadmin", "subadmin")
+        or role_rows[0].get("role") != claim_role.strip().lower()
+        or role_rows[0].get("is_active") is not True
+    ):
+        raise HTTPException(status_code=403, detail="An active AAL2 staff session is required.")
+    return role_rows[0]["role"]
+
+
 
 @app.post("/faq/answer", response_model=FAQAnswer)
 def answer_faq(request: FAQAnswerRequest):
@@ -327,6 +396,7 @@ def answer_faq(request: FAQAnswerRequest):
 @app.post("/forecast")
 def forecast(
     request: ForecastRequest,
+    _staff_role: str = Depends(require_active_staff),
     timeframe: Literal[
         "all",
         "today",

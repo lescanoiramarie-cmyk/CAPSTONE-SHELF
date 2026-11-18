@@ -18,14 +18,21 @@ DECLARE
   v_index            record;
   v_index_oid        oid;
   v_index_table_oid  oid;
+  v_index_owner_oid  oid;
   v_index_method     text;
   v_index_unique     boolean;
+  v_index_exclusion  boolean;
   v_index_valid      boolean;
   v_index_ready      boolean;
   v_index_live       boolean;
   v_index_keys       text[];
   v_index_include    text[];
   v_index_options    smallint[];
+  v_index_opclasses  text[];
+  v_index_collations oid[];
+  v_expected_collations oid[];
+  v_index_natts      smallint;
+  v_index_nkeyatts   smallint;
   v_index_predicate  text;
   v_expected_predicate text;
   v_constraint_names text[];
@@ -408,15 +415,17 @@ BEGIN
        ARRAY['fine_amount','fine_paid_amount','fine_rate_snapshot',
              'fine_review_required','fine_review_resolved_at','visitor_id']::text[],
        ARRAY[0,0,0]::smallint[],
-       '(status = ANY (ARRAY[''borrowed''::text, ''returned''::text]))'::text),
+       '(status = ANY (ARRAY[''borrowed''::text, ''returned''::text]))'::text,
+       ARRAY['pg_catalog.text_ops','pg_catalog.timestamptz_ops',
+             'pg_catalog.text_ops']::text[]),
       ('books_library_id_book_id_idx', 'public.books'::regclass::oid,
        ARRAY['library_id','id']::text[], ARRAY[]::text[],
-       ARRAY[0,0]::smallint[], NULL::text),
+        ARRAY[0,0]::smallint[], NULL::text, NULL::text[]),
       ('fine_payments_request_received_idx', v_fine_oid,
        ARRAY['borrow_request_id','received_at']::text[], ARRAY[]::text[],
-       ARRAY[0,3]::smallint[], NULL::text)
+        ARRAY[0,3]::smallint[], NULL::text, NULL::text[])
     ) AS expected(index_name, table_oid, key_columns, include_columns,
-                  key_options, predicate)
+                   key_options, predicate, key_opclasses)
   LOOP
     SELECT c.oid INTO v_index_oid
     FROM pg_catalog.pg_class AS c
@@ -424,24 +433,32 @@ BEGIN
     WHERE n.nspname = 'public' AND c.relname = v_index.index_name;
 
     IF v_index_oid IS NOT NULL THEN
-      SELECT i.indrelid, am.amname, i.indisunique, i.indisvalid,
-             i.indisready, i.indislive,
-             pg_catalog.regexp_replace(
-               pg_catalog.lower(pg_catalog.pg_get_expr(i.indpred, i.indrelid)),
-               '[[:space:]]', '', 'g'
-             )
-        INTO v_index_table_oid, v_index_method, v_index_unique, v_index_valid,
-             v_index_ready, v_index_live, v_index_predicate
+      SELECT i.indrelid, ic.relowner, am.amname, i.indisunique, i.indisexclusion, i.indisvalid,
+             i.indisready, i.indislive, i.indnatts, i.indnkeyatts,
+              pg_catalog.pg_get_expr(i.indpred, i.indrelid)
+        INTO v_index_table_oid, v_index_owner_oid, v_index_method, v_index_unique,
+             v_index_exclusion, v_index_valid, v_index_ready, v_index_live, v_index_natts,
+             v_index_nkeyatts, v_index_predicate
       FROM pg_catalog.pg_index AS i
       JOIN pg_catalog.pg_class AS ic ON ic.oid = i.indexrelid
       JOIN pg_catalog.pg_am AS am ON am.oid = ic.relam
       WHERE i.indexrelid = v_index_oid;
 
       IF NOT FOUND OR v_index_table_oid <> v_index.table_oid
-         OR v_index_method <> 'btree' OR v_index_unique
+         OR v_index_owner_oid <> v_owner_oid
+         OR v_index_method <> 'btree' OR v_index_unique OR v_index_exclusion
          OR NOT v_index_valid OR NOT v_index_ready OR NOT v_index_live THEN
         RAISE EXCEPTION
-          'Same-named index % has the wrong table, method, uniqueness, or validity',
+          'Same-named index % has the wrong table, owner, method, uniqueness, or validity',
+          v_index.index_name;
+      END IF;
+
+      IF EXISTS (
+        SELECT 1 FROM pg_catalog.pg_constraint AS c
+        WHERE c.conindid = v_index_oid
+      ) THEN
+        RAISE EXCEPTION
+          'Same-named index % unexpectedly backs a constraint',
           v_index.index_name;
       END IF;
 
@@ -453,8 +470,15 @@ BEGIN
           COALESCE(a.attname::text, '<expression>') ORDER BY k.ord
         ) FILTER (WHERE k.ord > i.indnkeyatts),
         pg_catalog.array_agg(o.option::smallint ORDER BY o.ord)
-          FILTER (WHERE o.ord <= i.indnkeyatts)
-      INTO v_index_keys, v_index_include, v_index_options
+          FILTER (WHERE o.ord <= i.indnkeyatts),
+        pg_catalog.array_agg(
+          opc_ns.nspname || '.' || opc.opcname ORDER BY k.ord
+        ) FILTER (WHERE k.ord <= i.indnkeyatts),
+        pg_catalog.array_agg(
+          COALESCE(co.collation_oid, 0::oid) ORDER BY k.ord
+        ) FILTER (WHERE k.ord <= i.indnkeyatts)
+      INTO v_index_keys, v_index_include, v_index_options,
+           v_index_opclasses, v_index_collations
       FROM pg_catalog.pg_index AS i
       CROSS JOIN LATERAL pg_catalog.unnest(i.indkey)
         WITH ORDINALITY AS k(attnum, ord)
@@ -462,33 +486,68 @@ BEGIN
         ON a.attrelid = i.indrelid AND a.attnum = k.attnum
       LEFT JOIN LATERAL pg_catalog.unnest(i.indoption)
         WITH ORDINALITY AS o(option, ord) ON o.ord = k.ord
+      LEFT JOIN LATERAL pg_catalog.unnest(i.indclass)
+        WITH ORDINALITY AS op(opclass_oid, ord)
+        ON op.ord = k.ord AND k.ord <= i.indnkeyatts
+      LEFT JOIN pg_catalog.pg_opclass AS opc ON opc.oid = op.opclass_oid
+      LEFT JOIN pg_catalog.pg_namespace AS opc_ns ON opc_ns.oid = opc.opcnamespace
+      LEFT JOIN LATERAL pg_catalog.unnest(i.indcollation)
+        WITH ORDINALITY AS co(collation_oid, ord)
+        ON co.ord = k.ord AND k.ord <= i.indnkeyatts
       WHERE i.indexrelid = v_index_oid
       GROUP BY i.indnkeyatts;
+
+      SELECT pg_catalog.array_agg(a.attcollation ORDER BY expected.ord)
+        INTO v_expected_collations
+      FROM pg_catalog.unnest(v_index.key_columns)
+        WITH ORDINALITY AS expected(column_name, ord)
+      JOIN pg_catalog.pg_attribute AS a
+        ON a.attrelid = v_index.table_oid
+       AND a.attname = expected.column_name;
 
       v_expected_predicate := CASE
         WHEN v_index.predicate IS NULL THEN NULL
         WHEN v_index.index_name = 'borrow_requests_fine_dashboard_status_book_due_idx'
              AND v_borrow_status_type LIKE 'character varying%' THEN
-          pg_catalog.regexp_replace(
-            pg_catalog.lower(
-              '(status = ANY (ARRAY[''borrowed''::' || v_borrow_status_type || ', ''returned''::' || v_borrow_status_type || ']))'
-            ),
-            '[[:space:]]', '', 'g'
-          )
-        ELSE pg_catalog.regexp_replace(
-          pg_catalog.lower(v_index.predicate), '[[:space:]]', '', 'g'
-        )
+          '((status)::text = ANY ((ARRAY[''borrowed''::character varying, ''returned''::character varying])::text[]))'
+        ELSE v_index.predicate
       END;
 
       IF v_index_keys IS DISTINCT FROM v_index.key_columns
+          OR v_index_nkeyatts <> pg_catalog.cardinality(v_index.key_columns)
+          OR v_index_natts <> pg_catalog.cardinality(v_index.key_columns)
+                              + pg_catalog.cardinality(v_index.include_columns)
          OR COALESCE(v_index_include, ARRAY[]::text[])
-              IS DISTINCT FROM v_index.include_columns
+               IS DISTINCT FROM v_index.include_columns
          OR v_index_options IS DISTINCT FROM v_index.key_options
+          OR (v_index.key_opclasses IS NOT NULL
+              AND v_index_opclasses IS DISTINCT FROM v_index.key_opclasses)
+          OR v_index_collations IS DISTINCT FROM v_expected_collations
          OR v_index_predicate IS DISTINCT FROM v_expected_predicate THEN
-        RAISE EXCEPTION
-          'Same-named index % has noncanonical keys, INCLUDE columns, ordering, or predicate',
-          v_index.index_name;
-      END IF;
+         RAISE EXCEPTION
+           'Same-named index % mismatch: keys_match=%, include_match=%, options_match=%, opclasses_match=%, collations_match=%, predicate_match=%, actual_natts=%, expected_natts=%, actual_nkeyatts=%, expected_nkeyatts=%. actual_keys=%, expected_keys=%. actual_include=%, expected_include=%. actual_options=%, expected_options=%. actual_opclasses=%, expected_opclasses=%. actual_collations=%, expected_collations=%. actual_predicate=%, expected_predicate=%. borrow_status_type=%. indexdef=%',
+           v_index.index_name,
+           v_index_keys IS NOT DISTINCT FROM v_index.key_columns,
+           COALESCE(v_index_include, ARRAY[]::text[]) IS NOT DISTINCT FROM v_index.include_columns,
+           v_index_options IS NOT DISTINCT FROM v_index.key_options,
+            v_index.key_opclasses IS NULL
+              OR v_index_opclasses IS NOT DISTINCT FROM v_index.key_opclasses,
+            v_index_collations IS NOT DISTINCT FROM v_expected_collations,
+           v_index_predicate IS NOT DISTINCT FROM v_expected_predicate,
+            v_index_natts,
+            pg_catalog.cardinality(v_index.key_columns)
+              + pg_catalog.cardinality(v_index.include_columns),
+            v_index_nkeyatts,
+            pg_catalog.cardinality(v_index.key_columns),
+           v_index_keys, v_index.key_columns,
+           COALESCE(v_index_include, ARRAY[]::text[]), v_index.include_columns,
+           v_index_options, v_index.key_options,
+            v_index_opclasses, v_index.key_opclasses,
+            v_index_collations, v_expected_collations,
+           v_index_predicate, v_expected_predicate,
+           v_borrow_status_type,
+           pg_catalog.pg_get_indexdef(v_index_oid);
+       END IF;
     END IF;
   END LOOP;
 

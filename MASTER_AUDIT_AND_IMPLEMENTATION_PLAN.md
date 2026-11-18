@@ -964,6 +964,34 @@ The dashboard index migration (`161030`) that creates `borrow_requests_fine_dash
 
 ## Release Status: NOT READY
 
+### 17.9 Fine Dashboard Index Predicate Failure Investigation (2026-11-18)
+
+**Status: local validator correction prepared; exact live catalog snapshot for the reported failure timestamp is still required before production migration approval.** The read-only reconciliation report `production-reconciliation-reports/reconciliation_20261118_134845.txt` records this production index definition:
+
+```sql
+CREATE INDEX borrow_requests_fine_dashboard_status_book_due_idx
+ON public.borrow_requests USING btree (status, due_date, book_id)
+INCLUDE (fine_amount, fine_paid_amount, fine_rate_snapshot, fine_review_required,
+         fine_review_resolved_at, visitor_id)
+WHERE ((status)::text = ANY ((ARRAY['borrowed'::character varying,
+                                   'returned'::character varying])::text[]))
+```
+
+Git history shows the prerequisite validation was first changed to expect the simplified `varchar` form, then later changed to construct constants using `format_type()`. Neither expectation reproduces the recorded production `pg_get_expr()` rendering: PostgreSQL coerces the `status` expression and the array to `text`, and renders the string constants as `character varying` without a typmod. This makes the normalized partial-index predicate comparison the evidenced failing condition. The older report does not contain all requested raw catalog fields (`indoption`, key/include attnums, opclasses/collations, validity flags, or constraint definitions), and it predates the reported failure; obtain those via a read-only catalog query on the same production database before declaring the exact run fully diagnosed.
+
+**Local correction:** for `character varying` status columns, construct the expected predicate using the observed PostgreSQL rendering and retain the normalized `IS DISTINCT FROM` comparison. This remains fail-closed. Regression coverage asserts the exact predicate rendering and retains a separate `text` path. No production migration, index, data, or migration history was changed by this investigation.
+
+**Production gates:** backup **FAILED / NOT VERIFIED**; database identity verification **BLOCKED pending correction and owner retest**; backup artifact **NOT CREATED**; restore test **NOT STARTED**; production migration approval **BLOCKED**. Do not apply this migration until the same-database catalog evidence and required owner approvals are recorded.
+
+**Final read-only verification preparation:** `scripts/verify-fine-dashboard-index-readonly.sql` now returns the index definition, schema/table, owner, access method, flags, key/include counts and ordered columns, `indoption` with ASC/DESC and NULL ordering meanings, operator classes, collations, predicate, status type, and any backing constraint. It was not executed. The available production runner uses `sslmode=require`; no live connection was made because the configured workflow does not preserve the previously required full TLS hostname verification. The owner must run the supplied query in the Supabase SQL Editor for the intended project and record its output before review. The validator now compares the catalog predicate without lowercasing or removing whitespace, so quoted literal contents cannot normalize into a match. Production migration approval remains **BLOCKED** until the fresh catalog evidence and all release gates are complete.
+
+### 17.10 Supplied Production Fine Index Catalog Result (2026-11-18)
+
+The owner supplied a fresh read-only catalog result for public.borrow_requests_fine_dashboard_status_book_due_idx. It reports btree, non-unique, valid/ready/live, indnatts=9, indnkeyatts=3, keys (status, due_date, book_id), INCLUDE columns (fine_amount, fine_paid_amount, fine_rate_snapshot, fine_review_required, fine_review_resolved_at, visitor_id), all key options 0 (ASC NULLS LAST), key opclasses (pg_catalog.text_ops, pg_catalog.timestamptz_ops, pg_catalog.text_ops), borrow_requests.status character varying(50), and no backing constraint. These reported properties match the canonical index DDL in 20261108161030_fine_dashboard_query_indexes.sql.
+
+The reported predicate is ((status)::text = ANY ((ARRAY[''borrowed''::character varying, ''returned''::character varying])::text[])). The original prerequisite expected predicate did not include PostgreSQL's status-to-text and array-to-text coercions. That predicate comparison caused the earlier generic noncanonical index exception. text_ops on the varchar key matches the reported canonical index; indoption values 0 match ascending, NULLS LAST. The local validator now checks exact expected opclasses, derives expected collations from indexed table columns (including OID 0 for noncollatable columns), checks index owner is postgres, verifies key/INCLUDE counts and ordering, and compares predicate text exactly. The supplied result did not include index relation owner or per-key collation OIDs; those comparisons still require those values to be recorded before approval.
+
+Local regression tests cover the supplied catalog shape and reject changed key order, INCLUDE order, predicate, operator class, invalid flag, and not-ready flag. These are local tests, not a migration execution or production write. Production schema/index/data and migration history were not modified. Production migration approval remains BLOCKED until release gates are complete and the omitted owner/collation evidence is reviewed.
 ### Remaining External Blockers
 1. **Independent database replay (Track A)** — All 167 migrations + 12 SQL assertions on isolated PostgreSQL: NOT RUN
 2. **Real Auth/AAL2/PostgREST matrix (Track B)** — 3 authorization roles × 2 AAL levels + anonymous with actual Auth-issued tokens: NOT RUN
@@ -986,3 +1014,144 @@ The dashboard index migration (`161030`) that creates `borrow_requests_fine_dash
 - [ ] Track B Auth/PostgREST matrix passes on isolated Supabase project
 
 **Final Status: NEEDS CHANGES** — Multiple owner actions required before production backup can be executed and migration batches authorized.
+
+## Current Production Migration Readiness Reassessment — 2026-11-18
+
+**Decision: NOT READY.** No production migration, production schema/data/history change, production backup, restore, Docker/WSL operation, commit, or push was performed for this reassessment. The current checklist remains an evidence record, not approval to deploy.
+
+### Gate status and evidence
+
+| Gate | Current status | Evidence / limitation |
+|---|---|---|
+| Backup script provenance and independent review | **BLOCKED** | `backup-production-db.ps1` is untracked and no trusted copy exists in Git history. The preserved `backup-production-db.ps1.damaged.20261118_193618` contains duplicated bodies and a truncated identity function; its first identity invocation uses `$connStr`, but its main block does not initialize it. The current candidate initializes a `verify-full` connection string, but its provenance cannot be established from repository evidence. The recorded timestamp's exact runtime error cannot be proven without the captured sanitized psql error/exit status from that run. |
+| Backup prerequisites | **PARTIAL LOCAL EVIDENCE** | PostgreSQL 18 `psql.exe` and `pg_dump.exe`, the configured CA file, and backup directory exist. The CA parsed and was valid at this check. The directory ACL showed Full Control only for the owner, SYSTEM, and Administrators. This does not establish free-space sufficiency, project identity, authentication, a successful backup, or restorability. No live database connection or backup was run. |
+| Backup artifact | **FAILED / NOT VERIFIED — NOT CREATED** | The previous run failed identity verification and cleaned partial files per its report. No verified backup artifact is recorded. |
+| Restore test | **NOT STARTED** | No backup artifact is verified and no separately provisioned Supabase recovery project or restore evidence is recorded. A separate project must be owner-provisioned; never restore into production. |
+| Local migration inventory | **PASS, LOCAL ONLY** | `npm run validate:migrations` reports 167 unique, ordered local migrations from `20260930000000` through `20270117000000`, with no filename/version errors. This does not refresh remote history or prove migration effects. |
+| Remote migration history and schema reconciliation | **STALE / BLOCKED** | The existing `MIGRATION_RECONCILIATION_REPORT.md` reports 119 applied and 48 local-only versions, including missing versions interleaved with later applied versions and the `20270102`+ sequence. This is prior owner-supplied evidence, not a fresh history/catalog export from this reassessment. Do not apply or repair history from that list. Backdated/interleaved items require current read-only history plus object-level catalog comparison. |
+| Fine dashboard index | **LOCAL VALIDATOR REGRESSION PASS; OWNER/COLLATION EVIDENCE INCOMPLETE** | Owner-supplied production catalog data matches the canonical DDL in `20261108161030_fine_dashboard_query_indexes.sql`: btree, nonunique, valid/ready/live, 3 ordered keys, 6 ordered INCLUDE columns, options `[0,0,0]`, and the supplied varchar(50) predicate and `text_ops` classes. The supplied result omitted index relation owner and per-key collation OIDs. Local tests exercise the reported fixture and several negative shapes; they are source/fixture tests, not PostgreSQL integration tests. |
+| Migration compatibility review | **INCOMPLETE** | Existing runbooks and reconciliation notes describe dependencies, function replacement chains, prerequisite checks, data assumptions, RLS/grants, and history-sensitive migrations. They are not a completed, freshly evidenced review of every currently pending migration against current production catalog state, nor a clean isolated replay. The historical “Class A” labels are not deployment authorization. |
+| Authenticated security tests | **NOT RUN / BLOCKED** | `AUTH_POSTGREST_TEST_PLAN.md` requires a safe isolated Supabase runtime, seeded synthetic users/data, and Auth-issued sessions across roles/AAL. No such test environment or run evidence was supplied. Do not use production users or data. |
+| Release approval / production migration | **BLOCKED** | Backup, restore, refreshed remote reconciliation, owner/collation evidence, full compatibility review, isolated replay/assertions, authenticated security tests, and rollback approval remain outstanding. |
+
+### Backup incident diagnosis boundary
+
+The preserved damaged file is demonstrably incomplete: its identity function is cut off as a block comment begins, its main block is inside that comment, and the second duplicated copy references `$connStr` without assigning it before the identity call. That is a concrete defect in the damaged artifact, but the failed run timestamp cannot be attributed to that exact defect without a hash or captured sanitized diagnostic tying the run to that file revision. The current candidate has `sslmode=verify-full` and an initialized connection string, but the current test file does not execute or mock the actual script functions; therefore it does not independently qualify the candidate for production use. No credential was read or requested.
+
+### Fine index follow-up
+
+The reported actual predicate is `((status)::text = ANY ((ARRAY['borrowed'::character varying, 'returned'::character varying])::text[]))` on `character varying(50)`. This matches the local validator's explicit expected rendering and is the evidence-backed explanation for the earlier predicate mismatch. The local validator compares ordered key and INCLUDE columns, `indoption`, opclasses, expected-vs-actual collations (including OID zero), table, owner, method, uniqueness, constraint backing, and validity flags. The owner still needs to provide the actual index relation owner and each key's collation OID from the same production catalog result before this gate can be reviewed as complete.
+
+### Required owner actions, in order
+
+1. Recover a byte-identical trusted backup script from a trusted source (for example, a known-good secured copy or shell history artifact), preserving the damaged file. Have a second reviewer examine the full candidate and replace the mock-only backup checks with tests that exercise the real identity verification and sanitized process failure paths. Keep `sslmode=verify-full`; do not run a backup until review and tests pass.
+2. After review, run the backup interactively with the script's hidden secure prompt; verify manifest, hashes, file ACLs, and archive listings. Record the artifact and the sanitized identity result. Never include the password in a command, log, screenshot, or report.
+3. Provision a separate recovery Supabase project, restore only the verified backup there, and compare catalog/schema, migration history, and approved synthetic functional checks. Record restore evidence and scope limitations.
+4. Export current production migration history and read-only catalog snapshots using a TLS-verified connection. Reconcile versions, backdated/interleaved versions, checksums if available, and every migration's effects; review discrepancies individually. Do not infer that a history row proves the migration's effects exist.
+5. Supply the omitted fine index owner and collation OIDs; add real PostgreSQL integration/regression coverage for the validator's catalog behavior where supported, including wrong table/schema, owner, collation, ordering, predicate, opclass, and validity flags.
+6. Complete dependency/data/destructive-operation/RLS/grant/function review and a clean migration replay with assertions in a disposable Supabase-compatible environment. Complete the authenticated Auth/PostgREST role/AAL matrix using synthetic users in a safe test project.
+7. Review and approve rollback/recovery procedures and all release evidence. Only then submit a separate production migration approval request; this reassessment does not authorize an apply.
+
+### Comprehensive Local Reassessment Continuation — 2026-11-18
+
+The user-provided remediation checklist was reviewed against the current checkout. It expands the locally actionable review, but it does not relax any production access or release boundary.
+
+| Check | Result | Evidence and scope |
+|---|---|---|
+| Repository and Git state | **INSPECTED / UNCOMMITTED WORK PRESERVED** | Unstaged changes exist in this master checklist, `src/lib/fineSchemaPrerequisite.test.js`, and the prerequisite migration; numerous untracked prior-work reports, scripts, and the backup candidate also remain. The index is empty. No files were staged, committed, pushed, reset, or cleaned. `.env` and `env` are ignored and not tracked at HEAD; Git history contains earlier commits for those path names. Their contents were not read. Historical exposure and provider remediation status remain **NOT VERIFIED**. |
+| Local migrations | **PASS, INVENTORY ONLY** | `npm run validate:migrations`: 167 migrations, first `20260930000000`, last `20270117000000`, zero filename/order validation errors. This does not establish remote application, checksum equality, or effects. |
+| Current application tests | **PASS WITH BLOCKED PLACEHOLDERS** | `node --test`: 272 total, 223 passed, 0 failed, 49 skipped. The skips are explicit placeholders in `fiveRoleRegressionBlocked.test.js`, `concurrencyBlocked.test.js`, and `migrationIntegrityBlocked.test.js`; they represent missing runtime role/AAL, concurrency, and catalog-integrity validation, not passing assertions. |
+| Fine-index regression tests | **PASS, LOCAL SOURCE/FIXTURE ONLY** | `src/lib/fineSchemaPrerequisite.test.js`: 24 passed. Added wrong schema/table, synthetic wrong owner, synthetic wrong collation OID, exclusion, and live-flag negatives. The synthetic collation values are test fixtures only; production collation OIDs remain unknown. No migration was executed. |
+| Frontend production build | **PASS WITH ADVISORY** | `npm run build` completed; Vite reports an existing chunk above 500 kB. This is a bundle-size warning, not a build failure. |
+| JavaScript lint | **PASS** | `npm run lint` and targeted ESLint for the changed fine-index test completed with exit code 0. |
+| PowerShell syntax | **PASS, PARSE ONLY** | Windows PowerShell parser found zero errors in the current backup candidate and `backup-production-db.tests.ps1`. Parse success is not functional or security validation. The backup-specific harness is not counted as passing: it duplicates logic rather than invoking the candidate’s functions or mocking psql end-to-end. |
+| FastAPI analytics | **BLOCKED BY TOOLING** | `analytics/` has `main.py` and dependency declarations but no analytics test suite. Python is unavailable in this environment (`python` resolves to the Windows Store alias), so compile and pytest checks could not run. No analytics source was changed. |
+| Auth/PostgREST and concurrency integration | **NOT RUN / BLOCKED** | Repository scripts require an isolated Supabase/PostgREST runtime and synthetic identities. No safe target was available; these scripts were not run against production or an unspecified remote. |
+| Backup / restore / remote migration reconciliation | **BLOCKED** | No trusted backup script provenance, verified artifact, separate recovery project, fresh remote history/catalog export, or complete restore evidence. No production connection or SQL was executed. |
+| Credential exposure follow-up | **PLAN ONLY / NOT EXECUTED** | Git history records prior `.env`/`env` path commits, but content was not inspected. Prepare a provider-by-provider rotation plan with the owner, identify impacted integrations without copying values, schedule rotation after a safe test window, update only approved secret stores, revoke superseded credentials, and verify service health. No secret was displayed, copied, or rotated during this work. |
+
+The fine-index local test change does not close the owner/collation gate. The documented evidence and missing owner outputs remain as stated above. Migration compatibility and application/security review remain source-review work in progress; the historical remediation notes are not substituted for a fresh exhaustive review or a clean isolated database replay. The release decision remains **NOT READY**.
+
+### Local Remediation Continuation — 2026-11-18
+
+This continuation records actual local fixes and their test evidence. It does not claim migration execution, production verification, backup completion, or release readiness.
+
+| Finding / workstream | Local result | Evidence and remaining boundary |
+|---|---|---|
+| Missing or mismatched staff role claims | **FORWARD FIX PREPARED; NOT DEPLOYED** | Added `20270118000000_fail_closed_attendance_lookup_role_claim.sql`. It performs guarded, exact rewrites and postflight checks for `get_current_user_role()`, `lookup_attendance_visitor_v2(text,text)`, `confirm_pickup(text,text)`, `confirm_return(text,text)`, and `confirm_return(uuid,text)`. Missing claims now fail the role comparison; unrelated or unexpected function bodies abort the migration. Local regression tests cover the fail-open definitions and strict predicates. No SQL was executed. |
+| Analytics forecast authorization | **LOCAL FIX AND TESTS PASS; SERVICE CONFIGURATION REQUIRED** | `analytics/main.py` now requires a bearer Supabase session, validates it through Supabase Auth over TLS with redirects disabled, requires an active AAL2 `subadmin` or `superadmin` via `get_current_user_role()`, and checks the authenticated user’s app-metadata role agrees. The admin dashboard sends its current access token. `SUPABASE_URL` and `SUPABASE_ANON_KEY` must be configured in the analytics service environment; no values are recorded here. |
+| Fine-dashboard index read-only evidence | **DIAGNOSTIC IMPROVED; OWNER/COLLATION STILL NOT VERIFIED** | `scripts/verify-fine-dashboard-index-readonly.sql` now returns index owner identity and per-key index and table collation OIDs/names. Local tests verify those output fields. The actual production owner and collation OIDs have not been supplied; synthetic test values are not production evidence. |
+| Skipped-test reduction | **4 DETERMINISTIC CHECKS IMPLEMENTED; 43 RUNTIME CHECKS STILL SKIPPED** | Migration manifest uniqueness/order, selected source postflight presence, declared prerequisite ordering, and a source scan ensuring literal frontend RPC calls end with a local SQL `CREATE` rather than a later `DROP` are active deterministic Node tests. The final full Node run is 278 total, expected 235 pass, 0 fail, 43 skipped; the complete rerun below records exact totals. The 27 Auth/RLS cases require synthetic Auth users, MFA/AAL sessions, RLS/PostgREST policies, and cross-role/branch calls in an isolated Supabase project. The 8 concurrency cases require real PostgreSQL locking and simultaneous requests. The 8 remaining migration-integrity cases cover function-signature conflicts, grants, ownership/search_path, RLS coverage, volatility, visitor ID types, SECURITY DEFINER catalog state, and PUBLIC grants; these require applied-catalog evidence or a fuller cross-migration parser/runtime and are not counted as passed. |
+| Analytics validation | **LOCAL TESTS PASS** | Python 3.13 is available. `py -3.13 -m py_compile analytics/main.py analytics/test_main.py` passed; `py -3.13 -m unittest discover -s analytics -p 'test*.py' -v` passed 9 tests. The configured `pytest` runner is unavailable, so no pytest result is claimed. These tests mock Supabase and Gemini; no external service or production session was used. |
+| Backup recovery | **BLOCKED — NO TRUSTED ORIGINAL FOUND** | The current untracked candidate and damaged copy remain untouched and were not executed. Search of Git history and local Documents/Downloads found no verifiable trusted original. PowerShell tests were not run because the script has no trusted provenance. The owner must provide a known-good source before recovery or script tests proceed. |
+| Application requirements | **NO NEW DEFECT CONFIRMED IN THIS PASS BEYOND FORECAST AUTHORIZATION** | Existing local feature/test coverage was inspected for registration, call-number entry, OPAC counts, fine-payment privacy and analytics, dashboard calculations, prediction, and QR attendance/borrowing/return flows. No broad rewrite was justified. Runtime RLS, branch isolation, real user ownership, and end-to-end workflow behavior remain unverified without an isolated Supabase environment. Generated QR workflows remain in place. |
+| Validation | **LOCAL PASS WITH KNOWN WARNING** | The original continuation row below is superseded by the final rerun recorded in the latest section at the end of this file: `node --test` 278 total, 235 passed, 0 failed, 43 skipped. `npm run lint`, build, migration validation, Python compile, 9 unittest cases, and `git diff --check` passed. The build reports an existing >500 kB chunk advisory. No PowerShell backup tests were run. |
+| Production and release gates | **NOT READY / BLOCKED** | No backup artifact or restore test exists; the remote migration ledger and catalog have not been refreshed; the owner/collation index evidence, isolated replay, authenticated security matrix, exhaustive pending-migration compatibility review, and rollback approval remain outstanding. No production database was contacted or modified, and no migration was applied. |
+
+### Final Commit and Migration Preparation — 2026-11-18 (supersedes earlier local test counts)
+
+**Decision: local code is ready for owner review; commit, push, and production migration remain NOT READY.** The working tree has no staged changes. No commit or push was made. Current local validation: `node --test` 278 total / 235 passed / 0 failed / 43 skipped; `npm run lint` exit 0; `npm run build` exit 0 (existing >500 kB chunk advisory); `npm run validate:migrations` exit 0 (168 ordered migrations, `20260930000000` through `20270118000000`); `git diff --check` exit 0 (line-ending notices only); Python 3.13 compile passed; analytics unittest passed 9/9. Pytest is unavailable. PowerShell backup tests were not run because neither script has trusted provenance.
+
+The 43 skips are not passes: 27 Auth/RLS role/AAL cases and 8 concurrency cases need an isolated Supabase/PostgreSQL test environment; 8 migration-integrity catalog checks need applied catalog evidence or a database-backed parser/runtime. The deterministic local checks formerly skipped are now active and pass.
+
+**Proposed commit contents for owner review (12 files):**
+
+1. `MASTER_AUDIT_AND_IMPLEMENTATION_PLAN.md`
+2. `analytics/.env.example`
+3. `analytics/main.py`
+4. `analytics/requirements.txt`
+5. `analytics/test_main.py`
+6. `scripts/verify-fine-dashboard-index-readonly.sql`
+7. `src/component/AdminWorkspace.jsx`
+8. `src/lib/attendanceLookupFailClosed.test.js`
+9. `src/lib/fineSchemaPrerequisite.test.js`
+10. `src/lib/migrationIntegrityBlocked.test.js`
+11. `supabase/migrations/20261108160959_fine_schema_prerequisite.sql`
+12. `supabase/migrations/20270118000000_fail_closed_attendance_lookup_role_claim.sql`
+
+Proposed commit message: `fix: fail closed on staff role claims and secure analytics forecast`.
+
+All other untracked files remain unmodified and excluded: five stale readiness/procedure reports; the production reconciliation output and migration list; scratch CJS/PowerShell inspection scripts; the raw reconciliation SQL and runner that use `sslmode=require`; both untrusted/damaged backup scripts and their nonqualifying tests. No untracked `.env`/secret file was found. Git history contains commits affecting `.env`/`env` path names; contents were not inspected. The owner must assess historical exposure and rotate affected credentials through approved providers; no rotation was performed.
+
+**Production history evidence remains stale.** The available prior capture reports 119 remote rows and 167 local migrations (48 local-only, no remote-only) at the time of that capture. The current local set has 168 migrations, so that stale comparison would imply 49 local-only, but it cannot establish current production state or exact missing versions now. No production connection was made: the available runner uses `sslmode=require`, which does not meet the required hostname-verified TLS workflow. Owner action: run `SELECT version, name FROM supabase_migrations.schema_migrations ORDER BY version;` read-only in the authorized production Supabase SQL Editor and provide the export for reconciliation against all 168 local files. Do not insert history rows or run pending migrations from the stale report.
+
+**Remaining release blockers:** trusted backup source and independent script review; verified backup and separate-project restore; fresh read-only production history/catalog export; production index owner and per-key collation OIDs; migration-by-migration compatibility review against fresh state; isolated migration replay and Auth/RLS/concurrency tests; rollback approval. Production migration status stays BLOCKED. No production DDL/DML/history change or backup was attempted.
+
+#### Next owner and implementation actions
+
+1. Provide a verifiable trusted original for the production backup script. Preserve both current files; require independent review and mock-based tests before any owner-run backup.
+2. Configure the analytics service’s Supabase URL and anon API key in its approved secret/configuration store, deploy the service and frontend together, then verify 401/403 for missing, invalid, visitor, inactive, role-mismatched, and AAL1 sessions plus success for synthetic active Sub Admin and Super Admin sessions in a safe test project.
+3. Supply the production index owner and per-key index/table collation OIDs using the updated read-only SQL; do not infer these values from synthetic local fixtures.
+4. Obtain an isolated Supabase project for the authenticated role/AAL/RLS matrix, concurrency tests, and migration replay. Refresh remote migration history and catalog read-only first, reconcile differences individually, then complete migration-by-migration compatibility and rollback review.
+5. Complete the verified backup and separate-project restore process only after the trusted script passes independent review and testing.
+
+**Current decision: NOT READY.** Local fixes are prepared for review; production-only evidence and release gates remain incomplete.
+
+### Commit and Remote-History Preparation — 2026-11-18
+
+**Staging state:** no files are staged. Proposed commit contents are limited to the following 12 reviewed application, migration, test, diagnostic, and checklist files. The message proposed for owner review is: `fix: fail closed on staff role claims and secure analytics forecast`.
+
+1. `MASTER_AUDIT_AND_IMPLEMENTATION_PLAN.md`
+2. `analytics/.env.example`
+3. `analytics/main.py`
+4. `analytics/requirements.txt`
+5. `analytics/test_main.py`
+6. `scripts/verify-fine-dashboard-index-readonly.sql`
+7. `src/component/AdminWorkspace.jsx`
+8. `src/lib/attendanceLookupFailClosed.test.js`
+9. `src/lib/fineSchemaPrerequisite.test.js`
+10. `src/lib/migrationIntegrityBlocked.test.js`
+11. `supabase/migrations/20261108160959_fine_schema_prerequisite.sql`
+12. `supabase/migrations/20270118000000_fail_closed_attendance_lookup_role_claim.sql`
+
+The remaining untracked files were reviewed and left untouched. The five readiness/reconciliation/restore markdown reports are prior owner documentation and remain outside this proposal pending review against current evidence. The reconciliation text output is prior production-derived metadata and is excluded. The backup candidate, damaged copy, and backup test file are untrusted backup artifacts and excluded. `check_duplicates.cjs`, `check_mismatches.cjs`, `count_migrations.cjs`, `count_migrations.ps1`, `debug.cjs`, `debug2.cjs`, `migration_list.txt`, `production_catalog_reconciliation.sql`, `scripts/run-production-catalog-reconciliation.ps1`, `scripts/test-secure-psql-scripts.mjs`, `scripts/validate-production-catalog-sql.mjs`, `secure_psql_test.ps1`, and `verify_batches.cjs` are temporary or unreviewed diagnostic artifacts and excluded. No current untracked secret or environment file was found. Do not delete these excluded files as part of commit preparation.
+
+#### Production migration history: last supplied evidence, not a fresh read
+
+The untracked `migration_list.txt` is a prior read-only CLI capture, last modified 2026-11-18 03:10 UTC. It showed 167 local versions at capture time, 119 remote-applied versions, 48 local-only versions, and no remote-only versions. The 48 local-only versions included the interleaved/backdated versions `20261108160959`, `20261109130133`, `20261129999998`, `20261129999999`, `20261226999999`, and `20261227000001`, plus `20270102000000`, `20270102000100` through `20270102002900`, `20270103000100` through `20270103001100`, and `20270117000000`. The current local tree has 168 versions and adds `20270118000000_fail_closed_attendance_lookup_role_claim.sql`, so comparison against that saved capture would produce 49 local-only versions and no remote-only versions. This is a stale-snapshot calculation, not current production history evidence. The remote state may have changed; checksums and actual catalog effects were not compared.
+
+No fresh production query was run: the existing untracked PowerShell reconciliation runner uses `sslmode=require`, which does not establish hostname verification, and the saved CLI output is stale. Owner action: run `SELECT version, name FROM supabase_migrations.schema_migrations ORDER BY version;` in the intended Supabase project's SQL Editor using its authorized read-only session, export the result, and reconcile it against the 168 local filenames before any migration planning. Do not insert history rows or apply the 49 pending versions as a batch. Separately run the updated fine-index diagnostic in the same project for owner/collation OIDs.
+
+Git history metadata confirms prior commits included paths named `.env` and `env`; current Git tracking has neither path, and no contents were read. Review affected providers for exposure and rotate any applicable credentials through approved provider workflows after owner confirmation. No rotation was performed.
+
+**Commit decision:** NOT READY until the owner reviews the exact proposed list above. **Push decision:** NOT READY until the reviewed changes are committed and the owner authorizes push. **Production migration decision:** NOT READY until fresh remote history/catalog evidence, verified backup and separate restore, isolated replay, authenticated security tests, migration-by-migration risk review, and rollback approval are complete.

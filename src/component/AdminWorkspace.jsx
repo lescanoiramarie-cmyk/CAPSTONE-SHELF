@@ -969,11 +969,16 @@ export default function AdminWorkspace({
         return { category, weekly_demand: [...weeklyDemand].reverse() };
       });
 
+      const { data: { session } = {} } = await supabase?.auth.getSession() ?? {};
+      if (!session?.access_token) throw new Error('An authenticated staff session is required for forecasting.');
       const response = await fetch(
         `${endpoint.replace(/\/$/, '')}/forecast?timeframe=${encodeURIComponent(timeframe)}`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
           body: JSON.stringify({
             daily_visitors: forecastDailyVisitorCounts,
             categories: categorySeries,
