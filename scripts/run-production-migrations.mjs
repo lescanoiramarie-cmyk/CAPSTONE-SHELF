@@ -17,7 +17,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createHash } from 'node:crypto';
+import { createHash, X509Certificate } from 'node:crypto';
+import tls from 'node:tls';
 import pg from 'pg';
 
 const { Client } = pg;
@@ -147,35 +148,58 @@ function isLocalhost(connectionString) {
 }
 
 export function resolveSslConfig(connectionString, opts = {}) {
+  // Localhost test database connections: skip TLS unless explicitly configured
   if (isLocalhost(connectionString)) {
-    return false;
-  }
-
-  const caPath = opts.sslCa || process.env.PGSSLROOTCERT || process.env.SUPABASE_SSL_CA;
-  if (caPath) {
-    if (!fs.existsSync(caPath)) {
-      throw new Error(`Configured TLS CA certificate file not found: ${caPath}`);
+    if (!opts.sslCa && !process.env.PGSSLROOTCERT && !process.env.SUPABASE_SSL_CA) {
+      return false;
     }
-    const ca = fs.readFileSync(caPath, 'utf8');
-    return {
-      rejectUnauthorized: true,
-      ca,
-    };
   }
 
-  const sslMode = (process.env.PGSSLMODE || '').toLowerCase();
-  if (opts.strictTls || sslMode === 'verify-full' || sslMode === 'verify-ca') {
-    return {
-      rejectUnauthorized: true,
-    };
+  // Remote production connections: strictly require a trusted CA certificate with full verification
+  const caPath = opts.sslCa || process.env.PGSSLROOTCERT || process.env.SUPABASE_SSL_CA;
+  if (!caPath) {
+    throw new Error(
+      'SECURITY VIOLATION: Remote production database connections require verified TLS with a trusted root CA certificate (rejectUnauthorized: true). ' +
+      'Missing CA certificate. Please supply a verified CA certificate via --ssl-ca <path>, PGSSLROOTCERT, or SUPABASE_SSL_CA.'
+    );
   }
 
-  // Supabase transaction/session poolers utilize an internal CA not included in
-  // standard operating system / Node.js root certificate stores. Transport remains
-  // fully encrypted via TLS (sslmode=require). Strict verification can be enforced
-  // by supplying the Supabase Root CA via --ssl-ca, PGSSLROOTCERT, or SUPABASE_SSL_CA.
+  if (!fs.existsSync(caPath)) {
+    throw new Error(`Configured TLS CA certificate file not found: ${caPath}`);
+  }
+
+  let ca;
+  try {
+    ca = fs.readFileSync(caPath, 'utf8');
+  } catch (err) {
+    throw new Error(`Failed to read TLS CA certificate file at ${caPath}: ${err.message}`);
+  }
+
+  // Validate CA certificate content and structure before connection attempt
+  const certBlocks = ca.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g);
+  if (!certBlocks || certBlocks.length === 0) {
+    throw new Error(`Invalid CA certificate in file ${caPath}: No valid PEM certificate blocks (-----BEGIN CERTIFICATE----- ... -----END CERTIFICATE-----) found.`);
+  }
+
+  for (const block of certBlocks) {
+    try {
+      new X509Certificate(block);
+    } catch (err) {
+      throw new Error(`Invalid CA certificate in file ${caPath}: Failed to parse X.509 certificate data: ${err.message}`);
+    }
+  }
+
+  // Enforce rejectUnauthorized: true and explicit hostname verification
   return {
-    rejectUnauthorized: false,
+    rejectUnauthorized: true,
+    ca,
+    checkServerIdentity: (host, cert) => {
+      const err = tls.checkServerIdentity(host, cert);
+      if (err) {
+        return err;
+      }
+      return undefined;
+    },
   };
 }
 
@@ -244,16 +268,11 @@ export async function runMigrations(opts) {
   console.log(`[INFO] Connecting to database (${isLocal ? 'LOCAL' : 'REMOTE: ' + projectRef})...`);
   const ssl = resolveSslConfig(connectionString, {
     sslCa: opts.sslCa,
-    strictTls: opts.strictTls,
   });
   const clientConfig = { connectionString };
   if (ssl) {
     clientConfig.ssl = ssl;
-    if (ssl.rejectUnauthorized) {
-      console.log('[INFO] TLS: Strict certificate authority verification active (rejectUnauthorized: true).');
-    } else {
-      console.log('[INFO] TLS: Encrypted transport active (sslmode=require; pooler CA not in default system trust store).');
-    }
+    console.log('[INFO] TLS: Strict root CA certificate and hostname verification active (rejectUnauthorized: true).');
   }
   const client = new Client(clientConfig);
   try {

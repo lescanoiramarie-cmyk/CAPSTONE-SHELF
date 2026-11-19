@@ -32,6 +32,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import tls from 'node:tls';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import {
@@ -653,52 +654,135 @@ async function run19Scenarios() {
     fs.rmSync(tempDirCatB, { recursive: true, force: true });
   }
 
-  // --- Scenario 20: Production TLS Configuration & Fail-Closed Behavior ---
-  console.log('--- Scenario 20: Production TLS Configuration & Fail-Closed Behavior ---');
-  // 1. Localhost returns false (no SSL)
+  // --- Scenario 20: Production TLS Configuration & Strict Certificate Verification ---
+  console.log('--- Scenario 20: Production TLS Configuration & Strict Certificate Verification ---');
+  // 1. Local test configuration remains functional (no SSL for localhost / loopback)
   const localSsl = resolveSslConfig('postgres://postgres@localhost:5433/db');
   if (localSsl !== false) throw new Error('Scenario 20 FAILED: Localhost should not use SSL');
+  const ipSsl = resolveSslConfig('postgres://postgres@127.0.0.1:5433/db');
+  if (ipSsl !== false) throw new Error('Scenario 20 FAILED: 127.0.0.1 should not use SSL');
 
-  // 2. Remote URL defaults to encrypted transport (rejectUnauthorized: false for custom pooler CA)
-  const remoteSsl = resolveSslConfig('postgres://user:pass@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres');
-  if (!remoteSsl || remoteSsl.rejectUnauthorized !== false) {
-    throw new Error('Scenario 20 FAILED: Remote URL should default to TLS encrypted transport');
-  }
-
-  // 3. Remote URL with strictTls flag enforces rejectUnauthorized: true
-  const strictSsl = resolveSslConfig('postgres://user:pass@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres', { strictTls: true });
-  if (!strictSsl || strictSsl.rejectUnauthorized !== true) {
-    throw new Error('Scenario 20 FAILED: strictTls should enforce rejectUnauthorized: true');
-  }
-
-  // 4. Remote URL with PGSSLMODE=verify-full enforces rejectUnauthorized: true
-  process.env.PGSSLMODE = 'verify-full';
-  const verifyFullSsl = resolveSslConfig('postgres://user:pass@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres');
-  delete process.env.PGSSLMODE;
-  if (!verifyFullSsl || verifyFullSsl.rejectUnauthorized !== true) {
-    throw new Error('Scenario 20 FAILED: PGSSLMODE=verify-full should enforce rejectUnauthorized: true');
-  }
-
-  // 5. Remote URL with custom CA cert file
-  const tempCaDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shelf-tls-ca-'));
-  const tempCaFile = path.join(tempCaDir, 'test-ca.crt');
-  fs.writeFileSync(tempCaFile, '-----BEGIN CERTIFICATE-----\nTEST_CA_DATA\n-----END CERTIFICATE-----\n');
-  const caSsl = resolveSslConfig('postgres://user:pass@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres', { sslCa: tempCaFile });
-  fs.rmSync(tempCaDir, { recursive: true, force: true });
-  if (!caSsl || caSsl.rejectUnauthorized !== true || !caSsl.ca.includes('TEST_CA_DATA')) {
-    throw new Error('Scenario 20 FAILED: sslCa should enforce rejectUnauthorized: true with CA contents');
-  }
-
-  // 6. Non-existent CA file throws fail-closed error
-  let missingCaCaught = false;
+  // 2. Production connection rejects missing CA
+  let missingCaError = null;
   try {
-    resolveSslConfig('postgres://user:pass@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres', { sslCa: 'C:\\nonexistent\\path\\ca.crt' });
+    resolveSslConfig('postgres://user:pass@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres');
   } catch (err) {
-    missingCaCaught = err.message.includes('Configured TLS CA certificate file not found');
+    missingCaError = err.message;
   }
-  if (!missingCaCaught) throw new Error('Scenario 20 FAILED: Missing CA file should fail closed immediately');
+  if (!missingCaError || !missingCaError.includes('Missing CA certificate')) {
+    throw new Error('Scenario 20 FAILED: Production connection must reject missing CA certificate');
+  }
 
-  console.log('  PASS: Production TLS configuration enforces encrypted transport, strict CA verification, and fail-closed validation.');
+  // 3. Non-existent CA file throws fail-closed error
+  let nonexistentCaError = null;
+  try {
+    resolveSslConfig('postgres://user:pass@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres', {
+      sslCa: 'C:\\nonexistent\\path\\prod-root.crt'
+    });
+  } catch (err) {
+    nonexistentCaError = err.message;
+  }
+  if (!nonexistentCaError || !nonexistentCaError.includes('Configured TLS CA certificate file not found')) {
+    throw new Error('Scenario 20 FAILED: Missing CA file must fail closed immediately');
+  }
+
+  // 4. Invalid CA is rejected
+  const tempCaDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shelf-tls-test-'));
+  try {
+    // 4a. Empty CA file
+    const emptyCaFile = path.join(tempCaDir, 'empty.crt');
+    fs.writeFileSync(emptyCaFile, '');
+    let emptyCaught = false;
+    try {
+      resolveSslConfig('postgres://user:pass@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres', { sslCa: emptyCaFile });
+    } catch (err) {
+      emptyCaught = err.message.includes('No valid PEM certificate blocks');
+    }
+    if (!emptyCaught) throw new Error('Scenario 20 FAILED: Empty CA file must be rejected');
+
+    // 4b. Non-certificate text
+    const textCaFile = path.join(tempCaDir, 'plain-text.crt');
+    fs.writeFileSync(textCaFile, 'This is plain text and not a PEM certificate.');
+    let textCaught = false;
+    try {
+      resolveSslConfig('postgres://user:pass@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres', { sslCa: textCaFile });
+    } catch (err) {
+      textCaught = err.message.includes('No valid PEM certificate blocks');
+    }
+    if (!textCaught) throw new Error('Scenario 20 FAILED: Plain text file must be rejected');
+
+    // 4c. Corrupted PEM block
+    const corruptCaFile = path.join(tempCaDir, 'corrupt.crt');
+    fs.writeFileSync(corruptCaFile, '-----BEGIN CERTIFICATE-----\nCORRUPT_BASE64_DATA_NOT_A_CERTIFICATE\n-----END CERTIFICATE-----\n');
+    let corruptCaught = false;
+    try {
+      resolveSslConfig('postgres://user:pass@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres', { sslCa: corruptCaFile });
+    } catch (err) {
+      corruptCaught = err.message.includes('Failed to parse X.509 certificate data');
+    }
+    if (!corruptCaught) throw new Error('Scenario 20 FAILED: Corrupted certificate data must be rejected');
+
+    // 5. Valid CA enables verified TLS
+    // Extract a genuine valid X509 root certificate from Node runtime's root store for testing
+    const genuineCertPem = tls.rootCertificates[0];
+    const validCaFile = path.join(tempCaDir, 'valid.crt');
+    fs.writeFileSync(validCaFile, genuineCertPem);
+
+    // 5a. Via --ssl-ca / opts.sslCa
+    const verifiedSsl = resolveSslConfig('postgres://user:pass@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres', {
+      sslCa: validCaFile,
+    });
+    if (!verifiedSsl || verifiedSsl.rejectUnauthorized !== true) {
+      throw new Error('Scenario 20 FAILED: Valid CA must enforce rejectUnauthorized: true');
+    }
+    if (!verifiedSsl.ca || !verifiedSsl.ca.includes('BEGIN CERTIFICATE')) {
+      throw new Error('Scenario 20 FAILED: Valid CA certificate must be loaded into ssl.ca');
+    }
+    if (typeof verifiedSsl.checkServerIdentity !== 'function') {
+      throw new Error('Scenario 20 FAILED: Hostname verification function checkServerIdentity must be configured');
+    }
+
+    // 5b. Via PGSSLROOTCERT environment variable
+    process.env.PGSSLROOTCERT = validCaFile;
+    const envSsl = resolveSslConfig('postgres://user:pass@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres');
+    delete process.env.PGSSLROOTCERT;
+    if (!envSsl || envSsl.rejectUnauthorized !== true) {
+      throw new Error('Scenario 20 FAILED: PGSSLROOTCERT must enable verified TLS');
+    }
+
+    // 5c. Via SUPABASE_SSL_CA environment variable
+    process.env.SUPABASE_SSL_CA = validCaFile;
+    const supabaseEnvSsl = resolveSslConfig('postgres://user:pass@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres');
+    delete process.env.SUPABASE_SSL_CA;
+    if (!supabaseEnvSsl || supabaseEnvSsl.rejectUnauthorized !== true) {
+      throw new Error('Scenario 20 FAILED: SUPABASE_SSL_CA must enable verified TLS');
+    }
+
+    // 6. Hostname/certificate verification is not silently disabled
+    const mockCert = {
+      subjectaltname: 'DNS:*.pooler.supabase.com, DNS:pooler.supabase.com'
+    };
+    // Hostname mismatch must return an Error
+    const mismatchErr = verifiedSsl.checkServerIdentity('malicious-host.example.com', mockCert);
+    if (!mismatchErr || !(mismatchErr instanceof Error)) {
+      throw new Error('Scenario 20 FAILED: checkServerIdentity must reject hostname mismatch with an Error');
+    }
+    // Matching hostname must succeed (return undefined)
+    const matchResult = verifiedSsl.checkServerIdentity('aws-0-ap-northeast-1.pooler.supabase.com', mockCert);
+    if (matchResult !== undefined) {
+      throw new Error('Scenario 20 FAILED: checkServerIdentity must accept valid matching hostname');
+    }
+
+    // 7. Localhost with explicit CA configuration remains functional
+    const localExplicitSsl = resolveSslConfig('postgres://postgres@localhost:5433/db', { sslCa: validCaFile });
+    if (!localExplicitSsl || localExplicitSsl.rejectUnauthorized !== true) {
+      throw new Error('Scenario 20 FAILED: Localhost with explicit CA should configure verified TLS');
+    }
+  } finally {
+    fs.rmSync(tempCaDir, { recursive: true, force: true });
+  }
+
+  console.log('  PASS: Production TLS configuration strictly enforces trusted CA certificates, rejects missing/invalid CA, verifies hostname, and keeps local test configuration separate.');
 
   console.log('\n================================================================');
   console.log('   ALL 20 PRODUCTION MIGRATION RUNNER SCENARIOS PASSED!');
