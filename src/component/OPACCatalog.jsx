@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import {
   ArcElement,
@@ -2500,28 +2501,29 @@ export default function OPACCatalog({
       {/* 2. MAIN CONTAINER WITH TOP PADDING & MARGIN */}
       <main className={`${embedded ? 'mx-auto max-w-7xl space-y-6 px-0 py-0' : 'mx-auto max-w-7xl space-y-6 px-3 pt-6 pb-12 sm:px-4 md:px-6'}`}>
         
-        {notice && (
-          <div
+        {notice && typeof document !== 'undefined' && createPortal(
+          <aside
             role={noticeIsError ? 'alert' : 'status'}
             aria-live={noticeIsError ? 'assertive' : 'polite'}
-            className={`visitor-feedback visitor-feedback-toast fixed top-20 left-1/2 -translate-x-1/2 z-[200] flex w-[calc(100%-2rem)] max-w-md items-center gap-3 rounded-xl border border-l-4 px-4 py-3 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-200 ${noticeTone}`}
+            className={`visitor-feedback-toast fixed top-6 left-1/2 -translate-x-1/2 z-[9999] flex w-[calc(100%-2rem)] max-w-md items-center gap-3 rounded-2xl border px-4 py-3 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-3 duration-200 ${noticeTone}`}
           >
-            <span className={`visitor-feedback-icon inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${noticeIconTone}`} aria-hidden="true">
+            <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${noticeIconTone}`} aria-hidden="true">
               {noticeIsSuccess ? <CheckCircle2 size={18} /> : <CircleAlert size={18} />}
             </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-bold">{noticeTitle}</span>
-              <span className="mt-0.5 block text-sm leading-6">{notice}</span>
-            </span>
+            <div className="min-w-0 flex-1">
+              <span className="block text-xs font-bold uppercase tracking-wider">{noticeTitle}</span>
+              <span className="mt-0.5 block text-sm font-medium leading-snug">{notice}</span>
+            </div>
             <button
               type="button"
               onClick={() => setNotice('')}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-current/70 transition hover:bg-black/5 hover:text-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-accent dark:hover:bg-white/10"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-current/70 transition hover:bg-black/10 hover:text-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-accent dark:hover:bg-white/10"
               aria-label="Close notification"
             >
-              <X size={16} aria-hidden="true" />
+              <X size={15} aria-hidden="true" />
             </button>
-          </div>
+          </aside>,
+          document.body
         )}
 
         {activeView === 'communityBooks' && (
@@ -3106,14 +3108,21 @@ export default function OPACCatalog({
                   ? savedCommunityBooks
                   : communityBooks.filter((book) => savedCommunityBookIds.has(String(book.id)))
                 ).map((book) => {
-                  const isSaved = savedCommunityBookIds.has(String(book.id));
                   return (
                     <article
                       key={book.id}
                       className="visitor-book-card visitor-reading-list-card"
                     >
-                      <span className="opac-book-card-availability visitor-status visitor-status-success">
-                        Community Book
+                      <span
+                        className={`opac-book-card-availability visitor-status ${
+                          Number(book.availableCopies ?? book.totalCopies ?? 1) > 0
+                            ? 'visitor-status-success'
+                            : 'visitor-status-neutral'
+                        }`}
+                      >
+                        {Number(book.availableCopies ?? book.totalCopies ?? 1) > 0
+                          ? `${book.availableCopies ?? book.totalCopies ?? 1} copies available`
+                          : 'Unavailable'}
                       </span>
                       <div className="visitor-book-card-inner visitor-reading-list-inner">
                         <div className="visitor-reading-list-main">
@@ -3149,14 +3158,14 @@ export default function OPACCatalog({
                               onClick={() => handleBookSelect({ ...book, bookType: 'personal' })}
                               className="rounded-lg bg-shelf-primary px-3 py-2 text-sm font-bold text-white hover:opacity-90"
                             >
-                              View details
+                              View Details
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleSaveCommunityBook(book.id, !isSaved)}
-                              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+                              onClick={() => handleSaveCommunityBook(book.id, false)}
+                              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
                             >
-                              Remove bookmark
+                              Remove
                             </button>
                           </div>
                         </div>

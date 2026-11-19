@@ -1606,6 +1606,16 @@ function VisitorDashboardContent() {
           GLOBAL SHELF HEADER
       ====================================================== */}
       <ShelfHeader
+        onNotificationClick={(item) => {
+          if (
+            item?.notificationType === 'feedback_reply' ||
+            item?.notification_type === 'feedback_reply' ||
+            item?.reference_type === 'visitor_feedback' ||
+            item?.referenceType === 'visitor_feedback'
+          ) {
+            setTab('announcements');
+          }
+        }}
         profileMenuContent={
           <>
             <li>
@@ -2372,7 +2382,7 @@ function VisitorDashboardContent() {
       {/* VISITOR PHOTO LIGHTBOX */}
       {showPhotoLightbox && profileImageSrc && (
         <div
-          className="fixed inset-0 z-120 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[150] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
           onClick={() => setShowPhotoLightbox(false)}
           role="dialog"
           aria-modal="true"

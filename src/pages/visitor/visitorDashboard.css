@@ -31,12 +31,15 @@
   color: var(--visitor-ink);
 }
 
-.visitor-dashboard.theme-dark {
+.visitor-dashboard.theme-dark,
+:root.dark .visitor-dashboard,
+.dark .visitor-dashboard {
+  --visitor-brand: #3b82f6;
   --visitor-page: #0b1220;
   --visitor-surface: #111c2e;
   --visitor-surface-muted: #1e293b;
-  --visitor-ink: #f1f5f9;
-  --visitor-muted: #cbd5e1;
+  --visitor-ink: #f8fafc;
+  --visitor-muted: #94a3b8;
   --visitor-border: #334155;
   --visitor-control-border: #64748b;
   --visitor-shadow-card: 0 1px 3px rgb(15 23 42 / 28%);
@@ -49,7 +52,11 @@
 }
 
 .visitor-dashboard.theme-dark button:focus-visible,
-.visitor-dashboard.theme-dark a:focus-visible {
+.visitor-dashboard.theme-dark a:focus-visible,
+:root.dark .visitor-dashboard button:focus-visible,
+:root.dark .visitor-dashboard a:focus-visible,
+.dark .visitor-dashboard button:focus-visible,
+.dark .visitor-dashboard a:focus-visible {
   outline-color: #e2e8f0;
 }
 
@@ -63,7 +70,11 @@
 }
 
 .visitor-dashboard.theme-dark .text-slate-400,
-.visitor-dashboard.theme-dark .text-slate-500 {
+.visitor-dashboard.theme-dark .text-slate-500,
+:root.dark .visitor-dashboard .text-slate-400,
+:root.dark .visitor-dashboard .text-slate-500,
+.dark .visitor-dashboard .text-slate-400,
+.dark .visitor-dashboard .text-slate-500 {
   color: #cbd5e1;
 }
 

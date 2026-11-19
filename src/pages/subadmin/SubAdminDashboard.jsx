@@ -1654,6 +1654,7 @@ export default function SubAdminDashboard() {
       <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
         {/* TOP BAR WITH SHELFHEADER */}
         <ShelfHeader
+          showLogo={false}
           notificationCount={branchNotifications.length}
           notificationItems={branchNotifications.map((n) => ({
             id: n.id,

@@ -1977,8 +1977,39 @@ The unit test suite (`npm test`) reports 301 total tests: **258 passed, 0 failed
 
 ---
 
+## Phase 19 — Saved Books Reconciliation, Feedback Replies & Visitor Experience Hardening
+
+### 1. Release Migration 174 Metadata
+- **Migration File:** `supabase/migrations/20270124000000_reconcile_saved_community_books_and_notifications.sql`
+- **Migration 174 SHA-256:** `f3a4135d622bb696f5d9267ac8b4fc89d8517b86cba1316fe8d8c80de932779a`
+- **Production Ledger Status:** **174/174 applied migrations** confirmed via `supabase migration list` on `khwtfjyvawukbsvyjdux`.
+- **Pending Migrations:** **0 pending**.
+
+### 2. Live Production Database Reconciliations (`khwtfjyvawukbsvyjdux`)
+1. **`get_saved_community_books()` RPC:** Reconciled query against actual tables `public.visitor_saved_community_books` and `public.books` (`book_type = 'personal'`), eliminating 400 bad request errors from hallucinated tables.
+2. **Visitor Notifications Constraints:** Dropped and recreated `visitor_notifications_notification_type_check` and `visitor_notifications_reference_type_check` to include `'feedback_reply'`, `'visitor_feedback'`, and `'feedback'`.
+3. **Feedback Notification Lifecycle:** Hardened `fn_notify_visitor_on_feedback_reply()` trigger and `respond_to_visitor_feedback()` RPC to provide `feedback_reply` notifications with a valid future expiration timestamp (`now() + interval '30 days'`), preventing transaction rollback.
+
+### 3. Frontend UI Recovery & Defect Remediation
+1. **Saved Community Book Cards:** Updated Saved Books tab in `OPACCatalog.jsx` to match "My Reading List" card format with availability badges and action buttons ("View Details" and "Remove").
+2. **Top Toast Banner:** Replaced oversized full-screen notification modals with a sleek top-centered `createPortal` toast (`z-[9999]`) that automatically dismisses after 2.5 seconds.
+3. **Sign Out Button De-cluttering:** Removed redundant "Sign Out" action from `DashboardWelcome` quick actions on Visitor Dashboard and removed the Sign Out section inside the My Profile drawer.
+4. **Visitor Profile Photo Lightbox:** Fixed photo preview modal z-index to `z-[150]` in Tailwind v4 syntax so clicking visitor avatars displays the full image above all interface elements.
+5. **Chatbot Fallback & Responsiveness:** Reduced request timeout to 4.5 seconds in `FAQ.jsx`, added immediate local responses for common greetings and inquiries on contacting live librarians/staff, and eliminated confusing timeout errors.
+6. **Dark Mode Text Contrast:** Fixed `.visitor-dashboard` CSS selectors to properly bind `:root.dark` and `.dark`, raising text colors to `#f8fafc` and `#cbd5e1` for high readability.
+7. **Header Logo Refinement:** Added `showLogo` prop to `ShelfHeader.jsx` (`showLogo={false}` in SubAdmin and SuperAdmin) to avoid duplicate brand logos with the full-height side navigation.
+
+### 4. Application Verification Results
+- `npm run validate:migrations`: **174/174 migrations valid** (0 errors).
+- `npm test`: **258 passed, 0 failed, 43 skipped**.
+- `npm run lint`: **0 errors, 0 warnings**.
+- `npm run build`: **Vite production build succeeded cleanly in 12.96s**.
+
+---
+
 ## Final Production Verdict
-**`RELEASE COMPLETED — MIGRATION 173 APPLIED AND SYSTEM FULLY RECOVERED`**
+**`RELEASE COMPLETED — MIGRATION 174 APPLIED AND SYSTEM FULLY RECONCILED`**
+
 
 
 

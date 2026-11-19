@@ -53,6 +53,7 @@ export default function ShelfHeader({
   isMobileMenuOpen = false,
   className = '',
   showDarkModeToggle = true,
+  showLogo = true,
 } ) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -262,17 +263,19 @@ export default function ShelfHeader({
     >
       <div className="flex min-w-0 items-center justify-between gap-3">
         {/* LEFT: LOGO AND HOME LINK */}
-        <button
-          type="button"
-          onClick={handleLogoClick}
-          aria-label="Go to SHELF home"
-          className="flex min-w-0 items-center gap-2 text-left shrink-0 cursor-pointer transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary rounded-lg"
-        >
-          <img src="/shelf-logo.png" alt="" className="h-8 w-8 shrink-0 object-contain" />
-          <span className="shrink-0 text-base font-extrabold tracking-wider sm:text-lg text-shelf-primary">
-            SHELF
-          </span>
-        </button>
+        {showLogo && (
+          <button
+            type="button"
+            onClick={handleLogoClick}
+            aria-label="Go to SHELF home"
+            className="flex min-w-0 items-center gap-2 text-left shrink-0 cursor-pointer transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary rounded-lg"
+          >
+            <img src="/shelf-logo.png" alt="" className="h-8 w-8 shrink-0 object-contain" />
+            <span className="shrink-0 text-base font-extrabold tracking-wider sm:text-lg text-shelf-primary">
+              SHELF
+            </span>
+          </button>
+        )}
 
         {/* CENTER: ROLE-SPECIFIC CONTENT (breadcrumbs, page title, etc.) */}
         <div className="flex-1 min-w-0 flex items-center justify-center sm:justify-start">
@@ -573,6 +576,7 @@ ShelfHeader.propTypes = {
   isMobileMenuOpen: PropTypes.bool,
   className: PropTypes.string,
   showDarkModeToggle: PropTypes.bool,
+  showLogo: PropTypes.bool,
 };
 
 ShelfHeader.defaultProps = {

@@ -76,6 +76,14 @@ export const FAQS = [
         q: 'How do I change my password?',
         a: 'Use Forgot Password on the sign-in page. Enter the email linked to your account, verify the code sent to you, and choose a new password.',
       },
+      {
+        q: 'How do I reach the live assistant or contact library staff?',
+        a: 'You can send a message directly to library staff via Announcements & Feedback in your dashboard, visit the circulation desk at your assigned branch, or ask questions here about borrowing, returns, fines, and services.',
+      },
+      {
+        q: 'What are the library operating hours?',
+        a: 'Partner libraries are typically open Monday to Friday, 8:00 AM to 5:00 PM. You can check the Library Map for specific branch contact information, exact schedules, and directions.',
+      },
     ],
   },
 ];

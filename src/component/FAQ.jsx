@@ -93,7 +93,7 @@ export default function FAQ() {
     abortControllerRef.current = new AbortController();
     const timeoutId = setTimeout(() => {
       abortControllerRef.current?.abort();
-    }, 12000);
+    }, 4500);
     const signal = abortControllerRef.current.signal;
 
     try {
@@ -145,6 +145,8 @@ export default function FAQ() {
     } catch (error) {
       clearTimeout(timeoutId);
       const localResponse = findFAQResponse(submittedQuestion);
+      const isContactOrStaffQuery = /assistant|live|librarian|staff|contact|person|human|talk|speak|help/i.test(submittedQuestion);
+      
       setMessages((previous) => [
         ...previous,
         {
@@ -152,9 +154,11 @@ export default function FAQ() {
           text:
             localResponse
               ? localResponse.a
-              : /failed to fetch|networkerror|connection refused|abort/i.test(error.message || '')
-                ? 'I am unable to reach the live assistant right now. You can check our built-in FAQ or ask a librarian at the desk.'
-                : error.message || 'The chatbot could not answer this question. Please try again.',
+              : isContactOrStaffQuery
+                ? 'To reach library staff or librarians directly, you can send a message through the Announcements & Feedback tab in your dashboard, or visit the circulation desk during library hours (Monday to Friday, 8:00 AM – 5:00 PM).'
+                : /failed to fetch|networkerror|connection refused|abort/i.test(error.message || '')
+                  ? 'I am unable to reach the live assistant right now. You can check our built-in FAQ, ask questions about borrowing or library rules, or send feedback to staff from your dashboard.'
+                  : error.message || 'The chatbot could not answer this question. Please try again.',
         },
       ]);
     } finally {
