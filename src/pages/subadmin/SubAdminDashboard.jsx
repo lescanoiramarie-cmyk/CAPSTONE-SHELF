@@ -2061,71 +2061,45 @@ export default function SubAdminDashboard() {
               <p className="mt-1 text-sm text-slate-600">Manage your dashboard preference and review your account access.</p>
             </header>
             <div className="grid gap-4 lg:grid-cols-2">
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="font-bold text-slate-900">Administrator account</h3>
-              <dl className="mt-3 divide-y divide-slate-100 text-sm">
-                <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500">Name</dt><dd className="text-right font-semibold text-slate-800">{user?.name || 'Sub-Admin'}</dd></div>
-                <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500">Email</dt><dd className="break-all text-right font-semibold text-slate-800">{user?.email || 'Not available'}</dd></div>
-                <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500">Assigned library</dt><dd className="text-right font-semibold text-slate-800">{currentBranchName || 'Not assigned'}</dd></div>
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <h3 className="font-bold text-slate-900 dark:text-white">Administrator account</h3>
+              <dl className="mt-3 divide-y divide-slate-100 text-sm dark:divide-slate-700">
+                <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500 dark:text-slate-400">Name</dt><dd className="text-right font-semibold text-slate-800 dark:text-slate-200">{user?.name || 'Sub-Admin'}</dd></div>
+                <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500 dark:text-slate-400">Email</dt><dd className="break-all text-right font-semibold text-slate-800 dark:text-slate-200">{user?.email || 'Not available'}</dd></div>
+                <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500 dark:text-slate-400">Assigned library</dt><dd className="text-right font-semibold text-slate-800 dark:text-slate-200">{currentBranchName || 'Not assigned'}</dd></div>
               </dl>
             </section>
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="font-bold text-slate-900">Account security</h3>
-              <p className="mt-1 text-sm text-slate-600">Sub-admin sign-ins require an authenticator code. During setup, scan the same QR code on each phone you want to use.</p>
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <h3 className="font-bold text-slate-900 dark:text-white">Account security</h3>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Sub-admin sign-ins require an authenticator code. During setup, scan the same QR code on each phone you want to use.</p>
               <form onSubmit={updateSubAdminPassword} className="mt-4 grid gap-3 sm:grid-cols-2">
-                <label className="text-xs font-semibold text-slate-700">New password<input type="password" required autoComplete="new-password" value={newAdminPassword} onChange={(event) => setNewAdminPassword(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20" /></label>
-                <label className="text-xs font-semibold text-slate-700">Confirm password<input type="password" required autoComplete="new-password" value={confirmAdminPassword} onChange={(event) => setConfirmAdminPassword(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20" /></label>
-                <p className="text-xs text-slate-500 sm:col-span-2">At least 12 characters, with uppercase and lowercase letters, a number, and a symbol.</p>
-                <div className="flex flex-wrap items-center gap-3 sm:col-span-2"><button type="submit" disabled={passwordSaving || !newAdminPassword || !confirmAdminPassword} className="rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{passwordSaving ? 'Updating…' : 'Update password'}</button>{passwordFeedback.message && <p role="status" className="text-sm font-semibold text-emerald-700">{passwordFeedback.message}</p>}{passwordFeedback.error && <p role="alert" className="text-sm font-semibold text-rose-700">{passwordFeedback.error}</p>}</div>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">New password<input type="password" required autoComplete="new-password" value={newAdminPassword} onChange={(event) => setNewAdminPassword(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-700 dark:text-white" /></label>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Confirm password<input type="password" required autoComplete="new-password" value={confirmAdminPassword} onChange={(event) => setConfirmAdminPassword(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-700 dark:text-white" /></label>
+                <p className="text-xs text-slate-500 dark:text-slate-400 sm:col-span-2">At least 12 characters, with uppercase and lowercase letters, a number, and a symbol.</p>
+                <div className="flex flex-wrap items-center gap-3 sm:col-span-2"><button type="submit" disabled={passwordSaving || !newAdminPassword || !confirmAdminPassword} className="rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{passwordSaving ? 'Updating…' : 'Update password'}</button>{passwordFeedback.message && <p role="status" className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">{passwordFeedback.message}</p>}{passwordFeedback.error && <p role="alert" className="text-sm font-semibold text-rose-700 dark:text-rose-400">{passwordFeedback.error}</p>}</div>
               </form>
             </section>
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="font-bold text-slate-900">Dashboard preferences</h3>
-              <label htmlFor="subadmin-start-page" className="mt-3 block text-sm font-semibold text-slate-700">Open this page when I sign in</label>
-              <select id="subadmin-start-page" defaultValue={window.localStorage.getItem('shelf_subadmin_start_page') || 'overview'} onChange={(event) => window.localStorage.setItem('shelf_subadmin_start_page', event.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <h3 className="font-bold text-slate-900 dark:text-white">Dashboard preferences</h3>
+              <label htmlFor="subadmin-start-page" className="mt-3 block text-sm font-semibold text-slate-700 dark:text-slate-300">Open this page when I sign in</label>
+              <select id="subadmin-start-page" defaultValue={window.localStorage.getItem('shelf_subadmin_start_page') || 'overview'} onChange={(event) => window.localStorage.setItem('shelf_subadmin_start_page', event.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                 {NAV.filter((item) => item.id !== 'settings').map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
               </select>
-              <p className="mt-2 text-xs leading-5 text-slate-500">This preference is saved on this device and used on your next sign-in.</p>
+              <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">This preference is saved on this device and used on your next sign-in.</p>
             </section>
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
               <div className="flex items-start gap-3">
-                <span className="rounded-xl bg-blue-50 p-3 text-blue-800"><Sliders size={20} aria-hidden="true" /></span>
+                <span className="rounded-xl bg-blue-50 p-3 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300"><Building2 size={20} aria-hidden="true" /></span>
                 <div>
-                  <h3 className="font-bold text-slate-900">Branch Circulation Preferences</h3>
-                  <p className="mt-1 text-sm text-slate-600">Configure default circulation behavior and reminder options for this branch.</p>
+                  <h3 className="font-bold text-slate-900 dark:text-white">Assigned Branch Overview</h3>
+                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Library profile details and system assignment for this console.</p>
                 </div>
               </div>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="subadmin-lending-period" className="block text-xs font-semibold text-slate-700">Default Lending Period</label>
-                  <select
-                    id="subadmin-lending-period"
-                    defaultValue={window.localStorage.getItem(`shelf_subadmin_lending_days_${currentLibraryId}`) || '7'}
-                    onChange={(event) => window.localStorage.setItem(`shelf_subadmin_lending_days_${currentLibraryId}`, event.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-shelf-primary focus:outline-none"
-                  >
-                    <option value="7">7 Days (Standard)</option>
-                    <option value="14">14 Days (Extended)</option>
-                    <option value="21">21 Days (3 Weeks)</option>
-                    <option value="30">30 Days (Monthly)</option>
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="subadmin-fine-rate" className="block text-xs font-semibold text-slate-700">Daily Overdue Rate Guidance</label>
-                  <select
-                    id="subadmin-fine-rate"
-                    defaultValue={window.localStorage.getItem(`shelf_subadmin_fine_rate_${currentLibraryId}`) || '20'}
-                    onChange={(event) => window.localStorage.setItem(`shelf_subadmin_fine_rate_${currentLibraryId}`, event.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-shelf-primary focus:outline-none"
-                  >
-                    <option value="10">₱10 per overdue day</option>
-                    <option value="20">₱20 per overdue day (Recommended)</option>
-                    <option value="30">₱30 per overdue day</option>
-                    <option value="50">₱50 per overdue day</option>
-                  </select>
-                </div>
-              </div>
-              <p className="mt-3 text-xs text-slate-500">Settings are remembered locally for your active library console.</p>
+              <dl className="mt-4 divide-y divide-slate-100 text-sm dark:divide-slate-700">
+                <div className="flex justify-between gap-4 py-2.5"><dt className="text-slate-500 dark:text-slate-400">Branch Name</dt><dd className="text-right font-semibold text-slate-800 dark:text-slate-200">{currentBranchName || 'Assigned Library'}</dd></div>
+                <div className="flex justify-between gap-4 py-2.5"><dt className="text-slate-500 dark:text-slate-400">Branch ID</dt><dd className="font-mono text-xs text-right font-semibold text-slate-600 dark:text-slate-300">{currentLibraryId || '—'}</dd></div>
+                <div className="flex justify-between gap-4 py-2.5"><dt className="text-slate-500 dark:text-slate-400">System Role</dt><dd className="text-right font-semibold text-blue-600 dark:text-blue-400">Sub-Administrator</dd></div>
+              </dl>
             </section>
             </div>
           </section>

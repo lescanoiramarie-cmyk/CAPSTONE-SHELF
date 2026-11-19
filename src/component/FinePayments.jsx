@@ -428,70 +428,70 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
       {loadError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{loadError}</p>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">Total fines charged</p>
-          <p className="mt-1 text-xs text-slate-500">Full fine amount for these records</p>
-          <p className="mt-2 text-2xl font-bold text-shelf-primary">{peso(totals.totalAssessed)}</p>
+        <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total fines charged</p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Full fine amount for these records</p>
+          <p className="mt-2 text-2xl font-bold text-shelf-primary dark:text-blue-400">{peso(totals.totalAssessed)}</p>
         </article>
-        <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">Payments received</p>
-          <p className="mt-1 text-xs text-slate-500">Actual offline payments logged by staff</p>
-          <p className="mt-2 text-2xl font-bold text-emerald-700">{peso(totals.totalCollected)}</p>
+        <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Payments received</p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Actual offline payments logged by staff</p>
+          <p className="mt-2 text-2xl font-bold text-emerald-700 dark:text-emerald-400">{peso(totals.totalCollected)}</p>
         </article>
-        <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">Still owed by visitors</p>
-          <p className="mt-1 text-xs text-slate-500">Unpaid amount remaining after payments</p>
-          <p className="mt-2 text-2xl font-bold text-red-700">{peso(totals.confirmedOutstanding)}</p>
+        <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Still owed by visitors</p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Unpaid amount remaining after payments</p>
+          <p className="mt-2 text-2xl font-bold text-red-700 dark:text-rose-400">{peso(totals.confirmedOutstanding)}</p>
         </article>
       </div>
 
-      <div className="flex min-w-0 flex-nowrap items-center gap-3 overflow-x-auto rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-        {isSuperAdmin && <label className="w-72 shrink-0"><span className="sr-only">Filter fines by partner library</span><select value={selectedLibraryId} onChange={(event) => setSelectedLibraryId(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800"><option value="all">All partner libraries</option>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>}
+      <div className="flex min-w-0 flex-nowrap items-center gap-3 overflow-x-auto rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        {isSuperAdmin && <label className="w-72 shrink-0"><span className="sr-only">Filter fines by partner library</span><select value={selectedLibraryId} onChange={(event) => setSelectedLibraryId(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-700 dark:text-white"><option value="all">All partner libraries</option>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>}
         <label className="relative min-w-[16rem] flex-1">
           <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search visitor, book, or library" className="w-full rounded-lg border border-slate-300 py-2.5 pl-10 pr-3 text-sm text-slate-800" />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search visitor, book, or library" className="w-full rounded-lg border border-slate-300 py-2.5 pl-10 pr-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder-slate-400" />
         </label>
-        <div role="tablist" aria-label="Fine payment status" className="flex shrink-0 flex-nowrap gap-1 rounded-lg bg-slate-50 p-1">
+        <div role="tablist" aria-label="Fine payment status" className="flex shrink-0 flex-nowrap gap-1 rounded-lg bg-slate-50 p-1 dark:bg-slate-900/50">
           {['All', 'Unpaid', 'Partially paid', 'Paid'].map((status) => {
             const selected = statusFilter === status;
             const count = statusCounts[status];
-            return <button key={status} type="button" role="tab" aria-selected={selected} onClick={() => setStatusFilter(status)} className={`inline-flex min-w-max items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${selected ? 'bg-shelf-primary text-white shadow-sm' : 'text-slate-600 hover:bg-white hover:text-slate-900'}`}>
-              {status}<span className={`rounded-full px-2 py-0.5 text-xs ${selected ? 'bg-white/15 text-white' : 'bg-white text-slate-600'}`}>{count}</span>
+            return <button key={status} type="button" role="tab" aria-selected={selected} onClick={() => setStatusFilter(status)} className={`inline-flex min-w-max items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${selected ? 'bg-shelf-primary text-white shadow-sm' : 'text-slate-600 hover:bg-white hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white'}`}>
+              {status}<span className={`rounded-full px-2 py-0.5 text-xs ${selected ? 'bg-white/15 text-white' : 'bg-white text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{count}</span>
             </button>;
           })}
         </div>
       </div>
 
-      {loading ? <p role="status" className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading fine records…</p> : visibleRows.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600">No fine records match this filter.</div>
+      {loading ? <p role="status" className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">Loading fine records…</p> : visibleRows.length === 0 ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">No fine records match this filter.</div>
       ) : (
         <div className="space-y-3">
           {pageRows.map((row) => {
             const status = getFineStatus(row);
             const history = Array.isArray(row.payments) ? row.payments : [];
             return (
-              <article key={row.request_id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+              <article key={row.request_id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 dark:border-slate-700 dark:bg-slate-800">
                 <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_11rem_18rem] lg:items-center">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-bold text-slate-900">{row.visitor_name}</h3>
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${status === 'Paid' ? 'bg-emerald-100 text-emerald-800' : status === 'Partially paid' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'}`}>{status}</span>
+                      <h3 className="font-bold text-slate-900 dark:text-white">{row.visitor_name}</h3>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${status === 'Paid' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' : status === 'Partially paid' ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300' : 'bg-red-100 text-red-800 dark:bg-rose-950/60 dark:text-rose-300'}`}>{status}</span>
                     </div>
-                    <p className="mt-1 line-clamp-2 break-words text-sm leading-5 text-slate-700">{row.book_title}</p>
-                    <p className="mt-1 line-clamp-2 break-words text-xs leading-4 text-slate-500">{row.library_name} · Borrowed {row.borrow_date ? new Date(row.borrow_date).toLocaleDateString('en-PH') : 'Date unavailable'} · Due {row.due_date ? new Date(row.due_date).toLocaleDateString('en-PH') : 'Date unavailable'}</p>
+                    <p className="mt-1 line-clamp-2 break-words text-sm leading-5 text-slate-700 dark:text-slate-300">{row.book_title}</p>
+                    <p className="mt-1 line-clamp-2 break-words text-xs leading-4 text-slate-500 dark:text-slate-400">{row.library_name} · Borrowed {row.borrow_date ? new Date(row.borrow_date).toLocaleDateString('en-PH') : 'Date unavailable'} · Due {row.due_date ? new Date(row.due_date).toLocaleDateString('en-PH') : 'Date unavailable'}</p>
                   </div>
                   <div className="grid grid-cols-2 gap-x-5 gap-y-1 text-sm lg:w-44">
-                    <span className="text-slate-500">Fine</span><strong className="text-right text-slate-800">{peso(row.fine_amount)}</strong>
-                    <span className="text-slate-500">Paid</span><strong className="text-right text-emerald-700">{peso(row.fine_paid_amount)}</strong>
-                    <span className="font-semibold text-slate-700">Balance</span><strong className="text-right font-bold text-red-700">{peso(row.outstanding_amount)}</strong>
+                    <span className="text-slate-500 dark:text-slate-400">Fine</span><strong className="text-right text-slate-800 dark:text-slate-200">{peso(row.fine_amount)}</strong>
+                    <span className="text-slate-500 dark:text-slate-400">Paid</span><strong className="text-right text-emerald-700 dark:text-emerald-400">{peso(row.fine_paid_amount)}</strong>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">Balance</span><strong className="text-right font-bold text-red-700 dark:text-rose-400">{peso(row.outstanding_amount)}</strong>
                   </div>
                   <div className="grid min-w-0 grid-cols-2 gap-2 lg:w-[18rem] lg:justify-self-end">
-                    {history.length > 0 ? <button type="button" onClick={() => setHistoryFor(historyFor === row.request_id ? null : row.request_id)} className="inline-flex min-w-0 items-center justify-center gap-2 rounded-lg border border-slate-300 px-2.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"><History size={16} className="shrink-0" /> History ({history.length})</button> : <span aria-hidden="true" className="invisible rounded-lg border px-2.5 py-2" />}
-                    {Number(row.outstanding_amount) > 0 ? <button type="button" disabled={alertingAll || alertingId === String(row.request_id) || wasVisitorAlertedToday(row)} onClick={() => void sendSingleAlert(row)} title={wasVisitorAlertedToday(row) ? 'This visitor was alerted today for this library.' : 'Send a fine reminder to this visitor'} className={`inline-flex min-w-0 items-center justify-center gap-2 rounded-lg border px-2.5 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-100 ${wasVisitorAlertedToday(row) ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100'}`}><Bell size={16} className="shrink-0"/>{alertingId === String(row.request_id) ? 'Sending…' : wasVisitorAlertedToday(row) ? 'Alerted today' : 'Alert visitor'}</button> : <span aria-hidden="true" className="invisible rounded-lg border px-2.5 py-2" />}
-                    {Number(row.outstanding_amount) > 0 ? <button type="button" onClick={() => openPayment(row)} className="col-span-2 inline-flex items-center justify-center gap-2 rounded-lg bg-shelf-primary px-3 py-2 text-sm font-semibold text-white hover:bg-shelf-primary/90"><CircleDollarSign size={16} /> Record payment</button> : <span className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800"><CheckCircle2 size={16} /> Settled</span>}
+                    {history.length > 0 ? <button type="button" onClick={() => setHistoryFor(historyFor === row.request_id ? null : row.request_id)} className="inline-flex min-w-0 items-center justify-center gap-2 rounded-lg border border-slate-300 px-2.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"><History size={16} className="shrink-0" /> History ({history.length})</button> : <span aria-hidden="true" className="invisible rounded-lg border px-2.5 py-2" />}
+                    {Number(row.outstanding_amount) > 0 ? <button type="button" disabled={alertingAll || alertingId === String(row.request_id) || wasVisitorAlertedToday(row)} onClick={() => void sendSingleAlert(row)} title={wasVisitorAlertedToday(row) ? 'This visitor was alerted today for this library.' : 'Send a fine reminder to this visitor'} className={`inline-flex min-w-0 items-center justify-center gap-2 rounded-lg border px-2.5 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-100 ${wasVisitorAlertedToday(row) ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300' : 'border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300'}`}><Bell size={16} className="shrink-0"/>{alertingId === String(row.request_id) ? 'Sending…' : wasVisitorAlertedToday(row) ? 'Alerted today' : 'Alert visitor'}</button> : <span aria-hidden="true" className="invisible rounded-lg border px-2.5 py-2" />}
+                    {Number(row.outstanding_amount) > 0 ? <button type="button" onClick={() => openPayment(row)} className="col-span-2 inline-flex items-center justify-center gap-2 rounded-lg bg-shelf-primary px-3 py-2 text-sm font-semibold text-white hover:bg-shelf-primary/90"><CircleDollarSign size={16} /> Record payment</button> : <span className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"><CheckCircle2 size={16} /> Settled</span>}
                   </div>
                 </div>
-                {historyFor === row.request_id && <ol className="mt-4 space-y-2 border-t border-slate-100 pt-3">{history.map((payment) => <li key={payment.id} className="flex flex-wrap justify-between gap-2 text-xs text-slate-600"><span><strong className="text-slate-800">{peso(payment.amount)}</strong> · {String(payment.paymentMethod || '').replace('_', ' ')}{payment.referenceNumber ? ` · Ref ${payment.referenceNumber}` : ''}{payment.note ? ` · ${payment.note}` : ''}</span><span>{payment.receivedBy} · {new Date(payment.receivedAt).toLocaleString('en-PH')}</span></li>)}</ol>}
+                {historyFor === row.request_id && <ol className="mt-4 space-y-2 border-t border-slate-100 pt-3 dark:border-slate-700">{history.map((payment) => <li key={payment.id} className="flex flex-wrap justify-between gap-2 text-xs text-slate-600 dark:text-slate-400"><span><strong className="text-slate-800 dark:text-slate-200">{peso(payment.amount)}</strong> · {String(payment.paymentMethod || '').replace('_', ' ')}{payment.referenceNumber ? ` · Ref ${payment.referenceNumber}` : ''}{payment.note ? ` · ${payment.note}` : ''}</span><span>{payment.receivedBy} · {new Date(payment.receivedAt).toLocaleString('en-PH')}</span></li>)}</ol>}
               </article>
             );
           })}

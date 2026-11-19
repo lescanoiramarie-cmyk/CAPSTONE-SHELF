@@ -68,6 +68,7 @@ import {
   unsaveCommunityBookForLater,
   getSavedCommunityBooks,
 } from '../data/store.js';
+import { maskReviewerName } from '../lib/maskReviewerName.js';
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend);
 
@@ -354,6 +355,13 @@ export default function OPACCatalog({
   const [readingListSearch, setReadingListSearch] = useState('');
   const [myRequestSearch, setMyRequestSearch] = useState('');
   const [myRequestStatus, setMyRequestStatus] = useState('all');
+  const [myRequestTypeFilter, setMyRequestTypeFilter] = useState('all');
+  const [myRequestPageSize, setMyRequestPageSize] = useState(10);
+  const [communityCategory, setCommunityCategory] = useState('All');
+  const [communityAvailability, setCommunityAvailability] = useState('All');
+  const [communitySort, setCommunitySort] = useState('title-asc');
+  const [communityPage, setCommunityPage] = useState(1);
+  const [communityPageSize, setCommunityPageSize] = useState(50);
   const [ownerCommunityRequestSearch, setOwnerCommunityRequestSearch] = useState('');
   const [sortBy, setSortBy] = useState('title-asc');
   const [catalogPage, setCatalogPage] = useState(1);
@@ -1698,6 +1706,16 @@ export default function OPACCatalog({
   const filteredMyRequests = useMemo(() => {
     const term = myRequestSearch.trim().toLowerCase();
     return myRequests.filter((request) => {
+      const isCommunity = Boolean(
+        request.bookType === 'community' ||
+        request.book_type === 'community' ||
+        request.isCommunityRequest ||
+        request.ownerName ||
+        request.owner_id
+      );
+      const matchesType =
+        myRequestTypeFilter === 'all' ||
+        (myRequestTypeFilter === 'community' ? isCommunity : !isCommunity);
       const matchesStatus =
         myRequestStatus === 'all' ||
         (myRequestStatus === 'fine_due'
@@ -1708,9 +1726,9 @@ export default function OPACCatalog({
         `${request.bookTitle || ''} ${request.ownerName || ''}`
           .toLowerCase()
           .includes(term);
-      return matchesStatus && matchesSearch && (!fineOnly || getVisitorFineHistoryAmount(request) > 0);
+      return matchesType && matchesStatus && matchesSearch && (!fineOnly || getVisitorFineHistoryAmount(request) > 0);
     });
-  }, [myRequestSearch, myRequestStatus, myRequests, fineOnly]);
+  }, [myRequestSearch, myRequestStatus, myRequestTypeFilter, myRequests, fineOnly]);
   const requestAnalytics = useMemo(() => {
     const waitingStatuses = new Set([
       'pending',
@@ -1805,7 +1823,6 @@ export default function OPACCatalog({
     cutout: '62%',
     plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12 } } },
   };
-  const myRequestPageSize = 10;
   const [myRequestPage, setMyRequestPage] = useState(1);
   const myRequestPageCount = Math.max(1, Math.ceil(filteredMyRequests.length / myRequestPageSize));
   const visibleMyRequestPage = Math.min(myRequestPage, myRequestPageCount);
@@ -1813,6 +1830,14 @@ export default function OPACCatalog({
     (visibleMyRequestPage - 1) * myRequestPageSize,
     visibleMyRequestPage * myRequestPageSize
   );
+
+  useEffect(() => {
+    if (!focusRequestId || activeView !== 'myBorrows') return;
+    setMyRequestSearch('');
+    setMyRequestStatus('all');
+    setMyRequestTypeFilter('all');
+  }, [activeView, focusRequestId]);
+
   useEffect(() => {
     if (!focusRequestId || activeView !== 'myBorrows') return;
     const focusedIndex = filteredMyRequests.findIndex(
@@ -1823,7 +1848,7 @@ export default function OPACCatalog({
       setMyRequestPage(Math.floor(focusedIndex / myRequestPageSize) + 1);
     });
     return () => cancelAnimationFrame(frame);
-  }, [activeView, filteredMyRequests, focusRequestId]);
+  }, [activeView, filteredMyRequests, focusRequestId, myRequestPageSize]);
   useEffect(() => {
     if (
       !focusRequestId ||
@@ -1871,6 +1896,16 @@ export default function OPACCatalog({
     (currentPersonalBooksPage - 1) * personalBooksPageSize,
     currentPersonalBooksPage * personalBooksPageSize
   );
+  const communityCategories = useMemo(() => {
+    const set = new Set();
+    if (Array.isArray(communityBooks)) {
+      communityBooks.forEach((b) => {
+        if (b?.category) set.add(b.category);
+      });
+    }
+    return Array.from(set).sort();
+  }, [communityBooks]);
+
   const filteredCommunityBooks = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     const safeCommunityBooks = Array.isArray(communityBooks)
@@ -1878,16 +1913,44 @@ export default function OPACCatalog({
           (book) => book && typeof book === 'object' && book.id != null
         )
       : [];
-    if (!term) return safeCommunityBooks;
-    return safeCommunityBooks.filter(
-      (book) =>
+    return safeCommunityBooks.filter((book) => {
+      const matchesSearch =
+        !term ||
         String(book.title || '').toLowerCase().includes(term) ||
         String(book.author || '').toLowerCase().includes(term) ||
         String(book.category || '').toLowerCase().includes(term) ||
         String(book.isbn || '').toLowerCase().includes(term) ||
-        matchesCallNumberSearch(book, term)
-    );
-  }, [communityBooks, searchTerm]);
+        matchesCallNumberSearch(book, term);
+
+      const matchesCategory =
+        communityCategory === 'All' ||
+        String(book.category || '').toLowerCase() === communityCategory.toLowerCase();
+
+      const availableCopies = Number(book.availableCopies || 0);
+      const matchesAvailability =
+        communityAvailability === 'All' ||
+        (communityAvailability === 'Available' ? availableCopies > 0 : availableCopies <= 0);
+
+      return matchesSearch && matchesCategory && matchesAvailability;
+    }).sort((a, b) => {
+      if (communitySort === 'title-asc') return String(a.title || '').localeCompare(String(b.title || ''));
+      if (communitySort === 'title-desc') return String(b.title || '').localeCompare(String(a.title || ''));
+      if (communitySort === 'author-asc') return String(a.author || '').localeCompare(String(b.author || ''));
+      if (communitySort === 'author-desc') return String(b.author || '').localeCompare(String(a.author || ''));
+      if (communitySort === 'available') return Number(b.availableCopies || 0) - Number(a.availableCopies || 0);
+      if (communitySort === 'newest') return new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0);
+      if (communitySort === 'oldest') return new Date(a.created_at || a.createdAt || 0) - new Date(b.created_at || b.createdAt || 0);
+      return 0;
+    });
+  }, [communityBooks, searchTerm, communityCategory, communityAvailability, communitySort]);
+
+  const communityTotalPages = Math.max(1, Math.ceil(filteredCommunityBooks.length / communityPageSize));
+  const visibleCommunityPage = Math.min(communityPage, communityTotalPages);
+  const visibleCommunityBooks = filteredCommunityBooks.slice(
+    (visibleCommunityPage - 1) * communityPageSize,
+    visibleCommunityPage * communityPageSize
+  );
+  const communityPaginationItems = getCatalogPaginationItems(visibleCommunityPage, communityTotalPages);
   const readingListFilteredBooks = useMemo(() => {
     const term = readingListSearch.trim().toLowerCase();
     if (!term) return readingListBooks;
@@ -2505,7 +2568,7 @@ export default function OPACCatalog({
           <aside
             role={noticeIsError ? 'alert' : 'status'}
             aria-live={noticeIsError ? 'assertive' : 'polite'}
-            className={`visitor-feedback-toast fixed top-6 left-1/2 -translate-x-1/2 z-[9999] flex w-[calc(100%-2rem)] max-w-md items-center gap-3 rounded-2xl border px-4 py-3 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-3 duration-200 ${noticeTone}`}
+            className={`visitor-feedback-toast fixed top-6 inset-x-0 mx-auto z-[9999] flex w-[calc(100%-2rem)] max-w-md items-center gap-3 rounded-2xl border px-4 py-3 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-3 duration-200 ${noticeTone}`}
           >
             <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${noticeIconTone}`} aria-hidden="true">
               {noticeIsSuccess ? <CheckCircle2 size={18} /> : <CircleAlert size={18} />}
@@ -3039,6 +3102,88 @@ export default function OPACCatalog({
                 </p>
               </div>
             </div>
+
+            {/* COMMUNITY BOOKS FILTER BAR */}
+            <div className="flex flex-col md:flex-row gap-3">
+              <div className="w-full md:w-auto md:min-w-44">
+                <label htmlFor="community-category-filter" className="sr-only">Filter by category</label>
+                <select
+                  id="community-category-filter"
+                  value={communityCategory}
+                  onChange={(event) => {
+                    setCommunityPage(1);
+                    setCommunityCategory(event.target.value);
+                  }}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none cursor-pointer dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+                >
+                  <option value="All">All Categories</option>
+                  {communityCategories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {formatBookCategory(cat)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="w-full md:w-auto md:min-w-40">
+                <label htmlFor="community-availability-filter" className="sr-only">Filter by availability</label>
+                <select
+                  id="community-availability-filter"
+                  value={communityAvailability}
+                  onChange={(event) => {
+                    setCommunityPage(1);
+                    setCommunityAvailability(event.target.value);
+                  }}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none cursor-pointer dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+                >
+                  <option value="All">All Statuses</option>
+                  <option value="Available">Available Only</option>
+                  <option value="Unavailable">Unavailable Only</option>
+                </select>
+              </div>
+
+              <div className="w-full md:w-auto md:min-w-40">
+                <label htmlFor="community-sort-filter" className="sr-only">Sort community books</label>
+                <select
+                  id="community-sort-filter"
+                  value={communitySort}
+                  onChange={(event) => {
+                    setCommunityPage(1);
+                    setCommunitySort(event.target.value);
+                  }}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none cursor-pointer dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+                >
+                  <option value="title-asc">Title (A-Z)</option>
+                  <option value="title-desc">Title (Z-A)</option>
+                  <option value="author-asc">Author (A-Z)</option>
+                  <option value="author-desc">Author (Z-A)</option>
+                  <option value="available">Most Available</option>
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                </select>
+              </div>
+
+              <div className="w-full md:w-auto md:min-w-36">
+                <label htmlFor="community-page-size" className="sr-only">Rows per page</label>
+                <select
+                  id="community-page-size"
+                  value={communityPageSize}
+                  onChange={(event) => {
+                    setCommunityPage(1);
+                    setCommunityPageSize(Number(event.target.value));
+                  }}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none cursor-pointer dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+                >
+                  <option value={10}>10 per page</option>
+                  <option value={20}>20 per page</option>
+                  <option value={30}>30 per page</option>
+                  <option value={40}>40 per page</option>
+                  <option value={50}>50 per page</option>
+                  <option value={100}>100 per page</option>
+                </select>
+              </div>
+            </div>
+
             {communityBookError && (
               <div role="alert" className="visitor-feedback visitor-feedback-error rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">
                 <span className="visitor-feedback-icon" aria-hidden="true">
@@ -3064,9 +3209,55 @@ export default function OPACCatalog({
                 </p>
               </div>
             ) : (
-              <div className="opac-book-grid book-card-grid visitor-book-collection-grid visitor-community-book-grid">
-                {filteredCommunityBooks.map(renderCommunityBookCard)}
-              </div>
+              <>
+                <div className="opac-book-grid book-card-grid visitor-book-collection-grid visitor-community-book-grid">
+                  {visibleCommunityBooks.map(renderCommunityBookCard)}
+                </div>
+                {communityTotalPages > 1 && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <p className="text-xs text-slate-600 dark:text-slate-300" aria-live="polite">
+                      Showing {(visibleCommunityPage - 1) * communityPageSize + 1}–{Math.min(visibleCommunityPage * communityPageSize, filteredCommunityBooks.length)} of {filteredCommunityBooks.length} books
+                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setCommunityPage((p) => Math.max(1, p - 1))}
+                        disabled={visibleCommunityPage === 1}
+                        className="min-h-9 rounded-lg border border-slate-300 px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+                      >
+                        Previous
+                      </button>
+                      {communityPaginationItems.map((item) =>
+                        typeof item === 'number' ? (
+                          <button
+                            key={item}
+                            type="button"
+                            onClick={() => setCommunityPage(item)}
+                            aria-current={visibleCommunityPage === item ? 'page' : undefined}
+                            className={`min-h-9 min-w-9 rounded-lg px-2 text-xs font-bold transition ${
+                              visibleCommunityPage === item
+                                ? 'bg-shelf-primary text-white'
+                                : 'border border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700'
+                            }`}
+                          >
+                            {item}
+                          </button>
+                        ) : (
+                          <span key={item} className="px-2 text-slate-400">…</span>
+                        )
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setCommunityPage((p) => Math.min(communityTotalPages, p + 1))}
+                        disabled={visibleCommunityPage === communityTotalPages}
+                        className="min-h-9 rounded-lg border border-slate-300 px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </section>
         ) : activeView === 'savedBooks' ? (
@@ -3709,7 +3900,7 @@ export default function OPACCatalog({
               </div>
             )}
             {myRequests.length > 0 && (
-              <div className="grid gap-3 border-b border-slate-200 p-4 dark:border-slate-700 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,auto)]">
+              <div className="grid gap-3 border-b border-slate-200 p-4 dark:border-slate-700 sm:grid-cols-2 lg:grid-cols-4">
                 <label>
                   <span className="sr-only">Search requests and borrows</span>
                   <input
@@ -3743,7 +3934,40 @@ export default function OPACCatalog({
                       ))}
                   </select>
                 </label>
-                <p className="text-xs text-slate-500 dark:text-slate-400 sm:col-span-2" aria-live="polite">
+                <label>
+                  <span className="sr-only">Filter requests by book type</span>
+                  <select
+                    value={myRequestTypeFilter}
+                    onChange={(event) => {
+                      setMyRequestPage(1);
+                      setMyRequestTypeFilter(event.target.value);
+                    }}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  >
+                    <option value="all">All book types</option>
+                    <option value="library">Library Books</option>
+                    <option value="community">Community Books</option>
+                  </select>
+                </label>
+                <label>
+                  <span className="sr-only">Rows per page</span>
+                  <select
+                    value={myRequestPageSize}
+                    onChange={(event) => {
+                      setMyRequestPage(1);
+                      setMyRequestPageSize(Number(event.target.value));
+                    }}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  >
+                    <option value={10}>10 per page</option>
+                    <option value={20}>20 per page</option>
+                    <option value={30}>30 per page</option>
+                    <option value={40}>40 per page</option>
+                    <option value={50}>50 per page</option>
+                    <option value={100}>100 per page</option>
+                  </select>
+                </label>
+                <p className="text-xs text-slate-500 dark:text-slate-400 sm:col-span-2 lg:col-span-4" aria-live="polite">
                   {filteredMyRequests.length} {filteredMyRequests.length === 1 ? 'request' : 'requests'} found
                 </p>
               </div>
@@ -3792,7 +4016,11 @@ export default function OPACCatalog({
                       request.status === 'borrowed' &&
                       request.dueDate && clockNow > 0 && new Date(request.dueDate).getTime() < clockNow;
                     const finePaidAmount = Number(request.finePaidAmount ?? request.fine_paid_amount ?? 0);
-                    const isFinePaid = isOverdue && finePaidAmount > 0 && currentFine <= 0;
+                    const isFinePaid = Boolean(
+                      request.fineStatus === 'paid' ||
+                      request.fine_status === 'paid' ||
+                      (isOverdue && finePaidAmount > 0 && currentFine <= 0)
+                    );
                     const overdueDays =
                       request.dueDate && isOverdue
                         ? calculateOverdueDays(request.dueDate)
@@ -4921,11 +5149,11 @@ export default function OPACCatalog({
                                 : `₱${entryFineRate} per overdue day`}
                             </p>
                           </div>
-                          <div className="visitor-library-actions flex max-w-full flex-wrap items-center justify-start gap-2 sm:justify-end">
+                          <div className="visitor-library-actions flex shrink-0 items-center gap-2 sm:justify-end">
                             <button
                               type="button"
                               onClick={() => handleViewMap(entry.libraryId, entry)}
-                              className="visitor-view-map-button inline-flex min-h-10 w-28 sm:w-32 items-center justify-center px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-300 transition"
+                              className="visitor-view-map-button inline-flex min-h-10 w-28 sm:w-32 shrink-0 items-center justify-center px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-300 transition"
                             >
                               View map
                             </button>
@@ -4933,7 +5161,7 @@ export default function OPACCatalog({
                               type="button"
                               disabled={savingReadingListBookId === entry.id}
                               onClick={() => handleToggleReadingList(entry)}
-                              className="inline-flex min-h-10 w-28 sm:w-32 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="inline-flex min-h-10 w-28 sm:w-32 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <ClipboardList size={14} aria-hidden="true" />
                               {savingReadingListBookId === entry.id
@@ -4951,7 +5179,7 @@ export default function OPACCatalog({
                                   : 'Are you sure you want to reserve this book?'
                               }
                               onClick={() => handleBorrowOrReserve(entry)}
-                              className="inline-flex min-h-10 w-28 sm:w-32 items-center justify-center px-3 py-1.5 bg-shelf-primary text-white rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="inline-flex min-h-10 w-28 sm:w-32 shrink-0 items-center justify-center px-3 py-1.5 bg-shelf-primary text-white rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {submittingBorrowBookId === String(entry.id)
                                 ? 'Processing...'
@@ -5135,8 +5363,8 @@ export default function OPACCatalog({
                   reviews.map((review) => (
                     <div key={review.id} className="p-3 bg-white rounded-lg border border-slate-100 shadow-sm text-xs space-y-1">
                       <div className="flex justify-between items-center gap-3">
-                        <span className="font-bold text-slate-800">
-                          {review.visitor_name || 'Verified Reader'}
+                        <span className="font-bold text-slate-800 dark:text-white">
+                          {maskReviewerName(review.visitor_name || 'Verified Reader')}
                         </span>
                         <span className="inline-flex items-center gap-0.5 text-amber-500" aria-label={`${Math.max(0, Math.min(5, Number(review.rating) || 0))} out of 5 stars`}>
                           {Array.from({ length: 5 }, (_, index) => (

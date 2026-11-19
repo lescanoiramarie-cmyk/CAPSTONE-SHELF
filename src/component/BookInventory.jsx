@@ -470,7 +470,7 @@ export default function BookInventory() {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+      <div className="flex flex-col sm:flex-row gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
 
@@ -479,14 +479,14 @@ export default function BookInventory() {
             placeholder="Search by title, author, ISBN, category..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="w-full pl-9 pr-9 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+            className="w-full pl-9 pr-9 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
           />
 
           {search && (
             <button
               type="button"
               onClick={() => { setSearch(''); setPage(1); }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100 transition"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-600 transition"
               aria-label="Clear search input"
             >
               <X className="w-4 h-4" />
@@ -500,7 +500,7 @@ export default function BookInventory() {
             id="book-inventory-category-filter"
             value={categoryFilter}
             onChange={(event) => { setCategoryFilter(event.target.value); setPage(1); }}
-            className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+            className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
           >
             <option value="all">All categories</option>
             {inventoryCategories.map((category) => (
@@ -517,12 +517,31 @@ export default function BookInventory() {
             id="book-inventory-sort"
             value={sortBy}
             onChange={(e) => { setSortBy(e.target.value); setPage(1); }}
-            className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+            className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
           >
             <option value="title-asc">Title (A-Z)</option>
             <option value="title-desc">Title (Z-A)</option>
             <option value="author-asc">Author (A-Z)</option>
             <option value="copies-desc">Most Copies</option>
+          </select>
+        </div>
+
+        <div className="w-full sm:w-40">
+          <label htmlFor="inventory-page-size-top" className="sr-only">Rows per page</label>
+          <select
+            id="inventory-page-size-top"
+            value={pageSize}
+            onChange={(event) => {
+              setPageSize(Number(event.target.value));
+              setPage(1);
+            }}
+            className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+          >
+            {INVENTORY_PAGE_SIZES.map((size) => (
+              <option key={size} value={size}>
+                {size} per page
+              </option>
+            ))}
           </select>
         </div>
       </div>

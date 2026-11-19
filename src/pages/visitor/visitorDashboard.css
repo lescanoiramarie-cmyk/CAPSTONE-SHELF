@@ -422,10 +422,10 @@
 }
 
 .visitor-dashboard .visitor-reading-list-grid {
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 19rem));
-  justify-content: start;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  justify-content: stretch;
   align-items: stretch;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .visitor-dashboard .visitor-reading-list-grid > * {

@@ -301,7 +301,7 @@ export default function ShelfHeader({
           )}
 
           {/* NOTIFICATIONS BELL */}
-          {(displayNotificationCount > 0 || displayNotificationItems.length > 0 || isVisitor) && (
+          {(Boolean(user) || displayNotificationCount > 0 || displayNotificationItems.length > 0 || isVisitor) && (
             <div className="relative" ref={notificationsButtonRef}>
               <button
                 type="button"

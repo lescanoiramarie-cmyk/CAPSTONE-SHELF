@@ -22,6 +22,14 @@ export const FAQS = [
         q: 'How do I cancel a library book request?',
         a: 'Open My Requests & Borrows and cancel a request while it is queued or ready for pickup. Requests that are already borrowed cannot be cancelled there.',
       },
+      {
+        q: 'Is borrowing the same as reserving a book?',
+        a: 'No, they are different: Borrow is used when physical copies are currently available at the branch for immediate checkout; Reserve is used when all copies are checked out, placing you in a waitlist queue until a copy is returned.',
+      },
+      {
+        q: 'How does SHELF predict "Recommended for You" books?',
+        a: 'SHELF predicts recommendations based on your borrowing and reading history, preferred book categories, community reading trends, and books currently available at your assigned library.',
+      },
     ],
   },
   {
@@ -107,6 +115,24 @@ export function findFAQResponse(question) {
     return {
       q: 'Contact Library Staff',
       a: 'To reach library staff or librarians directly, you can send a message through the Announcements & Feedback tab in your dashboard, or visit the circulation desk during library hours (Monday to Friday, 8:00 AM – 5:00 PM).',
+    };
+  }
+
+  // Instant local response for borrow vs reserve questions
+  const BORROW_VS_RESERVE_REGEX = /(same.*borrow.*reserve|borrow.*vs.*reserve|difference.*between.*borrow.*reserve|reserve.*vs.*borrow|same ba ang borrow sa reserve|reserve ba o borrow)/i;
+  if (BORROW_VS_RESERVE_REGEX.test(trimmed)) {
+    return {
+      q: 'Is borrowing the same as reserving a book?',
+      a: 'No, they are different: Borrow is used when physical copies are currently available at the branch for immediate checkout; Reserve is used when all copies are checked out, placing you in a waitlist queue until a copy is returned.',
+    };
+  }
+
+  // Instant local response for recommendations prediction questions
+  const RECOMMENDATION_REGEX = /(how.*predict.*recommend|paano.*predict.*recommend|recommended for you.*predict|how do recommendations work|recommendation engine|ai recommendation)/i;
+  if (RECOMMENDATION_REGEX.test(trimmed)) {
+    return {
+      q: 'How does SHELF predict "Recommended for You" books?',
+      a: 'SHELF predicts recommendations based on your borrowing and reading history, preferred book categories, community reading trends, and books currently available at your assigned library.',
     };
   }
 

@@ -1082,13 +1082,13 @@ body:has(.superadmin-dashboard) {
   box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.15), 0 8px 10px -6px rgb(0 0 0 / 0.1) !important;
 }
 
-/* Saved Books and Reading List fixed card width */
+/* Saved Books and Reading List responsive card width */
 .visitor-reading-list-grid {
   display: grid !important;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 19rem)) !important;
-  justify-content: start !important;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr)) !important;
+  justify-content: stretch !important;
   align-items: stretch;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 /* Standardized OPAC and Community Book Card heights */
@@ -1106,4 +1106,10 @@ body:has(.superadmin-dashboard) {
 .opac-book-card .opac-book-card-isbn {
   min-height: 1.15rem !important;
   line-height: 1.15rem !important;
+}
+
+.opac-book-card .opac-book-card-category {
+  min-height: 1.5rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
 }

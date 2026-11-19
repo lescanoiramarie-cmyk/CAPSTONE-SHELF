@@ -21,6 +21,50 @@ import 'leaflet/dist/leaflet.css';
 import '../lib/leafletIcons.js';
 import { loadGoogleMaps, hasGoogleMapsKey } from '../lib/googleMaps.js';
 
+function GoogleMapsEmbed({ libraries, activeFocusBranchId, bookContext }) {
+  const focused = libraries.find((lib) => String(lib.id) === String(activeFocusBranchId)) || libraries[0];
+  const query = focused?.address
+    ? encodeURIComponent(`${focused.name || ''}, ${focused.address}`)
+    : focused?.lat && focused?.lng
+    ? `${focused.lat},${focused.lng}`
+    : 'Batangas State University, Batangas, Philippines';
+  const zoom = activeFocusBranchId ? 16 : 12;
+
+  return (
+    <div className="relative h-full w-full min-h-[400px]">
+      <iframe
+        title="Google Maps Interactive View"
+        width="100%"
+        height="100%"
+        style={{ border: 0, minHeight: '400px' }}
+        loading="lazy"
+        allowFullScreen
+        referrerPolicy="no-referrer-when-downgrade"
+        src={`https://maps.google.com/maps?q=${query}&hl=en&z=${zoom}&output=embed`}
+        className="h-full w-full rounded-b-xl"
+      />
+      {focused && (
+        <div className="absolute bottom-3 left-3 z-10 max-w-sm rounded-lg border border-slate-200 bg-white/95 p-3 shadow-md backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/95">
+          <p className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-blue-600"></span>
+            {focused.name}
+          </p>
+          {focused.address && (
+            <p className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-300">
+              {focused.address}
+            </p>
+          )}
+          {bookContext && (
+            <p className="mt-1 text-[11px] font-semibold text-blue-700 dark:text-blue-300">
+              📖 {bookContext.title} ({bookContext.availableCopies} available)
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GoogleLibraryMap({
   libraries,
   activeFocusBranchId,
@@ -337,30 +381,32 @@ export default function LibraryMap({
           />
         </label>
 
-        <label className="block min-w-0">
-          <span className="sr-only">Filter by campus</span>
-          <select
-            value={campusFilter}
-            onChange={(event) => {
-              setCampusFilter(event.target.value);
-              setLibraryPage(1);
-            }}
-            className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-          >
-          <option value="All">
-            All campuses
-          </option>
-
-          {campuses.map((campus) => (
-            <option
-              key={campus}
-              value={campus}
+        {libraryScopeId == null && (
+          <label className="block min-w-0">
+            <span className="sr-only">Filter by campus</span>
+            <select
+              value={campusFilter}
+              onChange={(event) => {
+                setCampusFilter(event.target.value);
+                setLibraryPage(1);
+              }}
+              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
             >
-              {campus}
+            <option value="All">
+              All campuses
             </option>
-          ))}
-          </select>
-        </label>
+
+            {campuses.map((campus) => (
+              <option
+                key={campus}
+                value={campus}
+              >
+                {campus}
+              </option>
+            ))}
+            </select>
+          </label>
+        )}
 
         <button
           type="button"
@@ -431,131 +477,11 @@ export default function LibraryMap({
                 onBrowseLibrary={onBrowseLibrary}
               />
             ) : (
-              <MapContainer
-                center={[13.9, 121.1]}
-                zoom={10}
-                scrollWheelZoom
-                className="relative z-0 h-full w-full"
-              >
-              <ResizeMap isFullscreen={isMapFullscreen} />
-              <FitLibraries
-                coordinates={markerCoordinates}
-                focusBranchId={activeFocusBranchId}
+              <GoogleMapsEmbed
+                libraries={librariesWithCoordinates}
+                activeFocusBranchId={activeFocusBranchId}
+                bookContext={bookContext}
               />
-
-              <TileLayer
-                attribution="&copy; OpenStreetMap contributors"
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-
-              {activeFocusBranchId != null &&
-                (() => {
-                  const branch = libraries.find(
-                    (library) => library.id === activeFocusBranchId
-                  );
-                  return branch &&
-                    branch.lat != null &&
-                    branch.lng != null &&
-                    String(branch.lat).trim() !== '' &&
-                    String(branch.lng).trim() !== '' &&
-                    Number.isFinite(Number(branch.lat)) &&
-                    Number.isFinite(Number(branch.lng)) &&
-                    Number(branch.lat) >= -90 &&
-                    Number(branch.lat) <= 90 &&
-                    Number(branch.lng) >= -180 &&
-                    Number(branch.lng) <= 180 ? (
-                    <FocusBranch
-                      library={branch}
-                      markerRef={focusedMarkerRef}
-                    />
-                  ) : null;
-                })()}
-
-              {librariesWithCoordinates.map(
-                (library) => (
-                  <Marker
-                    key={library.id}
-                    ref={
-                      library.id === activeFocusBranchId
-                        ? focusedMarkerRef
-                        : undefined
-                    }
-                    eventHandlers={{
-                      click: () => setSelectedLibraryId(library.id),
-                    }}
-                    position={[
-                      Number(library.lat),
-                      Number(library.lng),
-                    ]}
-                  >
-                    <Popup>
-
-                      <div className="min-w-45">
-
-                        <h3 className="text-base font-bold leading-snug text-slate-900">
-                          {library.name}
-                        </h3>
-
-                        {library.campus && (
-                          <p className="mt-1 text-sm leading-relaxed text-slate-600">
-                            {library.campus}
-                          </p>
-                        )}
-
-                        {library.address && (
-                          <p className="mt-2 flex items-start gap-2 text-sm leading-relaxed text-slate-600">
-                            <MapPin size={13} className="mt-0.5 shrink-0" aria-hidden="true" /> {library.address}
-                          </p>
-                        )}
-
-                        {library.hours && (
-                          <p className="mt-2 flex items-center gap-2 text-sm leading-relaxed text-slate-600">
-                            <Clock3 size={13} aria-hidden="true" /> {library.hours}
-                          </p>
-                        )}
-
-                        {focusBranchId != null &&
-                          library.id === focusBranchId &&
-                          bookContext && (
-                          <div className="mt-2 border-t border-slate-200 pt-2">
-                            <p className="text-xs font-bold text-slate-900">
-                              {bookContext.title}
-                            </p>
-                            <p className="mt-1 text-sm leading-relaxed text-slate-600">
-                              {bookContext.availableCopies} available of{' '}
-                              {bookContext.totalCopies} copies
-                            </p>
-                          </div>
-                        )}
-
-                        {library.status && (
-                          <p className="text-xs font-bold mt-2">
-                            {library.status}
-                          </p>
-                        )}
-
-                        {onBrowseLibrary && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onBrowseLibrary(
-                                library.id
-                              )
-                            }
-                            className="mt-3 inline-flex items-center text-sm font-bold text-shelf-primary hover:underline"
-                          >
-                            Browse catalog →
-                          </button>
-                        )}
-
-                      </div>
-
-                    </Popup>
-                  </Marker>
-                )
-              )}
-
-            </MapContainer>
             )}
 
           </div>

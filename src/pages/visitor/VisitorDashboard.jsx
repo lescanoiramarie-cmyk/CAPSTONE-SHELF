@@ -1631,12 +1631,16 @@ function VisitorDashboardContent() {
           ) {
             setTab('myBorrows');
             if (targetId) setFocusRequestId(targetId);
+            setTimeout(() => {
+              const el = targetId ? document.getElementById(`borrow-request-${targetId}`) : null;
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              else document.getElementById('visitor-catalog')?.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
           } else if (type.includes('community')) {
             setTab('communityBooks');
           } else {
             setTab('catalog');
           }
-          globalThis.scrollTo({ top: 0, behavior: 'smooth' });
         }}
         profileMenuContent={
           <>
