@@ -119,6 +119,9 @@ BEGIN
 END;
 $function$;
 
+-- Ensure RPC owner can hold function ownership in schema public
+GRANT CREATE ON SCHEMA public TO shelf_book_reviews_rpc_owner;
+
 -- Owner is the dedicated RPC role
 ALTER FUNCTION public.save_my_book_review(text, integer, text) OWNER TO shelf_book_reviews_rpc_owner;
 REVOKE ALL ON FUNCTION public.save_my_book_review(text, integer, text)
@@ -199,6 +202,33 @@ REVOKE ALL ON FUNCTION public.delete_my_book_review(uuid)
     FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.delete_my_book_review(uuid)
     TO authenticated;
+
+-- Least privilege: drop CREATE on public schema after ownership established
+REVOKE CREATE ON SCHEMA public FROM shelf_book_reviews_rpc_owner;
+
+DO $ensure_review_uniqueness$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_catalog.pg_constraint
+        WHERE conname = 'book_reviews_book_id_visitor_id_key'
+           OR (conrelid = 'public.book_reviews'::regclass AND contype = 'u')
+    ) THEN
+        -- Deduplicate duplicate reviews if any exist (keeping the latest review per visitor for that book)
+        DELETE FROM public.book_reviews
+        WHERE id IN (
+          SELECT id FROM (
+            SELECT id, ROW_NUMBER() OVER (PARTITION BY book_id, visitor_id ORDER BY created_at DESC, id DESC) as rnum
+            FROM public.book_reviews
+            WHERE visitor_id IS NOT NULL
+          ) sub
+          WHERE rnum > 1
+        );
+
+        ALTER TABLE public.book_reviews
+            ADD CONSTRAINT book_reviews_book_id_visitor_id_key UNIQUE (book_id, visitor_id);
+    END IF;
+END;
+$ensure_review_uniqueness$;
 
 -- ============================================================
 -- 6. Postflight validation

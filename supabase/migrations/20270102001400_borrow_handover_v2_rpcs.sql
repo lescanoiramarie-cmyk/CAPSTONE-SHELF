@@ -3,16 +3,51 @@
 BEGIN;
 
 DO $preflight$
+DECLARE
+  v_pickup_proc regprocedure;
+  v_return_proc regprocedure;
 BEGIN
   IF pg_catalog.to_regprocedure('public.confirm_pickup_v2(text,text)') IS NOT NULL
      OR pg_catalog.to_regprocedure('public.confirm_return_v2(text,text)') IS NOT NULL THEN
     RAISE EXCEPTION 'A v2 handover RPC already exists; review its definition before continuing.';
   END IF;
 
-  IF pg_catalog.to_regprocedure('public.confirm_pickup(text,text)') IS NULL
-     OR pg_catalog.to_regprocedure('public.confirm_return(text,text)') IS NULL
-     OR pg_catalog.to_regprocedure('public.is_active_staff_for_branch(text)') IS NULL THEN
-    RAISE EXCEPTION 'Required legacy handover functions or branch authorization helper are missing.';
+  -- Verify is_active_staff_for_branch helper exists
+  IF pg_catalog.to_regprocedure('public.is_active_staff_for_branch(text)') IS NULL THEN
+    RAISE EXCEPTION 'Required branch authorization helper public.is_active_staff_for_branch(text) is missing.';
+  END IF;
+
+  -- Support existing production signature (uuid, text) as primary, with (text, text) compatibility for legacy environments
+  v_pickup_proc := COALESCE(
+    pg_catalog.to_regprocedure('public.confirm_pickup(uuid,text)'),
+    pg_catalog.to_regprocedure('public.confirm_pickup(text,text)')
+  );
+  v_return_proc := COALESCE(
+    pg_catalog.to_regprocedure('public.confirm_return(uuid,text)'),
+    pg_catalog.to_regprocedure('public.confirm_return(text,text)')
+  );
+
+  IF v_pickup_proc IS NULL OR v_return_proc IS NULL THEN
+    RAISE EXCEPTION 'Required legacy handover functions confirm_pickup/confirm_return are missing.';
+  END IF;
+
+  -- Verify argument and return types, prosecdef, and language for the handover procedures
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_proc p
+    JOIN pg_catalog.pg_language l ON l.oid = p.prolang
+    WHERE p.oid = v_pickup_proc
+      AND l.lanname = 'plpgsql'
+      AND p.prorettype = 'void'::regtype
+      AND p.prosecdef
+  ) OR NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_proc p
+    JOIN pg_catalog.pg_language l ON l.oid = p.prolang
+    WHERE p.oid = v_return_proc
+      AND l.lanname = 'plpgsql'
+      AND p.prorettype = 'void'::regtype
+      AND p.prosecdef
+  ) THEN
+    RAISE EXCEPTION 'Legacy handover procedures do not satisfy required security properties or return types.';
   END IF;
 END;
 $preflight$;
@@ -25,6 +60,7 @@ SET search_path = ''
 AS $function$
 DECLARE
   v_role text;
+  v_request_uuid uuid;
 BEGIN
   IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'Authenticated staff account required.';
@@ -36,6 +72,12 @@ BEGIN
      OR NULLIF(pg_catalog.btrim(p_staff_name), '') IS NULL THEN
     RAISE EXCEPTION 'A request ID and staff name are required.';
   END IF;
+
+  BEGIN
+    v_request_uuid := pg_catalog.btrim(p_request_id)::uuid;
+  EXCEPTION WHEN invalid_text_representation THEN
+    RAISE EXCEPTION 'Invalid request ID format.';
+  END;
 
   SELECT staff.role INTO v_role
   FROM public.staff_profiles AS staff
@@ -51,13 +93,17 @@ BEGIN
     SELECT 1
     FROM public.borrow_requests AS request
     JOIN public.books AS book ON book.id = request.book_id
-    WHERE request.id::text = pg_catalog.btrim(p_request_id)
+    WHERE request.id = v_request_uuid
       AND public.is_active_staff_for_branch(book.library_id::text)
   ) THEN
     RAISE EXCEPTION 'Request not found or branch access denied.';
   END IF;
 
-  PERFORM public.confirm_pickup(p_request_id, p_staff_name);
+  IF pg_catalog.to_regprocedure('public.confirm_pickup(uuid,text)') IS NOT NULL THEN
+    PERFORM public.confirm_pickup(v_request_uuid, p_staff_name);
+  ELSE
+    PERFORM public.confirm_pickup(p_request_id, p_staff_name);
+  END IF;
 END;
 $function$;
 
@@ -69,6 +115,7 @@ SET search_path = ''
 AS $function$
 DECLARE
   v_role text;
+  v_request_uuid uuid;
 BEGIN
   IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'Authenticated staff account required.';
@@ -80,6 +127,12 @@ BEGIN
      OR NULLIF(pg_catalog.btrim(p_staff_name), '') IS NULL THEN
     RAISE EXCEPTION 'A request ID and staff name are required.';
   END IF;
+
+  BEGIN
+    v_request_uuid := pg_catalog.btrim(p_request_id)::uuid;
+  EXCEPTION WHEN invalid_text_representation THEN
+    RAISE EXCEPTION 'Invalid request ID format.';
+  END;
 
   SELECT staff.role INTO v_role
   FROM public.staff_profiles AS staff
@@ -95,13 +148,17 @@ BEGIN
     SELECT 1
     FROM public.borrow_requests AS request
     JOIN public.books AS book ON book.id = request.book_id
-    WHERE request.id::text = pg_catalog.btrim(p_request_id)
+    WHERE request.id = v_request_uuid
       AND public.is_active_staff_for_branch(book.library_id::text)
   ) THEN
     RAISE EXCEPTION 'Loan not found or branch access denied.';
   END IF;
 
-  PERFORM public.confirm_return(p_request_id, p_staff_name);
+  IF pg_catalog.to_regprocedure('public.confirm_return(uuid,text)') IS NOT NULL THEN
+    PERFORM public.confirm_return(v_request_uuid, p_staff_name);
+  ELSE
+    PERFORM public.confirm_return(p_request_id, p_staff_name);
+  END IF;
 END;
 $function$;
 

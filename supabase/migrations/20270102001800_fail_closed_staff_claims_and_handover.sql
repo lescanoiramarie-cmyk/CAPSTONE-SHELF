@@ -46,6 +46,10 @@ BEGIN
   FOREACH v_signature IN ARRAY v_signatures LOOP
     v_oid := pg_catalog.to_regprocedure(v_signature)::oid;
     IF v_oid IS NULL THEN
+      IF v_signature IN ('public.confirm_pickup(text,text)', 'public.confirm_return(text,text)') THEN
+        -- Production has only (uuid, text) signatures. Skip text overload if absent.
+        CONTINUE;
+      END IF;
       RAISE EXCEPTION 'Required staff function % is missing; refusing a partial hardening.', v_signature;
     END IF;
 
@@ -402,9 +406,11 @@ BEGIN
     'public.confirm_pickup(uuid,text)',
     'public.confirm_return(uuid,text)'
   ] LOOP
-    v_definition := pg_catalog.pg_get_functiondef(pg_catalog.to_regprocedure(v_signature));
-    IF pg_catalog.strpos(v_definition, 'IS DISTINCT FROM ''aal2''') = 0 THEN
-      RAISE EXCEPTION 'AAL2 fail-closed authorization is missing from %.', v_signature;
+    IF pg_catalog.to_regprocedure(v_signature) IS NOT NULL THEN
+      v_definition := pg_catalog.pg_get_functiondef(pg_catalog.to_regprocedure(v_signature));
+      IF pg_catalog.strpos(v_definition, 'IS DISTINCT FROM ''aal2''') = 0 THEN
+        RAISE EXCEPTION 'AAL2 fail-closed authorization is missing from %.', v_signature;
+      END IF;
     END IF;
   END LOOP;
 

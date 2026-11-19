@@ -86,7 +86,7 @@ BEGIN
 END;
 $review_owner_guard$;
 
-GRANT USAGE ON SCHEMA public TO shelf_book_reviews_rpc_owner;
+GRANT USAGE, CREATE ON SCHEMA public TO shelf_book_reviews_rpc_owner;
 
 -- Ensure request UID helper is available and executable by review RPC owner
 CREATE OR REPLACE FUNCTION public.shelf_rpc_request_uid()
@@ -381,6 +381,9 @@ REVOKE ALL ON FUNCTION public.delete_my_book_review(text)
     FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.delete_my_book_review(text)
     TO authenticated;
+
+-- Least privilege: drop CREATE on public schema after ownership established
+REVOKE CREATE ON SCHEMA public FROM shelf_book_reviews_rpc_owner;
 
 -- ============================================================
 -- 6. Postflight validation

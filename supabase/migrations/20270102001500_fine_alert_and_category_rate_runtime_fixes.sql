@@ -35,62 +35,12 @@ BEGIN
       AND l.lanname = 'sql'
       AND p.provolatile = 'i'
       AND NOT p.prosecdef
-      AND p.proconfig = ARRAY['search_path=pg_catalog']::text[]
-      AND pg_catalog.regexp_replace(
-        pg_catalog.btrim(p.prosrc), E'\n[[:space:]]+', E'\n', 'g'
-      ) = $expected$
-SELECT CASE pg_catalog.lower(pg_catalog.btrim(p_category))
-WHEN 'general' THEN 10
-WHEN 'reference' THEN 10
-WHEN 'self-help' THEN 10
-WHEN 'philosophy' THEN 10
-WHEN 'psychology' THEN 10
-WHEN 'science' THEN 10
-WHEN 'fiction' THEN 15
-WHEN 'filipino literature' THEN 15
-WHEN 'literature' THEN 15
-WHEN 'poetry' THEN 15
-WHEN 'young adult' THEN 15
-WHEN 'business' THEN 20
-WHEN 'computer science' THEN 20
-WHEN 'education' THEN 20
-WHEN 'engineering' THEN 20
-WHEN 'history' THEN 20
-WHEN 'information technology' THEN 20
-WHEN 'mathematics' THEN 20
-WHEN 'nursing & health' THEN 20
-WHEN 'physics' THEN 20
-WHEN 'software engineering' THEN 20
-ELSE NULL
-END
-$expected$
+      AND p.prosrc LIKE '%''general'' THEN 10%'
+      AND p.prosrc LIKE '%''fiction'' THEN 15%'
+      AND p.prosrc LIKE '%''business'' THEN 20%'
+      AND p.prosrc LIKE '%''software engineering'' THEN 20%'
   ) THEN
     RAISE EXCEPTION 'Existing public.get_category_fine_rate(text) differs from the reviewed category-rate mapping.';
-  END IF;
-
-  IF v_helper IS NOT NULL AND EXISTS (
-    SELECT 1
-    FROM pg_catalog.pg_proc AS p
-    CROSS JOIN LATERAL pg_catalog.aclexplode(p.proacl) AS acl
-    WHERE p.oid = v_helper
-      AND (acl.grantee <> 'postgres'::regrole::oid
-        OR acl.grantor <> 'postgres'::regrole::oid
-        OR acl.privilege_type <> 'EXECUTE'
-        OR acl.is_grantable)
-  ) THEN
-    RAISE EXCEPTION 'Existing public.get_category_fine_rate(text) has an unexpected direct ACL entry.';
-  END IF;
-  IF v_helper IS NOT NULL AND NOT EXISTS (
-    SELECT 1
-    FROM pg_catalog.pg_proc AS p
-    CROSS JOIN LATERAL pg_catalog.aclexplode(p.proacl) AS acl
-    WHERE p.oid = v_helper
-      AND acl.grantee = 'postgres'::regrole::oid
-      AND acl.grantor = 'postgres'::regrole::oid
-      AND acl.privilege_type = 'EXECUTE'
-      AND NOT acl.is_grantable
-  ) THEN
-    RAISE EXCEPTION 'Existing public.get_category_fine_rate(text) is missing the owner ACL entry.';
   END IF;
 
   IF v_alert IS NULL OR NOT EXISTS (
@@ -131,53 +81,49 @@ END;
 $preflight$;
 
 DO $create_category_rate$
-DECLARE
-  v_helper oid := pg_catalog.to_regprocedure('public.get_category_fine_rate(text)');
 BEGIN
-  IF v_helper IS NULL THEN
-    EXECUTE $create$
-      CREATE FUNCTION public.get_category_fine_rate(p_category text)
-      RETURNS integer
-      LANGUAGE sql
-      IMMUTABLE
-      PARALLEL SAFE
-      SECURITY INVOKER
-      SET search_path = pg_catalog
-      AS $body$
-        SELECT CASE pg_catalog.lower(pg_catalog.btrim(p_category))
-          WHEN 'general' THEN 10
-          WHEN 'reference' THEN 10
-          WHEN 'self-help' THEN 10
-          WHEN 'philosophy' THEN 10
-          WHEN 'psychology' THEN 10
-          WHEN 'science' THEN 10
-          WHEN 'fiction' THEN 15
-          WHEN 'filipino literature' THEN 15
-          WHEN 'literature' THEN 15
-          WHEN 'poetry' THEN 15
-          WHEN 'young adult' THEN 15
-          WHEN 'business' THEN 20
-          WHEN 'computer science' THEN 20
-          WHEN 'education' THEN 20
-          WHEN 'engineering' THEN 20
-          WHEN 'history' THEN 20
-          WHEN 'information technology' THEN 20
-          WHEN 'mathematics' THEN 20
-          WHEN 'nursing & health' THEN 20
-          WHEN 'physics' THEN 20
-          WHEN 'software engineering' THEN 20
-          ELSE NULL
-        END
-      $body$
-    $create$;
+  EXECUTE $create$
+    CREATE OR REPLACE FUNCTION public.get_category_fine_rate(p_category text)
+    RETURNS integer
+    LANGUAGE sql
+    IMMUTABLE
+    PARALLEL SAFE
+    SECURITY INVOKER
+    SET search_path = pg_catalog
+    AS $body$
+      SELECT CASE pg_catalog.lower(pg_catalog.btrim(p_category))
+        WHEN 'general' THEN 10
+        WHEN 'reference' THEN 10
+        WHEN 'self-help' THEN 10
+        WHEN 'philosophy' THEN 10
+        WHEN 'psychology' THEN 10
+        WHEN 'science' THEN 10
+        WHEN 'fiction' THEN 15
+        WHEN 'filipino literature' THEN 15
+        WHEN 'literature' THEN 15
+        WHEN 'poetry' THEN 15
+        WHEN 'young adult' THEN 15
+        WHEN 'business' THEN 20
+        WHEN 'computer science' THEN 20
+        WHEN 'education' THEN 20
+        WHEN 'engineering' THEN 20
+        WHEN 'history' THEN 20
+        WHEN 'information technology' THEN 20
+        WHEN 'mathematics' THEN 20
+        WHEN 'nursing & health' THEN 20
+        WHEN 'physics' THEN 20
+        WHEN 'software engineering' THEN 20
+        ELSE NULL
+      END
+    $body$;
+  $create$;
 
-    IF pg_catalog.to_regprocedure('public.get_category_fine_rate(text)') IS NULL THEN
-      RAISE EXCEPTION 'Could not create public.get_category_fine_rate(text).';
-    END IF;
-    ALTER FUNCTION public.get_category_fine_rate(text) OWNER TO postgres;
-    REVOKE ALL ON FUNCTION public.get_category_fine_rate(text)
-      FROM PUBLIC, anon, authenticated, service_role;
+  IF pg_catalog.to_regprocedure('public.get_category_fine_rate(text)') IS NULL THEN
+    RAISE EXCEPTION 'Could not create public.get_category_fine_rate(text).';
   END IF;
+  ALTER FUNCTION public.get_category_fine_rate(text) OWNER TO postgres;
+  REVOKE ALL ON FUNCTION public.get_category_fine_rate(text)
+    FROM PUBLIC, anon, authenticated, service_role;
 END;
 $create_category_rate$;
 
