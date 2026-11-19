@@ -17,12 +17,16 @@ const { Pool } = pg;
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
+// Database connection configuration with standard environment variable precedence:
+// Standard PostgreSQL variables (PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD) take priority.
+// Defaults adhere to standard PostgreSQL conventions (127.0.0.1:5432, user: postgres, db: shelf_test).
+// For isolated test clusters running on alternate ports (e.g. port 5433), set PGPORT=5433 or TEST_PGPORT=5433.
 const DEFAULT_CONFIG = {
   host: process.env.PGHOST || '127.0.0.1',
-  port: parseInt(process.env.PGPORT || '5433', 10),
+  port: parseInt(process.env.PGPORT || process.env.TEST_PGPORT || '5432', 10),
   database: process.env.PGDATABASE || 'shelf_test',
   user: process.env.PGUSER || 'postgres',
-  password: process.env.PGPASSWORD !== undefined ? process.env.PGPASSWORD : '',
+  password: process.env.PGPASSWORD !== undefined ? process.env.PGPASSWORD : 'postgres',
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
@@ -546,13 +550,33 @@ class ConcurrencyHarness {
   }
 
   async initialize() {
-    this.pool = new Pool(this.config);
-    const client = await this.pool.connect();
     try {
-      await client.query('SELECT 1');
-      console.log('✓ Database connection established');
-    } finally {
-      client.release();
+      this.pool = new Pool(this.config);
+      const client = await this.pool.connect();
+      try {
+        await client.query('SELECT 1');
+        console.log(`✓ Database connection established (${this.config.host}:${this.config.port}/${this.config.database})`);
+      } finally {
+        client.release();
+      }
+    } catch (err) {
+      // If default port 5432 failed and no explicit PGPORT or TEST_PGPORT was set, attempt fallback to local isolated test port 5433
+      if (!process.env.PGPORT && !process.env.TEST_PGPORT && this.config.port === 5432) {
+        console.log('[INFO] Port 5432 unavailable or rejected credentials. Attempting fallback to isolated local test port 5433...');
+        await this.pool.end().catch(() => {});
+        this.config.port = 5433;
+        this.config.password = process.env.PGPASSWORD !== undefined ? process.env.PGPASSWORD : '';
+        this.pool = new Pool(this.config);
+        const client = await this.pool.connect();
+        try {
+          await client.query('SELECT 1');
+          console.log(`✓ Database connection established (${this.config.host}:${this.config.port}/${this.config.database})`);
+        } finally {
+          client.release();
+        }
+      } else {
+        throw err;
+      }
     }
   }
 

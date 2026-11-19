@@ -67,6 +67,8 @@ export function parseArgs(args) {
     stopAtVersion: null,
     migrationsDir: MIGRATIONS_DIR,
     expectedChecksums: null,
+    strictTls: false,
+    sslCa: null,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -83,6 +85,10 @@ export function parseArgs(args) {
       options.verifiedBackup = true;
     } else if (arg === '--project-ref') {
       options.projectRef = args[++i];
+    } else if (arg === '--strict-tls') {
+      options.strictTls = true;
+    } else if (arg === '--ssl-ca') {
+      options.sslCa = path.resolve(args[++i]);
     } else if (arg === '--db-url' || arg === '--connection-string' || arg === '--password') {
       throw new Error(
         'SECURITY VIOLATION: Passing database credentials or connection strings via command-line arguments is forbidden. ' +
@@ -138,6 +144,39 @@ function isLocalhost(connectionString) {
       connectionString.includes('127.0.0.1')
     );
   }
+}
+
+export function resolveSslConfig(connectionString, opts = {}) {
+  if (isLocalhost(connectionString)) {
+    return false;
+  }
+
+  const caPath = opts.sslCa || process.env.PGSSLROOTCERT || process.env.SUPABASE_SSL_CA;
+  if (caPath) {
+    if (!fs.existsSync(caPath)) {
+      throw new Error(`Configured TLS CA certificate file not found: ${caPath}`);
+    }
+    const ca = fs.readFileSync(caPath, 'utf8');
+    return {
+      rejectUnauthorized: true,
+      ca,
+    };
+  }
+
+  const sslMode = (process.env.PGSSLMODE || '').toLowerCase();
+  if (opts.strictTls || sslMode === 'verify-full' || sslMode === 'verify-ca') {
+    return {
+      rejectUnauthorized: true,
+    };
+  }
+
+  // Supabase transaction/session poolers utilize an internal CA not included in
+  // standard operating system / Node.js root certificate stores. Transport remains
+  // fully encrypted via TLS (sslmode=require). Strict verification can be enforced
+  // by supplying the Supabase Root CA via --ssl-ca, PGSSLROOTCERT, or SUPABASE_SSL_CA.
+  return {
+    rejectUnauthorized: false,
+  };
 }
 
 function cleanSql(rawSql) {
@@ -203,9 +242,18 @@ export async function runMigrations(opts) {
   }
 
   console.log(`[INFO] Connecting to database (${isLocal ? 'LOCAL' : 'REMOTE: ' + projectRef})...`);
+  const ssl = resolveSslConfig(connectionString, {
+    sslCa: opts.sslCa,
+    strictTls: opts.strictTls,
+  });
   const clientConfig = { connectionString };
-  if (!isLocal) {
-    clientConfig.ssl = { rejectUnauthorized: false };
+  if (ssl) {
+    clientConfig.ssl = ssl;
+    if (ssl.rejectUnauthorized) {
+      console.log('[INFO] TLS: Strict certificate authority verification active (rejectUnauthorized: true).');
+    } else {
+      console.log('[INFO] TLS: Encrypted transport active (sslmode=require; pooler CA not in default system trust store).');
+    }
   }
   const client = new Client(clientConfig);
   try {

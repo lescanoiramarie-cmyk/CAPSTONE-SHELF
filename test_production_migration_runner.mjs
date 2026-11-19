@@ -39,7 +39,8 @@ import {
   computeFileChecksum,
   parseArgs,
   redactConnectionString,
-  sanitizeErrorMessage
+  sanitizeErrorMessage,
+  resolveSslConfig
 } from './scripts/run-production-migrations.mjs';
 
 const { Client } = pg;
@@ -652,8 +653,55 @@ async function run19Scenarios() {
     fs.rmSync(tempDirCatB, { recursive: true, force: true });
   }
 
+  // --- Scenario 20: Production TLS Configuration & Fail-Closed Behavior ---
+  console.log('--- Scenario 20: Production TLS Configuration & Fail-Closed Behavior ---');
+  // 1. Localhost returns false (no SSL)
+  const localSsl = resolveSslConfig('postgres://postgres@localhost:5433/db');
+  if (localSsl !== false) throw new Error('Scenario 20 FAILED: Localhost should not use SSL');
+
+  // 2. Remote URL defaults to encrypted transport (rejectUnauthorized: false for custom pooler CA)
+  const remoteSsl = resolveSslConfig('postgres://user:pass@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres');
+  if (!remoteSsl || remoteSsl.rejectUnauthorized !== false) {
+    throw new Error('Scenario 20 FAILED: Remote URL should default to TLS encrypted transport');
+  }
+
+  // 3. Remote URL with strictTls flag enforces rejectUnauthorized: true
+  const strictSsl = resolveSslConfig('postgres://user:pass@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres', { strictTls: true });
+  if (!strictSsl || strictSsl.rejectUnauthorized !== true) {
+    throw new Error('Scenario 20 FAILED: strictTls should enforce rejectUnauthorized: true');
+  }
+
+  // 4. Remote URL with PGSSLMODE=verify-full enforces rejectUnauthorized: true
+  process.env.PGSSLMODE = 'verify-full';
+  const verifyFullSsl = resolveSslConfig('postgres://user:pass@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres');
+  delete process.env.PGSSLMODE;
+  if (!verifyFullSsl || verifyFullSsl.rejectUnauthorized !== true) {
+    throw new Error('Scenario 20 FAILED: PGSSLMODE=verify-full should enforce rejectUnauthorized: true');
+  }
+
+  // 5. Remote URL with custom CA cert file
+  const tempCaDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shelf-tls-ca-'));
+  const tempCaFile = path.join(tempCaDir, 'test-ca.crt');
+  fs.writeFileSync(tempCaFile, '-----BEGIN CERTIFICATE-----\nTEST_CA_DATA\n-----END CERTIFICATE-----\n');
+  const caSsl = resolveSslConfig('postgres://user:pass@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres', { sslCa: tempCaFile });
+  fs.rmSync(tempCaDir, { recursive: true, force: true });
+  if (!caSsl || caSsl.rejectUnauthorized !== true || !caSsl.ca.includes('TEST_CA_DATA')) {
+    throw new Error('Scenario 20 FAILED: sslCa should enforce rejectUnauthorized: true with CA contents');
+  }
+
+  // 6. Non-existent CA file throws fail-closed error
+  let missingCaCaught = false;
+  try {
+    resolveSslConfig('postgres://user:pass@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres', { sslCa: 'C:\\nonexistent\\path\\ca.crt' });
+  } catch (err) {
+    missingCaCaught = err.message.includes('Configured TLS CA certificate file not found');
+  }
+  if (!missingCaCaught) throw new Error('Scenario 20 FAILED: Missing CA file should fail closed immediately');
+
+  console.log('  PASS: Production TLS configuration enforces encrypted transport, strict CA verification, and fail-closed validation.');
+
   console.log('\n================================================================');
-  console.log('   ALL 19 PRODUCTION MIGRATION RUNNER SCENARIOS PASSED!');
+  console.log('   ALL 20 PRODUCTION MIGRATION RUNNER SCENARIOS PASSED!');
   console.log('================================================================');
 }
 
