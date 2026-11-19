@@ -27,6 +27,7 @@ import {
   Plus,
   UserRound,
   Users,
+  UsersRound,
   Clock3,
   CheckCircle2,
   CircleAlert,
@@ -453,15 +454,25 @@ export default function OPACCatalog({
       .then((summaries) => {
         if (active) {
           if (summaries && summaries.length > 0) {
-            setCategorySummaries(summaries);
+            const mergedMap = new Map();
+            summaries.forEach(({ label, count }) => {
+              const formatted = formatBookCategory(label) || 'General';
+              mergedMap.set(formatted, (mergedMap.get(formatted) || 0) + Number(count || 0));
+            });
+            const mergedSummaries = Array.from(mergedMap.entries())
+              .map(([label, count]) => ({ label, count }))
+              .sort((a, b) => a.label.localeCompare(b.label));
+            setCategorySummaries(mergedSummaries);
           } else if (books && books.length > 0) {
             const counts = {};
             books.forEach((b) => {
-              const cat = b.category || 'General';
+              const cat = formatBookCategory(b.category) || 'General';
               counts[cat] = (counts[cat] || 0) + 1;
             });
             setCategorySummaries(
-              Object.entries(counts).map(([label, count]) => ({ label, count }))
+              Object.entries(counts)
+                .map(([label, count]) => ({ label, count }))
+                .sort((a, b) => a.label.localeCompare(b.label))
             );
           } else {
             setCategorySummaries([]);
@@ -474,11 +485,13 @@ export default function OPACCatalog({
           if (books && books.length > 0) {
             const counts = {};
             books.forEach((b) => {
-              const cat = b.category || 'General';
+              const cat = formatBookCategory(b.category) || 'General';
               counts[cat] = (counts[cat] || 0) + 1;
             });
             setCategorySummaries(
-              Object.entries(counts).map(([label, count]) => ({ label, count }))
+              Object.entries(counts)
+                .map(([label, count]) => ({ label, count }))
+                .sort((a, b) => a.label.localeCompare(b.label))
             );
           } else {
             setCategorySummaries([]);
@@ -585,10 +598,13 @@ export default function OPACCatalog({
     }
   }, [user?.id]);
 
-  const handleSaveCommunityBook = async (communityBookId, currentlySaved) => {
+  const handleSaveCommunityBook = async (communityBookId, shouldBeSaved) => {
     if (!user?.id) return;
+    const isCurrentlySaved = savedCommunityBookIds.has(String(communityBookId));
+    const wantToSave = shouldBeSaved !== undefined ? Boolean(shouldBeSaved) : !isCurrentlySaved;
+
     try {
-      if (currentlySaved) {
+      if (!wantToSave) {
         const result = await unsaveCommunityBookForLater(communityBookId);
         if (result.success) {
           setSavedCommunityBooks((prev) => prev.filter((b) => String(b.id) !== String(communityBookId)));
@@ -616,7 +632,7 @@ export default function OPACCatalog({
       }
     } catch (error) {
       console.error('Save/unsave community book error:', error);
-      setNotice(currentlySaved ? 'Unable to remove book from saved list.' : 'Unable to save book for later.');
+      setNotice(wantToSave ? 'Unable to save book for later.' : 'Unable to remove book from saved list.');
     }
   };
 
@@ -3057,14 +3073,32 @@ export default function OPACCatalog({
                 </p>
               </div>
             ) : savedCommunityBooks.length === 0 && savedCommunityBookIds.size === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
-                <BookmarkCheck size={32} className="mx-auto text-slate-300" aria-hidden="true" />
-                <h3 className="mt-3 text-base font-bold text-slate-700">
-                  No saved books yet.
+              <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 sm:p-10 text-center max-w-xl mx-auto space-y-3 dark:border-slate-700 dark:bg-slate-800">
+                <BookmarkCheck size={36} className="mx-auto text-slate-300 dark:text-slate-600" aria-hidden="true" />
+                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">
+                  No saved community books yet.
                 </h3>
-                <p className="mt-1 text-xs text-slate-500">
-                  Click the bookmark icon on community books to save them for later.
+                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+                  Click the bookmark icon on community books to save them for later reading. Looking for your saved library books? Check your reading list.
                 </p>
+                <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onViewChange('communityBooks')}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-shelf-primary px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:opacity-90"
+                  >
+                    <UsersRound size={14} aria-hidden="true" />
+                    Browse Community Books
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onViewChange('readingList')}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
+                  >
+                    <ClipboardList size={14} aria-hidden="true" />
+                    View Library Reading List
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="opac-book-grid book-card-grid visitor-book-collection-grid visitor-community-book-grid">
@@ -4851,32 +4885,51 @@ export default function OPACCatalog({
                       : 'Send a request to the owner. You can coordinate the handover after approval.'}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  data-confirm-message="Are you sure you want to request this community book?"
-                  onClick={() => handleRequestCommunityBook(selectedBook)}
-                  disabled={
-                    submittingCommunityRequest ||
-                    (selectedBook.ownerVisitorId &&
-                      String(selectedBook.ownerVisitorId) === String(user?.id)) ||
-                    selectedBook.lendingEnabled === false ||
-                    getPersonalBookCopyAvailability(selectedBook).availableCopies === 0 ||
-                    selectedBookFineRate == null
-                  }
-                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <HandHeart size={16} strokeWidth={2} aria-hidden="true" />
-                  {submittingCommunityRequest
-                    ? 'Submitting request...'
-                    : selectedBook.ownerVisitorId &&
-                      String(selectedBook.ownerVisitorId) === String(user?.id)
-                      ? 'This is your book'
-                      : selectedBook.lendingEnabled === false
-                        ? 'Lending unavailable'
-                        : getPersonalBookCopyAvailability(selectedBook).availableCopies === 0
-                      ? 'Unavailable'
-                      : 'Request community book'}
-                </button>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSaveCommunityBook(selectedBook.id, !savedCommunityBookIds.has(String(selectedBook.id)))}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
+                  >
+                    {savedCommunityBookIds.has(String(selectedBook.id)) ? (
+                      <>
+                        <BookmarkCheck size={16} className="text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                        <span>Saved</span>
+                      </>
+                    ) : (
+                      <>
+                        <Bookmark size={16} aria-hidden="true" />
+                        <span>Save for later</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    data-confirm-message="Are you sure you want to request this community book?"
+                    onClick={() => handleRequestCommunityBook(selectedBook)}
+                    disabled={
+                      submittingCommunityRequest ||
+                      (selectedBook.ownerVisitorId &&
+                        String(selectedBook.ownerVisitorId) === String(user?.id)) ||
+                      selectedBook.lendingEnabled === false ||
+                      getPersonalBookCopyAvailability(selectedBook).availableCopies === 0 ||
+                      selectedBookFineRate == null
+                    }
+                    className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <HandHeart size={16} strokeWidth={2} aria-hidden="true" />
+                    {submittingCommunityRequest
+                      ? 'Submitting request...'
+                      : selectedBook.ownerVisitorId &&
+                        String(selectedBook.ownerVisitorId) === String(user?.id)
+                        ? 'This is your book'
+                        : selectedBook.lendingEnabled === false
+                          ? 'Lending unavailable'
+                          : getPersonalBookCopyAvailability(selectedBook).availableCopies === 0
+                        ? 'Unavailable'
+                        : 'Request community book'}
+                  </button>
+                </div>
                 {selectedBook.ownerVisitorId &&
                 String(selectedBook.ownerVisitorId) === String(user?.id) ? (
                   <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">

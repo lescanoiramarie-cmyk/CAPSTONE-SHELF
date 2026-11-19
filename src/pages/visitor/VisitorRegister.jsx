@@ -595,6 +595,7 @@ useEffect(() => {
       setPendingEmail(email);
       setOtpInput('');
       setView('otp');
+      setResendCooldown(120);
       setError('');
     } catch (err) {
       setError(err.message || 'Registration failed. Please try again.');
@@ -648,6 +649,7 @@ useEffect(() => {
 
   // Resend registration OTP.
   const handleResendOtp = async () => {
+    if (resendCooldown > 0 || busy) return;
     setError('');
     setBusy(true);
 
@@ -1030,27 +1032,23 @@ useEffect(() => {
       {/* Main panel */}
       <div className="auth-form-panel flex w-full items-center justify-center overflow-y-auto p-4 sm:p-8 lg:w-1/2 lg:p-12">
         <div className="auth-form-card my-auto w-full max-w-md space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-xl sm:p-8">
-          {/* Sticky header with Back navigation */}
-          <div className="sticky top-0 z-20 -mt-1 flex items-center justify-between gap-2 bg-white pb-1">
-            {view !== 'register' && view !== 'otp' && view !== 'forgot' && (
-              <button
-                type="button"
-                onClick={() => navigate('/')}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-shelf-primary"
-              >
-                <ArrowLeft size={16} aria-hidden="true" />
-                Back to home
-              </button>
-            )}
+          {/* Static header with Back to home navigation */}
+          <div className="flex items-center justify-between gap-2 pb-1">
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-shelf-primary"
+            >
+              <ArrowLeft size={15} aria-hidden="true" />
+              Back to home
+            </button>
             {(view === 'register' || view === 'otp' || view === 'forgot') && (
               <button
                 type="button"
                 onClick={resetToLogin}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-shelf-primary"
-                aria-label={view === 'register' ? 'Back to Login' : 'Go back'}
-                title={view === 'register' ? 'Back to Login' : 'Go back'}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
+                aria-label={view === 'register' ? 'Back to sign in' : 'Go back'}
               >
-                <ArrowLeft size={16} aria-hidden="true" />
                 {view === 'register' ? 'Back to sign in' : 'Back'}
               </button>
             )}

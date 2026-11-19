@@ -1535,16 +1535,14 @@ setOtpResendRemaining(
       <div className="auth-form-panel relative w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-8 lg:p-12 overflow-y-auto">
         <div className="auth-form-card w-full max-w-md bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-slate-200 space-y-6 my-auto">
           <div className="flex items-center justify-between gap-2 pb-1">
-            {view !== 'register' && view !== 'forgot' && (
-              <button
-                type="button"
-                onClick={() => navigate('/')}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-shelf-primary"
-              >
-                <ArrowLeft size={16} aria-hidden="true" />
-                Back to home
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-shelf-primary"
+            >
+              <ArrowLeft size={16} aria-hidden="true" />
+              Back to home
+            </button>
             {(view === 'register' || view === 'forgot') && (
               <button
                 type="button"

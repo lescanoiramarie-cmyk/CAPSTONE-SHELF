@@ -194,7 +194,13 @@ export default function ShelfHeader({
 
   const handleLogoClick = () => {
     if (user?.id) {
-      navigate(getDashboardPath(user.role));
+      const target = getDashboardPath(user.role);
+      if (window.location.pathname === target) {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        window.dispatchEvent(new CustomEvent('shelf:logo-click'));
+      } else {
+        navigate(target);
+      }
     } else {
       navigate('/');
     }
@@ -260,7 +266,7 @@ export default function ShelfHeader({
           type="button"
           onClick={handleLogoClick}
           aria-label="Go to SHELF home"
-          className="flex min-w-0 items-center gap-2 text-left shrink-0"
+          className="flex min-w-0 items-center gap-2 text-left shrink-0 cursor-pointer transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary rounded-lg"
         >
           <img src="/shelf-logo.png" alt="" className="h-8 w-8 shrink-0 object-contain" />
           <span className="shrink-0 text-base font-extrabold tracking-wider sm:text-lg text-shelf-primary">

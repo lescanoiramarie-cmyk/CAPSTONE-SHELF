@@ -1042,3 +1042,29 @@ label.text-xs {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+
+/* ==========================================================================
+   GLOBAL SCROLLBAR & OVERFLOW CONSTRAINTS (Prevent double scrollbars)
+   ========================================================================== */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#root {
+  width: 100%;
+  min-height: 100%;
+}
+
+/* Admin dashboards have internal scrollable main containers.
+   Prevent the root document from rendering a duplicate outer scrollbar. */
+html:has(.subadmin-dashboard),
+body:has(.subadmin-dashboard),
+html:has(.superadmin-dashboard),
+body:has(.superadmin-dashboard) {
+  overflow: hidden !important;
+  height: 100% !important;
+}

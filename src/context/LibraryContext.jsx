@@ -85,7 +85,7 @@ export function LibraryProvider({ children }) {
   );
 
   useEffect(() => {
-    const timer = setTimeout(() => setSplashElapsed(true), 2000);
+    const timer = setTimeout(() => setSplashElapsed(true), 250);
     return () => clearTimeout(timer);
   }, []);
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Draggable from 'react-draggable';
 import { QRCodeSVG } from 'qrcode.react';
 import { Bar } from 'react-chartjs-2';
@@ -22,6 +23,7 @@ import {
   CircleDollarSign,
   FileText,
   Fingerprint,
+  LogOut,
   Mail,
   MapPinned,
   Pencil,
@@ -193,6 +195,7 @@ function getCommunityReturnReminder(dueDate) {
 
 function VisitorDashboardContent() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [currentTime, setCurrentTime] = useState(0);
 
   useEffect(() => {
@@ -317,6 +320,17 @@ function VisitorDashboardContent() {
   const [visitorPasskeyBusy, setVisitorPasskeyBusy] = useState(false);
   const [visitorPasskeyError, setVisitorPasskeyError] = useState('');
   const [visitorPasskeyMessage, setVisitorPasskeyMessage] = useState('');
+
+  useEffect(() => {
+    const handleResetToHome = () => {
+      setIsMenuOpen(false);
+      setIsTermsReviewOpen(false);
+      setTab('catalog');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    window.addEventListener('shelf:logo-click', handleResetToHome);
+    return () => window.removeEventListener('shelf:logo-click', handleResetToHome);
+  }, []);
 
   const refreshVisitorMfa = useCallback(async () => {
     if (!supabase?.auth?.mfa) return;
@@ -1683,6 +1697,14 @@ function VisitorDashboardContent() {
                   });
               },
             },
+            {
+              label: 'Sign Out',
+              Icon: LogOut,
+              onClick: () => {
+                logout();
+                navigate('/');
+              },
+            },
           ]}
           />
         </div>
@@ -2323,6 +2345,28 @@ function VisitorDashboardContent() {
                       {!attendanceHistoryHasMore && myVisits.length > 0 && !attendanceHistoryLoading && (
                         <p className="py-2 text-center text-[11px] text-slate-400">You have reached the end of your attendance history.</p>
                       )}
+                    </div>
+                  </section>
+
+                  {/* SIGN OUT SECTION */}
+                  <section className="mt-6 pt-5 border-t border-slate-200 dark:border-slate-700">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-rose-200 bg-rose-50/50 p-4 dark:border-rose-900/50 dark:bg-rose-950/20">
+                      <div>
+                        <h4 className="text-sm font-bold text-rose-900 dark:text-rose-200">Session and Access</h4>
+                        <p className="text-xs text-rose-700/80 dark:text-rose-300/80">Sign out of your visitor account on this browser.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsMenuOpen(false);
+                          logout();
+                          navigate('/');
+                        }}
+                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                      >
+                        <LogOut size={16} aria-hidden="true" />
+                        Sign out
+                      </button>
                     </div>
                   </section>
 

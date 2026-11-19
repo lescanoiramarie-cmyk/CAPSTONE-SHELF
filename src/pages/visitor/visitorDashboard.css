@@ -1616,3 +1616,20 @@
     margin-inline: 0;
   }
 }
+
+
+/* Fix: Hide horizontal scrollbar under dashboard tabs */
+.visitor-dashboard [aria-label='Visitor dashboard']::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+.visitor-dashboard [aria-label='Visitor dashboard'] {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+/* Fix: reduce dead blank space at bottom of visitor dashboard */
+.visitor-dashboard main {
+  padding-bottom: 2rem !important;
+}
