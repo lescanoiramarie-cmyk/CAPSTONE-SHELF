@@ -560,7 +560,7 @@ const featuredBooks = books
               <span>
                 {libraryBookCount !== null
                   ? libraryBookCount.toLocaleString()
-                  : books.filter((book) => book.bookType === 'library').length.toLocaleString()} Books
+                  : books.filter((book) => book.bookType === 'library').length.toLocaleString()} Library Books
               </span>
             </div>
 

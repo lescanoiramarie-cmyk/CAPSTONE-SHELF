@@ -408,9 +408,7 @@ export default function ShelfHeader({
                 aria-expanded={isProfileMenuOpen}
                 aria-haspopup="true"
               >
-                {profileMenuContent ? (
-                  profileMenuContent
-                ) : user.qrCode ? (
+                {user.qrCode ? (
                   <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2}>
                     <rect x="3" y="3" width="7" height="7" rx="1" />
                     <rect x="14" y="3" width="7" height="7" rx="1" />

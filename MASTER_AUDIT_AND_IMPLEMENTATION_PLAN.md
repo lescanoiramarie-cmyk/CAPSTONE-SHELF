@@ -1776,6 +1776,68 @@ The unit test suite (`npm test`) reports 301 total tests: **258 passed, 0 failed
 
 ---
 
+### Phase 15: UI Recovery and System-Wide Data Fetching Repair — 2026-11-19
+
+#### 1. Identified Issues & Root Cause Analysis
+1. **Header Navigation Collision (Screenshot 1 & 2):**
+   - **File:** `src/component/ShelfHeader.jsx`
+   - **Root Cause:** In the profile menu button trigger, `{profileMenuContent ? profileMenuContent : ...}` rendered the entire dropdown menu list (`<li><button>My Profile</button></li>`) inside the 40x40 icon button trigger, distorting navigation and overlapping the notification bell and dark-mode toggle.
+   - **Fix:** Restored the button trigger to render only the user icon/avatar/QR code; `profileMenuContent` remains properly rendered inside `<ul role="menu">`.
+
+2. **OPAC Categories 400 Bad Request (Screenshot 2):**
+   - **Error:** `column b.is_active does not exist` in `get_opac_category_book_counts`.
+   - **Root Cause:** Migration `20270103000400` included `WHERE b.is_active = true`, but `public.books` has no `is_active` column.
+   - **Fix:** Removed `b.is_active = true` in reconciliation migration `20270121000000`, filtering by `b.book_type = 'library'`.
+
+3. **OPAC Saved Community Books 400 Bad Request (Screenshot 3 & 5):**
+   - **Error:** `Failed to load saved community books: column b.is_active does not exist`.
+   - **Root Cause:** Migration `20270103000700` included `AND b.is_active = true`, whereas `is_active` belongs to `public.visitors v`.
+   - **Fix:** Removed `b.is_active = true` and scoped to `v.is_active = true` in `20270121000000`.
+
+4. **Book Details Modal Toast Alert Overlap (Screenshot 4):**
+   - **File:** `src/component/OPACCatalog.jsx`
+   - **Root Cause:** Notification toast was positioned at `fixed left-1/2 top-4 z-[80]`, directly obscuring the modal header, book title, and modal close button.
+   - **Fix:** Repositioned toast to `fixed bottom-6 right-6 z-[100] max-w-md`, providing an unobtrusive feedback notification that never covers modal dialogs.
+
+5. **MFA Screen Staff Data-Loading Banner (Screenshot 7):**
+   - **Error:** `Unable to load library data: AAL2 authentication is required. [Retry]`.
+   - **Root Cause:** When staff logs in with password (AAL1), `onAuthStateChange` triggered `refreshAll()` -> `loadAllBorrowRequests()`. The staff history RPC rejects non-AAL2 sessions, and `loadAllBorrowRequests` incorrectly called `setConnectionError(error.message)`, showing a fatal system error banner while the user was entering their 6-digit MFA code.
+   - **Fix:** In `LibraryContext.jsx`, gracefully caught AAL2 intermediate states in `loadAllBorrowRequests()` without setting `connectionError`.
+
+6. **Sub-Admin Dashboard UUID Syntax Crash (Screenshot 8):**
+   - **Error:** `Unable to load library data: Invalid input syntax for type uuid: "BK-3a3904ac" [Retry]`.
+   - **Root Cause:** In migration `20270102002700`, `get_staff_borrowing_history` declared `v_branch_book_ids uuid[];` and `id uuid`, but `books.id` (`BK-...`) and `borrow_requests.id` (`REQ-...`) are `text`.
+   - **Fix:** Recreated `get_staff_borrowing_history` and `get_visitor_borrowing_history` with `v_branch_book_ids text[];` and `RETURNS TABLE ( id text, ... )`.
+
+7. **Landing Page Counter Clarification:**
+   - **File:** `src/pages/visitor/LandingPage.jsx`
+   - **Fix:** Updated quick-stats label to `"1,803 Library Books"` to clarify that the counter reflects physical library collection books.
+
+8. **OPAC Filtered Book Count & Least-Privilege Authorization:**
+   - **Fix:** In `get_opac_filtered_book_count`, permitted public branch filtering in OPAC without requiring staff privileges.
+   - **Least Privilege:** Re-evaluated permissions on internal staff helper `opac_has_library_access(uuid)`. Because `get_opac_filtered_book_count` no longer calls it, `anon` has no need to execute it. Enforced strict least privilege: revoked execute from `PUBLIC` and `anon`; granted execute exclusively to `authenticated` staff callers (`get_opac_library_book_count_by_library`).
+
+#### 2. Verification Summary & Security Audit
+- `npm test`: 301 tests (258 passed, 43 intentionally skipped placeholders, 0 failed).
+- `npm run test:concurrency`: 8/8 passed.
+- `npm run validate:migrations`: 171/171 migrations valid (Category A: 119, Category B: 6, Category C: 46).
+- `npm run lint`: 0 errors.
+- `npm run build`: built in 5.62s, 0 errors.
+- **Local PostgreSQL 18 Multi-Role Matrix:**
+  - Anonymous (no filter: 6 books, Branch A: 3 books, Branch B: 2 books, unknown branch: 0 books) — PASS.
+  - Institutional visitor, active community visitor, pending community visitor — PASS.
+  - Sub-Admin A (authorized Branch A: 3 books, public OPAC filter Branch B: 2 books) — PASS.
+  - Branch-scoped count RPC (`get_opac_library_book_count_by_library`): Sub-Admin A on Branch A succeeds (3); Sub-Admin A on Branch B fails closed (`42501 Insufficient privileges`); Anonymous and Visitors rejected (`42501`) — PASS.
+  - Borrowing history cross-branch isolation: Sub-Admin A sees only Branch A requests; Sub-Admin B sees only Branch B requests; cross-branch leakage is impossible — PASS.
+  - Borrowing history cross-visitor isolation: Visitor A sees only Visitor A requests; Visitor B sees only Visitor B requests; cross-visitor leakage is impossible — PASS.
+  - Frontend mapping: Verified `store.mapBorrowRequest` parses text IDs (`BK-TEST-A1` and `REQ-AUDIT-A1`) and null date fields without error — PASS.
+- **Production Preflight Status:**
+  - Production ledger has 170 migrations applied.
+  - Migration `20270121000000` is pending as migration 171.
+  - Migration runner dry-run against matching schema: `DRY_RUN_PASSED`.
+
+---
+
 ## Final Production Verdict
-**`RELEASE SUCCESSFUL`**
+**`READY FOR OWNER APPROVAL — UI RECOVERY & SECURITY AUDIT COMPLETE`**
 

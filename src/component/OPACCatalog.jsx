@@ -2414,7 +2414,7 @@ export default function OPACCatalog({
           <div
             role={noticeIsError ? 'alert' : 'status'}
             aria-live={noticeIsError ? 'assertive' : 'polite'}
-            className={`visitor-feedback visitor-feedback-toast fixed left-1/2 top-4 z-[80] flex w-[calc(100%-2rem)] max-w-3xl -translate-x-1/2 items-center gap-3 rounded-xl border border-l-4 px-4 py-3 shadow-lg ${noticeTone}`}
+            className={`visitor-feedback visitor-feedback-toast fixed bottom-6 right-6 z-[100] flex w-[calc(100%-2rem)] max-w-md items-center gap-3 rounded-xl border border-l-4 px-4 py-3 shadow-2xl backdrop-blur-sm ${noticeTone}`}
           >
             <span className={`visitor-feedback-icon inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${noticeIconTone}`} aria-hidden="true">
               {noticeIsSuccess ? <CheckCircle2 size={18} /> : <CircleAlert size={18} />}

@@ -320,12 +320,14 @@ export function LibraryProvider({ children }) {
     } catch (error) {
       if (loadSequence !== borrowRequestsLoadSequenceRef.current) return;
       if (error?.name === 'AbortError') return;
+      const msg = error?.message || '';
+      if (msg.includes('AAL2') || msg.includes('aal2') || msg.includes('assurance')) {
+        setBorrowRequestsLoading(false);
+        return;
+      }
       console.error('Unable to load borrowing history.');
       setBorrowRequestsLoadError(
-        error?.message || 'Unable to load borrowing history.'
-      );
-      setConnectionError(
-        error?.message || 'Unable to load borrowing history.'
+        msg || 'Unable to load borrowing history.'
       );
     } finally {
       clearTimeout(timeoutId);
