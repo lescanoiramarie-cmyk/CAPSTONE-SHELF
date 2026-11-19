@@ -33,6 +33,7 @@ import {
   FileText,
   X,
   Settings,
+  Sliders,
 } from 'lucide-react';
 import VisitorScanDetails from '../../component/VisitorScanDetails.jsx';
 import SubAdminTermsContent, {
@@ -1541,7 +1542,7 @@ export default function SubAdminDashboard() {
   }
 
   return (
-    <div className="subadmin-dashboard flex h-dvh min-h-0 w-full overflow-hidden bg-shelf-bg text-slate-800 flex-row">
+    <div className="subadmin-dashboard flex h-dvh min-h-0 w-full overflow-hidden bg-shelf-bg text-slate-800 dark:bg-slate-900 dark:text-slate-100 flex-row">
       {/* SIDEBAR (FULL HEIGHT TO TOP) */}
       <aside className="subadmin-sidebar relative flex h-full w-60 shrink-0 flex-col border-r border-white/10 bg-shelf-primary text-white shadow-lg z-20">
         {/* SHELF BRAND LOGO IN SIDEBAR */}
@@ -2086,22 +2087,45 @@ export default function SubAdminDashboard() {
               </select>
               <p className="mt-2 text-xs leading-5 text-slate-500">This preference is saved on this device and used on your next sign-in.</p>
             </section>
-            <section className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-start gap-3">
-                <span className="rounded-xl bg-blue-50 p-3 text-blue-800"><FileText size={20} aria-hidden="true" /></span>
+                <span className="rounded-xl bg-blue-50 p-3 text-blue-800"><Sliders size={20} aria-hidden="true" /></span>
                 <div>
-                  <h3 className="font-bold text-slate-900">Terms and Conditions</h3>
-                  <p className="mt-1 text-sm text-slate-600">View the responsibilities for accessing branch and visitor information.</p>
+                  <h3 className="font-bold text-slate-900">Branch Circulation Preferences</h3>
+                  <p className="mt-1 text-sm text-slate-600">Configure default circulation behavior and reminder options for this branch.</p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowSubAdminTerms(true)}
-                className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-shelf-primary hover:bg-slate-50"
-              >
-                <FileText size={16} aria-hidden="true" />
-                View terms
-              </button>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="subadmin-lending-period" className="block text-xs font-semibold text-slate-700">Default Lending Period</label>
+                  <select
+                    id="subadmin-lending-period"
+                    defaultValue={window.localStorage.getItem(`shelf_subadmin_lending_days_${currentLibraryId}`) || '7'}
+                    onChange={(event) => window.localStorage.setItem(`shelf_subadmin_lending_days_${currentLibraryId}`, event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-shelf-primary focus:outline-none"
+                  >
+                    <option value="7">7 Days (Standard)</option>
+                    <option value="14">14 Days (Extended)</option>
+                    <option value="21">21 Days (3 Weeks)</option>
+                    <option value="30">30 Days (Monthly)</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="subadmin-fine-rate" className="block text-xs font-semibold text-slate-700">Daily Overdue Rate Guidance</label>
+                  <select
+                    id="subadmin-fine-rate"
+                    defaultValue={window.localStorage.getItem(`shelf_subadmin_fine_rate_${currentLibraryId}`) || '20'}
+                    onChange={(event) => window.localStorage.setItem(`shelf_subadmin_fine_rate_${currentLibraryId}`, event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-shelf-primary focus:outline-none"
+                  >
+                    <option value="10">₱10 per overdue day</option>
+                    <option value="20">₱20 per overdue day (Recommended)</option>
+                    <option value="30">₱30 per overdue day</option>
+                    <option value="50">₱50 per overdue day</option>
+                  </select>
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-slate-500">Settings are remembered locally for your active library console.</p>
             </section>
             </div>
           </section>

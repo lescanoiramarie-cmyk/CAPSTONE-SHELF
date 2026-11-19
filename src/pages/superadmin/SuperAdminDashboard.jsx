@@ -535,7 +535,7 @@ export default function SuperAdminDashboard() {
   const [staffRoleFilter, setStaffRoleFilter] = useState('all');
   const [staffStatusFilter, setStaffStatusFilter] = useState('all');
   const [staffPage, setStaffPage] = useState(1);
-  const staffPageSize = 10;
+  const [staffPageSize, setStaffPageSize] = useState(10);
   const [
     staffLoading,
     setStaffLoading,
@@ -1124,80 +1124,22 @@ const handleEditStaff = (staff) => {
   }, []);
 
   const superAdminNotifications = useMemo(() => {
-    const now = notificationNow;
-    const todayDateKey = new Date(now).toISOString().slice(0, 10);
     const notifications = [];
 
-    borrowRequests.forEach((request) => {
-      const bookTitle = request.bookTitle || 'Untitled book';
-      const visitorName = request.visitorName || 'Visitor';
-      const status = String(request.status || '').toLowerCase();
-      const requestDate = new Date(request.requestDate || request.request_date).getTime();
-      const dueDate = new Date(request.dueDate || request.due_date).getTime();
-      const pickupDeadline = new Date(request.pickupDeadline || request.pickup_deadline).getTime();
-      const dueDateKey = Number.isFinite(dueDate)
-        ? new Date(dueDate).toISOString().slice(0, 10)
-        : '';
-
-      if (
-        ['queued', 'pending'].includes(status) &&
-        Number.isFinite(requestDate) &&
-        requestDate <= now &&
-        requestDate >= now - 24 * 60 * 60 * 1000
-      ) {
+    // System Oversight: Inactive / unverified staff accounts requiring review
+    staffAccounts.forEach((account) => {
+      if (account.is_active === false || account.isActive === false) {
         notifications.push({
-          id: `request-${request.id}`,
-          requestId: request.id,
-          recordId: request.id,
-          type: 'reservation',
-          targetSection: 'workspace',
-          targetTab: 'reports',
-          status: 'Pending',
-          title: 'New reservation request',
-          message: `${visitorName} — ${bookTitle}`,
-          timeLabel: `Requested ${new Date(requestDate).toLocaleString()}`,
-          timestamp: requestDate,
-        });
-      }
-
-      if (
-        status === 'borrowed' &&
-        Number.isFinite(dueDate) &&
-        dueDateKey < todayDateKey
-      ) {
-        notifications.push({
-          id: `overdue-${request.id}`,
-          requestId: request.id,
-          recordId: request.id,
-          type: 'overdue',
-          targetSection: 'workspace',
-          targetTab: 'reports',
-          followUp: true,
-          title: 'Overdue book',
-          message: `${bookTitle} — ${visitorName}`,
-          timeLabel: `Due ${new Date(dueDate).toLocaleString()}`,
-          timestamp: dueDate,
-        });
-      }
-
-      if (
-        status === 'ready_for_pickup' &&
-        Number.isFinite(pickupDeadline) &&
-        pickupDeadline >= now &&
-        pickupDeadline <= now + 24 * 60 * 60 * 1000
-      ) {
-        notifications.push({
-          id: `pickup-${request.id}`,
-          requestId: request.id,
-          recordId: request.id,
-          type: 'pickup',
-          targetSection: 'workspace',
-          targetTab: 'reports',
-          status: 'Pending',
-          title: 'Pickup deadline approaching',
-          message: `${bookTitle} for ${visitorName}`,
-          timeLabel: `Deadline ${new Date(pickupDeadline).toLocaleString()}`,
-          timestamp: pickupDeadline,
+          id: `staff-inactive-${account.id}`,
+          recordId: account.id,
+          type: 'staff_review',
+          targetSection: 'staff',
+          targetTab: 'staff',
+          status: 'Inactive',
+          title: 'Staff account inactive',
+          message: `${account.full_name || account.fullName || 'Staff'} (${account.email}) requires review`,
+          timeLabel: 'Needs review',
+          timestamp: new Date(account.created_at || account.createdAt || notificationNow).getTime(),
         });
       }
     });
@@ -1205,7 +1147,7 @@ const handleEditStaff = (staff) => {
     return notifications
       .sort((left, right) => right.timestamp - left.timestamp)
       .slice(0, 20);
-  }, [borrowRequests, notificationNow]);
+  }, [staffAccounts, notificationNow]);
 
   const handleOverdueFollowUp = async (notification) => {
     await sendDueDateFollowUp(notification.requestId);
@@ -1373,7 +1315,7 @@ const handleEditStaff = (staff) => {
   }
 
   return (
-    <div className="superadmin-dashboard flex h-dvh min-h-0 w-full overflow-hidden bg-shelf-bg text-slate-800 flex-row">
+    <div className="superadmin-dashboard flex h-dvh min-h-0 w-full overflow-hidden bg-shelf-bg text-slate-800 dark:bg-slate-900 dark:text-slate-100 flex-row">
       {/* SIDEBAR (FULL HEIGHT TO TOP) */}
       <aside className="superadmin-sidebar relative flex h-full w-60 shrink-0 flex-col overflow-hidden bg-shelf-primary text-white z-20">
         {/* SHELF BRAND LOGO IN SIDEBAR */}
@@ -2210,7 +2152,7 @@ const handleEditStaff = (staff) => {
                         disabled={savingLibrary}
                         className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
                       >
-                        {savingLibrary ? 'Adding...' : 'Add library'}
+                        {savingLibrary ? (editingLibraryId ? 'Saving...' : 'Adding...') : (editingLibraryId ? 'Save Changes' : 'Add library')}
                       </button>
                     </div>
                   </form>
@@ -2496,7 +2438,7 @@ const handleEditStaff = (staff) => {
                   {staffLoading ? 'Loading...' : 'Refresh'}
                 </button>
               </div>
-              <div className="grid gap-3 border-b border-slate-100 bg-slate-50/70 p-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-3 border-b border-slate-100 bg-slate-50/70 p-4 sm:grid-cols-2 lg:grid-cols-5">
                 <input
                   type="search"
                   value={staffSearch}
@@ -2506,7 +2448,7 @@ const handleEditStaff = (staff) => {
                   }}
                   placeholder="Search name or email"
                   aria-label="Search staff accounts by name or email"
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20 xl:col-span-2"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20"
                 />
                 <select
                   value={staffBranchFilter}
@@ -2553,6 +2495,22 @@ const handleEditStaff = (staff) => {
                   <option value="all">All statuses</option>
                   <option value="active">Active</option>
                   <option value="disabled">Disabled</option>
+                </select>
+                <select
+                  value={staffPageSize}
+                  onChange={(event) => {
+                    setStaffPage(1);
+                    setStaffPageSize(Number(event.target.value));
+                  }}
+                  aria-label="Rows per page"
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20"
+                >
+                  <option value={10}>10 per page</option>
+                  <option value={20}>20 per page</option>
+                  <option value={30}>30 per page</option>
+                  <option value={40}>40 per page</option>
+                  <option value={50}>50 per page</option>
+                  <option value={100}>100 per page</option>
                 </select>
               </div>
               <div className="overflow-x-auto">

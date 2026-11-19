@@ -63,11 +63,14 @@ export default function VisitorServices({ user, libraries = [] }) {
           .in('audience', ['visitor', 'both'])
           .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
           .order('created_at', { ascending: false });
+        const feedbackFilter = user?.email
+          ? `visitor_id.eq.${user.id},visitor_email.eq.${user.email}`
+          : `visitor_id.eq.${user?.id}`;
         const feedbackRequest = user?.id
           ? supabase
               .from('visitor_feedback')
               .select('id, category, subject, message, library_id, status, admin_reply, replied_at, created_at')
-              .eq('visitor_id', user.id)
+              .or(feedbackFilter)
               .order('created_at', { ascending: false })
           : Promise.resolve({ data: [], error: null });
         const [announcementResult, feedbackResult] = await Promise.all([announcementRequest, feedbackRequest]);
@@ -95,10 +98,13 @@ export default function VisitorServices({ user, libraries = [] }) {
     loadAnnouncements();
     const refreshFeedback = async () => {
       if (!supabase || !user?.id) return;
+      const feedbackFilter = user?.email
+        ? `visitor_id.eq.${user.id},visitor_email.eq.${user.email}`
+        : `visitor_id.eq.${user?.id}`;
       const { data, error } = await supabase
         .from('visitor_feedback')
         .select('id, category, subject, message, library_id, status, admin_reply, replied_at, created_at')
-        .eq('visitor_id', user.id)
+        .or(feedbackFilter)
         .order('created_at', { ascending: false });
       if (!error && active) setFeedbackItems(data || []);
     };

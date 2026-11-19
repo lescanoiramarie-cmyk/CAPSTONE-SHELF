@@ -282,8 +282,7 @@ function VisitorDashboardContent() {
     setIsAnnouncementOpen(false);
   };
   const [isTermsReviewOpen, setIsTermsReviewOpen] = useState(false);
-  // eslint-disable-next-line no-unused-vars
-  const [focusRequestId, _setFocusRequestId] = useState(null);
+  const [focusRequestId, setFocusRequestId] = useState(null);
   const [communityRequestNotice, setCommunityRequestNotice] = useState(null);
   const previousCommunityRequestStatusesRef = useRef(null);
   const [termsStatus, setTermsStatus] = useState('loading');
@@ -477,18 +476,27 @@ function VisitorDashboardContent() {
   };
 
   // Dark mode state (synced with global ShelfHeader)
-  // eslint-disable-next-line no-unused-vars
-  const [isDarkAppearance, _setIsDarkAppearance] = useState(() => {
+  const [isDarkAppearance, setIsDarkAppearance] = useState(() => {
     const saved = globalThis.localStorage.getItem('shelf_dark_mode');
     if (saved !== null) return saved === 'true';
     return globalThis.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
   useEffect(() => {
+    const handleDarkModeChange = (e) => {
+      setIsDarkAppearance(Boolean(e.detail));
+    };
+    window.addEventListener('shelf_dark_mode_changed', handleDarkModeChange);
+    return () => window.removeEventListener('shelf_dark_mode_changed', handleDarkModeChange);
+  }, []);
+
+  useEffect(() => {
     if (isDarkAppearance) {
       document.documentElement.classList.add('dark');
+      document.documentElement.classList.add('theme-dark');
     } else {
       document.documentElement.classList.remove('dark');
+      document.documentElement.classList.remove('theme-dark');
     }
     globalThis.localStorage.setItem('shelf_dark_mode', String(isDarkAppearance));
   }, [isDarkAppearance]);
@@ -1415,7 +1423,7 @@ function VisitorDashboardContent() {
     <div
       className={`visitor-dashboard min-h-screen transition-colors duration-200 ${
         isDarkAppearance
-          ? 'theme-dark bg-slate-900 text-slate-100'
+          ? 'theme-dark dark bg-slate-900 text-slate-100'
           : 'bg-shelf-bg text-slate-800'
       }`}
     >
@@ -1607,14 +1615,28 @@ function VisitorDashboardContent() {
       ====================================================== */}
       <ShelfHeader
         onNotificationClick={(item) => {
+          const type = String(item?.notificationType || item?.notification_type || item?.reference_type || item?.referenceType || '').toLowerCase();
+          const targetId = item?.reference_id || item?.referenceId || item?.borrow_request_id || item?.requestId || item?.recordId;
           if (
-            item?.notificationType === 'feedback_reply' ||
-            item?.notification_type === 'feedback_reply' ||
-            item?.reference_type === 'visitor_feedback' ||
-            item?.referenceType === 'visitor_feedback'
+            type.includes('feedback') ||
+            type.includes('announcement')
           ) {
-            setTab('announcements');
+            setTab('services');
+          } else if (
+            type.includes('borrow') ||
+            type.includes('fine') ||
+            type.includes('due') ||
+            type.includes('pickup') ||
+            type.includes('overdue')
+          ) {
+            setTab('myBorrows');
+            if (targetId) setFocusRequestId(targetId);
+          } else if (type.includes('community')) {
+            setTab('communityBooks');
+          } else {
+            setTab('catalog');
           }
+          globalThis.scrollTo({ top: 0, behavior: 'smooth' });
         }}
         profileMenuContent={
           <>

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, CircleDollarSign, History, Search, X, Bell, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Bar } from 'react-chartjs-2';
+import { Bar, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
   BarElement,
+  ArcElement,
   Title,
   Tooltip,
   Legend,
@@ -18,7 +19,7 @@ import {
   sanitizeFinePaymentAnalyticsRows,
 } from '../lib/finePaymentAnalytics.js';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend);
 
 const peso = (value) => `₱${Number(value || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const PAGE_SIZE = 10;
@@ -278,6 +279,71 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
               ))}
             </div>
 
+            {/* SIDE-BY-SIDE ANALYTICS CHARTS */}
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <article className="overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="font-bold text-slate-900 mb-1">Monthly Collection Trend</h3>
+                <p className="text-xs text-slate-500 mb-3">Total fine payments collected per month.</p>
+                <div className="h-64">
+                  <Bar
+                    data={{
+                      labels: monthlyRows.map((r) => fmtMonth(r.period_month)),
+                      datasets: [
+                        {
+                          label: 'Collected (₱)',
+                          data: monthlyRows.map((r) => Number(r.fines_collected || 0)),
+                          backgroundColor: '#2563eb',
+                          borderRadius: 6,
+                        },
+                      ],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: { display: false },
+                      },
+                      scales: {
+                        y: {
+                          beginAtZero: true,
+                          ticks: { callback: (v) => `₱${v}` },
+                        },
+                      },
+                    }}
+                  />
+                </div>
+              </article>
+
+              <article className="overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="font-bold text-slate-900 mb-1">Fine Payment Status Distribution</h3>
+                <p className="text-xs text-slate-500 mb-3">Settlement breakdown across assessed requests.</p>
+                <div className="h-64 flex items-center justify-center">
+                  <Doughnut
+                    data={{
+                      labels: ['Fully Paid', 'Partially Paid', 'Unpaid'],
+                      datasets: [
+                        {
+                          data: [
+                            branchSummaries.reduce((sum, b) => sum + Number(b.paid_request_count || 0), 0),
+                            branchSummaries.reduce((sum, b) => sum + Number(b.partially_paid_request_count || 0), 0),
+                            branchSummaries.reduce((sum, b) => sum + Number(b.unpaid_request_count || 0), 0),
+                          ],
+                          backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+                        },
+                      ],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: { position: 'bottom' },
+                      },
+                    }}
+                  />
+                </div>
+              </article>
+            </div>
+
             {branchSummaries.length > 0 && (
               <article className="overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h3 className="font-bold text-slate-900 mb-3">Branch Collections vs Outstanding</h3>
@@ -315,11 +381,12 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
                 </div>
               </article>
             )}
+
             <article className="overflow-hidden rounded-xl border border-slate-200 bg-white">
               <div className="border-b border-slate-100 px-4 py-3"><h3 className="font-bold text-slate-900">Branch comparison</h3></div>
-              <div className="overflow-x-auto">
+              <div className="max-h-80 overflow-y-auto overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Library</th><th className="px-4 py-3">Assessed</th><th className="px-4 py-3">Collected</th><th className="px-4 py-3">Outstanding</th><th className="px-4 py-3">Paid / partial / unpaid</th><th className="px-4 py-3">Cash / transfer / other</th></tr></thead>
+                  <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500 shadow-sm"><tr><th className="px-4 py-3">Library</th><th className="px-4 py-3">Assessed</th><th className="px-4 py-3">Collected</th><th className="px-4 py-3">Outstanding</th><th className="px-4 py-3">Paid / partial / unpaid</th><th className="px-4 py-3">Cash / transfer / other</th></tr></thead>
                   <tbody className="divide-y divide-slate-100">
                     {branchSummaries.map((row) => <tr key={row.branch_id}><td className="px-4 py-3 font-medium">{row.branch_name}</td><td className="px-4 py-3">{peso(row.fines_assessed)}</td><td className="px-4 py-3">{peso(row.fines_collected)}</td><td className="px-4 py-3">{peso(row.outstanding_balance)}</td><td className="px-4 py-3">{row.paid_request_count} / {row.partially_paid_request_count} / {row.unpaid_request_count}</td><td className="px-4 py-3">{peso(row.cash_collected)} / {peso(row.bank_transfer_collected)} / {peso(row.other_collected)}</td></tr>)}
                     {branchSummaries.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">No aggregate fine data is available.</td></tr>}
@@ -327,11 +394,12 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
                 </table>
               </div>
             </article>
+
             <article className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <div className="border-b border-slate-100 px-4 py-3"><h3 className="font-bold text-slate-900">Monthly collection trend</h3></div>
-              <div className="overflow-x-auto">
+              <div className="border-b border-slate-100 px-4 py-3"><h3 className="font-bold text-slate-900">Monthly collection trend details</h3></div>
+              <div className="max-h-80 overflow-y-auto overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Month</th><th className="px-4 py-3">Library</th><th className="px-4 py-3">Collected</th><th className="px-4 py-3">Cash / transfer / other</th></tr></thead>
+                  <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500 shadow-sm"><tr><th className="px-4 py-3">Month</th><th className="px-4 py-3">Library</th><th className="px-4 py-3">Collected</th><th className="px-4 py-3">Cash / transfer / other</th></tr></thead>
                   <tbody className="divide-y divide-slate-100">
                     {monthlyRows.map((row, index) => <tr key={`${row.period_month}-${row.branch_id || 'all'}-${index}`}><td className="px-4 py-3">{fmtMonth(row.period_month)}</td><td className="px-4 py-3">{row.branch_name}</td><td className="px-4 py-3">{peso(row.fines_collected)}</td><td className="px-4 py-3">{peso(row.cash_collected)} / {peso(row.bank_transfer_collected)} / {peso(row.other_collected)}</td></tr>)}
                     {monthlyRows.length === 0 && <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-500">No collection history is available.</td></tr>}

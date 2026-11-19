@@ -357,7 +357,7 @@ export default function OPACCatalog({
   const [ownerCommunityRequestSearch, setOwnerCommunityRequestSearch] = useState('');
   const [sortBy, setSortBy] = useState('title-asc');
   const [catalogPage, setCatalogPage] = useState(1);
-  const catalogPageSize = 20;
+  const [catalogPageSize, setCatalogPageSize] = useState(50);
   const [categorySelection, setCategorySelection] = useState({
     resetKey: catalogResetKey,
     value: 'All',
@@ -2686,6 +2686,22 @@ export default function OPACCatalog({
                 <option value="Available">Available Only</option>
                 <option value="Unavailable">Unavailable Only</option>
               </select>
+              <select
+                value={catalogPageSize}
+                onChange={(event) => {
+                  setCatalogPage(1);
+                  setCatalogPageSize(Number(event.target.value));
+                }}
+                aria-label="Rows per page"
+                className="w-full min-w-0 px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none cursor-pointer md:w-auto md:min-w-36 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+              >
+                <option value={10}>10 per page</option>
+                <option value={20}>20 per page</option>
+                <option value={30}>30 per page</option>
+                <option value={40}>40 per page</option>
+                <option value={50}>50 per page</option>
+                <option value={100}>100 per page</option>
+              </select>
             </div>
 
             {searchTerm && (
@@ -3775,6 +3791,8 @@ export default function OPACCatalog({
                     const isOverdue =
                       request.status === 'borrowed' &&
                       request.dueDate && clockNow > 0 && new Date(request.dueDate).getTime() < clockNow;
+                    const finePaidAmount = Number(request.finePaidAmount ?? request.fine_paid_amount ?? 0);
+                    const isFinePaid = isOverdue && finePaidAmount > 0 && currentFine <= 0;
                     const overdueDays =
                       request.dueDate && isOverdue
                         ? calculateOverdueDays(request.dueDate)
@@ -3787,7 +3805,9 @@ export default function OPACCatalog({
                       request.queuePosition ??
                       request.queue_position ??
                       request.position;
-                    const statusClass = isOverdue
+                    const statusClass = isFinePaid
+                      ? 'visitor-status visitor-status-success'
+                      : isOverdue
                       ? 'visitor-status visitor-status-danger'
                       : isCommunityRequest
                         ? request.status === 'pending' ||
@@ -3803,7 +3823,9 @@ export default function OPACCatalog({
                         : STATUS_STYLES[request.status] ||
                           'visitor-status visitor-status-neutral';
                     const StatusIcon =
-                      isOverdue || request.status === 'rejected'
+                      isFinePaid
+                        ? CheckCircle2
+                        : isOverdue || request.status === 'rejected'
                         ? CircleAlert
                         : request.status === 'returned'
                           ? CheckCircle2
@@ -3838,7 +3860,9 @@ export default function OPACCatalog({
                             className={statusClass}
                           >
                             <StatusIcon size={12} aria-hidden="true" />
-                            {isOverdue
+                            {isFinePaid
+                              ? 'Paid'
+                              : isOverdue
                               ? 'Overdue'
                               : isCommunityRequest
                                 ? request.status === 'pending'
@@ -3973,12 +3997,16 @@ export default function OPACCatalog({
                           {!isCommunityRequest && request.status === 'borrowed' && (
                             <>
                               <p>Due: {formatDate(request.dueDate)}</p>
-                              {isOverdue && (
+                              {isFinePaid ? (
+                                <p className="font-bold text-emerald-600 dark:text-emerald-400">
+                                  Fine paid in full. Please return book to library.
+                                </p>
+                              ) : isOverdue ? (
                                 <p className="font-bold text-red-600">
                                   Overdue by {overdueDays} day{overdueDays !== 1 ? 's' : ''}
                                 </p>
-                              )}
-                              {isOverdue && currentFine <= 0 && (
+                              ) : null}
+                              {isOverdue && !isFinePaid && currentFine <= 0 && (
                                 <p className="font-medium text-amber-700 dark:text-amber-300">The original checkout fine rate is not recorded, so the fine amount is unavailable. Contact the library about this return.</p>
                               )}
                             </>
@@ -4897,7 +4925,7 @@ export default function OPACCatalog({
                             <button
                               type="button"
                               onClick={() => handleViewMap(entry.libraryId, entry)}
-                              className="visitor-view-map-button inline-flex min-h-10 items-center justify-center px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-300 transition"
+                              className="visitor-view-map-button inline-flex min-h-10 w-28 sm:w-32 items-center justify-center px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-300 transition"
                             >
                               View map
                             </button>
@@ -4905,7 +4933,7 @@ export default function OPACCatalog({
                               type="button"
                               disabled={savingReadingListBookId === entry.id}
                               onClick={() => handleToggleReadingList(entry)}
-                              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="inline-flex min-h-10 w-28 sm:w-32 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <ClipboardList size={14} aria-hidden="true" />
                               {savingReadingListBookId === entry.id
@@ -4923,7 +4951,7 @@ export default function OPACCatalog({
                                   : 'Are you sure you want to reserve this book?'
                               }
                               onClick={() => handleBorrowOrReserve(entry)}
-                              className="inline-flex min-h-10 items-center justify-center px-3 py-1.5 bg-shelf-primary text-white rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="inline-flex min-h-10 w-28 sm:w-32 items-center justify-center px-3 py-1.5 bg-shelf-primary text-white rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {submittingBorrowBookId === String(entry.id)
                                 ? 'Processing...'

@@ -19,6 +19,91 @@ import { useLibraryData } from '../context/useLibrary.js';
 
 import 'leaflet/dist/leaflet.css';
 import '../lib/leafletIcons.js';
+import { loadGoogleMaps, hasGoogleMapsKey } from '../lib/googleMaps.js';
+
+function GoogleLibraryMap({
+  libraries,
+  activeFocusBranchId,
+  setSelectedLibraryId,
+  bookContext,
+  onBrowseLibrary,
+}) {
+  const containerRef = useRef(null);
+  const mapRef = useRef(null);
+  const markersRef = useRef([]);
+
+  useEffect(() => {
+    let active = true;
+    void loadGoogleMaps().then((maps) => {
+      if (!active || !maps || !containerRef.current) return;
+
+      const map = new maps.Map(containerRef.current, {
+        center: { lat: 13.9, lng: 121.1 },
+        zoom: 10,
+        mapTypeControl: false,
+        streetViewControl: false,
+      });
+      mapRef.current = map;
+
+      const bounds = new maps.LatLngBounds();
+      const infoWindow = new maps.InfoWindow();
+
+      markersRef.current.forEach((m) => m.setMap(null));
+      markersRef.current = [];
+
+      libraries.forEach((library) => {
+        if (!library.lat || !library.lng || !Number.isFinite(Number(library.lat))) return;
+        const pos = { lat: Number(library.lat), lng: Number(library.lng) };
+        bounds.extend(pos);
+
+        const marker = new maps.Marker({
+          position: pos,
+          map,
+          title: library.name,
+        });
+
+        marker.addListener('click', () => {
+          setSelectedLibraryId(library.id);
+          infoWindow.setContent(`
+            <div style="font-family: inherit; padding: 4px; min-width: 180px;">
+              <h3 style="font-weight: bold; font-size: 14px; margin: 0 0 4px 0;">${library.name}</h3>
+              ${library.campus ? `<p style="font-size: 12px; color: #475569; margin: 0 0 4px 0;">${library.campus}</p>` : ''}
+              ${library.address ? `<p style="font-size: 12px; color: #475569; margin: 0 0 4px 0;">📍 ${library.address}</p>` : ''}
+              ${library.hours ? `<p style="font-size: 12px; color: #475569; margin: 0 0 4px 0;">⏰ ${library.hours}</p>` : ''}
+              ${library.status ? `<p style="font-size: 11px; font-weight: bold; margin: 4px 0 0 0;">${library.status}</p>` : ''}
+            </div>
+          `);
+          infoWindow.open(map, marker);
+        });
+
+        markersRef.current.push(marker);
+
+        if (library.id === activeFocusBranchId) {
+          map.setCenter(pos);
+          map.setZoom(14);
+          infoWindow.setContent(`
+            <div style="font-family: inherit; padding: 4px; min-width: 180px;">
+              <h3 style="font-weight: bold; font-size: 14px; margin: 0 0 4px 0;">${library.name}</h3>
+              ${library.address ? `<p style="font-size: 12px; color: #475569; margin: 0 0 4px 0;">📍 ${library.address}</p>` : ''}
+              ${bookContext ? `<p style="font-size: 12px; font-weight: bold; color: #1e3a8a; margin: 4px 0 0 0;">📖 ${bookContext.title} (${bookContext.availableCopies} available)</p>` : ''}
+            </div>
+          `);
+          infoWindow.open(map, marker);
+        }
+      });
+
+      if (!activeFocusBranchId && markersRef.current.length > 0) {
+        map.fitBounds(bounds);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [libraries, activeFocusBranchId, setSelectedLibraryId, bookContext, onBrowseLibrary]);
+
+  return <div ref={containerRef} className="h-full w-full min-h-[inherit]" />;
+}
 
 
 function ResizeMap({ isFullscreen }) {
@@ -104,8 +189,17 @@ export default function LibraryMap({
   const [showMap, setShowMap] = useState(true);
   const [selectedLibraryId, setSelectedLibraryId] = useState(null);
   const [libraryPage, setLibraryPage] = useState(1);
+  const [useGoogle, setUseGoogle] = useState(() => hasGoogleMapsKey());
   const librariesPerPage = 3;
   const activeFocusBranchId = focusBranchId ?? selectedLibraryId;
+
+  useEffect(() => {
+    if (hasGoogleMapsKey()) {
+      void loadGoogleMaps().then((maps) => {
+        if (!maps) setUseGoogle(false);
+      });
+    }
+  }, []);
 
   // =========================================================
   // GET AVAILABLE CAMPUSES
@@ -328,12 +422,21 @@ export default function LibraryMap({
               )}
             </button>
 
-            <MapContainer
-              center={[13.9, 121.1]}
-              zoom={10}
-              scrollWheelZoom
-              className="relative z-0 h-full w-full"
-            >
+            {useGoogle ? (
+              <GoogleLibraryMap
+                libraries={librariesWithCoordinates}
+                activeFocusBranchId={activeFocusBranchId}
+                setSelectedLibraryId={setSelectedLibraryId}
+                bookContext={bookContext}
+                onBrowseLibrary={onBrowseLibrary}
+              />
+            ) : (
+              <MapContainer
+                center={[13.9, 121.1]}
+                zoom={10}
+                scrollWheelZoom
+                className="relative z-0 h-full w-full"
+              >
               <ResizeMap isFullscreen={isMapFullscreen} />
               <FitLibraries
                 coordinates={markerCoordinates}
@@ -453,6 +556,7 @@ export default function LibraryMap({
               )}
 
             </MapContainer>
+            )}
 
           </div>
         )}

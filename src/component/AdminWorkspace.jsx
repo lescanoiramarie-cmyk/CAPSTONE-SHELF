@@ -1246,7 +1246,7 @@ export default function AdminWorkspace({
                   type="button"
                   onClick={() => handleExport('xlsx')}
                   disabled={exporting}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold shadow-sm transition hover:-translate-y-0.5 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold shadow-sm transition hover:-translate-y-0.5 cursor-pointer dark:bg-slate-800 dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-slate-700"
                 >
                   <FileSpreadsheet size={15} className="text-emerald-400" />
                   <span>{exportingFormat === 'xlsx' ? 'Exporting…' : 'Export Excel'}</span>

@@ -1068,3 +1068,42 @@ body:has(.superadmin-dashboard) {
   overflow: hidden !important;
   height: 100% !important;
 }
+
+/* Compact top-centered pop-out toast prompt for visitor actions */
+.visitor-feedback-toast {
+  position: fixed !important;
+  top: 1.5rem !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 9999 !important;
+  width: min(calc(100vw - 2rem), 28rem) !important;
+  max-width: 28rem !important;
+  margin: 0 !important;
+  box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.15), 0 8px 10px -6px rgb(0 0 0 / 0.1) !important;
+}
+
+/* Saved Books and Reading List fixed card width */
+.visitor-reading-list-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 19rem)) !important;
+  justify-content: start !important;
+  align-items: stretch;
+  gap: 1rem;
+}
+
+/* Standardized OPAC and Community Book Card heights */
+.opac-book-card h3 {
+  min-height: 2.75rem !important;
+  max-height: 2.75rem !important;
+  line-height: 1.375rem !important;
+}
+
+.opac-book-card .opac-book-card-author {
+  min-height: 1.25rem !important;
+  line-height: 1.25rem !important;
+}
+
+.opac-book-card .opac-book-card-isbn {
+  min-height: 1.15rem !important;
+  line-height: 1.15rem !important;
+}

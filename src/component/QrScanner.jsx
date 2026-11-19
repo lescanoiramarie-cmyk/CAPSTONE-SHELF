@@ -207,11 +207,11 @@ export default function QrScanner({
         </button>
       ) : (
         <div className="fixed inset-0 z-200 grid place-items-center bg-slate-950/70 p-4" role="dialog" aria-modal="true" aria-label="Scan visitor QR code">
-          <div className="w-full max-w-sm space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-2xl">
+          <div className="w-full max-w-xs space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">Scan Visitor QR Code</h3>
-                <p className="mt-1 text-xs text-slate-600">Position the entire QR pass inside the square.</p>
+                <p className="mt-1 text-xs text-slate-600">Position the QR pass inside the square.</p>
               </div>
               <button
                 type="button"
@@ -222,7 +222,7 @@ export default function QrScanner({
                 <X size={18} aria-hidden="true" />
               </button>
             </div>
-            <div className="mx-auto aspect-[4/3] w-full overflow-hidden rounded-lg border border-slate-300 bg-black">
+            <div className="mx-auto aspect-square max-w-[240px] w-full overflow-hidden rounded-lg border border-slate-300 bg-black">
               <div
                 id={scannerId}
                 className="h-full min-h-0 w-full [&_video]:h-full [&_video]:w-full [&_video]:object-cover [&_canvas]:h-full [&_canvas]:w-full"

@@ -157,7 +157,7 @@ export default function FAQ() {
               : isContactOrStaffQuery
                 ? 'To reach library staff or librarians directly, you can send a message through the Announcements & Feedback tab in your dashboard, or visit the circulation desk during library hours (Monday to Friday, 8:00 AM – 5:00 PM).'
                 : /failed to fetch|networkerror|connection refused|abort/i.test(error.message || '')
-                  ? 'I am unable to reach the live assistant right now. You can check our built-in FAQ, ask questions about borrowing or library rules, or send feedback to staff from your dashboard.'
+                  ? 'I can answer common library questions about borrowing, renewals, fines, library locations, and your visitor account. For direct inquiries, you can message library staff via Announcements & Feedback.'
                   : error.message || 'The chatbot could not answer this question. Please try again.',
         },
       ]);

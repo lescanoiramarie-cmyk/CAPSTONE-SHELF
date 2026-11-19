@@ -89,6 +89,27 @@ export const FAQS = [
 ];
 
 export function findFAQResponse(question) {
+  const trimmed = String(question || '').trim().toLowerCase();
+  if (!trimmed) return null;
+
+  // Instant local responses for greetings
+  const GREETING_REGEX = /^(hi|hello|hey|good\s*(morning|afternoon|evening|day)|kumusta|kamusta|sup|yo)[\s!.,?]*$/i;
+  if (GREETING_REGEX.test(trimmed)) {
+    return {
+      q: 'Greetings',
+      a: 'Hello! I am your SHELF Assistant. How can I help you today? You can ask me questions about borrowing books, library hours, fines, community books, or how to contact library staff.',
+    };
+  }
+
+  // Instant local response for live assistant / contact staff queries
+  const LIVE_ASSISTANT_REGEX = /(live\s*assistant|live\s*agent|human|librarian|talk to|speak to|contact staff|call library|real person)/i;
+  if (LIVE_ASSISTANT_REGEX.test(trimmed)) {
+    return {
+      q: 'Contact Library Staff',
+      a: 'To reach library staff or librarians directly, you can send a message through the Announcements & Feedback tab in your dashboard, or visit the circulation desk during library hours (Monday to Friday, 8:00 AM – 5:00 PM).',
+    };
+  }
+
   const ignoredTerms = new Set([
     'how', 'what', 'where', 'when', 'does', 'do', 'can', 'my', 'the',
     'and', 'for', 'your', 'you', 'are', 'is', 'a', 'to', 'i', 'me',

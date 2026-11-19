@@ -98,7 +98,9 @@ export default function BookTransactions() {
             The visitor should already have scanned in at the entrance. Scan their pass again here to pull up their{' '}
             {mode === 'borrowing' ? 'pending pickup requests' : 'active borrowed items'}.
           </p>
-          <QrScanner onScan={handleScan} />
+          <div className="max-w-md">
+            <QrScanner onScan={handleScan} />
+          </div>
         </div>
 
         {message && (

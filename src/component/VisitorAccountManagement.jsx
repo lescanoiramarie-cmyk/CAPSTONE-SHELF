@@ -6,7 +6,7 @@ import {
   setVisitorActive,
 } from '../data/visitorAccounts.js';
 
-const PAGE_SIZE = 10;
+
 
 function formatDate(value) {
   if (!value) return '—';
@@ -30,6 +30,7 @@ export default function VisitorAccountManagement({
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [visitors, setVisitors] = useState([]);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState('');
@@ -58,6 +59,7 @@ export default function VisitorAccountManagement({
   const requestKey = JSON.stringify([
     selectedLibraryId === undefined ? 'all' : selectedLibraryId,
     page,
+    pageSize,
     debouncedSearch,
   ]);
 
@@ -69,7 +71,7 @@ export default function VisitorAccountManagement({
     fetchVisitorAccounts({
       libraryId: selectedLibraryId,
       page,
-      pageSize: PAGE_SIZE,
+      pageSize,
       search: debouncedSearch,
     })
       .then((result) => {
@@ -97,13 +99,14 @@ export default function VisitorAccountManagement({
     libraryId,
     missingBranch,
     page,
+    pageSize,
     requestKey,
     selectedLibraryId,
   ]);
 
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const firstRow = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const lastRow = Math.min(page * PAGE_SIZE, total);
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const firstRow = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const lastRow = Math.min(page * pageSize, total);
   const loading = !missingBranch && loadedRequestKey !== requestKey;
   const visibleError = missingBranch
     ? 'This sub-admin account is not assigned to a library branch.'
@@ -197,6 +200,25 @@ export default function VisitorAccountManagement({
             </select>
           </label>
         )}
+        <label className="block w-full sm:w-40 sm:shrink-0">
+          <span className="mb-1 block text-xs font-semibold text-slate-600">Rows per page</span>
+          <select
+            value={pageSize}
+            onChange={(event) => {
+              setPage(1);
+              setPageSize(Number(event.target.value));
+            }}
+            aria-label="Rows per page"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20"
+          >
+            <option value={10}>10 per page</option>
+            <option value={20}>20 per page</option>
+            <option value={30}>30 per page</option>
+            <option value={40}>40 per page</option>
+            <option value={50}>50 per page</option>
+            <option value={100}>100 per page</option>
+          </select>
+        </label>
       </div>
 
       {visibleError && (

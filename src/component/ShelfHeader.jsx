@@ -84,10 +84,13 @@ export default function ShelfHeader({
   useEffect(() => {
     if (isDarkAppearance) {
       document.documentElement.classList.add('dark');
+      document.documentElement.classList.add('theme-dark');
     } else {
       document.documentElement.classList.remove('dark');
+      document.documentElement.classList.remove('theme-dark');
     }
     globalThis.localStorage.setItem('shelf_dark_mode', String(isDarkAppearance));
+    globalThis.dispatchEvent(new CustomEvent('shelf_dark_mode_changed', { detail: isDarkAppearance }));
   }, [isDarkAppearance]);
 
   // Load visitor notifications from database
@@ -258,7 +261,7 @@ export default function ShelfHeader({
 
   return (
     <header
-      className={`sticky top-0 z-40 border-b border-slate-200/80 bg-shelf-bg/95 px-4 py-2 backdrop-blur sm:px-6 lg:px-8 ${className}`}
+      className={`sticky top-0 z-40 border-b border-slate-200/80 bg-shelf-bg/95 px-4 py-2 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-6 lg:px-8 ${className}`}
       role="banner"
     >
       <div className="flex min-w-0 items-center justify-between gap-3">
@@ -271,7 +274,7 @@ export default function ShelfHeader({
             className="flex min-w-0 items-center gap-2 text-left shrink-0 cursor-pointer transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary rounded-lg"
           >
             <img src="/shelf-logo.png" alt="" className="h-8 w-8 shrink-0 object-contain" />
-            <span className="shrink-0 text-base font-extrabold tracking-wider sm:text-lg text-shelf-primary">
+            <span className="shrink-0 text-base font-extrabold tracking-wider sm:text-lg text-shelf-primary dark:text-blue-400">
               SHELF
             </span>
           </button>
