@@ -57,8 +57,11 @@ Deno.serve(async (request: Request) => {
       );
     }
 
-    // The public anon key is supplied by the Supabase client.
-    const anonKey = request.headers.get('apikey');
+    // The public anon key is supplied by the Supabase client or edge environment.
+    const anonKey =
+      request.headers.get('apikey') ||
+      Deno.env.get('SUPABASE_ANON_KEY') ||
+      '';
 
     if (!anonKey) {
       return jsonResponse(

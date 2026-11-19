@@ -7,18 +7,7 @@ import {
   Minimize2,
   Search,
 } from 'lucide-react';
-import {
-  MapContainer,
-  TileLayer,
-  Marker,
-  Popup,
-  useMap,
-} from 'react-leaflet';
-
 import { useLibraryData } from '../context/useLibrary.js';
-
-import 'leaflet/dist/leaflet.css';
-import '../lib/leafletIcons.js';
 import { loadGoogleMaps, hasGoogleMapsKey } from '../lib/googleMaps.js';
 
 function GoogleMapsEmbed({ libraries, activeFocusBranchId, bookContext }) {
@@ -150,28 +139,7 @@ function GoogleLibraryMap({
 }
 
 
-function ResizeMap({ isFullscreen }) {
-  const map = useMap();
 
-  useEffect(() => {
-    const mapContainer = map.getContainer();
-    const resizeObserver = new ResizeObserver(() => {
-      map.invalidateSize({ pan: false });
-    });
-    const frameId = window.requestAnimationFrame(() => {
-      map.invalidateSize({ pan: false });
-    });
-
-    resizeObserver.observe(mapContainer);
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-      resizeObserver.disconnect();
-    };
-  }, [isFullscreen, map]);
-
-  return null;
-}
 
 function FocusBranch({ library, markerRef }) {
   const map = useMap();

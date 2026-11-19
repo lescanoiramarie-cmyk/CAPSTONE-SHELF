@@ -52,6 +52,11 @@ const configValid = validateSupabaseConfig();
 export const supabase =
   configValid && supabaseUrl && supabaseAnonKey
     ? createClient(supabaseUrl, supabaseAnonKey, {
+        global: {
+          headers: {
+            apikey: supabaseAnonKey,
+          },
+        },
         auth: {
           experimental: { passkey: true },
         },

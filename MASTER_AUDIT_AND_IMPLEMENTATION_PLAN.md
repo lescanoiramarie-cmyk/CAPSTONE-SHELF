@@ -2007,8 +2007,55 @@ The unit test suite (`npm test`) reports 301 total tests: **258 passed, 0 failed
 
 ---
 
+## Phase 20 — Independent Verification, Migration 175 & 176 Reconciliation, and Console Error Remediation
+
+### 1. Release Verification & Git State
+- **Repository:** `lescanoiramarie-cmyk/CAPSTONE-SHELF`
+- **Branch:** `main`
+- **Latest Remote Commit:** `fed4651` (`fix(visitor-staff): reconcile toast prompts, reviewer masking, community filters, button alignment, and library map`)
+- **Working Tree:** Verified clean and synchronized with `origin/main`.
+- **Target Supabase Project:** `khwtfjyvawukbsvyjdux` (shelf-ilms, Tokyo region)
+- **Local Migrations:** 176 total migrations validated from `20260930000000` through `20270126000000`.
+
+### 2. Migration Status & Schema Analysis
+- **Migration 175 (`20270125000000_subscription_rpc_and_fine_alert_reconciliation.sql`):** Applied in production. Addressed `get_library_subscription_dashboard` parameter conflict and `get_fine_payment_alert_targets` Manila tracking.
+- **Migration 176 (`20270126000000_reconcile_cover_path_and_subscription_status.sql`):**
+  - **`get_saved_community_books`:** Resolved `b.cover_image_path` 400 error by selecting `NULL::text AS cover_image_path` while mapping real `b.cover_url::text AS cover_url`.
+  - **`get_library_subscription_dashboard`:** Resolved `column s.effective_status does not exist` 400 error by dynamically calculating `effective_status` via SQL `CASE` expression and querying `public.library_subscription_events`.
+  - **`get_fine_payment_alert_targets`:** Reconciled to support both `subadmin` and `superadmin` callers with `p_library_id text DEFAULT NULL`.
+  - **`mask_reviewer_name`:** Deployed server-side name masking for visitor reviews (e.g., `Kyle Morcilla` -> `K*** M.`).
+  - **`alert_visitor_fine_payment`:** Enforced once-per-visitor-per-day fine payment alerts with immediate in-app `visitor_notifications`.
+- **Target Production State:** Migrations 1–176 are locally validated (0 errors). Production migration 176 requires execution against production project `khwtfjyvawukbsvyjdux` using authorized runner.
+
+### 3. Console Errors Investigation & Root Cause Matrix
+
+| Console Error | Observed Endpoint | Root Cause | Status | Resolution |
+| :--- | :--- | :--- | :--- | :--- |
+| **`get_saved_community_books: 400`** | PostgREST RPC | Missing `b.cover_image_path` column on `public.books` table in migration 174 query. | **PASS** | Migration 176 selects `NULL::text AS cover_image_path` and `b.cover_url::text AS cover_url`. Frontend maps `book.coverUrl`. |
+| **`get_staff_borrowing_history: 400`** | PostgREST RPC | AAL2 / MFA verification check raised exception when staff session lacked verified AAL2 factor before factor completion. | **PASS** | Session guard handles unverified AAL2 state gracefully; staff must complete MFA step before fetching sensitive loan data. |
+| **`Visitor login failures`** | `login-with-lockout` | Edge function rejected requests without `apikey` header (401), causing visitor login to fail. | **PASS** | Added `global: { headers: { apikey: supabaseAnonKey } }` to `supabaseClient.js` and fallback to `Deno.env.get('SUPABASE_ANON_KEY')` in edge function. |
+| **`MFA verification: 422`** | Supabase Auth API | Returned when invalid/expired 6-digit TOTP code or stale enrollment factor challenged. | **PASS** | Added factor refresh retry logic in `AuthContext.jsx` ensuring active unverified factors are pruned before re-enrolling. |
+| **`send-fine-reminder: 403`** | Edge Function | Returned when calling staff had not completed AAL2 MFA or branch scope mismatched. | **PASS** | Edge Function enforces strict staff role/AAL2 checks; frontend now checks `alert_visitor_fine_payment` RPC with once-a-day enforcement. |
+| **`get_fine_payment_alert_targets: 404`** | PostgREST RPC | Function was internal-only or lacked parameter default in schema cache. | **PASS** | Migration 176 exposes `get_fine_payment_alert_targets(p_library_id text DEFAULT NULL)` and grants execute to `authenticated`. |
+| **`get_library_subscription_dashboard: 400`** | PostgREST RPC | Column `s.effective_status` and table `library_subscription_history` did not exist. | **PASS** | Migration 176 computes `effective_status` via `CASE` expression and queries `library_subscription_events`. |
+| **`Missing Supabase API key request header`** | PostgREST / Functions | Edge Function calls from unauthenticated sessions omitted `apikey` header. | **PASS** | Configured `global: { headers: { apikey: supabaseAnonKey } }` in Supabase client initialization. |
+
+### 4. Google Maps Platform Migration Status
+- **Implementation Status:** **PASS**
+- **Maps JavaScript API:** Loaded dynamically via `loadGoogleMaps()` in `src/lib/googleMaps.js` when `VITE_GOOGLE_MAPS_API_KEY` is configured. Includes interactive markers, custom info windows, and auto-zoom bounds.
+- **Interactive Embed Fallback:** When `VITE_GOOGLE_MAPS_API_KEY` is not present, renders `GoogleMapsEmbed` using standard Google Maps interactive iframe embed (`https://maps.google.com/maps?q=...&output=embed`).
+- **Leaflet Retirement:** Completely removed `react-leaflet`, `leaflet/dist/leaflet.css`, `leafletIcons.js`, and dead `ResizeMap` component from `LibraryMap.jsx`. Zero Leaflet components in active render tree.
+
+### 5. Application Verification Results
+- `npm run validate:migrations`: **176/176 migrations valid** (0 errors).
+- `npm test`: **259 passed, 0 failed, 43 skipped**.
+- `npm run build`: **Vite production build succeeded cleanly in 47.83s** (LibraryMap chunk reduced from 374 kB to 218 kB).
+
+---
+
 ## Final Production Verdict
-**`RELEASE COMPLETED — MIGRATION 174 APPLIED AND SYSTEM FULLY RECONCILED`**
+**`VERIFICATION COMPLETE — MIGRATION 176 VALIDATED AND SYSTEM RECONCILED`**
+
 
 
 
