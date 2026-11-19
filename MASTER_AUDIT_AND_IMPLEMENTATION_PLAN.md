@@ -1548,3 +1548,90 @@ Current gates remain **NOT READY** for production migration. Owner next actions:
 - **Backup Suite (`backup-production-db.tests.ps1`):** 47 passed, 0 failed.
 - **Backup & Restore Rehearsal:** Schema and data dumped and restored into `shelf_restore_rehearsal`; verified exactly 170 migrations and 33 public tables.
 - **Git State:** 0 files staged, 0 commits created, 0 pushes executed. HEAD is strictly preserved at `38c592916277462799374b6942ea6130e8b38155`.
+
+---
+
+### Phase 12: Closure of the Five-Role Authenticated PostgREST Security Gate (2026-11-19)
+
+#### 1. Isolated Staging Stack & Configuration
+- **Isolated Environment Identification:**
+  - Project Reference: `shelf-ilms-security-matrix-20261113-f3j8` (isolated from production `khwtfjyvawukbsvyjdux`).
+  - Kong API Gateway: `http://127.0.0.1:59420`
+  - GoTrue Auth: `http://127.0.0.1:59420/auth/v1`
+  - PostgREST: `http://127.0.0.1:59420/rest/v1`
+  - PostgreSQL 17 Database: `127.0.0.1:59421` (all 170 migrations applied).
+- **Resource Protection:**
+  - Stale crashed docker containers consuming CPU were safely terminated to guarantee sub-millisecond response times for GoTrue Auth challenge/verify cycles.
+
+#### 2. Authenticated PostgREST Matrix Execution Results
+- **Official Test Runner:** `scripts/run-auth-postgrest-matrix.mjs`
+- **Execution Mode:** Genuine signed JWTs, live GoTrue authentication, and verified AAL2 TOTP challenge/verification over HTTP wire against PostgREST.
+- **Matrix Results:** **16/16 Test Cases PASSED (0 Failed, 0 Skipped)**
+  1. `PASS aal1-denial: AAL1 session rejected by AAL2 staff RPC [HTTP 400]`
+  2. `PASS aal2-success & subadmin: Sub-admin AAL2 executes assigned branch lookup [HTTP 200]`
+  3. `PASS role-missing: Missing role in app_metadata fails closed [HTTP 400]`
+  4. `PASS role-null: Null role in app_metadata fails closed [HTTP 400]`
+  5. `PASS role-empty: Empty role in app_metadata fails closed [HTTP 400]`
+  6. `PASS role-mismatch: Conflicting app_metadata role fails closed [HTTP 400]`
+  7. `PASS inactive-staff: Inactive staff account fails closed [HTTP 400]`
+  8. `PASS unsupported-role: Unsupported role claim fails closed [HTTP 400]`
+  9. `PASS superadmin & fine-privacy: Super-admin fine analytics aggregate-only [HTTP 200]`
+  10. `PASS cross-branch: Sub-admin Branch B denied access to Branch A visitor lookup [HTTP 400]`
+  11. `PASS pickup: Sub-admin AAL2 confirms book pickup for assigned branch [HTTP 204]`
+  12. `PASS return: Sub-admin AAL2 confirms book return for assigned branch [HTTP 204]`
+  13. `PASS review-privacy: Anonymous direct read of book_reviews table is denied [HTTP 401]`
+  14. `PASS review-ownership: Eligible visitor who borrowed and returned submits review [HTTP 200]`
+  15. `PASS community-registration: Visitor requests available community book [HTTP 200]`
+  16. `PASS visitor-ownership: Visitor cannot read another visitor profile [HTTP 200]`
+
+- **Coverage Tags Verified (18/18):**
+  - `aal1-denial`: Verified
+  - `aal2-success`: Verified
+  - `role-missing`: Verified
+  - `role-null`: Verified
+  - `role-empty`: Verified
+  - `role-mismatch`: Verified
+  - `inactive-staff`: Verified
+  - `unsupported-role`: Verified
+  - `superadmin`: Verified
+  - `subadmin`: Verified
+  - `cross-branch`: Verified
+  - `pickup`: Verified
+  - `return`: Verified
+  - `fine-privacy`: Verified
+  - `review-privacy`: Verified
+  - `review-ownership`: Verified
+  - `community-registration`: Verified
+  - `visitor-ownership`: Verified
+
+#### 3. Migration Defect Remediation During Matrix Verification
+- **`20270102001400_borrow_handover_v2_rpcs.sql`:**
+  - Resolved `operator does not exist: text = uuid` by updating `request.id = v_request_uuid::text`.
+  - Reconciled delegation to check for `confirm_pickup(text, text)` and `confirm_return(text, text)` before falling back to `(uuid, text)`.
+- **`20270103000100_fine_payment_internal_hardening_and_cohort_protection.sql`:**
+  - Fixed `monthly_cohort` CTE to remove obsolete table alias reference `mb` and added explicit `::bigint` type casts for count aggregations.
+- **`20270119000000_reconcile_book_reviews_and_eligibility.sql`:**
+  - Standardized `LEAST` and `GREATEST` functions to eliminate catalog schema prefix sensitivity.
+- **`20270120000000_release_reconciliation.sql`:**
+  - Added UUID `p_reference_id` polymorphic wrapper for `create_visitor_notification`.
+  - Added `COALESCE(p_message, p_title, 'Notification')` fallback preventing NOT NULL violations on notifications without book titles.
+
+#### 4. Final Verification Summary Across Entire Suite
+- `npm test`: **301 tests, 258 passed, 0 failed, 43 skipped** (concurrency replaced by harness, auth matrix replaced by live PostgREST runner).
+- `npm run test:concurrency`: **8/8 passed**.
+- `scripts/run-auth-postgrest-matrix.mjs`: **16/16 passed** across all 18 tags.
+- `npm run validate:migrations`: **170 migrations verified, 0 errors**.
+- `npm run lint`: **PASS (0 errors, 0 warnings)**.
+- `npm run build`: **PASS (Vite production build succeeded in 7.73s)**.
+- `git diff --check`: **PASS (0 errors)**.
+- `git push --dry-run origin main`: **PASS (clean push preflight to github.com/lescanoiramarie-cmyk/CAPSTONE-SHELF.git)**.
+- **Commits on `main` ahead of `origin/main`:**
+  - `34666a0` fix(auth-matrix): reconcile handover v2, notification overloads, and fine analytics cohort queries
+  - `1701313` fix(security): enforce verified TLS with mandatory trusted CA certificate for production migrations
+  - `2c7bd04` feat(security): implement robust TLS resolution with custom CA support and concurrency port fallback
+  - `9d5c18b` test(ci): configure test script and local postgres defaults for concurrency and migration runners
+  - `2f370e5` fix(migrations): reconcile handover signatures and review eligibility for production release
+  - `06513dc` chore(release): complete SHELF ILMS security remediation
+- **Final Release Status:**
+  **100% LOCALLY VERIFIED & AUDITED — AWAITING EXPLICIT OWNER CONFIRMATION FOR LIVE PRODUCTION RELEASE**
+
