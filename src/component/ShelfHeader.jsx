@@ -408,16 +408,7 @@ export default function ShelfHeader({
                 aria-expanded={isProfileMenuOpen}
                 aria-haspopup="true"
               >
-                {user.qrCode ? (
-                  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <rect x="3" y="3" width="7" height="7" rx="1" />
-                    <rect x="14" y="3" width="7" height="7" rx="1" />
-                    <rect x="3" y="14" width="7" height="7" rx="1" />
-                    <rect x="14" y="14" width="7" height="7" rx="1" />
-                  </svg>
-                ) : (
-                  <UserRound size={20} aria-hidden="true" />
-                )}
+                <UserRound size={20} aria-hidden="true" />
               </button>
 
               {isProfileMenuOpen && (
@@ -434,7 +425,7 @@ export default function ShelfHeader({
                       <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
                       <p className="text-xs text-slate-400 dark:text-slate-500 capitalize mt-1">{user.role?.replace('_', ' ')}</p>
                     </div>
-                    <ul role="menu" className="py-1">
+                    <ul role="menu" className="list-none m-0 p-0 py-1">
                       {profileMenuContent ? (
                         profileMenuContent
                       ) : (
@@ -516,22 +507,25 @@ export default function ShelfHeader({
                               </li>
                             </>
                           )}
-                          <li>
-                            <hr className="my-1 border-slate-200 dark:border-slate-700" />
-                          </li>
-                          <li>
-                            <button
-                              type="button"
-                              onClick={handleLogout}
-                              role="menuitem"
-                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-                            >
-                              <LogOut size={16} aria-hidden="true" />
-                              Sign out
-                            </button>
-                          </li>
                         </>
                       )}
+                      <li>
+                        <hr className="my-1 border-slate-200 dark:border-slate-700" />
+                      </li>
+                      <li>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsProfileMenuOpen(false);
+                            handleLogout();
+                          }}
+                          role="menuitem"
+                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                        >
+                          <LogOut size={16} aria-hidden="true" />
+                          Sign out
+                        </button>
+                      </li>
                     </ul>
                   </div>
                 </>

@@ -10,7 +10,7 @@ import {
   VISITOR_SEARCH_HISTORY_EVENT,
 } from '../lib/recommendationEngine.js';
 
-export default function AIRecommendations({ onRequestBorrow }) {
+export default function AIRecommendations({ onRequestBorrow, onSelectBook }) {
   const { user } = useAuth();
   const { books, borrowRequests } = useLibraryData();
   const [searchHistory, setSearchHistory] = useState([]);
@@ -103,13 +103,26 @@ export default function AIRecommendations({ onRequestBorrow }) {
         {recommendations.map((book) => (
           <div
             key={book.id}
-            className="flex min-w-0 flex-row items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 transition hover:border-shelf-primary hover:bg-white hover:shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:hover:bg-slate-800"
+            onClick={() => {
+              if (onSelectBook) onSelectBook(book);
+              else if (onRequestBorrow) onRequestBorrow(book);
+            }}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                if (onSelectBook) onSelectBook(book);
+                else if (onRequestBorrow) onRequestBorrow(book);
+              }
+            }}
+            className="flex min-w-0 flex-row items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 transition hover:border-shelf-primary hover:bg-white hover:shadow-sm cursor-pointer dark:border-slate-700 dark:bg-slate-900/60 dark:hover:bg-slate-800"
           >
             <div className="min-w-0 flex-1">
               <span className="category-chip rounded-full bg-slate-100 px-2 py-0.5 text-slate-800 dark:bg-slate-700 dark:text-slate-100">
                 {formatBookCategory(book.category) || 'General'}
               </span>
-              <h4 title={book.title} className="mt-1 line-clamp-2 text-sm font-bold text-slate-900 dark:text-white">
+              <h4 title={book.title} className="mt-1 line-clamp-2 text-sm font-bold text-slate-900 dark:text-white hover:text-shelf-primary">
                 {book.title}
               </h4>
               <p title={book.author || 'Unknown Author'} className="truncate text-xs text-slate-700 dark:text-slate-200">
@@ -126,7 +139,10 @@ export default function AIRecommendations({ onRequestBorrow }) {
               {onRequestBorrow && (
                 <button
                   type="button"
-                  onClick={() => onRequestBorrow(book)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRequestBorrow(book);
+                  }}
                   className="rounded-lg bg-shelf-primary px-3 py-1.5 text-xs font-bold text-white transition hover:opacity-90"
                 >
                   Borrow

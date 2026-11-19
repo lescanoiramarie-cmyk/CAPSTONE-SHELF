@@ -242,6 +242,7 @@ function VisitorDashboardContent() {
   const [qrSaveError, setQrSaveError] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [menuSection, setMenuSection] = useState('profile');
+  const [externalSelectedBook, setExternalSelectedBook] = useState(null);
   const [attendanceHistory, setAttendanceHistory] = useState([]);
   const [attendanceHistoryLoading, setAttendanceHistoryLoading] = useState(false);
   const [attendanceHistoryError, setAttendanceHistoryError] = useState('');
@@ -983,26 +984,32 @@ function VisitorDashboardContent() {
         995
       );
 
-      // Convert canvas to PNG
-      const imageUrl = canvas.toDataURL('image/png');
-
-      const link = document.createElement('a');
-
-      link.href = imageUrl;
-
-      link.download = `${visitorQrCode}-QR-Pass.png`;
-
-      document.body.appendChild(link);
-
-      link.click();
-
-      document.body.removeChild(link);
-      setQrSaveMessage('QR pass downloaded successfully.');
+      // Convert canvas to PNG Blob
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          setQrSaveError('Unable to generate the QR image. Please try again.');
+          setIsSavingQr(false);
+          return;
+        }
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = `${visitorQrCode}-QR-Pass.png`;
+        link.rel = 'noopener';
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          if (link.parentNode) {
+            document.body.removeChild(link);
+          }
+          URL.revokeObjectURL(blobUrl);
+        }, 300);
+        setQrSaveMessage('QR pass downloaded successfully.');
+        setIsSavingQr(false);
+      }, 'image/png');
     } catch (error) {
       console.error('Save QR image error:', error);
-
       setQrSaveError('Unable to save the QR code as an image. Please try again.');
-    } finally {
       setIsSavingQr(false);
     }
   };
@@ -1846,7 +1853,7 @@ function VisitorDashboardContent() {
         ================================================== */}
         <nav
           aria-label="Visitor dashboard"
-          className="relative z-30 flex min-w-0 flex-nowrap gap-2 overflow-x-auto overflow-y-hidden scroll-px-3 snap-x snap-proximity border-b border-slate-200 bg-shelf-bg/95 px-3 pb-3 pt-2 backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/95 sm:sticky sm:top-20 sm:rounded-2xl sm:border sm:px-3 sm:py-2.5"
+          className="relative z-30 flex min-w-0 flex-nowrap gap-2 overflow-x-auto overflow-y-hidden no-scrollbar scroll-px-3 snap-x snap-proximity border-b border-slate-200 bg-shelf-bg/95 px-3 pb-3 pt-2 backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/95 sm:sticky sm:top-20 sm:rounded-2xl sm:border sm:px-3 sm:py-2.5"
         >
           {[
             { id: 'catalog', label: 'Catalog', Icon: BookOpen },
@@ -1896,7 +1903,18 @@ function VisitorDashboardContent() {
                 AI RECOMMENDATIONS
             ================================================== */}
 
-            {tab === 'catalog' && <AIRecommendations />}
+            {tab === 'catalog' && (
+              <AIRecommendations
+                onSelectBook={(book) => {
+                  setExternalSelectedBook(book);
+                  setTab('catalog');
+                }}
+                onRequestBorrow={(book) => {
+                  setExternalSelectedBook(book);
+                  setTab('catalog');
+                }}
+              />
+            )}
 
             {/* =================================================
                 LIBRARY FILTER
@@ -1944,6 +1962,8 @@ function VisitorDashboardContent() {
               borrowRequestsLoading={borrowRequestsLoading}
               borrowRequestsLoadError={borrowRequestsLoadError}
               onRetryBorrowRequests={retryBorrowRequests}
+              externalSelectedBook={externalSelectedBook}
+              onClearExternalSelectedBook={() => setExternalSelectedBook(null)}
               onNavigateToMap={(targetLibraryId, bookContext) => {
                 setMapFocusLibraryId(targetLibraryId);
                 setMapBookContext(bookContext);
@@ -1987,7 +2007,7 @@ function VisitorDashboardContent() {
 
       {isMenuOpen && (
         <div
-          className={`fixed inset-0 z-50 flex ${menuSection === 'profile' ? 'justify-center' : 'justify-end'}`}
+          className={`fixed top-16 inset-x-0 bottom-0 z-30 flex ${menuSection === 'profile' ? 'justify-center' : 'justify-end'}`}
           role="dialog"
           aria-modal="true"
           aria-label={menuSection === 'profile' ? 'My profile' : 'Visitor menu'}
@@ -2004,26 +2024,31 @@ function VisitorDashboardContent() {
           {/* SIDE MENU */}
 
           <aside className={`visitor-profile-drawer relative flex h-full w-full flex-col bg-white dark:bg-slate-800 shadow-2xl ${menuSection === 'profile' ? 'visitor-profile-page max-w-none' : 'max-w-md'}`}>
-            {/* MENU HEADER */}
+            {/* SUBHEADER BREADCRUMB */}
 
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-5 py-4">
-              <div>
-                <p className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">
-                  Visitor Portal
-                </p>
-
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                  {menuSection === 'profile' ? 'My Profile' : 'Your Menu'}
-                </h2>
-              </div>
+            <div className="flex items-center justify-between border-b border-slate-200 bg-white/95 px-5 py-3 dark:border-slate-700 dark:bg-slate-800/95">
+              <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm">
+                <button
+                  type="button"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="font-medium text-slate-500 hover:text-shelf-primary dark:text-slate-400 dark:hover:text-white transition"
+                >
+                  Dashboard
+                </button>
+                <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">/</span>
+                <span className="font-bold text-shelf-primary dark:text-white">
+                  {menuSection === 'profile' ? 'My Profile' : 'Visitor Menu'}
+                </span>
+              </nav>
 
               <button
                 type="button"
                 onClick={() => setIsMenuOpen(false)}
-                className="rounded-md p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white"
-                aria-label="Close visitor menu"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                aria-label="Back to dashboard"
               >
-                <X size={20} aria-hidden="true" />
+                <X size={15} aria-hidden="true" />
+                Close
               </button>
             </div>
 

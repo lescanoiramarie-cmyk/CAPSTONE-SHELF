@@ -1396,7 +1396,7 @@ const handleEditStaff = (staff) => {
       {/* SIDEBAR + MAIN CONTENT */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* SIDEBAR */}
-        <aside className="superadmin-sidebar fixed top-16 inset-y-0 left-0 z-40 flex h-[calc(100vh-4rem)] w-60 shrink-0 flex-col overflow-hidden bg-shelf-primary text-white">
+        <aside className="superadmin-sidebar relative flex h-full w-60 shrink-0 flex-col overflow-hidden bg-shelf-primary text-white">
           <div className="border-b border-white/10 p-5">
             <div className="mt-4 border-l-[3px] border-blue-400 pl-3">
               <p className="text-base font-bold leading-tight tracking-wide text-white">Super admin</p>
@@ -1639,7 +1639,7 @@ const handleEditStaff = (staff) => {
         {/* MAIN CONTENT */}
         <main
           ref={mainScrollRef}
-          className={`ml-60 min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8 pt-16 ${section === 'overview' ? '' : 'pt-16!'}`}
+          className="min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8"
         >
           {section !== 'overview' && (
             <header className="sticky top-16 z-30 -mx-4 flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 bg-shelf-bg/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">

@@ -1776,7 +1776,46 @@ The unit test suite (`npm test`) reports 301 total tests: **258 passed, 0 failed
 
 ---
 
-### Phase 15: UI Recovery and System-Wide Data Fetching Repair — 2026-11-19
+### Phase 16: Complete UI Recovery, Staff Metadata Sync, and Migration 172 Reconciliation — 2026-11-19
+
+#### 1. Defect Analysis & Direct Resolutions
+1. **Header Navigation Squishing & Bullet Marks (Screenshot 1 & 2):**
+   - **Root Cause:** In `ShelfHeader.jsx`, the user profile button previously contained inline menu JSX, causing `<li>` bullets and navigation buttons to overflow into the header bar.
+   - **Fix:** Profile trigger button renders only `<UserRound size={20} />`. Dropdown `<ul role="menu">` styled with `list-none m-0 p-0 py-1` to guarantee zero bullet marks.
+
+2. **OPAC Categories Unavailable / Empty (Screenshot 2):**
+   - **Root Cause:** Legacy `get_opac_category_book_counts` had `b.is_active = true` and strict `uuid` parameter.
+   - **Fix:** In migration 172, reconciled `get_opac_category_book_counts(p_library_id text DEFAULT NULL)` to handle `'All'`, `''`, `null`, and branch UUIDs without casting errors. Added frontend fallback to loaded books in `OPACCatalog.jsx`.
+
+3. **Visitor Saved Community Books & Reading List (Screenshots 3, 4, 5, 6, 7):**
+   - **Root Cause:** Both `save_community_book_for_later` and `get_saved_community_books` failed with HTTP 400 (`column b.is_active does not exist`), preventing community books from saving or persisting in the "Saved Books" tab.
+   - **Fix:** Reconciled `save_community_book_for_later`, `unsave_community_book_for_later`, and `get_saved_community_books` in migration 172 to check `auth_user_id = auth.uid() AND is_active = true` on `public.visitors` and remove nonexistent `b.is_active`. Added optimistic state management and error guards in `OPACCatalog.jsx`.
+
+4. **Ugly Horizontal & Double Vertical Scrollbars (Screenshots 2, 3, 5, 7):**
+   - **Root Cause:** `visitorDashboard.css` set `scrollbar-width: auto;` and `scrollbar-gutter: stable;` on the visitor tab bar.
+   - **Fix:** Replaced with `scrollbar-width: none; -ms-overflow-style: none;` and `::-webkit-scrollbar { display: none; }`. Ensured `.no-scrollbar` cross-browser support.
+
+5. **Chatbot FAQ Latency / Spinner Stuck on "hi" (Screenshot 8):**
+   - **Root Cause:** Every input triggered remote AI backend fetch which timed out or lagged.
+   - **Fix:** Added instant greeting detection in `FAQ.jsx` (`hi`, `hello`, `good morning`, etc.) returning immediate local response with zero latency, alongside a 3.5s timeout on remote calls.
+
+6. **Sub-Admin Dashboard Sidebar Overlap & Duplicate Bell (Screenshot 9):**
+   - **Root Cause:** Sidebar `<aside>` was styled with `fixed top-16 inset-y-0 left-0 z-40`, causing it to float over "Good evening, Maria!". `CustomDashboardWelcome` also rendered a duplicate notification bell.
+   - **Fix:** Restored sidebar to `relative flex h-full w-60 shrink-0 flex-col` within flex layout; removed duplicate bell from `CustomDashboardWelcome` in favor of the global `ShelfHeader` bell.
+
+7. **Sub-Admin Reports vs Analytics Gating:**
+   - **Fix:** Separated `workspaceTab === 'reports'` from `workspaceTab === 'analytics'`, allowing sub-admins to view operational reports without being blocked by `PremiumFeatureGate`.
+
+8. **BatStateU JPLPC Malvar Campus Coordinates:**
+   - **Fix:** Reconciled coordinates to `14.04482, 121.15677` with `coordinates_verified = true` in migration 172.
+
+#### 2. Test Verification & Release Gate Results
+- `npm run validate:migrations`: **172/172 migrations validated** (Category A: 119, Category B: 6, Category C: 47). 0 errors.
+- `npm test`: **258 passed, 43 intentionally skipped, 0 failed** (duration 2.1s).
+- Local migration 172 replay on PostgreSQL (`shelf_test`): **SUCCESS** (`MIGRATION_172_REPLAY_SUCCESS`).
+- `npm run lint`: **0 errors, 0 warnings**.
+- `npm run build`: **Vite production build completed cleanly in 10.78s**.
+
 
 #### 1. Identified Issues & Root Cause Analysis
 1. **Header Navigation Collision (Screenshot 1 & 2):**

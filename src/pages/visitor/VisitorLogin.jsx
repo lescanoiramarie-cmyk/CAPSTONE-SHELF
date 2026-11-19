@@ -22,7 +22,7 @@ import {
 const OTP_CODE_TTL_SECONDS = 10 * 60;
 const OTP_RESEND_COOLDOWN_SECONDS = 120;
 const RESET_CODE_TTL_SECONDS = 10 * 60;
-const RESET_CODE_RESEND_COOLDOWN_SECONDS = 60;
+const RESET_CODE_RESEND_COOLDOWN_SECONDS = 120;
 const preventPasswordClipboard = (event) => event.preventDefault();
 
 function getInternalReturnPath(from) {
@@ -1233,10 +1233,7 @@ setOtpResendRemaining(
     };
 
   const handleResendResetCode = async () => {
-    if (
-      isResetSubmitting ||
-      (resetTimeRemaining > 0 && resetResendRemaining > 0)
-    ) {
+    if (isResetSubmitting || resetResendRemaining > 0) {
       return;
     }
 
@@ -1496,11 +1493,17 @@ setOtpResendRemaining(
         className="auth-visual-panel shelf-landing-backdrop hidden lg:flex lg:w-1/2 text-white p-12 flex-col justify-between relative overflow-hidden"
       >
         <ParticleConstellation />
-        <div className="relative z-10 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="relative z-10 flex items-center gap-3 text-left transition hover:opacity-90"
+          aria-label="Go to SHELF home"
+        >
+          <img src="/shelf-logo.png" alt="" className="h-8 w-8 object-contain" />
           <span className="text-xl font-bold tracking-wider">
             SHELF
           </span>
-        </div>
+        </button>
 
         <div className="relative z-10 space-y-4 max-w-lg">
           <span className="inline-block px-3 py-1 bg-white/10 backdrop-blur-md text-xs font-semibold rounded-full border border-white/20">
@@ -1531,7 +1534,7 @@ setOtpResendRemaining(
 
       <div className="auth-form-panel relative w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-8 lg:p-12 overflow-y-auto">
         <div className="auth-form-card w-full max-w-md bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-slate-200 space-y-6 my-auto">
-          <div className="sticky top-0 z-20 -mt-1 flex items-center justify-between gap-2 bg-white pb-1">
+          <div className="flex items-center justify-between gap-2 pb-1">
             {view !== 'register' && view !== 'forgot' && (
               <button
                 type="button"
@@ -2766,15 +2769,13 @@ setOtpResendRemaining(
                       onClick={handleResendResetCode}
                       disabled={
                         isResetSubmitting ||
-                        (resetTimeRemaining > 0 &&
-                          resetResendRemaining > 0)
+                        resetResendRemaining > 0
                       }
                       className="w-full rounded-lg border border-slate-300 bg-white py-2.5 text-sm font-bold text-shelf-primary transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isResetSubmitting
                         ? 'Sending code...'
-                        : resetTimeRemaining === 0 ||
-                            resetResendRemaining === 0
+                        : resetResendRemaining === 0
                           ? 'Resend code'
                           : `Resend Code in ${resetResendRemaining}s`}
                     </button>

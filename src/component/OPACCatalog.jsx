@@ -289,6 +289,8 @@ export default function OPACCatalog({
   onNavigateToMap = null,
   fineOnly = false,
   onFineOnlyChange = () => {},
+  externalSelectedBook = null,
+  onClearExternalSelectedBook = () => {},
 }) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -450,20 +452,44 @@ export default function OPACCatalog({
     fetchOpacCategoryBookCounts(libraryIdForFilter)
       .then((summaries) => {
         if (active) {
-          setCategorySummaries(summaries);
+          if (summaries && summaries.length > 0) {
+            setCategorySummaries(summaries);
+          } else if (books && books.length > 0) {
+            const counts = {};
+            books.forEach((b) => {
+              const cat = b.category || 'General';
+              counts[cat] = (counts[cat] || 0) + 1;
+            });
+            setCategorySummaries(
+              Object.entries(counts).map(([label, count]) => ({ label, count }))
+            );
+          } else {
+            setCategorySummaries([]);
+          }
         }
       })
       .catch((error) => {
         console.warn('Category book counts unavailable:', error.message);
         if (active) {
-          setCategorySummaries([]);
+          if (books && books.length > 0) {
+            const counts = {};
+            books.forEach((b) => {
+              const cat = b.category || 'General';
+              counts[cat] = (counts[cat] || 0) + 1;
+            });
+            setCategorySummaries(
+              Object.entries(counts).map(([label, count]) => ({ label, count }))
+            );
+          } else {
+            setCategorySummaries([]);
+          }
         }
       });
 
     return () => {
       active = false;
     };
-  }, [selectedLibrary, libraryFilter]);
+  }, [selectedLibrary, libraryFilter, books]);
 
   // =========================================================
   // UI STATES
@@ -493,23 +519,52 @@ export default function OPACCatalog({
   // =========================================================
   // COMMUNITY BOOKS - SAVED FOR LATER
   // =========================================================
+  const [savedCommunityBooks, setSavedCommunityBooks] = useState([]);
   const [savedCommunityBookIds, setSavedCommunityBookIds] = useState(new Set());
   const [savedCommunityBooksLoading, setSavedCommunityBooksLoading] = useState(false);
 
   useEffect(() => {
+    if (externalSelectedBook) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedBook(externalSelectedBook);
+      onClearExternalSelectedBook?.();
+    }
+  }, [externalSelectedBook, onClearExternalSelectedBook]);
+
+  useEffect(() => {
     if (!user?.id) return;
     let active = true;
-    // eslint-disable-next-line -- Standard React pattern for loading states in effects
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSavedCommunityBooksLoading(true);
     getSavedCommunityBooks()
-      .then((books) => {
+      .then((rawBooks) => {
         if (active) {
-          setSavedCommunityBookIds(new Set(books.map((b) => String(b.book_id))));
+          const list = (rawBooks || []).map((b) => ({
+            id: String(b.book_id || b.id),
+            title: b.title || 'Untitled Community Book',
+            author: b.author || 'Unknown Author',
+            category: b.category || 'General',
+            isbn: b.isbn || '',
+            coverUrl: b.cover_url || '',
+            cover_url: b.cover_url || '',
+            ownerVisitorId: b.owner_visitor_id,
+            owner_visitor_id: b.owner_visitor_id,
+            ownerName: b.owner_name || 'Community Member',
+            owner_name: b.owner_name || 'Community Member',
+            bookType: 'personal',
+            book_type: 'personal',
+            isPublic: true,
+            is_public: true,
+            savedAt: b.saved_at,
+          }));
+          setSavedCommunityBooks(list);
+          setSavedCommunityBookIds(new Set(list.map((b) => b.id)));
         }
       })
       .catch((error) => {
         console.warn('Failed to load saved community books:', error.message);
         if (active) {
+          setSavedCommunityBooks([]);
           setSavedCommunityBookIds(new Set());
         }
       })
@@ -524,7 +579,8 @@ export default function OPACCatalog({
   // Reset saved books when user logs out
   useEffect(() => {
     if (!user?.id) {
-      // eslint-disable-next-line -- Resetting state on logout is a standard pattern
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSavedCommunityBooks([]);
       setSavedCommunityBookIds(new Set());
     }
   }, [user?.id]);
@@ -535,6 +591,7 @@ export default function OPACCatalog({
       if (currentlySaved) {
         const result = await unsaveCommunityBookForLater(communityBookId);
         if (result.success) {
+          setSavedCommunityBooks((prev) => prev.filter((b) => String(b.id) !== String(communityBookId)));
           setSavedCommunityBookIds((prev) => {
             const next = new Set(prev);
             next.delete(String(communityBookId));
@@ -547,6 +604,10 @@ export default function OPACCatalog({
       } else {
         const result = await saveCommunityBookForLater(communityBookId);
         if (result.success) {
+          const found = communityBooks.find((b) => String(b.id) === String(communityBookId));
+          if (found) {
+            setSavedCommunityBooks((prev) => [found, ...prev.filter((b) => String(b.id) !== String(communityBookId))]);
+          }
           setSavedCommunityBookIds((prev) => new Set(prev).add(String(communityBookId)));
           setNotice('Book saved for later.');
         } else {
@@ -1320,6 +1381,19 @@ export default function OPACCatalog({
       setNotice(currentUserReview ? 'Your review has been updated.' : 'Thank you for your rating and review!');
     }
   };
+
+  const isEligibleToReview = useMemo(() => {
+    if (!user?.id || !selectedBook) return false;
+    if (currentUserReview) return true;
+    const hasReturnedLibraryBook = (borrowRequests || []).some(
+      (br) => String(br.book_id || br.bookId) === String(selectedBook.id) && br.status === 'returned'
+    );
+    if (hasReturnedLibraryBook) return true;
+    const hasReturnedCommunityBook = (myCommunityBookRequests || []).some(
+      (cr) => String(cr.community_book_id || cr.book_id) === String(selectedBook.id) && cr.status === 'returned'
+    );
+    return Boolean(hasReturnedCommunityBook);
+  }, [user?.id, selectedBook, currentUserReview, borrowRequests, myCommunityBookRequests]);
 
   // =========================================================
   // FILTER BOOKS
@@ -2982,7 +3056,7 @@ export default function OPACCatalog({
                   Loading saved books...
                 </p>
               </div>
-            ) : savedCommunityBookIds.size === 0 ? (
+            ) : savedCommunityBooks.length === 0 && savedCommunityBookIds.size === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
                 <BookmarkCheck size={32} className="mx-auto text-slate-300" aria-hidden="true" />
                 <h3 className="mt-3 text-base font-bold text-slate-700">
@@ -2994,9 +3068,10 @@ export default function OPACCatalog({
               </div>
             ) : (
               <div className="opac-book-grid book-card-grid visitor-book-collection-grid visitor-community-book-grid">
-                {communityBooks
-                  .filter((book) => savedCommunityBookIds.has(String(book.id)))
-                  .map(renderCommunityBookCard)}
+                {(savedCommunityBooks.length > 0
+                  ? savedCommunityBooks
+                  : communityBooks.filter((book) => savedCommunityBookIds.has(String(book.id)))
+                ).map(renderCommunityBookCard)}
               </div>
             )}
           </section>
@@ -4257,13 +4332,13 @@ export default function OPACCatalog({
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
-                      ISBN
+                      ISBN (Optional)
                     </label>
                     <input
                       type="text"
                       value={personalBookForm.isbn}
                       onChange={(event) => updatePersonalBookForm('isbn', event.target.value)}
-                      placeholder="Optional ISBN"
+                      placeholder="10-13 digit ISBN"
                       className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-400"
                     />
                   </div>
@@ -4272,7 +4347,6 @@ export default function OPACCatalog({
                       Fine rate per overdue day{personalBookForm.lendingEnabled ? ' *' : ' (optional)'}
                     </label>
                     <div className="flex items-center gap-2">
-                      <span>₱</span>
                       <select
                         id="personal-book-fine-rate"
                         value={personalBookForm.fineRate}
@@ -4833,66 +4907,73 @@ export default function OPACCatalog({
                   ({reviews.length} {reviews.length === 1 ? 'review' : 'reviews'})
                 </span>
               </h4>
-              <form onSubmit={handleSubmitReview} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <label className="text-xs font-bold text-slate-700">
-                    {currentUserReview ? 'Update Your Review:' : 'Leave a Review:'}
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-500 mr-1">Rating:</span>
-                    <div
-                      className="inline-flex items-center gap-0.5"
-                      role="group"
-                      aria-label="Book rating"
-                      onMouseLeave={() => setHoverRating(0)}
-                    >
-                      {Array.from({ length: 5 }, (_, index) => {
-                        const rating = index + 1;
-                        const displayedRating = hoverRating || userRating;
-                        return (
-                          <button
-                            key={rating}
-                            type="button"
-                            onMouseEnter={() => setHoverRating(rating)}
-                            onClick={() => setUserRating(rating)}
-                            aria-label={`${rating} out of 5 stars`}
-                            aria-pressed={userRating === rating}
-                            className="rounded-sm p-0.5 transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-                          >
-                            <Star
-                              size={18}
-                              className={rating <= displayedRating
-                                ? 'fill-amber-400 text-amber-500'
-                                : 'text-slate-500 dark:text-slate-300'}
-                              aria-hidden="true"
-                            />
-                          </button>
-                        );
-                      })}
+              {isEligibleToReview ? (
+                <form onSubmit={handleSubmitReview} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 dark:border-slate-700 dark:bg-slate-900/60">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                      {currentUserReview ? 'Update Your Review:' : 'Leave a Review:'}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-500 mr-1 dark:text-slate-400">Rating:</span>
+                      <div
+                        className="inline-flex items-center gap-0.5"
+                        role="group"
+                        aria-label="Book rating"
+                        onMouseLeave={() => setHoverRating(0)}
+                      >
+                        {Array.from({ length: 5 }, (_, index) => {
+                          const rating = index + 1;
+                          const displayedRating = hoverRating || userRating;
+                          return (
+                            <button
+                              key={rating}
+                              type="button"
+                              onMouseEnter={() => setHoverRating(rating)}
+                              onClick={() => setUserRating(rating)}
+                              aria-label={`${rating} out of 5 stars`}
+                              aria-pressed={userRating === rating}
+                              className="rounded-sm p-0.5 transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                            >
+                              <Star
+                                size={18}
+                                className={rating <= displayedRating
+                                  ? 'fill-amber-400 text-amber-500'
+                                  : 'text-slate-500 dark:text-slate-300'}
+                                aria-hidden="true"
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <span className="min-w-8 text-xs font-bold text-amber-800 dark:text-amber-300">
+                        {hoverRating || userRating}/5
+                      </span>
                     </div>
-                    <span className="min-w-8 text-xs font-bold text-amber-800 dark:text-amber-300">
-                      {hoverRating || userRating}/5
-                    </span>
                   </div>
+                  <textarea
+                    value={userComment}
+                    onChange={(event) => setUserComment(event.target.value)}
+                    placeholder="Write your review or thoughts about this book..."
+                    rows={2}
+                    className="w-full text-xs p-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 bg-white dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    required
+                  />
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={isSubmitting || loadingReviews}
+                      className="bg-shelf-primary text-white text-xs px-4 py-2 rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50"
+                    >
+                      {isSubmitting ? 'Saving...' : currentUserReview ? 'Update review' : 'Submit review'}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400">
+                  <p className="font-semibold text-slate-700 dark:text-slate-300">Ratings and reviews are reserved for readers</p>
+                  <p className="mt-1">You can submit a rating and review after borrowing and returning this book.</p>
                 </div>
-                <textarea
-                  value={userComment}
-                  onChange={(event) => setUserComment(event.target.value)}
-                  placeholder="Write your review or thoughts about this book..."
-                  rows={2}
-                  className="w-full text-xs p-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 bg-white"
-                  required
-                />
-                <div className="flex justify-end">
-                  <button
-                    type="submit"
-                    disabled={isSubmitting || loadingReviews}
-                    className="bg-shelf-primary text-white text-xs px-4 py-2 rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50"
-                  >
-                    {isSubmitting ? 'Saving...' : currentUserReview ? 'Update review' : 'Submit review'}
-                  </button>
-                </div>
-              </form>
+              )}
               <div className="visitor-modal-reviews max-h-48 space-y-3 overflow-y-auto pr-1">
                 {loadingReviews ? (
                   <p className="text-xs text-slate-400 italic">

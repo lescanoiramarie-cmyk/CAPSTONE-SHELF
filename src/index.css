@@ -1033,3 +1033,12 @@ label.text-xs {
     overflow-x: clip;
   }
 }
+
+/* Utility to hide scrollbars while allowing scroll */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

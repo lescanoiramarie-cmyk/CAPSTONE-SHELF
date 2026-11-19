@@ -245,8 +245,8 @@
   border-radius: var(--visitor-radius-card);
   background-color: var(--visitor-surface);
   box-shadow: 0 3px 8px rgb(15 23 42 / 8%);
-  scrollbar-color: #64748b #e2e8f0;
-  scrollbar-width: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   max-width: 100%;
   gap: 8px;
   overflow-x: auto;
@@ -256,7 +256,12 @@
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
   white-space: nowrap;
-  scrollbar-gutter: stable;
+}
+
+.visitor-dashboard [aria-label='Visitor dashboard']::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .visitor-dashboard [aria-label='Visitor dashboard']::after {

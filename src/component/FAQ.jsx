@@ -24,20 +24,11 @@ const SUGGESTED_QUESTIONS = [
   'How do I check partner library locations?',
 ];
 
-// Local-first keyword matching for instant responses
-const LOCAL_KEYWORDS = [
-  'borrow', 'request', 'period', 'due', 'return', 'renew',
-  'qr', 'code', 'pass', 'visitor', 'profile', 'library',
-  'branch', 'location', 'hours', 'open', 'close', 'fine',
-  'overdue', 'reserve', 'reservation', 'queue', 'pickup',
-  'community', 'personal', 'book', 'catalog', 'search',
-  'password', 'reset', 'login', 'register', 'verify', 'otp',
-  'attendance', 'scan', 'kiosk', 'map', 'direction',
-];
+const GREETINGS = ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening', 'kamusta', 'musta', 'sup', 'yo'];
 
-function isSimpleQuestion(question) {
-  const lower = question.toLowerCase();
-  return LOCAL_KEYWORDS.some((keyword) => lower.includes(keyword));
+function isGreeting(question) {
+  const clean = question.toLowerCase().replace(/[^a-z\s]/g, '').trim();
+  return GREETINGS.some((g) => clean === g || clean.startsWith(g + ' '));
 }
 
 export default function FAQ() {
@@ -62,9 +53,23 @@ export default function FAQ() {
 
     if (!submittedQuestion || asking) return;
 
-    // Immediate local response for simple questions
+    // Immediate greeting response
+    if (isGreeting(submittedQuestion)) {
+      setMessages((previous) => [
+        ...previous,
+        { role: 'user', text: submittedQuestion },
+        {
+          role: 'bot',
+          text: 'Hello! Welcome to SHELF. How can I help you today with library services, book requests, or your digital account?',
+        },
+      ]);
+      setQuestion('');
+      return;
+    }
+
+    // Immediate local response for FAQ questions
     const localResponse = findFAQResponse(submittedQuestion);
-    if (localResponse && isSimpleQuestion(submittedQuestion)) {
+    if (localResponse) {
       setMessages((previous) => [
         ...previous,
         { role: 'user', text: submittedQuestion },
@@ -82,6 +87,9 @@ export default function FAQ() {
     setAsking(true);
 
     abortControllerRef.current = new AbortController();
+    const timeoutId = setTimeout(() => {
+      abortControllerRef.current?.abort();
+    }, 3500);
     const signal = abortControllerRef.current.signal;
 
     try {
@@ -131,8 +139,7 @@ export default function FAQ() {
         { role: 'bot', text: payload.answer.trim() },
       ]);
     } catch (error) {
-      if (signal?.aborted) return;
-
+      clearTimeout(timeoutId);
       const localResponse = findFAQResponse(submittedQuestion);
       setMessages((previous) => [
         ...previous,
@@ -140,16 +147,15 @@ export default function FAQ() {
           role: 'bot',
           text:
             localResponse
-              ? `${localResponse.a}\n\n(The chatbot service is unavailable, so this answer came from the built-in FAQ.)`
-              : /failed to fetch|networkerror|connection refused/i.test(error.message || '')
-                ? 'I cannot reach the SHELF assistant service right now, and I could not find this in the built-in FAQ. Please try again later or contact the library.'
+              ? localResponse.a
+              : /failed to fetch|networkerror|connection refused|abort/i.test(error.message || '')
+                ? 'I am unable to reach the live assistant right now. You can check our built-in FAQ or ask a librarian at the desk.'
                 : error.message || 'The chatbot could not answer this question. Please try again.',
         },
       ]);
     } finally {
-      if (!signal?.aborted) {
-        setAsking(false);
-      }
+      clearTimeout(timeoutId);
+      setAsking(false);
     }
   }, [asking, question]);
 

@@ -25,7 +25,6 @@ import {
   Upload,
   UsersRound,
   Info,
-  Bell,
   MessageSquare,
   Sparkles,
   ArrowUpRight,
@@ -316,165 +315,17 @@ function formatDateTime(value) {
   });
 }
 
-// CUSTOM WELCOME COMPONENT WITH UPPER RIGHT NOTIFICATION BELL
+// CUSTOM WELCOME COMPONENT
 function CustomDashboardWelcome({
   name,
   description,
-  notifications = [],
-  onNotificationClick,
-
-  onNotificationFollowUp,
   actions = [],
 }) {
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [readNotificationIds, setReadNotificationIds] = useState(() => new Set());
-  const [followUpRequestId, setFollowUpRequestId] = useState(null);
-  const [followUpSentIds, setFollowUpSentIds] = useState(() => new Set());
-  const [followUpError, setFollowUpError] = useState('');
-  const [followUpErrorId, setFollowUpErrorId] = useState(null);
-  const unreadCount = notifications.filter(
-    (notification) => !readNotificationIds.has(notification.id)
-  ).length;
-
-
   return (
     <div className="relative bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-sm space-y-6">
       
-      {/* TOP RIGHT ACTION BAR (NOTIFICATION BELL & ONLINE BADGE) */}
+      {/* TOP RIGHT ACTION BAR (ONLINE BADGE) */}
       <div className="absolute top-6 right-6 z-20 flex items-center gap-3">
-        
-        {/* NOTIFICATION BELL BUTTON WITH DROPDOWN */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="w-10 h-10 rounded-full bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 transition shadow-sm relative"
-            aria-label="Notifications"
-          >
-            <Bell size={18} />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-extrabold rounded-full flex items-center justify-center shadow-sm">
-                {unreadCount}
-              </span>
-            )}
-          </button>
-
-          {/* NOTIFICATION DROPDOWN MENU */}
-          {showNotifications && (
-            <div className="absolute right-0 top-full z-50 mt-2 flex max-h-[min(70vh,32rem)] w-[min(20rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-2xl">
-              <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 font-bold text-slate-800">
-                <span>Branch Notifications</span>
-                <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full text-xs">
-                  {unreadCount} Unread
-                </span>
-              </div>
-              {notifications.length > 0 && (
-                <button
-                  type="button"
-                  disabled={unreadCount === 0}
-                  onClick={() => setReadNotificationIds((current) => new Set([
-                    ...current,
-                    ...notifications.map((notification) => notification.id),
-                  ]))}
-                  className="mb-2 text-xs font-bold text-blue-700 hover:underline disabled:opacity-50"
-                >
-                  Mark all read
-                </button>
-              )}
-              
-              <div className="min-h-0 max-h-[min(20rem,60vh)] flex-1 space-y-2 overflow-y-auto overscroll-contain">
-                {notifications.length === 0 ? (
-                  <p className="text-slate-400 py-3 text-center">No new notifications</p>
-                ) : (
-                  notifications.map((n) => (
-                    <div
-                      key={n.id}
-                      className={`rounded-lg border border-slate-100 p-2.5 transition ${
-                        readNotificationIds.has(n.id)
-                          ? 'bg-white'
-                          : 'bg-blue-50/70'
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setReadNotificationIds((current) => new Set([...current, n.id]));
-                          onNotificationClick?.(n);
-                          setShowNotifications(false);
-                        }}
-                        className="block w-full text-left"
-                      >
-                        <span className="flex items-center justify-between gap-2">
-                          <span className="font-bold text-slate-800">{n.title}</span>
-                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${
-                            followUpSentIds.has(n.id)
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}>
-                            {n.followUp
-                              ? followUpSentIds.has(n.id) ? 'Followed up' : 'Pending follow-up'
-                              : n.status || 'Pending'}
-                          </span>
-                        </span>
-                        <span className="mt-0.5 block line-clamp-1 text-slate-500">{n.message}</span>
-                        <span className="mt-1 block text-xs text-slate-400">
-                          {n.timeLabel}{' · '}{readNotificationIds.has(n.id) ? 'Read' : 'Unread'}
-                        </span>
-                      </button>
-
-                      {n.followUp && onNotificationFollowUp && (
-                        <div className="mt-2 flex items-center justify-between gap-2">
-                          <p className="min-w-0 text-xs text-red-700" role="status">
-                            {followUpErrorId === n.requestId
-                              ? followUpError
-                              : followUpSentIds.has(n.id)
-                                ? 'Follow-up sent today.'
-                                : ''}
-                          </p>
-                          <button
-                            type="button"
-                            disabled={
-                              followUpRequestId === n.requestId ||
-                              followUpSentIds.has(n.id)
-                            }
-                            onClick={async (event) => {
-                              event.stopPropagation();
-                              setFollowUpRequestId(n.requestId);
-                              setFollowUpError('');
-                              setFollowUpErrorId(null);
-
-                              try {
-                                await onNotificationFollowUp(n);
-                                setFollowUpSentIds(
-                                  (current) => new Set([...current, n.id])
-                                );
-                              } catch (error) {
-                                setFollowUpError(
-                                  error?.message || 'Unable to send follow-up.'
-                                );
-                                setFollowUpErrorId(n.requestId);
-                              } finally {
-                                setFollowUpRequestId(null);
-                              }
-                            }}
-                            className="shrink-0 rounded-md border border-red-200 px-2 py-1 text-xs font-bold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {followUpRequestId === n.requestId
-                              ? 'Sending...'
-                              : followUpSentIds.has(n.id)
-                                ? 'Sent'
-                                : 'Follow up'}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
         {/* ONLINE STATUS BADGE */}
         <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-full text-xs font-bold shadow-sm">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -1712,7 +1563,7 @@ export default function SubAdminDashboard() {
       {/* SIDEBAR + MAIN CONTENT */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* SIDEBAR */}
-        <aside className="subadmin-sidebar fixed top-16 inset-y-0 left-0 z-40 flex h-[calc(100vh-4rem)] w-60 shrink-0 flex-col border-r border-white/10 bg-shelf-primary text-white shadow-lg">
+        <aside className="subadmin-sidebar relative flex h-full w-60 shrink-0 flex-col border-r border-white/10 bg-shelf-primary text-white shadow-lg">
           <div className="p-5 border-b border-white/10">
             <div className="mt-4 min-w-0 border-l-[3px] border-blue-400 pl-3">
               <div className="flex min-w-0 items-center gap-2">
@@ -1804,7 +1655,7 @@ export default function SubAdminDashboard() {
       </aside>
 
       {/* MAIN CONTENT */}
-      <main ref={mainContentRef} className={`min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8 pt-16 ${section === 'overview' ? '' : '!pt-16'}`}>
+      <main ref={mainContentRef} className="min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8">
         {section !== 'overview' && (
           <header className="sticky top-16 z-30 -mx-4 flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 bg-shelf-bg/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
             <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm">
@@ -2219,22 +2070,36 @@ export default function SubAdminDashboard() {
           </section>
         )}
         {section === 'workspace' && (
-          <PremiumFeatureGate
-            libraryId={currentLibraryId}
-            onUpgrade={() => navigateToSection('subscription')}
-          >
-          <AdminWorkspace
-            key={`${workspaceTab}-${['feedback', 'announcements'].includes(workspaceTab) ? 'communication' : 'reports'}`}
-            mode={['feedback', 'announcements'].includes(workspaceTab) ? 'communication' : 'reports'}
-            initialTab={workspaceTab}
-            user={user}
-            libraries={libraries}
-            books={branchBooks}
-            borrowRequests={borrowRequests}
-            attendanceLogs={branchAttendance}
-            attendanceDataComplete={initialDataReady && !attendanceLoadError}
-          />
-          </PremiumFeatureGate>
+          workspaceTab === 'analytics' ? (
+            <PremiumFeatureGate
+              libraryId={currentLibraryId}
+              onUpgrade={() => navigateToSection('subscription')}
+            >
+              <AdminWorkspace
+                key={`${workspaceTab}-analytics`}
+                mode="reports"
+                initialTab="analytics"
+                user={user}
+                libraries={libraries}
+                books={branchBooks}
+                borrowRequests={borrowRequests}
+                attendanceLogs={branchAttendance}
+                attendanceDataComplete={initialDataReady && !attendanceLoadError}
+              />
+            </PremiumFeatureGate>
+          ) : (
+            <AdminWorkspace
+              key={`${workspaceTab}-${['feedback', 'announcements'].includes(workspaceTab) ? 'communication' : 'reports'}`}
+              mode={['feedback', 'announcements'].includes(workspaceTab) ? 'communication' : 'reports'}
+              initialTab={workspaceTab}
+              user={user}
+              libraries={libraries}
+              books={branchBooks}
+              borrowRequests={borrowRequests}
+              attendanceLogs={branchAttendance}
+              attendanceDataComplete={initialDataReady && !attendanceLoadError}
+            />
+          )
         )}
       </main>
       {(subAdminTermsStatus !== 'accepted' || showSubAdminTerms) && (
