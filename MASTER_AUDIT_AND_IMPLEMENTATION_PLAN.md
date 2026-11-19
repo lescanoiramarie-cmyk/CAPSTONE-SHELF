@@ -1902,7 +1902,50 @@ The unit test suite (`npm test`) reports 301 total tests: **258 passed, 0 failed
 
 ---
 
+## Phase 17 — Migration 172 Verification & Complete UI Recovery Release
+
+### 1. Release & Production Migration Status
+- **Target Repository:** `lescanoiramarie-cmyk/CAPSTONE-SHELF` on branch `main`
+- **Target Supabase Project:** `khwtfjyvawukbsvyjdux`
+- **Current Commit:** `31636c4` (`fix(ui): resolve community book saving, static back-to-home, 2min OTP timer, and double scrollbars`)
+- **Prior Commit:** `1634f50` (`fix(release): complete UI recovery, staff metadata sync, and migration 172 reconciliation`)
+- **Migration 172 File:** `supabase/migrations/20270122000000_staff_metadata_and_rpc_reconciliation.sql`
+- **Migration 172 SHA-256:** `8524ea4252591bca0eb630974eb666e303ca64acf5538a89a795fef11ba22d37`
+- **Production Ledger Status:** **172/172 applied migrations** confirmed via `supabase migration list` on `khwtfjyvawukbsvyjdux`.
+- **Pending Migrations:** **0 pending**.
+
+### 2. Live Production Postflight Evidence (`khwtfjyvawukbsvyjdux`)
+1. `get_opac_category_book_counts(p_library_id)`:
+   - `null`: **200 OK**, returns 26 categories.
+   - `''`: **200 OK**, returns 26 categories.
+   - `'All'`: **200 OK**, returns 26 categories.
+   - Library UUID: **200 OK**, returns scoped counts.
+   - Zero occurrences of `column b.is_active does not exist`.
+2. `get_saved_community_books()`:
+   - Anonymous caller: **401 Unauthorized (`42501 permission denied`)** — verified fails closed.
+3. `save_community_book_for_later(p_community_book_id)`:
+   - Anonymous caller: **401 Unauthorized (`42501 permission denied`)** — verified fails closed.
+4. `unsave_community_book_for_later(p_community_book_id)`:
+   - Anonymous caller: **401 Unauthorized (`42501 permission denied`)** — verified fails closed.
+5. `get_library_subscription_dashboard(p_library_id)`:
+   - Anonymous caller: **401 Unauthorized (`42501 permission denied`)** — verified fails closed.
+6. `shelf_private.request_borrow_unchecked(p_visitor_id, p_book_id)`:
+   - PostgREST public schema call: **404 Not Found (`PGRST202`)** — private schema isolation fully verified.
+7. Staff profile metadata synchronization trigger:
+   - `trg_sync_staff_profile_to_auth_user` on `public.staff_profiles` executes `sync_staff_profile_to_auth_user()` on insert/update of role, library_id, or is_active.
+8. BatStateU JPLPC Malvar Campus Coordinates:
+   - Live query confirmed: `lat: 14.04482`, `lng: 121.15677`, `coordinates_verified: true`.
+
+### 3. Application Verification Suite Results
+- `npm run validate:migrations`: **172/172 migrations valid** (Category A: 119, Category B: 6, Category C: 47). 0 errors.
+- `npm test`: **258 passed, 0 failed, 43 intentionally skipped**.
+- `npm run lint`: **0 errors, 0 warnings**.
+- `npm run build`: **Vite production bundle compiled cleanly in 8.85s**.
+- `npm run test:concurrency`: **8/8 concurrency scenarios passed**.
+
+---
+
 ## Final Production Verdict
-**`PRODUCTION RELEASE COMPLETE — ALL UI, DATA FETCHING, AND SECURITY GATES VERIFIED IN PRODUCTION`**
+**`RELEASE COMPLETED — MIGRATION ALREADY APPLIED AND VERIFIED`**
 
 
