@@ -18,11 +18,11 @@ const { Pool } = pg;
 // CONFIGURATION
 // ============================================================================
 const DEFAULT_CONFIG = {
-  host: process.env.PGHOST || 'localhost',
-  port: parseInt(process.env.PGPORT || '5432', 10),
+  host: process.env.PGHOST || '127.0.0.1',
+  port: parseInt(process.env.PGPORT || '5433', 10),
   database: process.env.PGDATABASE || 'shelf_test',
   user: process.env.PGUSER || 'postgres',
-  password: process.env.PGPASSWORD || 'postgres',
+  password: process.env.PGPASSWORD !== undefined ? process.env.PGPASSWORD : '',
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,

@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test": "node --test \"src/lib/*.test.js\" \"supabase/functions/send-due-date-notifications/notificationSafety.test.js\"",
     "validate:migrations": "node scripts/validate-migrations.mjs",
     "reconcile:migrations": "node scripts/reconcile-migration-evidence.mjs",
     "test:auth-postgrest": "node scripts/run-auth-postgrest-matrix.mjs",

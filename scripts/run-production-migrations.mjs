@@ -203,7 +203,11 @@ export async function runMigrations(opts) {
   }
 
   console.log(`[INFO] Connecting to database (${isLocal ? 'LOCAL' : 'REMOTE: ' + projectRef})...`);
-  const client = new Client({ connectionString });
+  const clientConfig = { connectionString };
+  if (!isLocal) {
+    clientConfig.ssl = { rejectUnauthorized: false };
+  }
+  const client = new Client(clientConfig);
   try {
     await client.connect();
   } catch (connErr) {
