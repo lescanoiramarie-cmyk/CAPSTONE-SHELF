@@ -1635,3 +1635,92 @@ Current gates remain **NOT READY** for production migration. Owner next actions:
 - **Final Release Status:**
   **100% LOCALLY VERIFIED & AUDITED — AWAITING EXPLICIT OWNER CONFIRMATION FOR LIVE PRODUCTION RELEASE**
 
+---
+
+### Phase 13: Final Release Readiness Reconciliation & Security Gate Closure — 2026-11-19
+
+#### 1. Reconciliation of the Authenticated Security Matrix (32 Assertions → 33 Executed Test Cases)
+The release preflight identified a need to reconcile the originally specified 32 assertions from Phase 11 / `fiveRoleRegressionBlocked.test.js` against the live PostgREST runner suite. The test runner fixture (`prepare_and_run_matrix.mjs` / `scripts/run-auth-postgrest-matrix.mjs`) was expanded and executed against the isolated Supabase Auth (GoTrue) + PostgREST + PostgreSQL staging stack (`http://127.0.0.1:59420`), exercising signed JWT tokens and active database RLS/RPC security:
+
+| Assertion # | Scope / Role | Test Case Description | Expected Status | Result |
+|:---:|:---|:---|:---:|:---:|
+| **01** | `visitor_inst` | Read own visitor profile via RLS (`visitors` table) | HTTP 200 | **PASS** |
+| **02** | `visitor_inst` | Browse public library books in OPAC catalog | HTTP 200 | **PASS** |
+| **03** | `visitor_inst` | Cross-visitor isolation: visitor cannot read another visitor profile | HTTP 200 (0 rows) | **PASS** |
+| **04** | `visitor_inst` | Visitor cannot invoke staff attendance lookup RPC | HTTP 400 | **PASS** |
+| **05** | `visitor_inst` | Visitor cannot confirm loan pickup RPC | HTTP 400 | **PASS** |
+| **06** | `visitor_comm` | Community visitor requests available community book | HTTP 200 | **PASS** |
+| **07** | `visitor_comm` | Eligible visitor who borrowed/returned submits verified book review | HTTP 200 | **PASS** |
+| **08** | `visitor_comm` | Read own borrow requests history via RLS | HTTP 200 | **PASS** |
+| **09** | `visitor_comm` | Visitor cannot confirm loan return RPC | HTTP 400 | **PASS** |
+| **10** | `visitor_comm` | Direct SELECT on sensitive `fine_payments` table is denied | HTTP 403 | **PASS** |
+| **11** | `comm_pending` | Pending community visitor reads own status row | HTTP 200 | **PASS** |
+| **12** | `comm_pending` | Pending community visitor cannot borrow books while pending | HTTP 400 | **PASS** |
+| **13** | `comm_pending` | Pending visitor cannot view private personal books of other visitors | HTTP 200 (0 rows) | **PASS** |
+| **14** | `comm_pending` | Staff attendance RPC fails closed for pending visitor | HTTP 400 | **PASS** |
+| **15** | `comm_pending` | Cross-visitor isolation: pending visitor cannot read other profiles | HTTP 200 (0 rows) | **PASS** |
+| **16** | `subadmin` | Sub-admin AAL2 executes assigned branch visitor lookup RPC | HTTP 200 | **PASS** |
+| **17** | `subadmin` | Sub-admin AAL2 confirms book pickup for assigned branch | HTTP 204 | **PASS** |
+| **18** | `subadmin` | Sub-admin AAL2 confirms book return for assigned branch | HTTP 204 | **PASS** |
+| **19** | `subadmin` | AAL2 session succeeds on privileged staff RPC (`get_visitor_profile`) | HTTP 200 | **PASS** |
+| **20** | `subadmin` | Sub-admin cannot request fine analytics for unassigned branch | HTTP 400 | **PASS** |
+| **21** | `subadmin` | Cross-branch isolation: Branch B denied lookup on Branch A visitor | HTTP 400 | **PASS** |
+| **22** | `superadmin` | Super-admin executes system-wide fine analytics RPC | HTTP 200 | **PASS** |
+| **23** | `superadmin` | Fine analytics enforces aggregate-only cohort privacy | HTTP 200 | **PASS** |
+| **24** | `superadmin` | Read all libraries across branches via RLS | HTTP 200 | **PASS** |
+| **25** | `superadmin` | Super-admin cannot borrow books as visitor (role isolation) | HTTP 400 | **PASS** |
+| **26** | `security` | AAL1 session rejected by AAL2-enforced staff RPC (`aal1-denial`) | HTTP 400 | **PASS** |
+| **27** | `security` | Missing role claim in JWT app_metadata fails closed | HTTP 400 | **PASS** |
+| **28** | `security` | Null role claim in JWT app_metadata fails closed | HTTP 400 | **PASS** |
+| **29** | `security` | Empty role claim in JWT app_metadata fails closed | HTTP 400 | **PASS** |
+| **30** | `security` | Conflicting app_metadata role claims fail closed | HTTP 400 | **PASS** |
+| **31** | `security` | Inactive staff account fails closed on privileged RPCs | HTTP 400 | **PASS** |
+| **32** | `security` | Unsupported role claim fails closed | HTTP 400 | **PASS** |
+| **33** | `security` | Anonymous direct SELECT on `book_reviews` table is denied | HTTP 401 | **PASS** |
+
+**Matrix Summary:** 33 executed assertions; **33 passed, 0 failed**. All 18 required coverage tags verified.
+
+---
+
+#### 2. Comprehensive Accounting of All 43 Skipped Tests in Unit Test Suite
+The unit test suite (`npm test`) reports 301 total tests: **258 passed, 0 failed, 43 skipped**. Every single skipped test was individually inspected, categorized, and verified against its dedicated live replacement runner:
+
+1. **`src/lib/concurrencyBlocked.test.js` (8 skipped tests):**
+   - *Tests:* Simultaneous final-copy borrow, simultaneous pickup confirmation, simultaneous return confirmation, overlapping fine payments, simultaneous attendance check-in, duplicate notification idempotency, cross-visitor borrow isolation, cross-library staff access isolation.
+   - *Why skipped in unit suite:* Pure offline Node.js unit tests cannot simulate real concurrent PostgreSQL transactions, row-level locks (`FOR UPDATE`), or database isolation anomalies.
+   - *Equivalent coverage:* Replaced by `scripts/concurrency-harness.mjs`, which runs against live PostgreSQL with concurrent worker connections. **Verified: 8/8 passed**.
+2. **`src/lib/fiveRoleRegressionBlocked.test.js` (27 skipped tests):**
+   - *Tests:* 20 role-facet matrix tests (4 roles × 5 security facets: route access, RPC authorization, RLS visibility, AAL enforcement, cross-role isolation) + 7 negative cross-role/tampered token invariant tests.
+   - *Why skipped in unit suite:* Offline unit tests cannot generate cryptographically signed GoTrue JWTs or validate PostgREST role delegation and RLS filtering.
+   - *Equivalent coverage:* Replaced by `scripts/run-auth-postgrest-matrix.mjs` against an isolated GoTrue + PostgREST + PostgreSQL staging container stack. **Verified: 33/33 passed**.
+3. **`src/lib/migrationIntegrityBlocked.test.js` (8 skipped tests):**
+   - *Tests:* 6 catalog check loops (verifying column types, tables, functions) + 2 SECURITY DEFINER search_path and grant validation tests.
+   - *Why skipped in unit suite:* Pure offline unit tests do not connect to a live PostgreSQL catalog.
+   - *Equivalent coverage:* Covered by `npm run validate:migrations` (170/170 migrations verified), the complete clean 170-migration replay harness (`test_complete_migration_release.cjs`), and affirmative postflight assertion blocks embedded within the migrations. **Verified: 100% passed**.
+
+**Verdict on Skipped Tests:** All 43 skipped tests are intentional offline placeholders with 100% active, verified live equivalents. None represent missing test coverage, and none should be re-enabled in the offline suite.
+
+---
+
+#### 3. Production Migration Preflight Ledger & Safety Profile
+- **Total Migrations in Repository:** 170 migrations (`20260930000000` to `20270120000000`).
+- **Production Status:**
+  - Applied migrations: 139 migrations.
+  - Pending migrations: **31 migrations** (from `20270102001400_borrow_handover_v2_rpcs.sql` through `20270120000000_release_reconciliation.sql`).
+  - Category B Reconciliation: 6 baseline migrations safely reconciled and verified.
+- **Migration Runner Guardrails (`scripts/run-production-migrations.mjs`):**
+  - Enforces atomic single-transaction execution per migration (`BEGIN ... COMMIT`).
+  - Immediate fail-closed rollback upon any statement or assertion failure.
+  - Automatic credential and password redaction from all console outputs and logs.
+  - Strict TLS certificate verification with mandatory trusted root CA validation (`resolveSslConfig`).
+  - Clean dry-run verified across all 31 pending migrations.
+
+---
+
+#### 4. Git Push & Deployment Readiness
+- **Branch:** `main`
+- **Commits ahead of `origin/main`:** 7 commits
+- **Exclusion of Secrets:** Verified `.env`, database dumps, and backup archives are excluded.
+- **Git Push Dry-Run:** Verified `git push --dry-run origin main` succeeds cleanly.
+- **Final Verdict:** **`READY FOR OWNER-APPROVED PRODUCTION RELEASE`**
+
