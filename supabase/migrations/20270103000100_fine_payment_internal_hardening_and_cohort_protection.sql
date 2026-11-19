@@ -437,7 +437,9 @@ BEGIN
   ),
   -- Apply cohort suppression to monthly breakdowns as well
   monthly_cohort AS (
-    SELECT mb.month, mb.branch_id, mb.branch_name,
+    SELECT pg_catalog.date_trunc('month', payment.received_at)::date AS month,
+           COALESCE(request.library_id, book.library_id)::text AS branch_id,
+           COALESCE(library.name, 'Unassigned library')::text AS branch_name,
            count(DISTINCT request.id) AS request_count
     FROM public.fine_payments AS payment
     JOIN public.borrow_requests AS request
@@ -447,7 +449,9 @@ BEGIN
       ON library.id = COALESCE(request.library_id, book.library_id)
     WHERE (v_role = 'superadmin' OR COALESCE(request.library_id, book.library_id) = v_library_id)
       AND (p_library_id IS NULL OR COALESCE(request.library_id, book.library_id)::text = p_library_id)
-    GROUP BY mb.month, mb.branch_id, mb.branch_name
+    GROUP BY pg_catalog.date_trunc('month', payment.received_at)::date,
+             COALESCE(request.library_id, book.library_id)::text,
+             COALESCE(library.name, 'Unassigned library')::text
     HAVING count(DISTINCT request.id) >= v_min_cohort
   ),
   monthly_filtered AS (
@@ -470,11 +474,11 @@ BEGIN
   UNION ALL
 
   SELECT 'summary'::text, NULL::date, NULL::text, 'All libraries'::text,
-    COALESCE(sum(branch.assessed), 0), COALESCE(sum(branch.collected), 0),
-    COALESCE(sum(branch.outstanding), 0), COALESCE(sum(branch.paid_count), 0),
-    COALESCE(sum(branch.partial_count), 0), COALESCE(sum(branch.unpaid_count), 0),
-    COALESCE(sum(method.cash_total), 0), COALESCE(sum(method.transfer_total), 0),
-    COALESCE(sum(method.other_total), 0)
+    COALESCE(sum(branch.assessed), 0)::numeric, COALESCE(sum(branch.collected), 0)::numeric,
+    COALESCE(sum(branch.outstanding), 0)::numeric, COALESCE(sum(branch.paid_count), 0)::bigint,
+    COALESCE(sum(branch.partial_count), 0)::bigint, COALESCE(sum(branch.unpaid_count), 0)::bigint,
+    COALESCE(sum(method.cash_total), 0)::numeric, COALESCE(sum(method.transfer_total), 0)::numeric,
+    COALESCE(sum(method.other_total), 0)::numeric
   FROM branch_summary AS branch
   LEFT JOIN payment_methods AS method ON method.library_id = branch.library_id
 

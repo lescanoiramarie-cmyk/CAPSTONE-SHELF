@@ -101,7 +101,7 @@ BEGIN
         p_visitor_id,
         p_notification_type,
         p_title,
-        p_message,
+        COALESCE(p_message, p_title, 'Notification'),
         p_reference_id,
         p_reference_type,
         p_expires_at
@@ -116,6 +116,35 @@ $function$;
 ALTER FUNCTION public.create_visitor_notification(text, text, text, text, text, text, timestamptz) OWNER TO postgres;
 REVOKE ALL ON FUNCTION public.create_visitor_notification(text, text, text, text, text, text, timestamptz) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.create_visitor_notification(text, text, text, text, text, text, timestamptz) TO authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.create_visitor_notification(
+    p_visitor_id text,
+    p_notification_type text,
+    p_title text,
+    p_message text,
+    p_reference_id uuid,
+    p_reference_type text DEFAULT NULL,
+    p_expires_at timestamptz DEFAULT NULL
+)
+RETURNS uuid
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+  SELECT public.create_visitor_notification(
+    p_visitor_id,
+    p_notification_type,
+    p_title,
+    p_message,
+    p_reference_id::text,
+    p_reference_type,
+    p_expires_at
+  );
+$function$;
+
+ALTER FUNCTION public.create_visitor_notification(text, text, text, text, uuid, text, timestamptz) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.create_visitor_notification(text, text, text, text, uuid, text, timestamptz) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.create_visitor_notification(text, text, text, text, uuid, text, timestamptz) TO authenticated, service_role;
 
 -- 4. Verified Category B Migration Ledger Synchronization
 -- Validates every required schema/catalog effect before idempotently stamping the ledger.

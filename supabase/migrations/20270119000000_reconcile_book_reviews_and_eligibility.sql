@@ -324,8 +324,8 @@ BEGIN
     FROM public.book_reviews AS review
     WHERE review.book_id = p_book_id
     ORDER BY review.created_at DESC
-    LIMIT pg_catalog.least(pg_catalog.greatest(p_limit, 1), 50)
-    OFFSET pg_catalog.greatest(p_offset, 0);
+    LIMIT LEAST(GREATEST(p_limit, 1), 50)
+    OFFSET GREATEST(p_offset, 0);
 END;
 $function$;
 

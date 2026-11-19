@@ -93,16 +93,16 @@ BEGIN
     SELECT 1
     FROM public.borrow_requests AS request
     JOIN public.books AS book ON book.id = request.book_id
-    WHERE request.id = v_request_uuid
+    WHERE request.id = v_request_uuid::text
       AND public.is_active_staff_for_branch(book.library_id::text)
   ) THEN
     RAISE EXCEPTION 'Request not found or branch access denied.';
   END IF;
 
-  IF pg_catalog.to_regprocedure('public.confirm_pickup(uuid,text)') IS NOT NULL THEN
-    PERFORM public.confirm_pickup(v_request_uuid, p_staff_name);
-  ELSE
+  IF pg_catalog.to_regprocedure('public.confirm_pickup(text,text)') IS NOT NULL THEN
     PERFORM public.confirm_pickup(p_request_id, p_staff_name);
+  ELSE
+    PERFORM public.confirm_pickup(v_request_uuid, p_staff_name);
   END IF;
 END;
 $function$;
@@ -148,16 +148,16 @@ BEGIN
     SELECT 1
     FROM public.borrow_requests AS request
     JOIN public.books AS book ON book.id = request.book_id
-    WHERE request.id = v_request_uuid
+    WHERE request.id = v_request_uuid::text
       AND public.is_active_staff_for_branch(book.library_id::text)
   ) THEN
     RAISE EXCEPTION 'Loan not found or branch access denied.';
   END IF;
 
-  IF pg_catalog.to_regprocedure('public.confirm_return(uuid,text)') IS NOT NULL THEN
-    PERFORM public.confirm_return(v_request_uuid, p_staff_name);
-  ELSE
+  IF pg_catalog.to_regprocedure('public.confirm_return(text,text)') IS NOT NULL THEN
     PERFORM public.confirm_return(p_request_id, p_staff_name);
+  ELSE
+    PERFORM public.confirm_return(v_request_uuid, p_staff_name);
   END IF;
 END;
 $function$;

@@ -213,16 +213,17 @@ async function main() {
       if (!expectedStatuses.includes(response.status)) fail(`expected status ${expectedStatuses.join('|')}, received ${response.status}`);
       if (testCase.expected?.json) assertResponse(body, testCase.expected.json);
       results.push({ name: testCase.name, status: response.status, result: 'PASS' });
+      process.stdout.write(`PASS ${testCase.name} [HTTP ${response.status}]\n`);
     } catch (error) {
       results.push({ name: testCase.name, result: 'FAIL', reason: error.message });
+      process.stdout.write(`FAIL ${testCase.name} — ${error.message}\n`);
     }
   }
-  for (const result of results) process.stdout.write(`${result.result} ${result.name}${result.status ? ` [HTTP ${result.status}]` : ''}${result.reason ? ` — ${result.reason}` : ''}\n`);
   process.stdout.write(`Total: ${results.length}; passed: ${results.filter((item) => item.result === 'PASS').length}; failed: ${results.filter((item) => item.result === 'FAIL').length}\n`);
   return results.every((result) => result.result === 'PASS') ? 0 : 2;
 }
 
-main().then((code) => { process.exitCode = code; }).catch((error) => {
+main().then((code) => { process.exit(code); }).catch((error) => {
   process.stderr.write(`Auth/PostgREST matrix not run: ${error.message}\n`);
-  process.exitCode = 1;
+  process.exit(1);
 });
