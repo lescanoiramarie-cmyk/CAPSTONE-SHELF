@@ -21,7 +21,7 @@ AS $function$
 BEGIN
   RETURN QUERY
   SELECT
-    COALESCE(b.category, 'Uncategorized') AS category,
+    COALESCE(b.category, 'Uncategorized')::text AS category,
     COUNT(DISTINCT b.id)::bigint AS book_count
   FROM public.books AS b
   WHERE b.book_type = 'library'
@@ -65,14 +65,14 @@ BEGIN
 
   RETURN QUERY
   SELECT
-    b.id AS book_id,
-    b.title,
-    b.author,
-    b.category,
-    b.isbn,
-    b.cover_url,
-    b.owner_visitor_id,
-    v.full_name AS owner_name,
+    b.id::text AS book_id,
+    b.title::text,
+    b.author::text,
+    b.category::text,
+    b.isbn::text,
+    b.cover_url::text,
+    b.owner_visitor_id::text,
+    v.full_name::text AS owner_name,
     sb.saved_at
   FROM public.visitor_saved_community_books sb
   JOIN public.books b ON b.id = sb.community_book_id

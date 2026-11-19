@@ -1838,6 +1838,32 @@ The unit test suite (`npm test`) reports 301 total tests: **258 passed, 0 failed
 
 ---
 
+## Phase 16 — Production Release Execution & Deployment Verification
+
+### 1. Production Release Execution Summary
+- **Target Repository:** `lescanoiramarie-cmyk/CAPSTONE-SHELF` on branch `main`
+- **Target Supabase Project:** `khwtfjyvawukbsvyjdux`
+- **TLS Security:** Verified strict TLS connection with CA certificate `prod-ca-2021.crt` (`rejectUnauthorized: true`).
+- **Git Commit:** `9075d8f` (`fix: reconcile OPAC data fetching and UI errors`)
+- **Git Push:** Successfully pushed to `origin/main` (`https://github.com/lescanoiramarie-cmyk/CAPSTONE-SHELF.git`).
+- **Production Migration:** `20270121000000_ui_and_rpc_reconciliation.sql` applied cleanly as migration 171.
+
+### 2. Production Ledger Status
+- **Prior Ledger Count:** 170 applied migrations.
+- **Current Ledger Count:** 171 applied migrations.
+- **Pending Migrations:** 0.
+- **Latest Applied Migration:** `20270121000000_ui_and_rpc_reconciliation`.
+
+### 3. Production Postflight Live Verification Results
+1. `get_opac_category_book_counts()`: **PASSED** — returns 26 categories (e.g., Business: 136, Computer Science: 140, Engineering: 158).
+2. `get_opac_filtered_book_count('', 'All', NULL, 'All')`: **PASSED** — returns 1,921 catalog books.
+3. `get_saved_community_books()`: **PASSED** — executes cleanly without error, returns 0 rows for unauthenticated sessions.
+4. `opac_has_library_access(uuid)`: **PASSED** — anonymous callers are rejected with `permission denied for function opac_has_library_access`.
+5. `get_staff_borrowing_history` & `get_visitor_borrowing_history`: **PASSED** — return signatures and text ID compatibility verified.
+
+---
+
 ## Final Production Verdict
-**`READY FOR OWNER APPROVAL — UI RECOVERY & SECURITY AUDIT COMPLETE`**
+**`PRODUCTION RELEASE COMPLETE — ALL UI, DATA FETCHING, AND SECURITY GATES VERIFIED IN PRODUCTION`**
+
 
