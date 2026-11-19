@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, ChevronLeft, ChevronRight, UsersRound } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, UsersRound, ShieldCheck } from 'lucide-react';
 import {
   fetchVisitorAccounts,
   approveCommunityVisitor,
@@ -113,7 +113,7 @@ export default function VisitorAccountManagement({
   const visibleVisitors = loadedRequestKey === requestKey ? visitors : [];
 
   const handleToggleVisitor = async (visitor) => {
-    if (!visitor?.id || updatingVisitorId) return;
+    if (isSuperAdmin || !visitor?.id || updatingVisitorId) return;
 
     const nextIsActive = !visitor.isActive;
     setUpdatingVisitorId(visitor.id);
@@ -153,6 +153,13 @@ export default function VisitorAccountManagement({
             : `Registered visitors for ${libraryName || 'your assigned library branch'}.`}
         </p>
       </header>
+
+      {isSuperAdmin && (
+        <div className="flex items-center gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-200">
+          <ShieldCheck size={18} className="shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+          <span>System-wide visitor accounts oversight (Read-only). Account activation, approvals, and status mutations are managed by branch sub-administrators.</span>
+        </div>
+      )}
 
       <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end">
         <label className="relative min-w-0 flex-1">
@@ -218,7 +225,7 @@ export default function VisitorAccountManagement({
                 <th className="px-4 py-3 font-semibold">Library</th>
                 <th className="px-4 py-3 font-semibold">Registration / approval</th>
                 <th className="px-4 py-3 font-semibold">Registration Date</th>
-                <th className="px-4 py-3 font-semibold">Action</th>
+                <th className="px-4 py-3 font-semibold">{isSuperAdmin ? 'Status' : 'Action'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -258,25 +265,35 @@ export default function VisitorAccountManagement({
                     </td>
                     <td className="px-4 py-3 text-slate-600">{formatDate(visitor.registeredAt)}</td>
                     <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        data-confirm-message={`${visitor.registrationType === 'community' && visitor.approvalStatus === 'pending' ? 'Approve' : visitor.isActive ? 'Disable' : 'Enable'} the visitor account for "${visitor.fullName || visitor.email || 'this visitor'}"?`}
-                        onClick={() => void handleToggleVisitor(visitor)}
-                        disabled={Boolean(updatingVisitorId)}
-                        className={`rounded-md border px-3 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                      {isSuperAdmin ? (
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${
                           visitor.isActive
-                            ? 'border-red-200 text-red-700 hover:bg-red-50'
-                            : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
-                        }`}
-                      >
-                        {updatingVisitorId === visitor.id
-                          ? 'Updating...'
-                          : visitor.registrationType === 'community' && visitor.approvalStatus === 'pending'
-                            ? 'Approve visitor'
-                            : visitor.isActive
-                              ? 'Disable'
-                              : 'Enable'}
-                      </button>
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
+                            : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                        }`}>
+                          {visitor.isActive ? 'Active' : 'Disabled'}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          data-confirm-message={`${visitor.registrationType === 'community' && visitor.approvalStatus === 'pending' ? 'Approve' : visitor.isActive ? 'Disable' : 'Enable'} the visitor account for "${visitor.fullName || visitor.email || 'this visitor'}"?`}
+                          onClick={() => void handleToggleVisitor(visitor)}
+                          disabled={Boolean(updatingVisitorId)}
+                          className={`rounded-md border px-3 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                            visitor.isActive
+                              ? 'border-red-200 text-red-700 hover:bg-red-50'
+                              : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                          }`}
+                        >
+                          {updatingVisitorId === visitor.id
+                            ? 'Updating...'
+                            : visitor.registrationType === 'community' && visitor.approvalStatus === 'pending'
+                              ? 'Approve visitor'
+                              : visitor.isActive
+                                ? 'Disable'
+                                : 'Enable'}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))

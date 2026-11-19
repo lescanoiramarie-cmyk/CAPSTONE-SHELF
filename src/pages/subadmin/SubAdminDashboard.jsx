@@ -1541,31 +1541,27 @@ export default function SubAdminDashboard() {
   }
 
   return (
-    <div className="subadmin-dashboard flex h-dvh min-h-0 w-full overflow-hidden bg-shelf-bg text-slate-800 flex-col">
-      {/* GLOBAL SHELF HEADER */}
-      <ShelfHeader
-        notificationCount={branchNotifications.length}
-        notificationItems={branchNotifications.map((n) => ({
-          id: n.id,
-          message: n.message,
-          created_at: new Date(n.timestamp).toISOString(),
-          read: false,
-        }))}
-        onNotificationClick={(item) => {
-          if (item.targetSection) navigateToSection(item.targetSection);
-          if (item.targetTab) setWorkspaceTab(item.targetTab);
-          if (item.recordId) setFocusRequestId(item.recordId);
-          if (item.type) setFocusNotificationType(item.type);
-        }}
-        showDarkModeToggle={true}
-      />
+    <div className="subadmin-dashboard flex h-dvh min-h-0 w-full overflow-hidden bg-shelf-bg text-slate-800 flex-row">
+      {/* SIDEBAR (FULL HEIGHT TO TOP) */}
+      <aside className="subadmin-sidebar relative flex h-full w-60 shrink-0 flex-col border-r border-white/10 bg-shelf-primary text-white shadow-lg z-20">
+        {/* SHELF BRAND LOGO IN SIDEBAR */}
+        <div className="flex items-center gap-3 border-b border-white/10 px-5 py-4">
+          <button
+            type="button"
+            onClick={() => navigateToSection('overview')}
+            className="flex items-center gap-2.5 text-left cursor-pointer transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-lg"
+            aria-label="Go to Sub-Admin dashboard"
+          >
+            <img src="/shelf-logo.png" alt="" className="h-8 w-8 object-contain" />
+            <span className="text-lg font-extrabold tracking-wider text-white">
+              SHELF
+            </span>
+          </button>
+        </div>
 
-      {/* SIDEBAR + MAIN CONTENT */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* SIDEBAR */}
-        <aside className="subadmin-sidebar relative flex h-full w-60 shrink-0 flex-col border-r border-white/10 bg-shelf-primary text-white shadow-lg">
-          <div className="p-5 border-b border-white/10">
-            <div className="mt-4 min-w-0 border-l-[3px] border-blue-400 pl-3">
+        {/* SUBADMIN INFO */}
+        <div className="p-4 border-b border-white/10">
+          <div className="min-w-0 border-l-[3px] border-blue-400 pl-3">
               <div className="flex min-w-0 items-center gap-2">
                 <p className="min-w-0 truncate text-sm font-bold leading-tight text-white">{user?.name || 'Sub-admin'}</p>
                 <span className="shrink-0 rounded-full border border-blue-200/40 bg-blue-400/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-100">Sub-admin</span>
@@ -1654,31 +1650,71 @@ export default function SubAdminDashboard() {
         </nav>
       </aside>
 
-      {/* MAIN CONTENT */}
-      <main ref={mainContentRef} className="min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8">
-        {section !== 'overview' && (
-          <header className="sticky top-16 z-30 -mx-4 flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 bg-shelf-bg/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-            <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm">
-              <button
-                type="button"
-                onClick={() => navigateToSection('overview')}
-                className="shrink-0 font-medium text-slate-500 transition hover:text-shelf-accent"
-              >
-                Dashboard
-              </button>
-              <span aria-hidden="true" className="text-slate-300">/</span>
-              <span className="truncate font-semibold text-shelf-primary">
-                {section === 'workspace'
-                  ? ({ reports: 'Reports', analytics: 'Analytics' }[workspaceTab] || 'Reports')
-                  : ({ visitors: 'Visitor Accounts', attendance: 'Attendance', transactions: 'Book Transactions', fines: 'Fine Payments', subscription: 'Plan & Subscription', inventory: 'Inventory', queue: 'Reservation Queue', map: 'Branch Map', settings: 'Settings' }[section] || 'Dashboard')}
-              </span>
-            </nav>
-            <span className="flex max-w-full min-w-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">
-              <Building2 size={14} className="shrink-0 text-shelf-accent" aria-hidden="true" />
+      {/* MAIN WORKSPACE COLUMN */}
+      <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+        {/* TOP BAR WITH SHELFHEADER */}
+        <ShelfHeader
+          notificationCount={branchNotifications.length}
+          notificationItems={branchNotifications.map((n) => ({
+            id: n.id,
+            message: n.message,
+            created_at: new Date(n.timestamp).toISOString(),
+            read: false,
+          }))}
+          onNotificationClick={(item) => {
+            if (item.targetSection) navigateToSection(item.targetSection);
+            if (item.targetTab) setWorkspaceTab(item.targetTab);
+            if (item.recordId) setFocusRequestId(item.recordId);
+            if (item.type) setFocusNotificationType(item.type);
+          }}
+          profileMenuContent={
+            <>
+              <li>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => setShowSubAdminTerms(true)}
+                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700/50"
+                >
+                  <FileText size={16} aria-hidden="true" />
+                  Terms and conditions
+                </button>
+              </li>
+              <li>
+                <hr className="my-1 border-slate-200 dark:border-slate-700" />
+              </li>
+            </>
+          }
+          showDarkModeToggle={true}
+        >
+          {/* Breadcrumb & Library Badge in Center */}
+          <div className="flex min-w-0 items-center gap-2 text-sm">
+            <button
+              type="button"
+              onClick={() => navigateToSection('overview')}
+              className="shrink-0 font-medium text-slate-500 transition hover:text-shelf-accent dark:text-slate-400"
+            >
+              Dashboard
+            </button>
+            {section !== 'overview' && (
+              <>
+                <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">/</span>
+                <span className="truncate font-semibold text-shelf-primary dark:text-white">
+                  {section === 'workspace'
+                    ? ({ reports: 'Reports', analytics: 'Analytics' }[workspaceTab] || 'Reports')
+                    : ({ visitors: 'Visitor Accounts', attendance: 'Attendance', transactions: 'Book Transactions', fines: 'Fine Payments', subscription: 'Plan & Subscription', inventory: 'Inventory', queue: 'Reservation Queue', map: 'Branch Map', settings: 'Settings' }[section] || 'Dashboard')}
+                </span>
+              </>
+            )}
+            <span className="hidden md:inline-flex ml-2 max-w-xs min-w-0 items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              <Building2 size={13} className="shrink-0 text-shelf-accent" aria-hidden="true" />
               <span className="truncate">{currentBranchName || 'Assigned library'}</span>
             </span>
-          </header>
-        )}
+          </div>
+        </ShelfHeader>
+
+        {/* MAIN CONTENT AREA */}
+        <main ref={mainContentRef} className="min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8">
         
         {/* Keep the welcome panel on the overview so other sections start at the top. */}
         {section === 'overview' && <CustomDashboardWelcome

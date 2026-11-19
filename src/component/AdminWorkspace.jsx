@@ -10,7 +10,7 @@ import {
   PointElement,
   Tooltip,
 } from 'chart.js';
-import { Download, FileSpreadsheet, FileCode, FileText } from 'lucide-react';
+import { Download, FileSpreadsheet, FileCode, FileText, ShieldCheck } from 'lucide-react';
 import {
   createAnnouncement,
   updateAnnouncement,
@@ -870,6 +870,7 @@ export default function AdminWorkspace({
   };
 
   const handleFeedbackReply = async (item) => {
+    if (user?.role === 'superadmin') return;
     const reply = String(feedbackReply[item.id] || '').trim();
     if (!reply) {
       setError('Please enter a reply message before saving.');
@@ -893,16 +894,26 @@ export default function AdminWorkspace({
       status: 'answered',
       updated_at: repliedAt,
     };
-    const { error: replyError } = await supabase
-      .from('visitor_feedback')
-      .update({
-        admin_reply: reply,
-        replied_by: user?.name || user?.email,
-        replied_at: repliedAt,
-        status: 'answered',
-        updated_at: repliedAt,
-      })
-      .eq('id', item.id);
+
+    let replyError = null;
+    const { error: rpcError } = await supabase.rpc('respond_to_visitor_feedback', {
+      p_feedback_id: item.id,
+      p_reply: reply,
+    });
+
+    if (rpcError) {
+      const { error: directError } = await supabase
+        .from('visitor_feedback')
+        .update({
+          admin_reply: reply,
+          replied_by: user?.name || user?.email,
+          replied_at: repliedAt,
+          status: 'answered',
+          updated_at: repliedAt,
+        })
+        .eq('id', item.id);
+      replyError = directError;
+    }
 
     if (replyError) {
       setError(replyError.message);
@@ -1036,6 +1047,10 @@ export default function AdminWorkspace({
         <div className="rounded-lg border-l-4 border-emerald-600 bg-emerald-50 p-3.5 text-sm text-emerald-900">
           <strong>Reply:</strong> {item.admin_reply}
           {item.replied_at && <p className="mt-1 text-xs text-emerald-700">Replied {new Date(item.replied_at).toLocaleString()}</p>}
+        </div>
+      ) : user?.role === 'superadmin' ? (
+        <div className="rounded-lg border border-slate-200 bg-slate-100/70 p-3 text-xs text-slate-500 italic">
+          Feedback replies are managed by the branch library staff.
         </div>
       ) : (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -1839,6 +1854,12 @@ export default function AdminWorkspace({
       {/* FEEDBACK TAB */}
       {tab === 'feedback' && (
         <section className="space-y-4">
+          {user?.role === 'superadmin' && (
+            <div className="flex items-center gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-200">
+              <ShieldCheck size={18} className="shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+              <span>System-wide feedback oversight (Read-only). Message replies are handled by branch library staff.</span>
+            </div>
+          )}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-lg font-bold text-slate-800">Visitor feedback</h2>

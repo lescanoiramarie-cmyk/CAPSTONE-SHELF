@@ -976,9 +976,12 @@
 
 .visitor-dashboard .visitor-feedback.visitor-feedback-toast {
   position: fixed;
-  top: calc(var(--visitor-header-height) + 0.75rem);
-  z-index: 80;
+  top: calc(var(--visitor-header-height) + 1rem);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
   align-items: center;
+  max-width: min(calc(100vw - 2rem), 28rem);
 }
 
 .visitor-dashboard .visitor-feedback > :not(.visitor-feedback-icon) {

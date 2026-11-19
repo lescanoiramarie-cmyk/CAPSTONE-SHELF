@@ -77,6 +77,12 @@ export default function AttendanceKiosk() {
       const profileImagePromise = (async () => {
         if (!visitor.profileImagePath || !supabase) return '';
         try {
+          const { data: signedData, error: signedError } = await supabase.storage
+            .from('visitor-profile-images')
+            .createSignedUrl(visitor.profileImagePath, 60);
+          if (!signedError && signedData?.signedUrl) {
+            return signedData.signedUrl;
+          }
           const { data, error } = await supabase.storage
             .from('visitor-profile-images')
             .download(visitor.profileImagePath);

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Draggable from 'react-draggable';
 import { QRCodeSVG } from 'qrcode.react';
 import { Bar } from 'react-chartjs-2';
@@ -23,7 +22,6 @@ import {
   CircleDollarSign,
   FileText,
   Fingerprint,
-  LogOut,
   Mail,
   MapPinned,
   Pencil,
@@ -195,7 +193,6 @@ function getCommunityReturnReminder(dueDate) {
 
 function VisitorDashboardContent() {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
   const [currentTime, setCurrentTime] = useState(0);
 
   useEffect(() => {
@@ -320,6 +317,7 @@ function VisitorDashboardContent() {
   const [visitorPasskeyBusy, setVisitorPasskeyBusy] = useState(false);
   const [visitorPasskeyError, setVisitorPasskeyError] = useState('');
   const [visitorPasskeyMessage, setVisitorPasskeyMessage] = useState('');
+  const [showPhotoLightbox, setShowPhotoLightbox] = useState(false);
 
   useEffect(() => {
     const handleResetToHome = () => {
@@ -1697,14 +1695,6 @@ function VisitorDashboardContent() {
                   });
               },
             },
-            {
-              label: 'Sign Out',
-              Icon: LogOut,
-              onClick: () => {
-                logout();
-                navigate('/');
-              },
-            },
           ]}
           />
         </div>
@@ -2084,7 +2074,25 @@ function VisitorDashboardContent() {
               {menuSection === 'profile' && (
                 <div className="space-y-6">
                   <section className="visitor-profile-summary flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/60 sm:flex-nowrap">
-                    <span className="relative flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-full bg-shelf-primary text-2xl font-bold text-white ring-4 ring-white shadow-md dark:ring-slate-800">
+                    <span
+                      onClick={() => {
+                        if (!isEditingProfile && profileImageSrc && !profileImageFailed) {
+                          setShowPhotoLightbox(true);
+                        }
+                      }}
+                      className={`relative flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-full bg-shelf-primary text-2xl font-bold text-white ring-4 ring-white shadow-md dark:ring-slate-800 ${
+                        !isEditingProfile && profileImageSrc && !profileImageFailed ? 'cursor-pointer hover:opacity-90 transition' : ''
+                      }`}
+                      title={!isEditingProfile && profileImageSrc && !profileImageFailed ? 'Click to view full photo' : undefined}
+                      role={!isEditingProfile && profileImageSrc && !profileImageFailed ? 'button' : undefined}
+                      tabIndex={!isEditingProfile && profileImageSrc && !profileImageFailed ? 0 : undefined}
+                      onKeyDown={(e) => {
+                        if ((e.key === 'Enter' || e.key === ' ') && !isEditingProfile && profileImageSrc && !profileImageFailed) {
+                          e.preventDefault();
+                          setShowPhotoLightbox(true);
+                        }
+                      }}
+                    >
                       {profileImageSrc && !profileImageFailed ? (
                         <img
                           src={profileImageSrc}
@@ -2347,29 +2355,6 @@ function VisitorDashboardContent() {
                       )}
                     </div>
                   </section>
-
-                  {/* SIGN OUT SECTION */}
-                  <section className="mt-6 pt-5 border-t border-slate-200 dark:border-slate-700">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-rose-200 bg-rose-50/50 p-4 dark:border-rose-900/50 dark:bg-rose-950/20">
-                      <div>
-                        <h4 className="text-sm font-bold text-rose-900 dark:text-rose-200">Session and Access</h4>
-                        <p className="text-xs text-rose-700/80 dark:text-rose-300/80">Sign out of your visitor account on this browser.</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsMenuOpen(false);
-                          logout();
-                          navigate('/');
-                        }}
-                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
-                      >
-                        <LogOut size={16} aria-hidden="true" />
-                        Sign out
-                      </button>
-                    </div>
-                  </section>
-
                 </div>
               )}
             </div>
@@ -2382,6 +2367,41 @@ function VisitorDashboardContent() {
             onCancel={() => setPendingProfileImageFile(null)}
             onApply={handleProfileImageCrop}
           />
+      )}
+
+      {/* VISITOR PHOTO LIGHTBOX */}
+      {showPhotoLightbox && profileImageSrc && (
+        <div
+          className="fixed inset-0 z-120 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          onClick={() => setShowPhotoLightbox(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Profile photo preview"
+        >
+          <div
+            className="relative max-h-[90vh] max-w-lg overflow-hidden rounded-2xl bg-white p-2 shadow-2xl dark:bg-slate-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Profile Photo</h3>
+              <button
+                type="button"
+                onClick={() => setShowPhotoLightbox(false)}
+                className="rounded-lg p-1 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700"
+                aria-label="Close photo preview"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex items-center justify-center p-4">
+              <img
+                src={profileImageSrc}
+                alt={visitorDetails?.fullName || 'Profile photo'}
+                className="max-h-[70vh] w-auto max-w-full rounded-xl object-contain shadow-sm"
+              />
+            </div>
+          </div>
+        </div>
       )}
 
       {isTermsReviewOpen && (

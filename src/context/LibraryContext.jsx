@@ -70,6 +70,19 @@ export function LibraryProvider({ children }) {
   const [attendanceLoadError, setAttendanceLoadError] = useState('');
   const [optionalDataLoadErrors, setOptionalDataLoadErrors] = useState([]);
   const [realtimeVisitorId, setRealtimeVisitorId] = useState(null);
+  const [showRefreshToast, setShowRefreshToast] = useState(false);
+  useEffect(() => {
+    if (loading && initialDataReady) {
+      const showTimer = setTimeout(() => setShowRefreshToast(true), 0);
+      const hideTimer = setTimeout(() => setShowRefreshToast(false), 2500);
+      return () => {
+        clearTimeout(showTimer);
+        clearTimeout(hideTimer);
+      };
+    }
+    const offTimer = setTimeout(() => setShowRefreshToast(false), 0);
+    return () => clearTimeout(offTimer);
+  }, [loading, initialDataReady]);
   const [borrowRequestsLoading, setBorrowRequestsLoading] = useState(false);
   const [borrowRequestsLoadError, setBorrowRequestsLoadError] = useState('');
   const refreshSequenceRef = useRef(0);
@@ -1797,11 +1810,11 @@ fineReviewRequired:
       )}
       {children}
       {!splashElapsed && <ShelfLoader screen label="Loading SHELF..." />}
-      {loading && initialDataReady && (
-        <div className="pointer-events-none fixed inset-0 z-190 grid place-items-center">
-          <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-4 py-3 text-sm font-semibold text-slate-700 shadow-lg dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-100">
+      {showRefreshToast && (
+        <div className="pointer-events-none fixed top-4 left-1/2 -translate-x-1/2 z-200 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-md backdrop-blur dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-100">
             <ShelfLoader compact label="Refreshing dashboard data..." />
-            <span>Refreshing…</span>
+            <span>Updating catalog...</span>
           </div>
         </div>
       )}

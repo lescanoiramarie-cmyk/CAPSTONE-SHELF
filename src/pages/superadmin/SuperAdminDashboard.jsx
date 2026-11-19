@@ -1373,36 +1373,34 @@ const handleEditStaff = (staff) => {
   }
 
   return (
-    <div className="superadmin-dashboard flex h-dvh min-h-0 overflow-hidden bg-shelf-bg text-slate-800 flex-col">
-      {/* GLOBAL SHELF HEADER */}
-      <ShelfHeader
-        notificationCount={superAdminNotifications.length}
-        notificationItems={superAdminNotifications.map((n) => ({
-          id: n.id,
-          message: n.message,
-          created_at: new Date(n.timestamp).toISOString(),
-          read: false,
-        }))}
-        onNotificationClick={(item) => {
-          if (item.targetSection) setSection(item.targetSection);
-          if (item.targetTab) setActiveTab(item.targetTab);
-          if (item.recordId) setFocusedNotificationRequestId(item.recordId);
-          if (item.type) setFocusedNotificationType(item.type);
-          setNotificationFocusVersion((v) => v + 1);
-        }}
-        showDarkModeToggle={true}
-      />
+    <div className="superadmin-dashboard flex h-dvh min-h-0 w-full overflow-hidden bg-shelf-bg text-slate-800 flex-row">
+      {/* SIDEBAR (FULL HEIGHT TO TOP) */}
+      <aside className="superadmin-sidebar relative flex h-full w-60 shrink-0 flex-col overflow-hidden bg-shelf-primary text-white z-20">
+        {/* SHELF BRAND LOGO IN SIDEBAR */}
+        <div className="flex items-center gap-3 border-b border-white/10 px-5 py-4">
+          <button
+            type="button"
+            onClick={() => {
+              setSection('overview');
+              setStaffError('');
+              setStaffMessage('');
+            }}
+            className="flex items-center gap-2.5 text-left cursor-pointer transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-lg"
+            aria-label="Go to Super-Admin dashboard"
+          >
+            <img src="/shelf-logo.png" alt="" className="h-8 w-8 object-contain" />
+            <span className="text-lg font-extrabold tracking-wider text-white">
+              SHELF
+            </span>
+          </button>
+        </div>
 
-      {/* SIDEBAR + MAIN CONTENT */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* SIDEBAR */}
-        <aside className="superadmin-sidebar relative flex h-full w-60 shrink-0 flex-col overflow-hidden bg-shelf-primary text-white">
-          <div className="border-b border-white/10 p-5">
-            <div className="mt-4 border-l-[3px] border-blue-400 pl-3">
-              <p className="text-base font-bold leading-tight tracking-wide text-white">Super admin</p>
-              <p className="mt-1 text-xs font-medium text-blue-100/75">System console</p>
-            </div>
+        <div className="border-b border-white/10 p-4">
+          <div className="border-l-[3px] border-blue-400 pl-3">
+            <p className="text-base font-bold leading-tight tracking-wide text-white">Super admin</p>
+            <p className="mt-1 text-xs font-medium text-blue-100/75">System console</p>
           </div>
+        </div>
 
           {/* NAVIGATION */}
           <nav className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1">
@@ -1636,56 +1634,70 @@ const handleEditStaff = (staff) => {
           </div>
         </aside>
 
-        {/* MAIN CONTENT */}
-        <main
-          ref={mainScrollRef}
-          className="min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8"
-        >
-          {section !== 'overview' && (
-            <header className="sticky top-16 z-30 -mx-4 flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 bg-shelf-bg/95 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-              <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm">
-                <button
-                  type="button"
-                  onClick={() => setSection('overview')}
-                  className="shrink-0 font-medium text-slate-500 transition hover:text-shelf-accent"
-                >
-                  Dashboard
-                </button>
-                <span aria-hidden="true" className="text-slate-300">/</span>
-                <span className="truncate font-semibold text-shelf-primary">
-                  {section === 'workspace'
-                    ? (activeTab === 'analytics' ? 'Analytics' : 'Reports')
-                    : section === 'communication'
-                      ? (activeTab === 'announcements' ? 'Announcements' : 'Feedback')
-                      : ({ inventory: 'Inventory', map: 'Libraries & map', accounts: 'Staff accounts', 'visitor-accounts': 'Visitor accounts', fines: 'Fine Payments', subscriptions: 'Subscriptions', settings: 'Settings' }[section] || 'Dashboard')}
-                </span>
-              </nav>
-              <span className="flex max-w-full min-w-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">
-                <Globe size={14} className="shrink-0 text-shelf-accent" aria-hidden="true" />
+        {/* MAIN WORKSPACE COLUMN */}
+        <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+          {/* TOP BAR WITH SHELFHEADER */}
+          <ShelfHeader
+            notificationCount={superAdminNotifications.length}
+            notificationItems={superAdminNotifications.map((n) => ({
+              id: n.id,
+              message: n.message,
+              created_at: new Date(n.timestamp).toISOString(),
+              read: false,
+            }))}
+            onNotificationClick={(item) => {
+              if (item.targetSection) setSection(item.targetSection);
+              if (item.targetTab) setActiveTab(item.targetTab);
+              if (item.recordId) setFocusedNotificationRequestId(item.recordId);
+              if (item.type) setFocusedNotificationType(item.type);
+              setNotificationFocusVersion((v) => v + 1);
+            }}
+            showDarkModeToggle={true}
+          >
+            {/* Breadcrumb & Global Badge in Center */}
+            <div className="flex min-w-0 items-center gap-2 text-sm">
+              <button
+                type="button"
+                onClick={() => setSection('overview')}
+                className="shrink-0 font-medium text-slate-500 transition hover:text-shelf-accent dark:text-slate-400"
+              >
+                Dashboard
+              </button>
+              {section !== 'overview' && (
+                <>
+                  <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">/</span>
+                  <span className="truncate font-semibold text-shelf-primary dark:text-white">
+                    {section === 'workspace'
+                      ? (activeTab === 'analytics' ? 'Analytics' : 'Reports')
+                      : section === 'communication'
+                        ? (activeTab === 'announcements' ? 'Announcements' : 'Feedback')
+                        : ({ inventory: 'Inventory', map: 'Libraries & map', accounts: 'Staff accounts', 'visitor-accounts': 'Visitor accounts', fines: 'Fine Payments', subscriptions: 'Subscriptions', settings: 'Settings' }[section] || 'Dashboard')}
+                  </span>
+                </>
+              )}
+              <span className="hidden md:inline-flex ml-2 max-w-xs min-w-0 items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                <Globe size={13} className="shrink-0 text-shelf-accent" aria-hidden="true" />
                 <span className="truncate">All libraries</span>
               </span>
-            </header>
-          )}
-          {section === 'overview' && <DashboardWelcome
-            name={superAdminName.split(' ')[0]}
-            description="System metrics, library operations, staff accounts, and reports at a glance."
-            notifications={superAdminNotifications}
-            onNotificationFollowUp={handleOverdueFollowUp}
-            onNotificationClick={(notification) => {
-              setFocusedNotificationRequestId(
-                notification.recordId || notification.requestId
-              );
-              setFocusedNotificationType(notification.type);
-              setNotificationFocusVersion((version) => version + 1);
-              setSection(notification.targetSection);
-              setActiveTab(notification.targetTab);
-            }}
-            actions={[
-              { label: 'View Inventory', Icon: BookOpen, onClick: () => setSection('inventory') },
-              { label: 'Manage Staff', Icon: ShieldCheck, onClick: () => setSection('accounts') },
-              { label: 'Open Reports', Icon: FileSpreadsheet, onClick: () => { setSection('workspace'); setActiveTab('reports'); } },
-            ]}
-          />}
+            </div>
+          </ShelfHeader>
+
+          {/* MAIN CONTENT */}
+          <main
+            ref={mainScrollRef}
+            className="min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8"
+          >
+            {section === 'overview' && <DashboardWelcome
+              name={superAdminName.split(' ')[0]}
+              description="System metrics, library operations, staff accounts, and reports at a glance."
+              showNotifications={false}
+              onNotificationFollowUp={handleOverdueFollowUp}
+              actions={[
+                { label: 'View Inventory', Icon: BookOpen, onClick: () => setSection('inventory') },
+                { label: 'Manage Staff', Icon: ShieldCheck, onClick: () => setSection('accounts') },
+                { label: 'Open Reports', Icon: FileSpreadsheet, onClick: () => { setSection('workspace'); setActiveTab('reports'); } },
+              ]}
+            />}
 
           {/* OVERVIEW */}
           {section === 'overview' && (

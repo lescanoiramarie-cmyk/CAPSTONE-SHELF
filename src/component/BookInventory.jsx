@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, ChevronLeft, ChevronRight, Pencil, Search, Trash2, X } from 'lucide-react';
+import { BookOpen, ChevronLeft, ChevronRight, Pencil, Search, ShieldCheck, Trash2, X } from 'lucide-react';
 import { useLibrary } from '../context/useLibrary';
 import { useAuth } from '../context/useAuth.js';
 import { supabase } from '../lib/supabaseClient';
@@ -11,6 +11,7 @@ const INVENTORY_PAGE_SIZES = [10, 20, 50, 100];
 
 export default function BookInventory() {
   const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'superadmin';
   const {
     books,
     addBook,
@@ -226,6 +227,7 @@ export default function BookInventory() {
   };
 
   const handleOpenAdd = () => {
+    if (isSuperAdmin) return;
     setEditingId(null);
     setSelectedCoverFile(null);
     setCoverPreview('');
@@ -249,6 +251,7 @@ export default function BookInventory() {
   };
 
   const handleOpenEdit = (book) => {
+    if (isSuperAdmin) return;
     setEditingId(book.id);
     setSelectedCoverFile(null);
     setCoverPreview('');
@@ -339,6 +342,7 @@ export default function BookInventory() {
   };
 
   const handleDelete = async (id) => {
+    if (isSuperAdmin) return;
     const deletedBookTitle = inventoryBooks.find((book) => String(book.id) === String(id))?.title;
     setMutationNotice('');
     setMutationError('');
@@ -429,13 +433,22 @@ export default function BookInventory() {
           </p>
         </div>
 
-        <button
-          onClick={handleOpenAdd}
-          className="px-4 py-2 bg-shelf-primary hover:bg-[#003568] text-white rounded-lg text-sm font-semibold transition"
-        >
-          + Add new book
-        </button>
+        {!isSuperAdmin && (
+          <button
+            onClick={handleOpenAdd}
+            className="px-4 py-2 bg-shelf-primary hover:bg-[#003568] text-white rounded-lg text-sm font-semibold transition"
+          >
+            + Add new book
+          </button>
+        )}
       </div>
+
+      {isSuperAdmin && (
+        <div className="flex items-center gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-200">
+          <ShieldCheck size={18} className="shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+          <span>System-wide inventory oversight (Read-only). Book catalog additions and inventory adjustments are managed by branch sub-administrators.</span>
+        </div>
+      )}
 
       {error && (
         <div className="p-3 bg-red-100 text-red-700 rounded-lg text-sm">
@@ -518,12 +531,12 @@ export default function BookInventory() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1080px] table-fixed text-left text-sm text-slate-600 border-collapse">
             <colgroup>
-              <col style={{ width: '32%' }} />
-              <col style={{ width: '15%' }} />
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '19%' }} />
-              <col style={{ width: '7%' }} />
-              <col style={{ width: '11%' }} />
+              <col style={{ width: isSuperAdmin ? '36%' : '32%' }} />
+              <col style={{ width: isSuperAdmin ? '18%' : '15%' }} />
+              <col style={{ width: isSuperAdmin ? '18%' : '16%' }} />
+              <col style={{ width: isSuperAdmin ? '20%' : '19%' }} />
+              <col style={{ width: isSuperAdmin ? '8%' : '7%' }} />
+              {!isSuperAdmin && <col style={{ width: '11%' }} />}
             </colgroup>
             <thead className="bg-slate-50/80 text-slate-700 font-bold uppercase text-xs border-b border-slate-100">
               <tr>
@@ -532,7 +545,7 @@ export default function BookInventory() {
                 <th className="p-4">Fine Rate</th>
                 <th className="p-4">Library Location</th>
                 <th className="p-4 text-center">Copies</th>
-                <th className="p-4 text-right">Actions</th>
+                {!isSuperAdmin && <th className="p-4 text-right">Actions</th>}
               </tr>
             </thead>
 
@@ -540,7 +553,7 @@ export default function BookInventory() {
               {filteredBooks.length === 0 ? (
                 <tr>
                   <td
-                    colSpan="6"
+                    colSpan={isSuperAdmin ? 5 : 6}
                     className="p-8 text-center text-slate-400 font-medium"
                   >
                     No books found.
@@ -613,36 +626,38 @@ export default function BookInventory() {
                       </span>
                     </td>
 
-                    <td className="p-4 align-middle">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          aria-label={`Edit ${book.title}`}
-                          title="Edit book"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenEdit(book);
-                          }}
-                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 transition hover:border-shelf-accent hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-accent/50"
-                        >
-                          <Pencil size={16} aria-hidden="true" />
-                        </button>
+                    {!isSuperAdmin && (
+                      <td className="p-4 align-middle">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            aria-label={`Edit ${book.title}`}
+                            title="Edit book"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenEdit(book);
+                            }}
+                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 transition hover:border-shelf-accent hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-accent/50"
+                          >
+                            <Pencil size={16} aria-hidden="true" />
+                          </button>
 
-                        <button
-                          type="button"
-                          aria-label={`Delete ${book.title}`}
-                          title="Delete book"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(book.id);
-                          }}
-                          data-confirm-message={`Delete "${book.title || 'this book'}" from the inventory? This cannot be undone.`}
-                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition hover:border-red-300 hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50"
-                        >
-                          <Trash2 size={16} aria-hidden="true" />
-                        </button>
-                      </div>
-                    </td>
+                          <button
+                            type="button"
+                            aria-label={`Delete ${book.title}`}
+                            title="Delete book"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(book.id);
+                            }}
+                            data-confirm-message={`Delete "${book.title || 'this book'}" from the inventory? This cannot be undone.`}
+                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition hover:border-red-300 hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50"
+                          >
+                            <Trash2 size={16} aria-hidden="true" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}

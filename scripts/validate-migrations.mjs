@@ -198,8 +198,8 @@ export function validateReleasePackage(entries, manifest) {
   if (categoryB.length !== 6) {
     errors.push({ kind: 'invalid_category_b_count', expected: 6, actual: categoryB.length });
   }
-  if (categoryC.length !== 47) {
-    errors.push({ kind: 'invalid_category_c_count', expected: 47, actual: categoryC.length });
+  if (categoryC.length !== 48) {
+    errors.push({ kind: 'invalid_category_c_count', expected: 48, actual: categoryC.length });
   }
 
   // Scan for SQL defects across all migration files (calls or definitions of invalid pg_catalog.trim, excluding DROP FUNCTION cleanup)

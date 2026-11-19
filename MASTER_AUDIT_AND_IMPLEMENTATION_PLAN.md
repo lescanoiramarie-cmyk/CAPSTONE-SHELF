@@ -1945,7 +1945,40 @@ The unit test suite (`npm test`) reports 301 total tests: **258 passed, 0 failed
 
 ---
 
+## Phase 18 — Full UI Layout Recovery, SuperAdmin Oversight, and Migration 173 Reconciliation
+
+### 1. Release Migration 173 Metadata
+- **Migration File:** `supabase/migrations/20270123000000_subscription_events_and_community_rpc_reconciliation.sql`
+- **Migration 173 SHA-256:** `362874bf0b5328ecf0e267fa208e726830e0adf27a7c8768868a9c6dcff19407`
+- **Production Ledger Status:** **173/173 applied migrations** confirmed via `supabase migration list` on `khwtfjyvawukbsvyjdux`.
+- **Pending Migrations:** **0 pending**.
+
+### 2. Live Production Database Reconciliations (`khwtfjyvawukbsvyjdux`)
+1. `get_library_subscription_dashboard(uuid)`: Reconciled order by `created_at DESC` (resolved non-existent `changed_at` column error).
+2. `get_saved_community_books()`: Added explicit `::text` and `::integer` casts matching frontend expectations.
+3. Feedback reply lifecycle: Created trigger `trg_notify_visitor_on_feedback_reply` on `visitor_feedback` and RPC `respond_to_visitor_feedback(uuid, text)`.
+4. Kiosk profile photo policy: Updated `storage.objects` SELECT policy for active staff to read visitor profile pictures during kiosk check-in.
+
+### 3. Frontend UI Recovery & Defect Remediation
+1. **SubAdmin & SuperAdmin Full-Height Sidebar Layout:** Restructured dashboard containers to `flex flex-row h-dvh overflow-hidden` with full-height aside (`h-full z-20`) and SHELF logo pinned at the top.
+2. **Clean Top Bar Header:** Integrated `ShelfHeader` as top bar in the content column with breadcrumbs and library indicator, eliminating nested sticky header clipping and double scrollbars.
+3. **SuperAdmin Read-Only Oversight:** Replaced mutation controls with status badges in `VisitorAccountManagement.jsx`, hid book mutation buttons in `BookInventory.jsx`, and added read-only feedback mode in `AdminWorkspace.jsx`. Added aggregate collections vs. outstanding fines Bar chart in `FinePayments.jsx`.
+4. **Visitor Account Experience:** Removed redundant "Sign Out" from `DashboardWelcome` quick actions and My Profile drawer. Added full-size photo preview lightbox modal on avatar click.
+5. **Toast Pill Notifications:** Replaced oversized centered "Refreshing..." overlay and bottom modal notifications with subtle auto-dismissing (2.5s) top toast pills.
+6. **Saved Community Books:** Styled Saved Books cards to match My Reading List layout (`visitor-reading-list-grid` / `visitor-reading-list-card`).
+7. **FAQ Chatbot Live Connection:** Expanded greeting triggers and increased timeout to 12s with graceful fallback.
+8. **Consistent Dark Mode:** Verified high-contrast typography, crisp borders, and minimalist styling across all modules.
+
+### 4. Application Verification Results
+- `npm run validate:migrations`: **173/173 migrations valid** (0 errors).
+- `npm test`: **258 passed, 0 failed, 43 skipped**.
+- `npm run lint`: **0 errors, 0 warnings**.
+- `npm run build`: **Vite production build succeeded cleanly in 3.96s**.
+
+---
+
 ## Final Production Verdict
-**`RELEASE COMPLETED — MIGRATION ALREADY APPLIED AND VERIFIED`**
+**`RELEASE COMPLETED — MIGRATION 173 APPLIED AND SYSTEM FULLY RECOVERED`**
+
 
 

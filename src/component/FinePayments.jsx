@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, CircleDollarSign, History, Search, X, Bell, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Bar } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
 import { supabase } from '../lib/supabaseClient.js';
 import { sendFineReminder } from '../lib/fineReminder.js';
 import {
@@ -7,6 +17,8 @@ import {
   FINE_PAYMENT_ANALYTICS_RPC,
   sanitizeFinePaymentAnalyticsRows,
 } from '../lib/finePaymentAnalytics.js';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 const peso = (value) => `₱${Number(value || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const PAGE_SIZE = 10;
@@ -265,6 +277,44 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
                 </article>
               ))}
             </div>
+
+            {branchSummaries.length > 0 && (
+              <article className="overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="font-bold text-slate-900 mb-3">Branch Collections vs Outstanding</h3>
+                <div className="h-64">
+                  <Bar
+                    data={{
+                      labels: branchSummaries.map((b) => b.branch_name || 'Library'),
+                      datasets: [
+                        {
+                          label: 'Collected (₱)',
+                          data: branchSummaries.map((b) => Number(b.fines_collected || 0)),
+                          backgroundColor: '#10b981',
+                        },
+                        {
+                          label: 'Outstanding (₱)',
+                          data: branchSummaries.map((b) => Number(b.outstanding_balance || 0)),
+                          backgroundColor: '#ef4444',
+                        },
+                      ],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: { position: 'top' },
+                      },
+                      scales: {
+                        y: {
+                          beginAtZero: true,
+                          ticks: { callback: (v) => `₱${v}` },
+                        },
+                      },
+                    }}
+                  />
+                </div>
+              </article>
+            )}
             <article className="overflow-hidden rounded-xl border border-slate-200 bg-white">
               <div className="border-b border-slate-100 px-4 py-3"><h3 className="font-bold text-slate-900">Branch comparison</h3></div>
               <div className="overflow-x-auto">

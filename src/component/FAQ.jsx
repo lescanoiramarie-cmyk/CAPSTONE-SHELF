@@ -24,7 +24,11 @@ const SUGGESTED_QUESTIONS = [
   'How do I check partner library locations?',
 ];
 
-const GREETINGS = ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening', 'kamusta', 'musta', 'sup', 'yo'];
+const GREETINGS = [
+  'hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening',
+  'kamusta', 'musta', 'sup', 'yo', 'salamat', 'thank you', 'thanks',
+  'bye', 'goodbye', 'help', 'what can you do', 'who are you', 'paano'
+];
 
 function isGreeting(question) {
   const clean = question.toLowerCase().replace(/[^a-z\s]/g, '').trim();
@@ -89,7 +93,7 @@ export default function FAQ() {
     abortControllerRef.current = new AbortController();
     const timeoutId = setTimeout(() => {
       abortControllerRef.current?.abort();
-    }, 3500);
+    }, 12000);
     const signal = abortControllerRef.current.signal;
 
     try {
