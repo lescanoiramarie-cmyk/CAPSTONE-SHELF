@@ -2348,3 +2348,9 @@ This phase supersedes the outdated Phase 22 migration-177 defect summary above w
 - Git commit/push can proceed for the reviewed application, forward migrations, tests, and release documentation independently of production recovery gates. The full backup helper is excluded because it is not validated. Production migration and deployment remain **HOLD** until production history/catalog/index OIDs, backup/PITR evidence, and separate-project restore verification are recorded and reviewed.
 - Backup and restore: **NOT VERIFIED**. Production migration history/catalog: **NOT RECONCILED**. Production migrated: **NO**. No production schema/data/history/configuration was changed.
 - Restore drill remains gated on the owner's confirmation of a separate target Supabase project and acceptance of its costs. Do not restore over production.
+
+### Phase 28 Git result addendum
+
+- Commit `b11b0e2` (`fix: reconcile transaction workflows and harden release checks`) contains the 47-file reviewed release scope. It was pushed successfully to `origin/main` with a normal fast-forward push; no force push or history rewrite was used.
+- The damaged/unparseable `backup-production-db.ps1`, its preserved damaged candidate, `.env`/`env`, local production reconciliation report, temporary readiness reports, and the legacy restore procedure with deprecated unsafe command blocks were excluded from that commit.
+- This commit/push verifies repository delivery only. It does not verify production migration history, production catalog, backup/PITR recovery, restore, or production migration execution.
