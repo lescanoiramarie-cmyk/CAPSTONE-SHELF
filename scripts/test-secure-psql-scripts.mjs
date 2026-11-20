@@ -10,6 +10,11 @@ import { resolve } from 'path';
 const SECURE_TEST_PS1 = resolve('secure_psql_test.ps1');
 const RECONCILIATION_PS1 = resolve('scripts/run-production-catalog-reconciliation.ps1');
 const VALIDATOR = resolve('scripts/validate-production-catalog-sql.mjs');
+const CREDENTIAL_HELPER = resolve('scripts/PsqlCredential.ps1');
+const CREDENTIAL_TEST = resolve('scripts/test-psql-credential-handling.ps1');
+const RECONCILIATION_SQL = resolve('production_catalog_reconciliation.sql');
+const FINE_INDEX_SQL = resolve('scripts/verify-fine-dashboard-index-readonly.sql');
+const NOTIFICATION_CONTRACT_MIGRATION = resolve('supabase/migrations/20270127000000_reconcile_transactions_subscription_and_notifications.sql');
 
 function main() {
   let hasErrors = false;
@@ -20,6 +25,11 @@ function main() {
   // Test secure_psql_test.ps1
   console.log('--- Testing secure_psql_test.ps1 ---');
   const secureTestContent = readFileSync(SECURE_TEST_PS1, 'utf-8');
+  const credentialHelperContent = readFileSync(CREDENTIAL_HELPER, 'utf-8');
+  const credentialTestContent = readFileSync(CREDENTIAL_TEST, 'utf-8');
+  const reconciliationSqlContent = readFileSync(RECONCILIATION_SQL, 'utf-8');
+  const fineIndexSqlContent = readFileSync(FINE_INDEX_SQL, 'utf-8');
+  const notificationMigrationContent = readFileSync(NOTIFICATION_CONTRACT_MIGRATION, 'utf-8');
 
   // Check no Invoke-Expression (excluding comments)
   const invokeExprLines = secureTestContent.split('\n').filter((line, i) =>
@@ -49,14 +59,15 @@ function main() {
   }
 
   // Check PGPASSWORD usage
-  if (secureTestContent.includes('$env:PGPASSWORD = $plainPassword')) {
+  if (secureTestContent.includes('Set-PsqlProcessEnvironment -Password $plainPassword')
+      && credentialHelperContent.includes("SetEnvironmentVariable('PGPASSWORD', $Password, 'Process')")) {
     console.log('  OK: Uses PGPASSWORD environment variable');
   } else {
     console.error('  FAIL: Missing PGPASSWORD assignment');
     hasErrors = true;
   }
-  if (secureTestContent.includes('$env:PGOPTIONS = "-c default_transaction_read_only=on"')
-      && secureTestContent.includes('$env:PGOPTIONS = $previousPgOptions')) {
+  if (credentialHelperContent.includes("SetEnvironmentVariable('PGOPTIONS', '-c default_transaction_read_only=on', 'Process')")
+      && secureTestContent.includes('Restore-PsqlProcessEnvironment -PriorEnvironment $psqlEnvironmentState')) {
     console.log('  OK: Enforces read-only database transactions and restores prior PGOPTIONS');
   } else {
     console.error('  FAIL: Missing read-only transaction guard');
@@ -85,8 +96,8 @@ function main() {
   if (secureTestContent.includes('finally') &&
       secureTestContent.includes('$plainPassword = ""') &&
       secureTestContent.includes('$securePassword.Dispose()') &&
-      secureTestContent.includes('$env:PGPASSWORD = ""')) {
-    console.log('  OK: finally block clears password variables and disposes SecureString');
+      secureTestContent.includes('Restore-PsqlProcessEnvironment -PriorEnvironment $psqlEnvironmentState')) {
+    console.log('  OK: finally block clears password variables, restores prior PGPASSWORD, and disposes SecureString');
   } else {
     console.error('  FAIL: Missing password cleanup in finally block');
     hasErrors = true;
@@ -274,7 +285,7 @@ function main() {
 
   // Check PGPASSWORD usage (excluding comments)
   const reconPgpassLines = reconContent.split('\n').filter(line =>
-    line.includes('$env:PGPASSWORD = $plainPassword') && !line.trim().startsWith('#')
+    line.includes('Set-PsqlProcessEnvironment -Password $plainPassword') && !line.trim().startsWith('#')
   );
   if (reconPgpassLines.length > 0) {
     console.log('  OK: Uses PGPASSWORD environment variable');
@@ -294,13 +305,37 @@ function main() {
     line.includes('$securePassword.Dispose()') && !line.trim().startsWith('#')
   );
   const reconClearPgpassLines = reconContent.split('\n').filter(line =>
-    line.includes('$env:PGPASSWORD = ""') && !line.trim().startsWith('#')
+    line.includes('Restore-PsqlProcessEnvironment -PriorEnvironment $psqlEnvironmentState') && !line.trim().startsWith('#')
   );
   if (reconFinallyLines.length > 0 && reconClearPlainLines.length > 0 &&
       reconDisposeLines.length > 0 && reconClearPgpassLines.length > 0) {
-    console.log('  OK: finally block clears password variables and disposes SecureString');
+      console.log('  OK: finally block clears password variables, restores prior PGPASSWORD, and disposes SecureString');
   } else {
     console.error('  FAIL: Missing password cleanup in finally block');
+    hasErrors = true;
+  }
+
+  // Credential flow must use explicit Unicode BSTR conversion and sanitized diagnostics.
+  const credentialFlowFiles = [secureTestContent, reconContent];
+  if (credentialFlowFiles.every(content => content.includes('ConvertFrom-SecurePsqlPassword -SecurePassword $securePassword'))
+      && credentialFlowFiles.every(content => content.includes('Get-SanitizedPsqlFailure -Output $output -ExitCode $exitCode'))
+      && credentialHelperContent.includes('PtrToStringUni')
+      && credentialHelperContent.includes('UTF8Encoding]::new($false, $true)')
+      && credentialHelperContent.includes('Set-PsqlProcessEnvironment')
+      && credentialHelperContent.includes('PGSERVICEFILE')
+      && credentialHelperContent.includes('PGHOSTADDR')
+      && !reconContent.includes('Write-Host $output')
+      && credentialTestContent.includes('synthetic')
+      && credentialTestContent.includes('TLS diagnostic')
+      && reconContent.includes('postgres.khwtfjyvawukbsvyjdux')
+      && secureTestContent.includes('postgres.khwtfjyvawukbsvyjdux')
+      && reconContent.includes('$connStr = "host=$server port=$port dbname=$database user=$user sslmode=$sslmode')
+      && reconContent.includes('$server   = "aws-0-ap-northeast-1.pooler.supabase.com"')
+      && reconContent.includes('$port     = "5432"')
+      && reconContent.includes('$database = "postgres"')) {
+    console.log('  OK: strict UTF-8 validation, exact project pooler user, stale libpq override suppression, environment restoration, and sanitized failures are covered');
+  } else {
+    console.error('  FAIL: Credential conversion, sanitized failure, or synthetic regression-test requirement is missing');
     hasErrors = true;
   }
 
@@ -332,8 +367,41 @@ function main() {
     console.error('  FAIL: SQL execution could bypass validation or accept an arbitrary path');
     hasErrors = true;
   }
-  if (reconContent.includes('$env:PGOPTIONS = "-c default_transaction_read_only=on"')
-      && reconContent.includes('$env:PGOPTIONS = $previousPgOptions')) {
+  const canonicalNotificationBlock = notificationMigrationContent.match(/IF\s+p_notification_type\s+NOT\s+IN\s*\(([\s\S]*?)\)\s*THEN/i)?.[1] ?? '';
+  const diagnosticNotificationBlock = reconciliationSqlContent.match(/WITH\s+expected\(value\)\s+AS\s*\(\s*VALUES([\s\S]*?)\)\s*,\s*actual\s+AS/i)?.[1] ?? '';
+  const canonicalNotificationTypes = [...canonicalNotificationBlock.matchAll(/'([^']+)'/g)].map((match) => match[1]).sort();
+  const diagnosticNotificationTypes = [...diagnosticNotificationBlock.matchAll(/\('([^']+)'\)/g)].map((match) => match[1]).sort();
+  const identityProbeChecks = [
+    ['explicit read-only transaction', [reconciliationSqlContent, fineIndexSqlContent].every((sql) =>
+      /BEGIN\s+TRANSACTION\s+READ\s+ONLY\s*;/i.test(sql) && /COMMIT\s*;\s*$/i.test(sql))],
+    ['signature-aware function lookup', reconciliationSqlContent.includes('to_regprocedure(')
+      && !reconciliationSqlContent.includes('to_regproc(')],
+    ['canonical text review-delete signature', reconciliationSqlContent.includes("delete_my_book_review(text)'")
+      && !reconciliationSqlContent.includes("delete_my_book_review(uuid)'")],
+    ['notification contract exact catalog validation', reconciliationSqlContent.includes('matches_canonical_allowed_values')
+      && reconciliationSqlContent.includes("('feedback_reply')")
+      && canonicalNotificationTypes.length === 22
+      && JSON.stringify(diagnosticNotificationTypes) === JSON.stringify(canonicalNotificationTypes)
+      && !reconciliationSqlContent.includes("LIKE '%21%'" )],
+    ['fine index owner, health, and collation OIDs', reconciliationSqlContent.includes('index_owner')
+      && reconciliationSqlContent.includes('indisvalid')
+      && reconciliationSqlContent.includes('indisready')
+      && reconciliationSqlContent.includes('indislive')
+      && reconciliationSqlContent.includes('index_collation_oid')
+      && reconciliationSqlContent.includes('table_column_collation_oid')],
+    ['borrowed count effective and default privileges', reconciliationSqlContent.includes('has_table_privilege')
+      && reconciliationSqlContent.includes('default_acl.defaclnamespace IN (0, schema_row.oid)')],
+    ['critical RPC definitions included', reconciliationSqlContent.includes('pg_get_functiondef(p.oid)')],
+  ];
+  const missingIdentityProbeChecks = identityProbeChecks.filter(([, passed]) => !passed);
+  if (missingIdentityProbeChecks.length === 0) {
+    console.log('  OK: Catalog diagnostic covers transaction guard, exact signatures/constraints, RPC bodies, fine-index OIDs, and borrowed-count ACLs');
+  } else {
+    console.error(`  FAIL: Catalog diagnostic gaps: ${missingIdentityProbeChecks.map(([name]) => name).join(', ')}`);
+    hasErrors = true;
+  }
+  if (credentialHelperContent.includes("SetEnvironmentVariable('PGOPTIONS', '-c default_transaction_read_only=on', 'Process')")
+      && reconContent.includes('Restore-PsqlProcessEnvironment -PriorEnvironment $psqlEnvironmentState')) {
     console.log('  OK: Enforces read-only database transactions and restores prior PGOPTIONS');
   } else {
     console.error('  FAIL: Missing read-only transaction guard');
@@ -402,13 +470,30 @@ function main() {
   }
 
   // Check report directory permissions restricted (icacls or .NET ACL APIs)
-  const reconPermLines = reconContent.split('\n').filter(line =>
-    (line.includes('SetAccessRuleProtection') || line.includes('FileSystemAccessRule') || line.includes('Set-Acl') || line.includes('icacls')) && !line.trim().startsWith('#')
-  );
-  if (reconPermLines.length > 0) {
-    console.log('  OK: Restricts report directory/file permissions to current user');
+  const aclHelperPath = resolve('scripts/ReportAcl.ps1');
+  const aclTestPath = resolve('scripts/test-report-acl.ps1');
+  const aclHelperContent = readFileSync(aclHelperPath, 'utf8');
+  const aclHelperCode = aclHelperContent.split('\n').filter(line => !line.trim().startsWith('#')).join('\n');
+  const aclTestContent = readFileSync(aclTestPath, 'utf8');
+  const aclRequirements = [
+    ['structured SID verification', /GetAccessRules\([\s\S]*SecurityIdentifier/],
+    ['protected DACL', /SetAccessRuleProtection\(\$true,\s*\$false\)/],
+    ['current user, SYSTEM, and Administrators allowlist', /Get-ReportAclPrincipals/],
+    ['DACL-only native reads and writes', /AccessControlSections\]::Access[\s\S]*Directory\]::GetAccessControl[\s\S]*File\]::GetAccessControl[\s\S]*Directory\]::SetAccessControl[\s\S]*File\]::SetAccessControl/],
+    ['no SACL/audit ACL operations', /Get-ReportDacl[\s\S]*Set-ReportDacl/],
+    ['preconnection report file ACL verification', /Set-RestrictedReportAcl -LiteralPath \$reportFile[\s\S]*No connection was attempted/],
+  ];
+  const missingAclRequirements = aclRequirements.filter(([, pattern]) => !pattern.test(aclHelperContent + '\n' + reconContent));
+  if (missingAclRequirements.length === 0
+      && aclTestContent.includes('LAPTOP-95DMOFRV\\Yesha May M. Cordero')
+      && aclTestContent.includes('DOMAIN\\Library Staff User')
+      && aclTestContent.includes('Everyone retains access')
+      && aclTestContent.includes('without enabled SeSecurityPrivilege')
+      && aclTestContent.includes('IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)')
+      && !/\b(Get-Acl|Set-Acl|GetAuditRules|SetAuditRule)\b|AccessControlSections\]::All/.test(aclHelperCode)) {
+    console.log('  OK: Uses protected SID-based DACL-only APIs and includes spaced domain/computer account regression cases');
   } else {
-    console.error('  FAIL: Does not restrict report permissions');
+    console.error(`  FAIL: Report ACL implementation/test gap: ${missingAclRequirements.map(([name]) => name).join(', ')}`);
     hasErrors = true;
   }
 

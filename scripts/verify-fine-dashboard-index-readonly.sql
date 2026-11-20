@@ -1,6 +1,8 @@
 -- Read-only catalog inspection for the production fine dashboard index.
 -- Run in Supabase SQL Editor against the intended project. This script contains
 -- no DDL/DML and returns rows for every same-named index in any schema.
+BEGIN TRANSACTION READ ONLY;
+
 SELECT pg_catalog.current_setting('transaction_read_only') AS transaction_read_only;
 
 WITH target AS (
@@ -94,3 +96,5 @@ LEFT JOIN pg_catalog.pg_attribute AS status_col
  AND NOT status_col.attisdropped
 LEFT JOIN pg_catalog.pg_constraint AS con ON con.conindid = t.index_oid
 ORDER BY t.index_schema, t.index_name;
+
+COMMIT;

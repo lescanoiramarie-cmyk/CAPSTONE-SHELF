@@ -14,6 +14,10 @@ const fineDashboardMigration = readFileSync(
   new URL('../../supabase/migrations/20270102000700_fine_payment_rpc_authorization.sql', import.meta.url),
   'utf8'
 );
+const paidHistoryMigration = readFileSync(
+  new URL('../../supabase/migrations/20270131000000_preserve_paid_fine_history_in_dashboard.sql', import.meta.url),
+  'utf8'
+);
 
 test('fine payment privacy: Super Admin aggregate analytics response shape', () => {
   // Verify analytics function returns only aggregate fields, no individual transaction details
@@ -67,4 +71,14 @@ test('fine payment authorization: Super Admin analytics requires active staff pr
   // The analytics RPC is granted to authenticated but internal checks in Dashboard enforce superadmin
   // Source migration grants EXECUTE TO authenticated but Dashboard component checks role
   assert.match(finePrivacyMigration, /GRANT EXECUTE ON FUNCTION public\.get_fine_payment_analytics\(text\)[\s\S]*?TO authenticated/);
+});
+
+test('paid fine history remains visible when current assessed fine and review flag are zero', () => {
+  assert.match(paidHistoryMigration, /COALESCE\(br\.fine_paid_amount, 0\) > 0/);
+  assert.match(paidHistoryMigration, /COALESCE\(a\.fine_paid_amount, 0\) > 0/);
+  assert.match(paidHistoryMigration, /WHERE fp\.borrow_request_id = a\.id::text/);
+  assert.match(paidHistoryMigration, /FROM PUBLIC, anon, authenticated, service_role/);
+  assert.match(paidHistoryMigration, /has_function_privilege\([\s\S]*?'authenticated'[\s\S]*?EXECUTE/);
+  assert.match(paidHistoryMigration, /You can only view fines for your assigned library/);
+  assert.doesNotMatch(paidHistoryMigration, /UPDATE\s+public\.borrow_requests|DELETE\s+FROM\s+public\.fine_payments/i);
 });

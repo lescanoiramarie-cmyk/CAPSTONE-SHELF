@@ -10,6 +10,47 @@ import {
 import { useLibraryData } from '../context/useLibrary.js';
 import { loadGoogleMaps, hasGoogleMapsKey } from '../lib/googleMaps.js';
 
+function createLibraryInfoWindowContent(library, bookContext = null) {
+  const content = document.createElement('div');
+  content.style.fontFamily = 'inherit';
+  content.style.padding = '4px';
+  content.style.minWidth = '180px';
+
+  const title = document.createElement('h3');
+  title.textContent = library.name || 'Library';
+  title.style.fontWeight = 'bold';
+  title.style.fontSize = '14px';
+  title.style.margin = '0 0 4px';
+  content.append(title);
+
+  for (const [value, prefix] of [
+    [library.campus, ''],
+    [library.address, '📍 '],
+    [library.hours, '⏰ '],
+    [library.status, ''],
+  ]) {
+    if (!value) continue;
+    const detail = document.createElement('p');
+    detail.textContent = `${prefix}${value}`;
+    detail.style.fontSize = '12px';
+    detail.style.color = '#475569';
+    detail.style.margin = '0 0 4px';
+    content.append(detail);
+  }
+
+  if (bookContext?.title) {
+    const book = document.createElement('p');
+    book.textContent = `📖 ${bookContext.title} (${bookContext.availableCopies} available)`;
+    book.style.fontSize = '12px';
+    book.style.fontWeight = 'bold';
+    book.style.color = '#1e3a8a';
+    book.style.margin = '4px 0 0';
+    content.append(book);
+  }
+
+  return content;
+}
+
 function GoogleMapsEmbed({ libraries, activeFocusBranchId, bookContext }) {
   const focused = libraries.find((lib) => String(lib.id) === String(activeFocusBranchId)) || libraries[0];
   const query = focused?.address
@@ -59,7 +100,6 @@ function GoogleLibraryMap({
   activeFocusBranchId,
   setSelectedLibraryId,
   bookContext,
-  onBrowseLibrary,
 }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -85,8 +125,15 @@ function GoogleLibraryMap({
       markersRef.current = [];
 
       libraries.forEach((library) => {
-        if (!library.lat || !library.lng || !Number.isFinite(Number(library.lat))) return;
-        const pos = { lat: Number(library.lat), lng: Number(library.lng) };
+        const lat = Number(library.lat);
+        const lng = Number(library.lng);
+        if (
+          library.lat == null || library.lng == null ||
+          String(library.lat).trim() === '' || String(library.lng).trim() === '' ||
+          !Number.isFinite(lat) || !Number.isFinite(lng) ||
+          lat < -90 || lat > 90 || lng < -180 || lng > 180
+        ) return;
+        const pos = { lat, lng };
         bounds.extend(pos);
 
         const marker = new maps.Marker({
@@ -97,30 +144,18 @@ function GoogleLibraryMap({
 
         marker.addListener('click', () => {
           setSelectedLibraryId(library.id);
-          infoWindow.setContent(`
-            <div style="font-family: inherit; padding: 4px; min-width: 180px;">
-              <h3 style="font-weight: bold; font-size: 14px; margin: 0 0 4px 0;">${library.name}</h3>
-              ${library.campus ? `<p style="font-size: 12px; color: #475569; margin: 0 0 4px 0;">${library.campus}</p>` : ''}
-              ${library.address ? `<p style="font-size: 12px; color: #475569; margin: 0 0 4px 0;">📍 ${library.address}</p>` : ''}
-              ${library.hours ? `<p style="font-size: 12px; color: #475569; margin: 0 0 4px 0;">⏰ ${library.hours}</p>` : ''}
-              ${library.status ? `<p style="font-size: 11px; font-weight: bold; margin: 4px 0 0 0;">${library.status}</p>` : ''}
-            </div>
-          `);
+          map.panTo(pos);
+          map.setZoom(14);
+          infoWindow.setContent(createLibraryInfoWindowContent(library, bookContext));
           infoWindow.open(map, marker);
         });
 
         markersRef.current.push(marker);
 
-        if (library.id === activeFocusBranchId) {
+        if (String(library.id) === String(activeFocusBranchId)) {
           map.setCenter(pos);
           map.setZoom(14);
-          infoWindow.setContent(`
-            <div style="font-family: inherit; padding: 4px; min-width: 180px;">
-              <h3 style="font-weight: bold; font-size: 14px; margin: 0 0 4px 0;">${library.name}</h3>
-              ${library.address ? `<p style="font-size: 12px; color: #475569; margin: 0 0 4px 0;">📍 ${library.address}</p>` : ''}
-              ${bookContext ? `<p style="font-size: 12px; font-weight: bold; color: #1e3a8a; margin: 4px 0 0 0;">📖 ${bookContext.title} (${bookContext.availableCopies} available)</p>` : ''}
-            </div>
-          `);
+          infoWindow.setContent(createLibraryInfoWindowContent(library, bookContext));
           infoWindow.open(map, marker);
         }
       });
@@ -132,8 +167,11 @@ function GoogleLibraryMap({
 
     return () => {
       active = false;
+      markersRef.current.forEach((marker) => marker.setMap(null));
+      markersRef.current = [];
+      mapRef.current = null;
     };
-  }, [libraries, activeFocusBranchId, setSelectedLibraryId, bookContext, onBrowseLibrary]);
+  }, [libraries, activeFocusBranchId, setSelectedLibraryId, bookContext]);
 
   return <div ref={containerRef} className="h-full w-full min-h-[inherit]" />;
 }

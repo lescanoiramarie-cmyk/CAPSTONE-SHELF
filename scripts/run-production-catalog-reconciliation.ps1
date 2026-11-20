@@ -24,7 +24,7 @@ This script runs the read-only production catalog reconciliation SQL script agai
 production PostgreSQL database. It uses the same secure password handling as secure_psql_test.ps1:
 - Password prompted via Read-Host -AsSecureString (hidden input)
 - Password passed via PGPASSWORD environment variable (never on command line)
-- PGPASSWORD cleared in finally block; SecureString disposed
+- PGPASSWORD restored to its prior process value in finally block; SecureString disposed
 - Uses psql -f to execute the SQL file directly
 - ON_ERROR_STOP=1 ensures non-zero exit on any SQL error
 - Validates SQL file is strictly read-only BEFORE prompting for password (mandatory, no bypass)
@@ -66,6 +66,12 @@ $connectTimeout = 10
 # Resolve SQL file path
 $scriptDir = Split-Path -Parent -Path $MyInvocation.MyCommand.Definition
 $projectRoot = Split-Path -Parent -Path $scriptDir
+$credentialHelperPath = Join-Path -Path $scriptDir -ChildPath 'PsqlCredential.ps1'
+if (-not (Test-Path -LiteralPath $credentialHelperPath -PathType Leaf)) {
+    Write-Host '[FAIL] Secure credential helper is missing. No connection was attempted.' -ForegroundColor Red
+    exit 1
+}
+. $credentialHelperPath
 $sqlFile = Join-Path -Path $projectRoot -ChildPath $SqlFilePath
 
 Write-Host "SHELF ILMS Production Catalog Reconciliation Runner"
@@ -116,7 +122,21 @@ if ($validationExitCode -ne 0) {
 }
 Write-Host "[PASS] PASS: SQL validation passed (strictly read-only)"
 
-# Step 2: Prepare report directory and file
+# Step 2: Prepare and verify report ACLs before prompting or opening a database connection.
+$aclHelperPath = Join-Path -Path $scriptDir -ChildPath 'ReportAcl.ps1'
+if (-not (Test-Path -LiteralPath $aclHelperPath -PathType Leaf)) {
+    Write-Host "[FAIL] Report ACL helper not found at $aclHelperPath. No connection was attempted." -ForegroundColor Red
+    exit 1
+}
+. $aclHelperPath
+$currentIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+$currentUserSid = $currentIdentity.User
+$currentUserName = $currentIdentity.Name
+if (-not $currentUserSid) {
+    Write-Host '[FAIL] Could not resolve the current Windows user SID. No connection was attempted.' -ForegroundColor Red
+    exit 1
+}
+
 $reportDir = Join-Path -Path $projectRoot -ChildPath "production-reconciliation-reports"
 if (-not (Test-Path -LiteralPath $reportDir)) {
     try {
@@ -126,21 +146,9 @@ if (-not (Test-Path -LiteralPath $reportDir)) {
         exit 1
     }
 }
-# Restrict directory permissions to current user (Windows ACL via icacls)
 try {
-    $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-    # Disable inheritance and copy existing ACEs
-    icacls $reportDir /inheritance:d | Out-Null
-    # Remove all existing ACEs
-    icacls $reportDir /remove:g * | Out-Null
-    # Grant FullControl to current user only
-    icacls $reportDir /grant:r "${identity}:(OI)(CI)F" | Out-Null
-    # Verify the DACL
-    $verify = icacls $reportDir 2>&1
-    if (-not ($verify -match "$identity.*\(OI\)\(CI\)F")) {
-        throw "DACL verification failed for directory. Output: $verify"
-    }
-    Write-Host "[PASS] Directory DACL restricted to current user: $identity"
+    Set-RestrictedReportAcl -LiteralPath $reportDir -ItemType Directory -CurrentUserSid $currentUserSid
+    Write-Host "[PASS] Directory DACL restricted to the current user SID, SYSTEM, and Administrators: $currentUserName"
 } catch {
     Write-Host "[FAIL] Could not restrict report directory permissions: $($_.Exception.Message)" -ForegroundColor Red
     exit 1
@@ -148,6 +156,20 @@ try {
 
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $reportFile = Join-Path -Path $reportDir -ChildPath "reconciliation_${timestamp}.txt"
+try {
+    if (Test-Path -LiteralPath $reportFile) {
+        throw 'A report with this timestamp already exists; refusing to overwrite it.'
+    }
+    New-Item -ItemType File -Path $reportFile -ErrorAction Stop | Out-Null
+    Set-RestrictedReportAcl -LiteralPath $reportFile -ItemType File -CurrentUserSid $currentUserSid
+    Write-Host '[PASS] Empty report file DACL verified before database connection.'
+} catch {
+    Write-Host "[FAIL] Could not create and secure report file: $($_.Exception.Message). No connection was attempted." -ForegroundColor Red
+    if (Test-Path -LiteralPath $reportFile) {
+        try { Remove-Item -LiteralPath $reportFile -Force -ErrorAction Stop } catch { }
+    }
+    exit 1
+}
 
 # Step 3: Prompt for password securely
 $securePassword = Read-Host -AsSecureString "Enter database password for $user"
@@ -159,16 +181,12 @@ if (-not $securePassword -or $securePassword.Length -eq 0) {
 # Convert SecureString to plaintext ONLY for PGPASSWORD environment variable.
 # This creates an unmanaged BSTR; it cannot be fully erased from memory in pure
 # PowerShell. The variable is cleared and GC is forced in the finally block.
-$bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
-$plainPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
-[System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+$plainPassword = ConvertFrom-SecurePsqlPassword -SecurePassword $securePassword
 
-$env:PGPASSWORD = $plainPassword
-$previousPgOptions = $env:PGOPTIONS
-$env:PGOPTIONS = "-c default_transaction_read_only=on"
-
+$psqlEnvironmentState = $null
 $reportWritten = $false
 try {
+    $psqlEnvironmentState = Set-PsqlProcessEnvironment -Password $plainPassword
     # psql options:
     #   -X           Do not read .psqlrc
     #   -w           Never prompt for password (fail if PGPASSWORD missing)
@@ -192,20 +210,8 @@ if ($exitCode -eq 0) {
         # Save complete output to timestamped report file
         try {
             $output | Out-File -FilePath $reportFile -Encoding UTF8 -Force
-            # Restrict report file permissions to current user (via icacls)
-            $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-            # Disable inheritance and copy existing ACEs
-            icacls $reportFile /inheritance:d | Out-Null
-            # Remove all existing ACEs
-            icacls $reportFile /remove:g * | Out-Null
-            # Grant FullControl to current user only
-            icacls $reportFile /grant:r "${identity}:F" | Out-Null
-            # Verify the DACL
-            $verify = icacls $reportFile 2>&1
-            if (-not ($verify -match "$identity.*F")) {
-                throw "DACL verification failed for file. Output: $verify"
-            }
-            Write-Host "[PASS] File DACL restricted to current user: $identity"
+            Assert-RestrictedReportAcl -LiteralPath $reportFile -ItemType File -CurrentUserSid $currentUserSid
+            Write-Host "[PASS] File DACL verified for the current user SID, SYSTEM, and Administrators: $currentUserName"
             $reportWritten = $true
         } catch {
             Write-Host "FAIL: Could not write or secure report file ${reportFile}: $($_.Exception.Message)" -ForegroundColor Red
@@ -214,13 +220,12 @@ if ($exitCode -eq 0) {
         Write-Host "[PASS] PASS: Reconciliation completed successfully (exit code $exitCode)"
         Write-Host "Report saved to: $reportFile"
     } else {
-        Write-Host "[FAIL] FAIL: Reconciliation failed (exit code $exitCode)"
-        Write-Host $output
+        Write-Host "[FAIL] $(Get-SanitizedPsqlFailure -Output $output -ExitCode $exitCode)" -ForegroundColor Red
         exit 1
     }
 }
 catch {
-    Write-Host "`n[FAIL] UNEXPECTED ERROR: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "`n[FAIL] Unexpected reconciliation error; detailed output withheld." -ForegroundColor Red
     exit 1
 }
 finally {
@@ -233,8 +238,10 @@ finally {
     if ($securePassword) {
         $securePassword.Dispose()
     }
-    $env:PGPASSWORD = ""
-    $env:PGOPTIONS = $previousPgOptions
+    if ($psqlEnvironmentState) {
+        Restore-PsqlProcessEnvironment -PriorEnvironment $psqlEnvironmentState
+    }
+    $psqlEnvironmentState = $null
     # Force garbage collection to reduce plaintext lifetime in managed heap
     [GC]::Collect()
     [GC]::WaitForPendingFinalizers()

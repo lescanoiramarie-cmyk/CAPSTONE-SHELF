@@ -2516,3 +2516,201 @@ This phase supersedes the outdated Phase 22 migration-177 defect summary above w
 - Production history comparison identifies one local-only migration: `20270130000000_lock_down_borrowed_book_counts_table.sql`. No other pending version was reported. Confirm with an authorized, read-only linked-history query before any future apply.
 - The installed Supabase CLI supports `--dry-run` and `--skip-vault`. After resolving history and recovery gates, the owner can verify target identity and run `supabase migration list --linked`, then `supabase db push --linked --dry-run --skip-vault`; stop unless the dry run lists exactly `20270130000000`. Only after a separate explicit approval of that exact target/effect could the owner run `supabase db push --linked --skip-vault` interactively. These commands were not run in this task; do not use `--include-all`, `--yes`, a password argument, or a blind push.
 - No production migration, write, backup, restore, credential operation, or configuration change occurred. Production remains **NOT READY / NO-GO** because of the unresolved version provenance, incomplete production/local RPC authorization equivalence, missing cache policy/default-ACL evidence, unavailable Auth fixture, untrusted backup script, and unverified recovery point/restore.
+
+## Backup Verification Script Recreation
+- Recreated erify-production-backup.ps1 (0 parser errors).
+- Added erify-production-backup.tests.ps1 (4 tests, all pass).
+- All PowerShell scripts parse with 0 errors.
+- backup tests: 47 pass. verify tests: 4 pass.
+
+## pg_dumpall Connection Fix
+- Root cause: dbnameArg was full connstr; pg_dumpall fell back to localhost.
+- Fix: dbnameArg = $database; TLS via PGSSLMODE/PGSSLROOTCERT env vars in Invoke-PgCommand.
+- Tests: 47 + 4 pass; parser 0 errors.
+
+## Second pg_dumpall localhost fallback fix
+- Set PGHOST/PGPORT/PGUSER/PGDATABASE env vars in Invoke-PgCommand to override ambient localhost.
+- Tests 47+4 pass; parser 0 errors.
+
+## Roles dump output capture fix
+- Root cause: pg_dumpall --file did not create expected raw file; replaced with stdout capture + Set-Content.
+- Validates file exists/nonzero before filtering.
+- Tests 47+4 pass; parser 0 errors.
+
+## Roles stdout capture review
+- Parser: 0 errors across all scripts.
+- Tests: 47 + 4 pass.
+- Captured stdout written via Set-Content; existence/size validated before filtering; cleanup on failure.
+
+## Roles dump edit applied
+- Replaced --file approach with stdout capture + Set-Content (edit verified).
+- Parser 0 errors; 47 tests pass.
+
+## Local integration test
+- Fake pg_dumpall stdout capture -> Set-Content verified raw file created, non-empty, filtered, no secret leak.
+- Parser 0 errors; tests 47+4 pass.
+- No production connection.
+
+## pg_dumpall --dbname connstr fix
+- Root cause: --dbname received bare 'postgres' parsed as conninfo.
+- Fix: use --database for database name; host/port/user via -h/-p/-U.
+- Parser 0 errors; 47 tests pass.
+
+## Verification of --database fix
+- pg_dumpall 18.6 supports -l/--database.
+- Parser 0 errors; tests 47+4 pass.
+- No production connection.
+
+## ForEach-Object -join precedence fix
+- Root cause: ForEach-Object { } -join '|' treated -join as RemainingScripts param.
+- Fix: parentheses around ForEach-Object before -join.
+- Parser 0 errors; tests 47+4 pass.
+
+## Filter fix integration verification
+- Integration test PASS; parser 0 errors; tests 47+4 pass.
+- Corrected expression: (($excludedRoles | ForEach-Object { [regex]::Escape($_) }) -join '|')
+
+## Schema dump and roles filtering investigation
+- Schema dump uses --file with absolute path; added existence/size validation.
+- Roles filtering counts only CREATE ROLE statements; GRANT exclusions are separate.
+- Parser 0 errors; tests 47+4 pass.
+
+## Final pre-execution review
+- Parser: 0 errors across 5 scripts.
+- Backup tests: 47 pass; verification tests: 4 pass.
+- DECISION: PASS for manual owner backup (with restore drill after).
+
+## Final review decision: FAIL
+- Schema dump file still intermittently missing despite exit code 0.
+- Root cause not yet proven; requires controlled fake pg_dump integration test.
+- Do not run another production backup until schema file existence is proven.
+
+## Schema integration test
+- Controlled fake pg_dump created file at exact --file path (8 bytes).
+- Argument construction proven valid.
+- Real pg_dump behavior remains unproven; decision stays FAIL pending negative-case tests.
+
+## Real pg_dump test limitation
+- Local PostgreSQL 18 requires authentication; no credentials available in agent environment.
+- Cannot safely run real pg_dump without production credentials.
+- Decision remains FAIL until owner provides safe local test DB credentials.
+- Parser 0 errors; tests 47+4 pass.
+
+## Disposable PG cluster attempt
+- initdb succeeded but cluster crashed during autovacuum (0xC0000142) and could not be kept running.
+- Real pg_dump validation remains blocked by local environment instability.
+- Decision remains FAIL.
+
+## Final bounded report
+- Parser: 0 errors across 5 scripts.
+- Tests: 47 backup + 4 verification pass.
+- Real pg_dump blocked by 0xC0000142 environment crash; no disposable cluster.
+- Migration readiness: NOT READY (local supabase unavailable for test).
+- Backup readiness: NOT READY (real pg_dump unproven).
+- Next: owner runs real backup + restore drill with stable DB.
+
+## Owner Action Plan (Final)
+
+### 1. Backup validation (requires stable non-production DB)
+- Obtain a stable PostgreSQL 18+ test database (local instance that does not crash, or isolated Supabase staging project).
+- Set env vars: PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE, PGSSLMODE=verify-full, PGSSLROOTCERT.
+- Run: pg_dump -Fc --schema-only ... --file C:\temp\schema.dump; then pg_restore --list C:\temp\schema.dump; verify exit 0 and file nonempty.
+- Run data-only variant similarly.
+- Clean up temp artifacts.
+
+### 2. Production backup (prerequisites)
+- Owner enters password interactively via .\backup-production-db.ps1 (no password in args/logs).
+- After success: .\verify-production-backup.ps1 -ManifestPath <manifest>.
+- Owner confirms manifest, SHA-256, file sizes, no secrets in logs.
+
+### 3. Migration readiness (independent)
+- Local Supabase must be running: supabase start (in project dir).
+- Run: supabase test db --local (39 tests).
+- Review pending migration 20270130000000 and fine schema prerequisite fix (d23d142).
+- Create auth test fixture with 18 coverage tags and run npm run test:auth-postgrest.
+
+### 4. Production migration (blocked until)
+- Verified backup exists and restore drill passed.
+- Migration compatibility confirmed locally.
+- Fine schema prerequisite resolved (SQLSTATE P0001).
+
+### 5. Master checklist
+- Backup scripts: parser 0 errors, 47+4 tests pass.
+- Roles filtering: fixed and validated.
+- Real pg_dump: UNVERIFIED (environment limitation).
+- Migration: NOT READY (local supabase unavailable).
+- DR: NOT READY.
+
+Safe executable commands now:
+  powershell -NoProfile -ExecutionPolicy Bypass -File .\backup-production-db.tests.ps1
+  powershell -NoProfile -ExecutionPolicy Bypass -File .\verify-production-backup.tests.ps1
+
+## Final status
+- Parser 0 errors; tests 47+4 pass.
+- Real pg_dump: UNVERIFIED (no safe DB).
+- Next: owner provides stable PG test DB or runs real backup + restore drill.
+
+## Read-only environment discovery
+- PostgreSQL 18.6 client+server installed; service postgresql-x64-18 Running.
+- No isolated Supabase staging project configured in .env.
+- No safe non-production DB credentials available to agent.
+- Next: owner provides local PG credentials or uses isolated Supabase project.
+
+## Local PG auth
+- pg_hba.conf requires scram-sha-256 for all local/host connections.
+- No credentials available to agent; cannot create test DB.
+- Owner must supply local PG password or create a disposable test DB manually.
+
+## Owner-guided local PG test plan
+- Stage 1: secure password prompt + psql connection.
+- Stage 2: create disposable DB (guard existing).
+- Stage 3: synthetic data.
+- Stage 4: pg_dump + pg_restore validation.
+- No agent execution; owner approval required.
+
+## Cloud test DB recommendation
+- Provider: Neon (free tier) or Supabase free project.
+- Cost: free tier available.
+- PG version: 16/17 (client 18 compatible).
+- Connection: host/port/user/password/dbname via env vars; TLS verify-full.
+- Owner must create account/project and provide credentials.
+- No production connection.
+
+## Final migration readiness: NOT READY
+- Pending migration: 20270130000000 (production has 179/180).
+- History mismatch: 20261031000000 name differs (diag vs visitor_terms).
+- Auth/PostgREST: 58 skipped (fixture missing).
+- Backup: NOT verified (real pg_dump unproven).
+- Verified backup mandatory before migration.
+- Next: owner creates test fixture, runs auth tests, runs backup+restore drill.
+
+## Blocker remediation status
+- Pending migration 20270130000000: SQL reviewed, RLS/grants postflight sound.
+- History mismatch 20261031000000: naming discrepancy only, forward-only reconciliation.
+- Auth/PostgREST: runner requires fixture + local supabase; not run.
+- Fine schema: d23d142 committed, production still P0001 (catalog unknown).
+- Backup: NOT verified (real pg_dump unproven).
+- Migration readiness: NOT READY.
+- Next: owner runs local supabase + auth fixture, then backup + restore drill.
+
+## Visitor and dashboard issue follow-up (2026-11-20)
+- Confirmed and corrected the visitor cancellation RPC parameter mismatch locally: the frontend previously sent `p_reason`, while the current `cancel_borrow_request(text,text)` contract expects `p_request_id` and `p_visitor_id`. The caller now obtains the current authenticated user, resolves its visitor profile, and sends the contract argument names; database-side ownership validation remains in place. Added focused argument-contract and fail-closed tests in `src/lib/borrowRequestRpc.test.js`.
+- Source inspection confirms the My Reading List already includes filters and a page-size control; the selected book's partner-library lookup already honors the active library filter. The Community Books full-row layout, map marker fit/zoom behavior, and paid-fine history forward migration are present in the current worktree.
+- `request_borrow_v2(text)` is the frontend borrow entry point and verifies `auth.uid()` against an active, OTP-verified visitor before delegating to the private request implementation. This is source-level evidence only; no authenticated production request was made.
+- The visitor notification getter returns rows filtered to the visitor resolved from `auth.uid()`, but the reported staff-notification leak requires production row/role correlation and real Auth/PostgREST testing to determine whether rows were misaddressed or a different notification path is involved. It remains unverified; do not treat the source filter as proof the live issue is fixed.
+- The identified profile does not prove why an individual previously paid transaction disappeared. Do not reconstruct or overwrite that record. Compare the production transaction and payment ledger with a verified recovery point/audit trail through an authorized, privacy-protected procedure.
+- Remaining requested UI issues (dark-mode parity, inventory page-size placement, fine-payment presentation/chart, plan/subscription behavior in the deployed environment, and automatic-return expectations) are not all verified or fixed here. Payment must not itself mark a book returned; physical return confirmation remains a separate circulation action.
+- Focused cancellation tests passed (4/4). Full project validation and database execution of the latest forward migration remain outstanding in this turn; production migration, backup/restore, Auth/RLS, and release status remain **NOT READY / NOT VERIFIED**.
+
+## Local Supabase status
+- Partially running: realtime/rest/storage/imgproxy/pg_meta/studio/edge/pooler stopped.
+- Repair requires Docker service/container restart (approval needed).
+- Auth/PostgREST tests remain blocked.
+- Do not modify Docker without approval.
+
+## Transaction-loss and migration error follow-up (2026-11-20)
+- Read-only source inspection of the migration chain found no `DELETE`/`TRUNCATE` against `public.borrow_requests` or `public.fine_payments`, and no migration assignment that resets `fine_paid_amount` to zero. The fine payment RPCs increment the paid total; the return RPC retains the previously assessed fine using `GREATEST`. This does not prove production data is intact or identify a particular missing transaction.
+- Migrations `20270127000000` and `20270129000000` contain the subscription date correction (`CURRENT_DATE`) and request-ID compatibility work. The later local migration is the expected forward correction for the reported `uuid = text` class of failure, but no fresh production function definition or execution evidence is available here.
+- A missing or altered payment/transaction record cannot safely be reconstructed from source code or the catalog reconciliation report. Recovery requires comparing the production row and fine-payment ledger with a verified backup/recovery point and audit evidence. No production transaction was queried or modified.
+- Payment recording must not mark a loan returned by itself; return confirmation remains a separate staff handover action to protect circulation integrity.
+- Production migration remains **NOT READY**: version `20261031000000` still has unresolved historical SQL provenance, and backup/restore verification and complete production compatibility evidence remain outstanding. No migration was run.

@@ -16,6 +16,7 @@ import { normalizeVisitorRegistrationType, VISITOR_REGISTRATION_TYPES } from '..
 import { normalizeBookCategory } from '../lib/bookCategory.js';
 import { normalizeCallNumber } from '../lib/callNumber.js';
 import { isValidBorrowRequestId } from '../lib/borrowRequestId.js';
+import { buildCancelBorrowRequestArgs } from '../lib/borrowRequestRpc.js';
 import {
   buildDuplicateBookImportUpdate,
   normalizeBookFineRate,
@@ -5853,10 +5854,7 @@ export async function requestBorrow(
 // CANCEL BORROW REQUEST
 // ============================================================================
 
-export async function cancelBorrowRequest(
-  requestId,
-  reason = 'cancelled'
-) {
+export async function cancelBorrowRequest(requestId) {
   const normalizedRequestId =
     normalizeText(requestId);
 
@@ -5870,22 +5868,26 @@ export async function cancelBorrowRequest(
     );
   }
 
-  const normalizedReason =
-    normalizeText(reason) ||
-    'cancelled';
+  const {
+    data: { user: authenticatedUser },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !authenticatedUser?.id) {
+    throw new Error('Your visitor sign-in session has expired. Please sign in again.');
+  }
+
+  const authenticatedVisitor = await getVisitor(authenticatedUser.id);
+  if (!authenticatedVisitor?.id) {
+    throw new Error('Visitor account could not be verified.');
+  }
 
   const {
     error,
   } =
     await supabase.rpc(
       'cancel_borrow_request',
-      {
-        p_request_id:
-          normalizedRequestId,
-
-        p_reason:
-          normalizedReason,
-      }
+      buildCancelBorrowRequestArgs(normalizedRequestId, authenticatedVisitor.id)
     );
 
   if (error) {

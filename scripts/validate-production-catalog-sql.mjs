@@ -41,7 +41,9 @@ const REQUIRED_SECTIONS = [
   '2. Tables and Columns',
   '3. Constraints',
   '4. Indexes',
+  '4b. Fine dashboard index catalog identity',
   '5. Functions',
+  '5b. Critical RPC definitions',
   '6. Function Grants',
   '6b. Default Privileges for Functions',
   '7. Triggers',
@@ -55,6 +57,8 @@ const REQUIRED_SECTIONS = [
   '13. Extensions',
   '14. Roles',
   '15. Critical Objects',
+  '15b. Visitor notification type constraint',
+  '15c. borrowed_book_counts RLS',
 ];
 
 // Parse SQL content into statements, handling multiline statements
@@ -156,6 +160,8 @@ function parseStatements(content) {
 
 function getStatementType(sql) {
   const trimmed = sql.trim().toUpperCase();
+  if (/^BEGIN\s+TRANSACTION\s+READ\s+ONLY;?$/.test(trimmed)) return 'BEGIN READ ONLY';
+  if (/^COMMIT;?$/.test(trimmed)) return 'COMMIT';
   if (trimmed.startsWith('SELECT')) return 'SELECT';
   if (trimmed.startsWith('WITH')) return 'WITH';
   if (trimmed.startsWith('(')) return 'SUBQUERY';
@@ -313,9 +319,27 @@ function main() {
   console.log('\n--- Verifying read-only statements (parsed) ---');
   const statements = parseStatements(content);
   console.log(`  INFO: Parsed ${statements.length} SQL statements`);
-  for (const stmt of statements) {
+  const requiresReadOnlyTransaction = true;
+  if (requiresReadOnlyTransaction) {
+    if (getStatementType(statements[0]?.sql ?? '') !== 'BEGIN READ ONLY'
+        || getStatementType(statements.at(-1)?.sql ?? '') !== 'COMMIT') {
+      console.error('  FAIL: Approved catalog SQL must start with BEGIN TRANSACTION READ ONLY and end with COMMIT');
+      hasErrors = true;
+    } else {
+      console.log('  OK: Catalog SQL is enclosed in an explicit read-only transaction');
+    }
+  }
+  for (let index = 0; index < statements.length; index++) {
+    const stmt = statements[index];
     const type = getStatementType(stmt.sql);
-    if (type === 'OTHER') {
+    const isAllowedTransactionBoundary = requiresReadOnlyTransaction
+      && ((index === 0 && type === 'BEGIN READ ONLY')
+        || (index === statements.length - 1 && type === 'COMMIT'));
+    if (isAllowedTransactionBoundary) {
+      console.log(`  OK: Statement lines ${stmt.startLine}-${stmt.endLine} -> ${type}`);
+      continue;
+    }
+    if (type === 'BEGIN READ ONLY' || type === 'COMMIT' || type === 'OTHER') {
       console.error(`  FAIL: Non-SELECT statement at lines ${stmt.startLine}-${stmt.endLine}: ${stmt.sql.slice(0, 80)}...`);
       hasErrors = true;
     } else {
