@@ -134,6 +134,7 @@ test('migration integrity: security remediation source has postflight guards', (
     '20270118000000_fail_closed_attendance_lookup_role_claim.sql',
     '20270128000000_fix_handover_existing_columns.sql',
     '20270129000000_support_text_borrow_request_ids.sql',
+    '20270130000000_lock_down_borrowed_book_counts_table.sql',
   ];
   for (const file of migrations) {
     const sql = readFileSync(join(migrationDirectory, file), 'utf8');
