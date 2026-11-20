@@ -92,7 +92,6 @@ test('handover migration validates reviewed baseline metadata and exact direct/e
     "v_expected_config := ARRAY['search_path=public']::text[]",
     "v_expected_config := ARRAY['search_path=\"\"']::text[]",
     "v_expected_config := ARRAY['search_path=public, pg_temp']::text[]",
-    "v_expected_grantees := ARRAY['postgres', 'authenticated']::text[]",
     "v_expected_grantees := ARRAY['postgres', 'authenticated', 'service_role']::text[]",
     "pg_catalog.oidvectortypes",
     "pg_catalog.aclexplode(v_acl)",
@@ -108,9 +107,20 @@ test('handover migration validates reviewed baseline metadata and exact direct/e
   assert.match(migration, /v_after_config IS DISTINCT FROM v_expected_config/);
 });
 
+test('historical handover baseline includes Supabase managed service_role function defaults', () => {
+  for (const signature of ['confirm_pickup', 'confirm_return']) {
+    const block = migration.slice(
+      migration.indexOf(`WHEN 'public.${signature}(text,text)'`),
+      migration.indexOf(`WHEN 'public.${signature}(uuid,text)'`)
+    );
+    assert.match(block, /v_expected_grantees := ARRAY\['postgres', 'authenticated', 'service_role'\]::text\[\]/);
+    assert.match(block, /v_expected_service_role := true/);
+  }
+  assert.match(migration, /Supabase's managed default ACL grants service_role on functions/);
+});
+
 test('SQL catalog assertions cover attendance, fine privacy, review identity, grants, and defaults', () => {
   for (const required of [
-    'public.find_visitor_by_qr(text,uuid)',
     'public.toggle_attendance(text,text)',
     'public.lookup_attendance_visitor_v2(text,text)',
     'public.get_fine_payment_analytics(text)',
@@ -121,7 +131,7 @@ test('SQL catalog assertions cover attendance, fine privacy, review identity, gr
     'public.delete_my_book_review(text)',
     'pg_default_acl',
     'TRUNCATE',
-    'Verified Reader',
+    'public.mask_reviewer_name(',
   ]) {
     assert.ok(sqlAssertions.includes(required), `Missing SQL assertion coverage: ${required}`);
   }
@@ -185,7 +195,7 @@ test('rollback-only SQL assertions cover role-claim and staff/branch authorizati
     'UUID pickup did not reject AAL1',
     'UUID return did not reject AAL1',
     'legacy UUID RPC guard',
-    'SET LOCAL ROLE service_role',
+    'service_role cannot execute owner-only UUID handover overloads',
     'valid AAL2 pickup role was rejected before request lookup',
     'valid AAL2 return role was rejected before request lookup',
     'Unauthorized staff role.',

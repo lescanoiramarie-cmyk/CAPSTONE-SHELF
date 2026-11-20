@@ -1,6 +1,10 @@
+CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
+BEGIN;
+SELECT extensions.plan(1);
+
 -- Read-only catalog assertions for community borrowing workflow.
 -- Covers migration: 20270103001100_fix_community_borrowing_workflow.sql
-DO $tests$
+SELECT extensions.lives_ok($tap$DO $tests$
 DECLARE
   v_signature regprocedure;
   v_oid oid;
@@ -18,12 +22,12 @@ BEGIN
   -- 1. promote_next_community_request(text)
   -- ============================================================
   v_signature := 'public.promote_next_community_request(text)'::regprocedure;
-  v_oid := pg_catalog.to_regprocedure(v_signature)::oid;
+  v_oid := v_signature::oid;
   IF v_oid IS NULL THEN
     RAISE EXCEPTION 'Missing function: public.promote_next_community_request(text)';
   END IF;
 
-  SELECT p.proowner, l.lanname, p.provolatile, p.prosecdef, p.proconfig
+  SELECT pg_catalog.pg_get_userbyid(p.proowner), l.lanname, p.provolatile, p.prosecdef, p.proconfig
     INTO v_owner, v_language, v_volatility, v_secdef, v_config
   FROM pg_catalog.pg_proc AS p
   JOIN pg_catalog.pg_language AS l ON l.oid = p.prolang
@@ -62,15 +66,15 @@ BEGIN
   END IF;
 
   -- ============================================================
-  // 2. approve_community_book_request(uuid, text, text)
-  // ============================================================
+  -- 2. approve_community_book_request(uuid, text, text)
+  -- ============================================================
   v_signature := 'public.approve_community_book_request(uuid,text,text)'::regprocedure;
-  v_oid := pg_catalog.to_regprocedure(v_signature)::oid;
+  v_oid := v_signature::oid;
   IF v_oid IS NULL THEN
     RAISE EXCEPTION 'Missing function: public.approve_community_book_request(uuid,text,text)';
   END IF;
 
-  SELECT p.proowner, l.lanname, p.provolatile, p.prosecdef, p.proconfig
+  SELECT pg_catalog.pg_get_userbyid(p.proowner), l.lanname, p.provolatile, p.prosecdef, p.proconfig
     INTO v_owner, v_language, v_volatility, v_secdef, v_config
   FROM pg_catalog.pg_proc AS p
   JOIN pg_catalog.pg_language AS l ON l.oid = p.prolang
@@ -119,20 +123,20 @@ BEGIN
   CROSS JOIN LATERAL pg_catalog.aclexplode(p.proacl) AS acl
   WHERE p.oid = v_oid;
 
-  IF v_acl_count <> 1 THEN
-    RAISE EXCEPTION 'approve_community_book_request ACL entry count mismatch (expected 1).';
+  IF v_acl_count <> 2 THEN
+    RAISE EXCEPTION 'approve_community_book_request ACL entry count mismatch (expected owner + authenticated).';
   END IF;
 
   -- ============================================================
-  // 3. cancel_community_book_request(uuid, text, text)
-  // ============================================================
+  -- 3. cancel_community_book_request(uuid, text, text)
+  -- ============================================================
   v_signature := 'public.cancel_community_book_request(uuid,text,text)'::regprocedure;
-  v_oid := pg_catalog.to_regprocedure(v_signature)::oid;
+  v_oid := v_signature::oid;
   IF v_oid IS NULL THEN
     RAISE EXCEPTION 'Missing function: public.cancel_community_book_request(uuid,text,text)';
   END IF;
 
-  SELECT p.proowner, l.lanname, p.provolatile, p.prosecdef, p.proconfig
+  SELECT pg_catalog.pg_get_userbyid(p.proowner), l.lanname, p.provolatile, p.prosecdef, p.proconfig
     INTO v_owner, v_language, v_volatility, v_secdef, v_config
   FROM pg_catalog.pg_proc AS p
   JOIN pg_catalog.pg_language AS l ON l.oid = p.prolang
@@ -172,20 +176,20 @@ BEGIN
   CROSS JOIN LATERAL pg_catalog.aclexplode(p.proacl) AS acl
   WHERE p.oid = v_oid;
 
-  IF v_acl_count <> 2 THEN
-    RAISE EXCEPTION 'cancel_community_book_request ACL entry count mismatch (expected 2).';
+  IF v_acl_count <> 3 THEN
+    RAISE EXCEPTION 'cancel_community_book_request ACL entry count mismatch (expected owner + authenticated + service_role).';
   END IF;
 
   -- ============================================================
-  // 4. update_community_book_copy_availability trigger function
-  // ============================================================
+  -- 4. update_community_book_copy_availability trigger function
+  -- ============================================================
   v_signature := 'public.update_community_book_copy_availability()'::regprocedure;
-  v_oid := pg_catalog.to_regprocedure(v_signature)::oid;
+  v_oid := v_signature::oid;
   IF v_oid IS NULL THEN
     RAISE EXCEPTION 'Missing trigger function: public.update_community_book_copy_availability()';
   END IF;
 
-  SELECT p.proowner, l.lanname, p.provolatile, p.prosecdef, p.proconfig
+  SELECT pg_catalog.pg_get_userbyid(p.proowner), l.lanname, p.provolatile, p.prosecdef, p.proconfig
     INTO v_owner, v_language, v_volatility, v_secdef, v_config
   FROM pg_catalog.pg_proc AS p
   JOIN pg_catalog.pg_language AS l ON l.oid = p.prolang
@@ -204,12 +208,11 @@ BEGIN
      OR pg_catalog.strpos(v_definition, 'INSERT') = 0
      OR pg_catalog.strpos(v_definition, 'UPDATE') = 0
      OR pg_catalog.strpos(v_definition, 'DELETE') = 0
-     OR pg_catalog.strpos(v_definition, 'community_promotion') = 0
-     OR pg_catalog.strpos(v_definition, 'pg_notify') = 0
+     OR pg_catalog.strpos(v_definition, 'promote_next_community_request') = 0
      OR pg_catalog.strpos(v_definition, 'available_copies') = 0
      OR pg_catalog.strpos(v_definition, 'total_copies') = 0
      OR pg_catalog.strpos(v_definition, 'book_type = ''personal''') = 0 THEN
-    RAISE EXCEPTION 'Trigger function missing tg_op handling, pg_notify, inventory math, or personal book filter.';
+    RAISE EXCEPTION 'Trigger function missing tg_op handling, queue promotion, inventory math, or personal book filter.';
   END IF;
 
   -- Grants: postgres + service_role only
@@ -220,7 +223,7 @@ BEGIN
     RAISE EXCEPTION 'Trigger function grants differ from postgres+service_role contract.';
   END IF;
 
-  // Trigger attachment
+  -- Trigger attachment
   SELECT pg_catalog.count(*)::integer
     INTO v_trigger_count
   FROM pg_catalog.pg_trigger AS t
@@ -236,16 +239,16 @@ BEGIN
     RAISE EXCEPTION 'community_book_copy_availability trigger missing or not attached to community_book_requests.';
   END IF;
 
-  // ============================================================
-  // 5. require_available_community_book_copy trigger function
-  // ============================================================
+  -- ============================================================
+  -- 5. require_available_community_book_copy trigger function
+  -- ============================================================
   v_signature := 'public.require_available_community_book_copy()'::regprocedure;
-  v_oid := pg_catalog.to_regprocedure(v_signature)::oid;
+  v_oid := v_signature::oid;
   IF v_oid IS NULL THEN
     RAISE EXCEPTION 'Missing trigger function: public.require_available_community_book_copy()';
   END IF;
 
-  // Grants: postgres + service_role only
+  -- Grants: postgres + service_role only
   IF NOT pg_catalog.has_function_privilege('postgres', v_signature, 'EXECUTE')
      OR NOT pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE')
      OR pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE')
@@ -253,16 +256,16 @@ BEGIN
     RAISE EXCEPTION 'require_available_community_book_copy grants differ from postgres+service_role contract.';
   END IF;
 
-  // ============================================================
-  // 6. enforce_book_copy_inventory trigger function
-  // ============================================================
+  -- ============================================================
+  -- 6. enforce_book_copy_inventory trigger function
+  -- ============================================================
   v_signature := 'public.enforce_book_copy_inventory()'::regprocedure;
-  v_oid := pg_catalog.to_regprocedure(v_signature)::oid;
+  v_oid := v_signature::oid;
   IF v_oid IS NULL THEN
     RAISE EXCEPTION 'Missing trigger function: public.enforce_book_copy_inventory()';
   END IF;
 
-  SELECT p.proowner, l.lanname, p.provolatile, p.prosecdef, p.proconfig
+  SELECT pg_catalog.pg_get_userbyid(p.proowner), l.lanname, p.provolatile, p.prosecdef, p.proconfig
     INTO v_owner, v_language, v_volatility, v_secdef, v_config
   FROM pg_catalog.pg_proc AS p
   JOIN pg_catalog.pg_language AS l ON l.oid = p.prolang
@@ -287,7 +290,7 @@ BEGIN
     RAISE EXCEPTION 'enforce_book_copy_inventory missing library/personal separation, conflict codes, or allocation counts.';
   END IF;
 
-  // Grants: postgres + service_role only
+  -- Grants: postgres + service_role only
   IF NOT pg_catalog.has_function_privilege('postgres', v_signature, 'EXECUTE')
      OR NOT pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE')
      OR pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE')
@@ -295,16 +298,16 @@ BEGIN
     RAISE EXCEPTION 'enforce_book_copy_inventory grants differ from postgres+service_role contract.';
   END IF;
 
-  // ============================================================
-  // 7. auto_expire_community_requests cron function
-  // ============================================================
+  -- ============================================================
+  -- 7. auto_expire_community_requests cron function
+  -- ============================================================
   v_signature := 'public.auto_expire_community_requests()'::regprocedure;
-  v_oid := pg_catalog.to_regprocedure(v_signature)::oid;
+  v_oid := v_signature::oid;
   IF v_oid IS NULL THEN
     RAISE EXCEPTION 'Missing function: public.auto_expire_community_requests()';
   END IF;
 
-  SELECT p.proowner, l.lanname, p.provolatile, p.prosecdef, p.proconfig
+  SELECT pg_catalog.pg_get_userbyid(p.proowner), l.lanname, p.provolatile, p.prosecdef, p.proconfig
     INTO v_owner, v_language, v_volatility, v_secdef, v_config
   FROM pg_catalog.pg_proc AS p
   JOIN pg_catalog.pg_language AS l ON l.oid = p.prolang
@@ -327,11 +330,11 @@ BEGIN
     RAISE EXCEPTION 'auto_expire_community_requests missing 7-day expiry, notifications, or pending status filter.';
   END IF;
 
-  // Grants: service_role only
+  -- Grants: service_role only
   IF NOT pg_catalog.has_function_privilege('service_role', v_signature, 'EXECUTE')
      OR pg_catalog.has_function_privilege('anon', v_signature, 'EXECUTE')
      OR pg_catalog.has_function_privilege('authenticated', v_signature, 'EXECUTE')
-     OR pg_catalog.has_function_privilege('postgres', v_signature, 'EXECUTE') THEN
+     OR NOT pg_catalog.has_function_privilege('postgres', v_signature, 'EXECUTE') THEN
     RAISE EXCEPTION 'auto_expire_community_requests grants differ from service_role-only contract.';
   END IF;
 
@@ -340,34 +343,34 @@ BEGIN
   CROSS JOIN LATERAL pg_catalog.aclexplode(p.proacl) AS acl
   WHERE p.oid = v_oid;
 
-  IF v_acl_count <> 1 THEN
-    RAISE EXCEPTION 'auto_expire_community_requests ACL entry count mismatch (expected 1).';
+  IF v_acl_count <> 2 THEN
+    RAISE EXCEPTION 'auto_expire_community_requests ACL entry count mismatch (expected owner + service_role).';
   END IF;
 
-  // ============================================================
-  // 8. pg_notify channel for community promotion
-  // ============================================================
+  -- ============================================================
+  -- 8. pg_notify channel for community promotion
+  -- ============================================================
   v_definition := pg_catalog.pg_get_functiondef('public.update_community_book_copy_availability()'::regprocedure);
-  IF pg_catalog.strpos(v_definition, 'community_promotion') = 0
-     OR pg_catalog.strpos(v_definition, 'book_id') = 0 THEN
-    RAISE EXCEPTION 'pg_notify channel or payload missing from trigger function.';
+  IF pg_catalog.strpos(v_definition, 'promote_next_community_request') = 0
+     OR pg_catalog.strpos(v_definition, 'pg_notify') > 0 THEN
+    RAISE EXCEPTION 'Community copy trigger must promote synchronously and must not depend on an unconsumed notification channel.';
   END IF;
 
-  // ============================================================
-  // 9. Response type contracts
-  // ============================================================
+  -- ============================================================
+  -- 9. Response type contracts
+  -- ============================================================
   v_definition := pg_catalog.pg_get_function_result('public.approve_community_book_request(uuid,text,text)'::regprocedure);
-  IF v_definition NOT LIKE 'TABLE(id uuid, book_id text, book_title text, requester_visitor_id text, requester_name text, status text, approved_at timestamptz, owner_response text)' THEN
+  IF v_definition NOT LIKE 'TABLE(id uuid, book_id text, book_title text, requester_visitor_id text, requester_name text, status text, approved_at timestamp with time zone, owner_response text)' THEN
     RAISE EXCEPTION 'approve_community_book_request response contract changed: %', v_definition;
   END IF;
 
-  // ============================================================
-  // 10. Inventory math: available_copies never exceeds total_copies
-  // ============================================================
-  // Verify the constraint logic exists in trigger functions
+  -- ============================================================
+  -- 10. Inventory math: available_copies never exceeds total_copies
+  -- ============================================================
+  -- Verify the constraint logic exists in trigger functions
   IF pg_catalog.strpos(
        pg_catalog.pg_get_functiondef('public.enforce_book_copy_inventory()'::regprocedure),
-       'available_copies > total_copies') = 0
+       'new.available_copies > new.total_copies') = 0
      OR pg_catalog.strpos(
        pg_catalog.pg_get_functiondef('public.update_community_book_copy_availability()'::regprocedure),
        'available_copies > 0') = 0 THEN
@@ -375,4 +378,7 @@ BEGIN
   END IF;
 
 END;
-$tests$;
+$tests$;$tap$, 'community borrowing workflow assertions contract block 1');
+
+SELECT * FROM extensions.finish();
+ROLLBACK;

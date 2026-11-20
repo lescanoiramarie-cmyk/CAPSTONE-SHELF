@@ -688,18 +688,6 @@ export default function BookInventory() {
             Showing {filteredBooks.length === 0 ? 0 : (visiblePage - 1) * pageSize + 1}–{Math.min(visiblePage * pageSize, filteredBooks.length)} of {filteredBooks.length} books
           </p>
           <div className="flex flex-wrap items-center justify-end gap-2 self-end sm:self-auto">
-            <label htmlFor="inventory-page-size" className="text-xs font-medium text-slate-600">Rows per page</label>
-            <select
-              id="inventory-page-size"
-              value={pageSize}
-              onChange={(event) => {
-                setPageSize(Number(event.target.value));
-                setPage(1);
-              }}
-              className="rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-700"
-            >
-              {INVENTORY_PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
-            </select>
             {pageCount > 1 && (
               <div className="flex items-center gap-2">
                 <button

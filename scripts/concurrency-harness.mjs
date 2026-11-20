@@ -165,8 +165,28 @@ async function ensureBaseFixtures(client) {
   `);
 }
 
+async function seedFineRequest(pool, { requestId, bookId, fineAmount, status = 'returned', libraryId = LIB1_UUID }) {
+  const client = await pool.connect();
+  try {
+    await ensureBaseFixtures(client);
+    await client.query('DELETE FROM public.fine_payment_idempotency WHERE request_id = $1::text', [requestId]);
+    await client.query('DELETE FROM fine_payments WHERE borrow_request_id = $1', [requestId]);
+    await client.query('DELETE FROM borrow_requests WHERE id = $1 OR book_id = $2', [requestId, bookId]);
+    await client.query('DELETE FROM books WHERE id = $1', [bookId]);
+    await client.query(`INSERT INTO books (id, title, author, available_copies, total_copies, fine_rate, library_id)
+      VALUES ($1, 'Fine Test Book', 'Synthetic Author', 1, 1, 10, $2)`, [bookId, libraryId]);
+    await client.query(`INSERT INTO borrow_requests
+      (id, book_id, book_title, visitor_id, visitor_name, status, borrow_date, due_date, return_date,
+       fine_amount, fine_paid_amount, fine_rate_snapshot, library_id)
+      VALUES ($1, $2, 'Fine Test Book', 'VIS-00000001', 'Synthetic Visitor', $3,
+        now() - interval '5 days', now() - interval '2 days',
+        CASE WHEN $3 = 'returned' THEN now() ELSE NULL END,
+        $4, 0, 10, $5)`, [requestId, bookId, status, fineAmount, libraryId]);
+  } finally { client.release(); }
+}
+
 // ============================================================================
-// TEST SCENARIOS (8 tests from concurrency_test_scenarios.sql)
+// TEST SCENARIOS (8 concurrency scenarios plus fine-payment behavior scenarios)
 // ============================================================================
 
 const TEST_SCENARIOS = [
@@ -230,7 +250,7 @@ const TEST_SCENARIOS = [
       const client = await pool.connect();
       try {
         await ensureBaseFixtures(client);
-        await client.query(`DELETE FROM borrow_requests WHERE id = 'REQ-TEST-1' OR book_id = 'test-book-2'`);
+        await client.query(`DELETE FROM borrow_requests WHERE id = 'd0000000-0000-4000-8000-000000000001' OR book_id = 'test-book-2'`);
         await client.query(`DELETE FROM books WHERE id = 'test-book-2'`);
         await client.query(`
           INSERT INTO books (id, title, author, available_copies, total_copies, fine_rate, library_id)
@@ -238,21 +258,21 @@ const TEST_SCENARIOS = [
         `);
         await client.query(`
           INSERT INTO borrow_requests (id, book_id, book_title, visitor_id, visitor_name, status, pickup_deadline, library_id)
-          VALUES ('REQ-TEST-1', 'test-book-2', 'Test Book 2', 'VIS-00000001', 'Visitor One', 'ready_for_pickup', now() + interval '24 hours', '${LIB1_UUID}')
+          VALUES ('d0000000-0000-4000-8000-000000000001', 'test-book-2', 'Test Book 2', 'VIS-00000001', 'Visitor One', 'ready_for_pickup', now() + interval '24 hours', '${LIB1_UUID}')
         `);
       } finally {
         client.release();
       }
     },
     sessions: [
-      { name: 'Staff One', authUid: STAFF_UID_1, role: 'subadmin', query: "SELECT public.confirm_pickup('REQ-TEST-1', 'Staff One')" },
-      { name: 'Staff Two', authUid: STAFF_UID_2, role: 'subadmin', query: "SELECT public.confirm_pickup('REQ-TEST-1', 'Staff Two')" },
+      { name: 'Staff One', authUid: STAFF_UID_1, role: 'subadmin', query: "SELECT public.confirm_pickup('d0000000-0000-4000-8000-000000000001', 'Staff One')" },
+      { name: 'Staff Two', authUid: STAFF_UID_2, role: 'subadmin', query: "SELECT public.confirm_pickup('d0000000-0000-4000-8000-000000000001', 'Staff Two')" },
     ],
     verify: async (pool) => {
       const client = await pool.connect();
       try {
         const req = await client.query(
-          "SELECT status, borrow_date, due_date, confirmed_by FROM borrow_requests WHERE id = 'REQ-TEST-1'"
+          "SELECT status, borrow_date, due_date, confirmed_by FROM borrow_requests WHERE id = 'd0000000-0000-4000-8000-000000000001'"
         );
         console.log('  Verification results:');
         console.log(`    Status: ${req.rows[0]?.status}`);
@@ -275,7 +295,7 @@ const TEST_SCENARIOS = [
       const client = await pool.connect();
       try {
         await ensureBaseFixtures(client);
-        await client.query(`DELETE FROM borrow_requests WHERE id = 'REQ-TEST-2' OR book_id = 'test-book-3'`);
+        await client.query(`DELETE FROM borrow_requests WHERE id = 'd0000000-0000-4000-8000-000000000002' OR book_id = 'test-book-3'`);
         await client.query(`DELETE FROM books WHERE id = 'test-book-3'`);
         await client.query(`
           INSERT INTO books (id, title, author, available_copies, total_copies, fine_rate, library_id)
@@ -283,21 +303,21 @@ const TEST_SCENARIOS = [
         `);
         await client.query(`
           INSERT INTO borrow_requests (id, book_id, book_title, visitor_id, visitor_name, status, borrow_date, due_date, fine_rate_snapshot, library_id)
-          VALUES ('REQ-TEST-2', 'test-book-3', 'Test Book 3', 'VIS-00000001', 'Visitor One', 'borrowed', now() - interval '10 days', now() - interval '3 days', 10, '${LIB1_UUID}')
+          VALUES ('d0000000-0000-4000-8000-000000000002', 'test-book-3', 'Test Book 3', 'VIS-00000001', 'Visitor One', 'borrowed', now() - interval '10 days', now() - interval '3 days', 10, '${LIB1_UUID}')
         `);
       } finally {
         client.release();
       }
     },
     sessions: [
-      { name: 'Staff One', authUid: STAFF_UID_1, role: 'subadmin', query: "SELECT public.confirm_return('REQ-TEST-2', 'Staff One')" },
-      { name: 'Staff Two', authUid: STAFF_UID_2, role: 'subadmin', query: "SELECT public.confirm_return('REQ-TEST-2', 'Staff Two')" },
+      { name: 'Staff One', authUid: STAFF_UID_1, role: 'subadmin', query: "SELECT public.confirm_return('d0000000-0000-4000-8000-000000000002', 'Staff One')" },
+      { name: 'Staff Two', authUid: STAFF_UID_2, role: 'subadmin', query: "SELECT public.confirm_return('d0000000-0000-4000-8000-000000000002', 'Staff Two')" },
     ],
     verify: async (pool) => {
       const client = await pool.connect();
       try {
         const req = await client.query(
-          "SELECT status, return_date, fine_amount, return_confirmed_by FROM borrow_requests WHERE id = 'REQ-TEST-2'"
+          "SELECT status, return_date, fine_amount, return_confirmed_by FROM borrow_requests WHERE id = 'd0000000-0000-4000-8000-000000000002'"
         );
         console.log('  Verification results:');
         console.log(`    Status: ${req.rows[0]?.status}`);
@@ -322,8 +342,9 @@ const TEST_SCENARIOS = [
       const client = await pool.connect();
       try {
         await ensureBaseFixtures(client);
-        await client.query(`DELETE FROM fine_payments WHERE borrow_request_id = 'REQ-TEST-3'`);
-        await client.query(`DELETE FROM borrow_requests WHERE id = 'REQ-TEST-3' OR book_id = 'test-book-4'`);
+        await client.query(`DELETE FROM public.fine_payment_idempotency WHERE request_id = 'd0000000-0000-4000-8000-000000000003'::text`);
+        await client.query(`DELETE FROM fine_payments WHERE borrow_request_id = 'd0000000-0000-4000-8000-000000000003'`);
+        await client.query(`DELETE FROM borrow_requests WHERE id = 'd0000000-0000-4000-8000-000000000003' OR book_id = 'test-book-4'`);
         await client.query(`DELETE FROM books WHERE id = 'test-book-4'`);
         await client.query(`
           INSERT INTO books (id, title, author, available_copies, total_copies, fine_rate, library_id)
@@ -331,32 +352,32 @@ const TEST_SCENARIOS = [
         `);
         await client.query(`
           INSERT INTO borrow_requests (id, book_id, book_title, visitor_id, visitor_name, status, return_date, fine_amount, fine_paid_amount, fine_rate_snapshot, library_id)
-          VALUES ('REQ-TEST-3', 'test-book-4', 'Test Book 4', 'VIS-00000001', 'Visitor One', 'returned', now(), 50.00, 0.00, 10, '${LIB1_UUID}')
+          VALUES ('d0000000-0000-4000-8000-000000000003', 'test-book-4', 'Test Book 4', 'VIS-00000001', 'Visitor One', 'returned', now(), 50.00, 0.00, 10, '${LIB1_UUID}')
         `);
       } finally {
         client.release();
       }
     },
     sessions: [
-      { name: 'Staff One', authUid: STAFF_UID_1, role: 'subadmin', query: "SELECT public.record_fine_payment('REQ-TEST-3', 30.00, 'cash', 'REF-1', 'Partial')" },
-      { name: 'Staff Two', authUid: STAFF_UID_2, role: 'subadmin', query: "SELECT public.record_fine_payment('REQ-TEST-3', 30.00, 'cash', 'REF-2', 'Partial')" },
+      { name: 'Staff One', authUid: STAFF_UID_1, role: 'subadmin', query: "SELECT public.record_fine_payment_v2('d0000000-0000-4000-8000-000000000003', 30.00, 'cash', 'REF-1', 'Partial', 'e0000000-0000-4000-8000-000000000001')" },
+      { name: 'Staff Two', authUid: STAFF_UID_2, role: 'subadmin', query: "SELECT public.record_fine_payment_v2('d0000000-0000-4000-8000-000000000003', 30.00, 'cash', 'REF-2', 'Partial', 'e0000000-0000-4000-8000-000000000002')" },
     ],
     verify: async (pool) => {
       const client = await pool.connect();
       try {
         const req = await client.query(
-          "SELECT fine_amount, fine_paid_amount FROM borrow_requests WHERE id = 'REQ-TEST-3'"
+          "SELECT fine_amount, fine_paid_amount FROM borrow_requests WHERE id = 'd0000000-0000-4000-8000-000000000003'"
         );
         const payments = await client.query(
-          "SELECT * FROM fine_payments WHERE borrow_request_id = 'REQ-TEST-3' ORDER BY received_at"
+          "SELECT * FROM fine_payments WHERE borrow_request_id = 'd0000000-0000-4000-8000-000000000003' ORDER BY received_at"
         );
         console.log('  Verification results:');
         console.log(`    Fine amount: ${req.rows[0]?.fine_amount}, Paid: ${req.rows[0]?.fine_paid_amount}`);
         console.log(`    Payment rows: ${payments.rows.length}`);
 
-        if (parseFloat(req.rows[0]?.fine_paid_amount || '0') > parseFloat(req.rows[0]?.fine_amount || '0')) {
-          throw new Error('fine_paid_amount exceeds fine_amount!');
-        }
+        if (parseFloat(req.rows[0]?.fine_paid_amount || '0') !== 30) throw new Error('Expected exactly one $30 payment to be recorded.');
+        if (payments.rows.length !== 1) throw new Error(`Expected one payment row, got ${payments.rows.length}`);
+        if (parseFloat(req.rows[0]?.fine_amount || '0') - parseFloat(req.rows[0]?.fine_paid_amount || '0') !== 20) throw new Error('Outstanding balance is not $20.');
 
         return { pass: true };
       } finally {
@@ -537,6 +558,89 @@ const TEST_SCENARIOS = [
       }
     }
   },
+
+  {
+    id: 9,
+    name: 'Full fine payment preserves borrowed status and history',
+    description: 'A full synthetic fine payment settles an overdue balance without marking the unreturned book as returned',
+    setup: (pool) => seedFineRequest(pool, { requestId: 'd0000000-0000-4000-8000-000000000009', bookId: 'test-book-pay-9', fineAmount: 20, status: 'borrowed' }),
+    sessions: [
+      { name: 'Sub-admin full payment', authUid: STAFF_UID_1, role: 'subadmin', query: "SELECT public.record_fine_payment_v2('d0000000-0000-4000-8000-000000000009',20,'cash','FULL-9','full payment','e0000000-0000-4000-8000-000000000009')" },
+    ],
+    verify: async (pool) => {
+      const client = await pool.connect();
+      try {
+        const { rows } = await client.query("SELECT status,fine_amount,fine_paid_amount,(SELECT count(*) FROM fine_payments WHERE borrow_request_id='d0000000-0000-4000-8000-000000000009')::int payments FROM borrow_requests WHERE id='d0000000-0000-4000-8000-000000000009'");
+        if (rows[0]?.status !== 'borrowed' || Number(rows[0]?.fine_paid_amount) !== 20 || Number(rows[0]?.payments) !== 1) throw new Error('Full payment did not settle exactly one payment while preserving borrowed status.');
+        return { pass: true };
+      } finally { client.release(); }
+    },
+  },
+  {
+    id: 10,
+    name: 'Duplicate fine-payment retry is idempotent',
+    description: 'Concurrent identical retries with one key record one ledger row',
+    setup: (pool) => seedFineRequest(pool, { requestId: 'd0000000-0000-4000-8000-000000000010', bookId: 'test-book-pay-10', fineAmount: 30 }),
+    sessions: [1, 2].map((_, index) => ({ name: `Retry ${index + 1}`, authUid: STAFF_UID_1, role: 'subadmin', query: "SELECT public.record_fine_payment_v2('d0000000-0000-4000-8000-000000000010',10,'cash','RETRY-10','same retry','e0000000-0000-4000-8000-000000000010')" })),
+    verify: async (pool, results) => {
+      const client = await pool.connect();
+      try {
+        const { rows } = await client.query("SELECT fine_paid_amount,(SELECT count(*) FROM fine_payments WHERE borrow_request_id='d0000000-0000-4000-8000-000000000010')::int payments FROM borrow_requests WHERE id='d0000000-0000-4000-8000-000000000010'");
+        if (results.filter((result) => result.success).length !== 2 || Number(rows[0]?.fine_paid_amount) !== 10 || Number(rows[0]?.payments) !== 1) throw new Error('Duplicate retries did not return safely with one ledger row.');
+        return { pass: true };
+      } finally { client.release(); }
+    },
+  },
+  {
+    id: 11,
+    name: 'Invalid fine-payment method is rejected',
+    description: 'An unsupported payment method creates no payment or balance mutation',
+    setup: (pool) => seedFineRequest(pool, { requestId: 'd0000000-0000-4000-8000-000000000011', bookId: 'test-book-pay-11', fineAmount: 30 }),
+    sessions: [{ name: 'Invalid method', authUid: STAFF_UID_1, role: 'subadmin', query: "SELECT public.record_fine_payment_v2('d0000000-0000-4000-8000-000000000011',10,'crypto',NULL,NULL,'e0000000-0000-4000-8000-000000000011')" }],
+    verify: async (pool, results) => {
+      const client = await pool.connect();
+      try {
+        const { rows } = await client.query("SELECT fine_paid_amount,(SELECT count(*) FROM fine_payments WHERE borrow_request_id='d0000000-0000-4000-8000-000000000011')::int payments FROM borrow_requests WHERE id='d0000000-0000-4000-8000-000000000011'");
+        if (!results[0]?.error?.includes('Choose a valid payment method') || Number(rows[0]?.fine_paid_amount) !== 0 || Number(rows[0]?.payments) !== 0) throw new Error('Invalid payment method was not rejected without mutation.');
+        return { pass: true };
+      } finally { client.release(); }
+    },
+  },
+  {
+    id: 12,
+    name: 'Inactive staff cannot record fine payments',
+    description: 'Inactive synthetic staff are denied and no payment is recorded',
+    setup: async (pool) => {
+      await seedFineRequest(pool, { requestId: 'd0000000-0000-4000-8000-000000000012', bookId: 'test-book-pay-12', fineAmount: 30 });
+      const client = await pool.connect();
+      try { await client.query('UPDATE staff_profiles SET is_active=false WHERE id=$1', [STAFF_UID_1]); } finally { client.release(); }
+    },
+    sessions: [{ name: 'Inactive staff', authUid: STAFF_UID_1, role: 'subadmin', query: "SELECT public.record_fine_payment_v2('d0000000-0000-4000-8000-000000000012',10,'cash',NULL,NULL,'e0000000-0000-4000-8000-000000000012')" }],
+    verify: async (pool, results) => {
+      const client = await pool.connect();
+      try {
+        await client.query('UPDATE staff_profiles SET is_active=true WHERE id=$1', [STAFF_UID_1]);
+        const { rows } = await client.query("SELECT count(*)::int payments FROM fine_payments WHERE borrow_request_id='d0000000-0000-4000-8000-000000000012'");
+        if (!results[0]?.error?.includes('Active Sub-Admin account required') || rows[0].payments !== 0) throw new Error('Inactive staff was not rejected without a payment.');
+        return { pass: true };
+      } finally { client.release(); }
+    },
+  },
+  {
+    id: 13,
+    name: 'Cross-library staff cannot record fine payments',
+    description: 'Sub-admin from another branch cannot access a synthetic payment request',
+    setup: (pool) => seedFineRequest(pool, { requestId: 'd0000000-0000-4000-8000-000000000013', bookId: 'test-book-pay-13', fineAmount: 30 }),
+    sessions: [{ name: 'Other library staff', authUid: STAFF_UID_B, role: 'subadmin', query: "SELECT public.record_fine_payment_v2('d0000000-0000-4000-8000-000000000013',10,'cash',NULL,NULL,'e0000000-0000-4000-8000-000000000013')" }],
+    verify: async (pool, results) => {
+      const client = await pool.connect();
+      try {
+        const { rows } = await client.query("SELECT count(*)::int payments FROM fine_payments WHERE borrow_request_id='d0000000-0000-4000-8000-000000000013'");
+        if (!results[0]?.error?.includes('assigned library') || rows[0].payments !== 0) throw new Error('Cross-library staff request was not rejected without a payment.');
+        return { pass: true };
+      } finally { client.release(); }
+    },
+  },
 ];
 
 // ============================================================================
@@ -637,7 +741,7 @@ class ConcurrencyHarness {
       let verification = { pass: true };
       if (scenario.verify) {
         try {
-          verification = await scenario.verify(this.pool);
+          verification = await scenario.verify(this.pool, sessionResults);
         } catch (err) {
           verification = { pass: false, error: err.message };
         }

@@ -89,16 +89,16 @@ export default function BookTransactions() {
         ))}
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3 dark:border-slate-700 dark:bg-slate-800">
         <div>
-          <h3 className="text-sm font-bold text-slate-800 mb-1">
+          <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-1">
             Step 1 — Scan Visitor QR (for attendance verification)
           </h3>
-          <p className="text-xs text-slate-500 mb-3">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-2.5">
             The visitor should already have scanned in at the entrance. Scan their pass again here to pull up their{' '}
             {mode === 'borrowing' ? 'pending pickup requests' : 'active borrowed items'}.
           </p>
-          <div className="max-w-md">
+          <div className="max-w-sm">
             <QrScanner onScan={handleScan} />
           </div>
         </div>

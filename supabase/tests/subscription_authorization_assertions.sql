@@ -1,4 +1,8 @@
-DO $subscription_authorization_assertions$
+CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
+BEGIN;
+SELECT extensions.plan(1);
+
+SELECT extensions.lives_ok($tap$DO $subscription_authorization_assertions$
 DECLARE
   v_signature text;
   v_oid oid;
@@ -34,7 +38,13 @@ BEGIN
     WHERE p.oid = v_oid;
 
     IF v_owner <> 'postgres'
-       OR v_config IS DISTINCT FROM ARRAY['search_path=public, pg_temp']::text[]
+       OR v_config IS DISTINCT FROM (CASE
+            WHEN v_signature IN (
+              'public.update_library_subscription(uuid,text,text,text,date,date,integer,boolean,date,text)',
+              'public.terminate_library_subscription(uuid,text)'
+            ) THEN ARRAY['search_path=public, pg_temp']::text[]
+            ELSE ARRAY['search_path=""']::text[]
+          END)
        OR v_secdef IS DISTINCT FROM true THEN
       RAISE EXCEPTION 'Unexpected owner/security metadata for %', v_signature;
     END IF;
@@ -69,19 +79,32 @@ BEGIN
     FROM pg_catalog.aclexplode(v_acl) AS acl;
     IF v_acl IS NULL OR v_acl_entries <> 0 OR (
       SELECT count(*) FROM pg_catalog.aclexplode(v_acl)
-    ) <> 3 OR v_owner_entries <> 1 OR v_authenticated_entries <> 1 OR v_service_entries <> 1 THEN
+    ) <> (CASE WHEN v_signature IN (
+      'public.update_library_subscription(uuid,text,text,text,date,date,integer,boolean,date,text)',
+      'public.terminate_library_subscription(uuid,text)'
+    ) THEN 3 ELSE 2 END)
+       OR v_owner_entries <> 1
+       OR v_authenticated_entries <> 1
+       OR v_service_entries <> (CASE WHEN v_signature IN (
+         'public.update_library_subscription(uuid,text,text,text,date,date,integer,boolean,date,text)',
+         'public.terminate_library_subscription(uuid,text)'
+       ) THEN 1 ELSE 0 END) THEN
       RAISE EXCEPTION 'Unexpected direct EXECUTE ACL entries for %', v_signature;
     END IF;
     IF NOT pg_catalog.has_function_privilege('authenticated', v_oid, 'EXECUTE')
        OR pg_catalog.has_function_privilege('anon', v_oid, 'EXECUTE')
-       OR NOT pg_catalog.has_function_privilege('service_role', v_oid, 'EXECUTE') THEN
+       OR pg_catalog.has_function_privilege('service_role', v_oid, 'EXECUTE')
+            IS DISTINCT FROM (v_signature IN (
+              'public.update_library_subscription(uuid,text,text,text,date,date,integer,boolean,date,text)',
+              'public.terminate_library_subscription(uuid,text)'
+            )) THEN
       RAISE EXCEPTION 'Unexpected effective EXECUTE privileges for %', v_signature;
     END IF;
   END LOOP;
 
   IF pg_catalog.pg_get_functiondef(
        'public.get_library_subscription_dashboard(text)'::regprocedure
-     ) NOT LIKE '%p_library_id <> v_staff_library::text%' THEN
+     ) NOT LIKE '%v_library_id <> v_staff_library::text%' THEN
     RAISE EXCEPTION 'Sub-admin dashboard branch restriction is missing';
   END IF;
   IF pg_catalog.pg_get_functiondef(
@@ -90,4 +113,6 @@ BEGIN
     RAISE EXCEPTION 'Sub-admin notification branch restriction is missing';
   END IF;
 END
-$subscription_authorization_assertions$;
+$subscription_authorization_assertions$;$tap$, 'subscription authorization assertions contract block 1');
+SELECT * FROM extensions.finish();
+ROLLBACK;

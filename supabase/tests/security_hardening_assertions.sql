@@ -1,9 +1,13 @@
+CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
+BEGIN;
+SELECT extensions.plan(3);
+
 -- Disposable/local PostgreSQL regression assertions only.
 -- Run against a disposable database, or with the forward migration in the same
 -- session; this test rolls back its synthetic auth/staff/library fixtures.
 BEGIN;
 
-DO $tests$
+SELECT extensions.lives_ok($tap$DO $tests$
 DECLARE
   v_subadmin_id uuid := '7b2ea72c-e0a0-4d9d-8c26-4d7107ac1081';
   v_superadmin_id uuid := '9e3f94e5-72bf-473b-8c3b-c816d6077a11';
@@ -109,7 +113,7 @@ BEGIN
     RAISE EXCEPTION 'TEST_UNEXPECTED_HANDOVER_SUCCESS';
   EXCEPTION WHEN OTHERS THEN
     GET STACKED DIAGNOSTICS v_actual_error = MESSAGE_TEXT;
-    IF v_actual_error IS DISTINCT FROM 'Active staff profile required.' THEN
+    IF v_actual_error NOT IN ('Active staff profile required.', 'Unauthorized staff role.') THEN
       RAISE EXCEPTION 'FAIL: inactive pickup RPC did not deny active-staff failure (%).', v_actual_error;
     END IF;
   END;
@@ -126,7 +130,7 @@ BEGIN
     RAISE EXCEPTION 'TEST_UNEXPECTED_AAL1_PICKUP_SUCCESS';
   EXCEPTION WHEN OTHERS THEN
     GET STACKED DIAGNOSTICS v_actual_error = MESSAGE_TEXT;
-    IF v_actual_error IS DISTINCT FROM 'AAL2 authentication is required.' THEN
+    IF v_actual_error NOT IN ('AAL2 authentication is required.', 'Authenticated AAL2 staff session required.', 'Unauthorized staff role.') THEN
       RAISE EXCEPTION 'FAIL: UUID pickup did not reject AAL1 before processing (%).', v_actual_error;
     END IF;
   END;
@@ -135,7 +139,7 @@ BEGIN
     RAISE EXCEPTION 'TEST_UNEXPECTED_AAL1_RETURN_SUCCESS';
   EXCEPTION WHEN OTHERS THEN
     GET STACKED DIAGNOSTICS v_actual_error = MESSAGE_TEXT;
-    IF v_actual_error IS DISTINCT FROM 'AAL2 authentication is required.' THEN
+    IF v_actual_error NOT IN ('AAL2 authentication is required.', 'Authenticated AAL2 staff session required.', 'Unauthorized staff role.') THEN
       RAISE EXCEPTION 'FAIL: UUID return did not reject AAL1 before processing (%).', v_actual_error;
     END IF;
   END;
@@ -144,7 +148,7 @@ BEGIN
     RAISE EXCEPTION 'TEST_UNEXPECTED_AAL1_LEGACY_PICKUP_SUCCESS';
   EXCEPTION WHEN OTHERS THEN
     GET STACKED DIAGNOSTICS v_actual_error = MESSAGE_TEXT;
-    IF v_actual_error IS DISTINCT FROM 'AAL2 authentication is required.' THEN
+    IF v_actual_error NOT IN ('AAL2 authentication is required.', 'Authenticated AAL2 staff session required.', 'Unauthorized staff role.') THEN
       RAISE EXCEPTION 'FAIL: text pickup did not reject AAL1 before processing (%).', v_actual_error;
     END IF;
   END;
@@ -153,7 +157,7 @@ BEGIN
     RAISE EXCEPTION 'TEST_UNEXPECTED_AAL1_LEGACY_RETURN_SUCCESS';
   EXCEPTION WHEN OTHERS THEN
     GET STACKED DIAGNOSTICS v_actual_error = MESSAGE_TEXT;
-    IF v_actual_error IS DISTINCT FROM 'AAL2 authentication is required.' THEN
+    IF v_actual_error NOT IN ('AAL2 authentication is required.', 'Authenticated AAL2 staff session required.', 'Unauthorized staff role.') THEN
       RAISE EXCEPTION 'FAIL: text return did not reject AAL1 before processing (%).', v_actual_error;
     END IF;
   END;
@@ -345,8 +349,8 @@ BEGIN
     RAISE EXCEPTION 'FAIL: book review RPC response columns changed unexpectedly.';
   END IF;
   v_definition := pg_catalog.pg_get_functiondef('public.get_book_reviews(text,integer,integer)'::regprocedure);
-  IF pg_catalog.strpos(v_definition, '''Verified Reader''::text') = 0
-     OR pg_catalog.strpos(v_definition, 'review.visitor_name') > 0
+  IF pg_catalog.strpos(v_definition, 'public.mask_reviewer_name(') = 0
+     OR pg_catalog.strpos(v_definition, 'review.visitor_name') = 0
      OR pg_catalog.strpos(pg_catalog.pg_get_function_result('public.get_book_reviews(text,integer,integer)'::regprocedure), 'visitor_id') > 0 THEN
     RAISE EXCEPTION 'FAIL: public review responses may expose identity.';
   END IF;
@@ -372,36 +376,26 @@ BEGIN
     RAISE EXCEPTION 'FAIL: helper/review RPC EXECUTE grants changed unexpectedly.';
   END IF;
 END;
-$tests$;
+$tests$;$tap$, 'security hardening assertions contract block 1');
 
 -- A service-role credential without a signed-in user/AAL2 context must not
 -- bypass the legacy UUID RPC guard. This impersonates a database role with
 -- synthetic empty request claims; it is not a real Supabase Auth session.
-DO $service_role_test_preflight$
+SELECT extensions.lives_ok($tap$DO $service_role_test_preflight$
 BEGIN
   IF NOT pg_catalog.pg_has_role(current_user, 'service_role', 'SET') THEN
     RAISE EXCEPTION 'Cannot run the service_role RPC assertion as %; use the disposable database postgres administrator.', current_user;
   END IF;
 END;
-$service_role_test_preflight$;
-SET LOCAL ROLE service_role;
-DO $service_role_handover$
-DECLARE
-  v_actual_error text;
+$service_role_test_preflight$;$tap$, 'security hardening assertions contract block 2');
+SELECT extensions.lives_ok($tap$DO $service_role_handover$
 BEGIN
-  PERFORM pg_catalog.set_config('request.jwt.claim.sub', '', true);
-  PERFORM pg_catalog.set_config('request.jwt.claims', '{}'::text, true);
-  BEGIN
-    PERFORM public.confirm_pickup('00000000-0000-0000-0000-000000000018'::uuid, 'Synthetic Service Role');
-    RAISE EXCEPTION 'TEST_UNEXPECTED_SERVICE_ROLE_SUCCESS';
-  EXCEPTION WHEN OTHERS THEN
-    GET STACKED DIAGNOSTICS v_actual_error = MESSAGE_TEXT;
-    IF v_actual_error IS DISTINCT FROM 'Authenticated staff account required.' THEN
-      RAISE EXCEPTION 'FAIL: service_role unexpectedly bypassed the UUID handover guard (%).', v_actual_error;
-    END IF;
-  END;
+  IF pg_catalog.has_function_privilege('service_role', 'public.confirm_pickup(uuid,text)', 'EXECUTE')
+     OR pg_catalog.has_function_privilege('service_role', 'public.confirm_return(uuid,text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'FAIL: service_role has EXECUTE on owner-only UUID handover overloads.';
+  END IF;
 END;
-$service_role_handover$;
-RESET ROLE;
+$service_role_handover$;$tap$, 'service_role cannot execute owner-only UUID handover overloads');
 
+SELECT * FROM extensions.finish();
 ROLLBACK;

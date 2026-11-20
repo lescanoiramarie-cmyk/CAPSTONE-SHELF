@@ -138,48 +138,6 @@ function GoogleLibraryMap({
   return <div ref={containerRef} className="h-full w-full min-h-[inherit]" />;
 }
 
-
-
-
-function FocusBranch({ library, markerRef }) {
-  const map = useMap();
-  const latitude = Number(library.lat);
-  const longitude = Number(library.lng);
-
-  useEffect(() => {
-    map.setView([latitude, longitude], Math.max(map.getZoom(), 15));
-    markerRef.current?.openPopup();
-  }, [latitude, longitude, map, markerRef]);
-
-  return null;
-}
-
-function FitLibraries({ coordinates, focusBranchId }) {
-  const map = useMap();
-
-  useEffect(() => {
-    if (focusBranchId != null || coordinates === '') {
-      return;
-    }
-
-    const locations = coordinates
-      .split('|')
-      .map((coordinate) => coordinate.split(',').map(Number));
-
-    if (locations.length === 1) {
-      map.setView(locations[0], 15);
-      return;
-    }
-
-    map.fitBounds(locations, {
-      padding: [24, 24],
-      maxZoom: 12,
-    });
-  }, [coordinates, focusBranchId, map]);
-
-  return null;
-}
-
 export default function LibraryMap({
   onBrowseLibrary,
   focusBranchId = null,
@@ -193,7 +151,6 @@ export default function LibraryMap({
     : libraries.filter(
         (library) => String(library.id) === String(libraryScopeId)
       );
-  const focusedMarkerRef = useRef(null);
 
   const [search, setSearch] = useState('');
   const [campusFilter, setCampusFilter] = useState('All');
@@ -303,9 +260,6 @@ export default function LibraryMap({
         );
       }
     );
-  const markerCoordinates = librariesWithCoordinates
-    .map((library) => `${Number(library.lat)},${Number(library.lng)}`)
-    .join('|');
 
   // =========================================================
   // COMPONENT

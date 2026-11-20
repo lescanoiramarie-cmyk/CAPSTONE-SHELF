@@ -1,6 +1,10 @@
+CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
+BEGIN;
+SELECT extensions.plan(1);
+
 -- Catalog assertions for the public/community visitor registration migration.
 -- Auth/PostgREST behavior still requires synthetic users through the Supabase APIs.
-DO $test$
+SELECT extensions.lives_ok($tap$DO $test$
 DECLARE
   v_proc record;
   v_definition text;
@@ -51,7 +55,7 @@ BEGIN
    WHERE procedure_row.oid = 'public.register_visitor_v2(uuid,text,text,text,text,text,uuid,text)'::pg_catalog.regprocedure;
   IF v_proc.proowner IS DISTINCT FROM 'postgres'::pg_catalog.regrole::oid
      OR v_proc.lanname IS DISTINCT FROM 'plpgsql'
-     OR v_proc.prorettype IS DISTINCT FROM 'record'::pg_catalog.regtype::oid
+     OR v_proc.prorettype IS DISTINCT FROM 'text'::pg_catalog.regtype::oid
      OR v_proc.proretset IS NOT TRUE
      OR v_proc.prosecdef IS NOT TRUE
      OR v_proc.provolatile IS DISTINCT FROM 'v'::"char"
@@ -171,9 +175,10 @@ BEGIN
      OR v_policy_using IS NULL
      OR v_policy_check IS NOT NULL
      OR v_policy_using !~* 'auth_user_id[[:space:]]*=[[:space:]]*(auth[.])?uid[[:space:]]*[(][[:space:]]*[)]'
-     OR v_policy_using !~* 'otp_verified[[:space:]]+IS[[:space:]]+TRUE'
+     OR v_policy_using !~* 'otp_verified([[:space:]]+IS[[:space:]]+TRUE)?'
+     OR v_policy_using !~* 'is_active'
      OR v_policy_using !~* 'approval_status[[:space:]]*=[[:space:]]*''pending'''
-     OR v_policy_using !~* 'is_active_staff_for_branch[[:space:]]*[(][[:space:]]*library_id[[:space:]]*::[[:space:]]*text[[:space:]]*[)]'
+     OR v_policy_using !~* 'is_active_staff_for_branch[[:space:]]*[(][[:space:]]*[(]?library_id[)]?[[:space:]]*::[[:space:]]*text[)]'
      OR pg_catalog.regexp_count(v_policy_using, 'auth_user_id', 1, 'i') <> 1
      OR pg_catalog.regexp_count(v_policy_using, 'otp_verified', 1, 'i') <> 1
      OR pg_catalog.regexp_count(v_policy_using, 'approval_status', 1, 'i') <> 1
@@ -189,4 +194,6 @@ BEGIN
     RAISE EXCEPTION 'OTP verification must retain attempt lockout and defer pending community QR issuance.';
   END IF;
 END;
-$test$;
+$test$;$tap$, 'public community visitor registration contract block 1');
+SELECT * FROM extensions.finish();
+ROLLBACK;

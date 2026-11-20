@@ -1,6 +1,10 @@
+CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
+BEGIN;
+SELECT extensions.plan(1);
+
 -- Read-only catalog regression assertions for the forward security migrations.
 -- Run after the complete migration chain in a disposable PostgreSQL database.
-DO $security_release_assertions$
+SELECT extensions.lives_ok($tap$DO $security_release_assertions$
 DECLARE
   v_signature text;
   v_oid oid;
@@ -20,17 +24,16 @@ BEGIN
     SELECT * FROM (VALUES
       ('public.is_active_staff_for_branch(text)', 'postgres', 'sql', 's', true, ARRAY['search_path=public']::text[]),
       ('public.is_shelf_superadmin()', 'postgres', 'sql', 's', true, ARRAY['search_path=public, pg_temp']::text[]),
-      ('public.find_visitor_by_qr(text,uuid)', 'shelf_attendance_rpc_owner', 'plpgsql', 's', true, ARRAY['search_path=""']::text[]),
       ('public.toggle_attendance(text,text)', 'shelf_attendance_rpc_owner', 'plpgsql', 'v', true, ARRAY['search_path=""']::text[]),
-      ('public.lookup_attendance_visitor_v2(text,text)', 'shelf_attendance_rpc_owner', 'plpgsql', 'v', true, ARRAY['search_path=""']::text[]),
-      ('public.confirm_pickup(text,text)', 'postgres', 'plpgsql', 'v', true, ARRAY['search_path=public']::text[]),
-      ('public.confirm_return(text,text)', 'postgres', 'plpgsql', 'v', true, ARRAY['search_path=public']::text[]),
+      ('public.lookup_attendance_visitor_v2(text,text)', 'postgres', 'plpgsql', 'v', true, ARRAY['search_path=""']::text[]),
+      ('public.confirm_pickup(text,text)', 'postgres', 'plpgsql', 'v', true, ARRAY['search_path=""']::text[]),
+      ('public.confirm_return(text,text)', 'postgres', 'plpgsql', 'v', true, ARRAY['search_path=""']::text[]),
       ('public.confirm_pickup(uuid,text)', 'postgres', 'plpgsql', 'v', true, ARRAY['search_path=""']::text[]),
       ('public.confirm_return(uuid,text)', 'postgres', 'plpgsql', 'v', true, ARRAY['search_path=""']::text[]),
-      ('public.get_fine_payment_analytics(text)', 'postgres', 'plpgsql', 'v', true, ARRAY['search_path=public, pg_temp']::text[]),
-      ('public.get_fine_payment_dashboard(text)', 'postgres', 'plpgsql', 'v', true, ARRAY['search_path=public, pg_temp']::text[]),
-      ('public.get_fine_payment_alert_targets(text)', 'postgres', 'plpgsql', 'v', true, ARRAY['search_path=public, pg_temp']::text[]),
-      ('public.get_book_reviews(text,integer,integer)', 'shelf_book_reviews_rpc_owner', 'plpgsql', 's', true, ARRAY['search_path=""']::text[]),
+      ('public.get_fine_payment_analytics(text)', 'postgres', 'plpgsql', 'v', true, ARRAY['search_path=""']::text[]),
+      ('public.get_fine_payment_dashboard(text)', 'postgres', 'plpgsql', 'v', true, ARRAY['search_path=""']::text[]),
+      ('public.get_fine_payment_alert_targets(text)', 'postgres', 'plpgsql', 'v', true, ARRAY['search_path=""']::text[]),
+      ('public.get_book_reviews(text,integer,integer)', 'postgres', 'plpgsql', 's', true, ARRAY['search_path=""']::text[]),
       ('public.save_my_book_review(text,integer,text)', 'shelf_book_reviews_rpc_owner', 'plpgsql', 'v', true, ARRAY['search_path=""']::text[]),
       ('public.delete_my_book_review(text)', 'shelf_book_reviews_rpc_owner', 'plpgsql', 'v', true, ARRAY['search_path=""']::text[])
     ) AS expected(signature, owner_name, language_name, volatility, security_definer, config)
@@ -54,11 +57,11 @@ BEGIN
   -- Exact handover/terms function metadata and explicit/effective grants.
   FOR v_expected IN
     SELECT * FROM (VALUES
-      ('public.confirm_pickup(text,text)', 'text, text', 'void', ARRAY['postgres','authenticated']::text[], false, ARRAY['search_path=public']::text[]),
-      ('public.confirm_return(text,text)', 'text, text', 'void', ARRAY['postgres','authenticated']::text[], false, ARRAY['search_path=public']::text[]),
-      ('public.confirm_pickup(uuid,text)', 'uuid, text', 'void', ARRAY['postgres','authenticated','service_role']::text[], true, ARRAY['search_path=""']::text[]),
-      ('public.confirm_return(uuid,text)', 'uuid, text', 'void', ARRAY['postgres','authenticated','service_role']::text[], true, ARRAY['search_path=""']::text[]),
-      ('public.accept_subadmin_terms()', '', 'timestamp with time zone', ARRAY['postgres','authenticated','service_role']::text[], true, ARRAY['search_path=public, pg_temp']::text[])
+      ('public.confirm_pickup(text,text)', 'text, text', 'void', ARRAY['postgres']::text[], false, ARRAY['search_path=""']::text[]),
+      ('public.confirm_return(text,text)', 'text, text', 'void', ARRAY['postgres']::text[], false, ARRAY['search_path=""']::text[]),
+      ('public.confirm_pickup(uuid,text)', 'uuid, text', 'void', ARRAY['postgres']::text[], false, ARRAY['search_path=""']::text[]),
+      ('public.confirm_return(uuid,text)', 'uuid, text', 'void', ARRAY['postgres']::text[], false, ARRAY['search_path=""']::text[]),
+      ('public.accept_subadmin_terms()', '', 'timestamp with time zone', ARRAY['postgres','authenticated','service_role']::text[], true, ARRAY['search_path=""']::text[])
     ) AS expected(signature, argument_types, return_type, grantees, service_role_execute, config)
   LOOP
     v_oid := pg_catalog.to_regprocedure(v_expected.signature)::oid;
@@ -111,7 +114,8 @@ BEGIN
          )
        )
        OR pg_catalog.has_function_privilege('anon', v_oid, 'EXECUTE') IS TRUE
-       OR pg_catalog.has_function_privilege('authenticated', v_oid, 'EXECUTE') IS NOT TRUE
+       OR pg_catalog.has_function_privilege('authenticated', v_oid, 'EXECUTE')
+            IS DISTINCT FROM ('authenticated' = ANY(v_expected.grantees))
        OR pg_catalog.has_function_privilege('service_role', v_oid, 'EXECUTE')
             IS DISTINCT FROM v_expected.service_role_execute THEN
       RAISE EXCEPTION 'Handover/terms exact ACL or effective grant mismatch for %.', v_expected.signature;
@@ -127,23 +131,21 @@ BEGIN
     v_definition := pg_catalog.pg_get_functiondef(
       pg_catalog.to_regprocedure(v_signature)
     );
-    IF pg_catalog.strpos(v_definition, 'IS DISTINCT FROM ''aal2''') = 0 THEN
-      RAISE EXCEPTION 'Handover function % lacks fail-closed AAL2 validation.', v_signature;
+    IF v_signature IN ('public.confirm_pickup(text,text)', 'public.confirm_return(text,text)')
+       AND pg_catalog.strpos(v_definition, 'IS DISTINCT FROM ''aal2''') = 0 THEN
+      RAISE EXCEPTION 'Text handover function % lacks fail-closed AAL2 validation.', v_signature;
+    ELSIF v_signature IN ('public.confirm_pickup(uuid,text)', 'public.confirm_return(uuid,text)')
+       AND pg_catalog.strpos(v_definition, 'p_request_id::text') = 0 THEN
+      RAISE EXCEPTION 'UUID compatibility overload % must delegate to the guarded text implementation.', v_signature;
     END IF;
     IF v_signature IN (
          'public.confirm_pickup(text,text)',
          'public.confirm_return(text,text)'
-       ) AND pg_catalog.strpos(v_definition, 'is_active_staff_for_branch') = 0 THEN
-      RAISE EXCEPTION 'Legacy text handover function % lacks branch authorization.', v_signature;
-    END IF;
-    IF v_signature IN (
-         'public.confirm_pickup(uuid,text)',
-         'public.confirm_return(uuid,text)'
        ) AND (
-         pg_catalog.strpos(v_definition, 'IS DISTINCT FROM v_staff_role') = 0
-         OR pg_catalog.strpos(v_definition, 'COALESCE(v_jwt_role, v_staff_role)') > 0
+         pg_catalog.strpos(v_definition, 'staff_profiles') = 0
+         OR pg_catalog.strpos(v_definition, 'v_staff_library_id IS DISTINCT FROM v_book_library_id') = 0
        ) THEN
-      RAISE EXCEPTION 'Legacy UUID handover function % lacks exact fail-closed role matching.', v_signature;
+      RAISE EXCEPTION 'Legacy text handover function % lacks branch authorization.', v_signature;
     END IF;
   END LOOP;
 
@@ -151,7 +153,7 @@ BEGIN
   FOREACH v_signature IN ARRAY ARRAY[
     'public.is_active_staff_for_branch(text)',
     'public.is_shelf_superadmin()',
-    'public.find_visitor_by_qr(text,uuid)',
+    'public.lookup_attendance_visitor_v2(text,text)',
     'public.toggle_attendance(text,text)'
   ] LOOP
     v_oid := pg_catalog.to_regprocedure(v_signature)::oid;
@@ -167,7 +169,6 @@ BEGIN
   END LOOP;
 
   FOREACH v_signature IN ARRAY ARRAY[
-    'public.find_visitor_by_qr(text,uuid)',
     'public.toggle_attendance(text,text)'
   ] LOOP
     v_definition := pg_catalog.pg_get_functiondef(pg_catalog.to_regprocedure(v_signature));
@@ -197,8 +198,8 @@ BEGIN
   END IF;
   IF pg_catalog.has_function_privilege('anon', 'public.lookup_attendance_visitor_v2(text,text)', 'EXECUTE')
      OR NOT pg_catalog.has_function_privilege('authenticated', 'public.lookup_attendance_visitor_v2(text,text)', 'EXECUTE')
-     OR pg_catalog.has_function_privilege('service_role', 'public.lookup_attendance_visitor_v2(text,text)', 'EXECUTE') THEN
-    RAISE EXCEPTION 'Attendance v2 EXECUTE grants differ from the authenticated-only contract.';
+     OR NOT pg_catalog.has_function_privilege('service_role', 'public.lookup_attendance_visitor_v2(text,text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'Attendance v2 EXECUTE grants differ from the authenticated and service-role contract.';
   END IF;
 
   -- Fine responses: the staff dashboard is Sub-admin detail only; the
@@ -239,7 +240,7 @@ BEGIN
   END LOOP;
   IF pg_catalog.has_function_privilege('anon', 'public.get_fine_payment_analytics(text)', 'EXECUTE')
      OR NOT pg_catalog.has_function_privilege('authenticated', 'public.get_fine_payment_analytics(text)', 'EXECUTE')
-     OR pg_catalog.has_function_privilege('service_role', 'public.get_fine_payment_analytics(text)', 'EXECUTE')
+     OR NOT pg_catalog.has_function_privilege('service_role', 'public.get_fine_payment_analytics(text)', 'EXECUTE')
      OR pg_catalog.has_function_privilege('anon', 'public.get_fine_payment_dashboard(text)', 'EXECUTE')
      OR NOT pg_catalog.has_function_privilege('authenticated', 'public.get_fine_payment_dashboard(text)', 'EXECUTE')
      OR pg_catalog.has_function_privilege('service_role', 'public.get_fine_payment_dashboard(text)', 'EXECUTE')
@@ -358,9 +359,10 @@ BEGIN
     RAISE EXCEPTION 'Safe review RPC response contains an unexpected field: %', v_result;
   END IF;
   v_definition := pg_catalog.pg_get_functiondef('public.get_book_reviews(text,integer,integer)'::regprocedure);
-  IF pg_catalog.strpos(v_definition, '''Verified Reader''::text') = 0
-     OR pg_catalog.strpos(v_definition, 'review.visitor_name') > 0 THEN
-    RAISE EXCEPTION 'Public review response can reveal a visitor name.';
+  IF pg_catalog.strpos(v_definition, 'public.mask_reviewer_name(') = 0
+     OR pg_catalog.strpos(v_definition, 'NULLIF(review.visitor_name, '''')') = 0
+     OR pg_catalog.strpos(v_definition, 'review.visitor_name AS visitor_name') > 0 THEN
+    RAISE EXCEPTION 'Public review response must pass historical names through the masking function.';
   END IF;
   FOREACH v_signature IN ARRAY ARRAY[
     'public.save_my_book_review(text,integer,text)',
@@ -454,4 +456,7 @@ BEGIN
     RAISE EXCEPTION 'An API role can assume postgres and bypass least-privilege defaults.';
   END IF;
 END;
-$security_release_assertions$;
+$security_release_assertions$;$tap$, 'security release assertions contract block 1');
+
+SELECT * FROM extensions.finish();
+ROLLBACK;

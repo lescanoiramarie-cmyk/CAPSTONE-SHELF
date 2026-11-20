@@ -422,10 +422,11 @@
 }
 
 .visitor-dashboard .visitor-reading-list-grid {
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16.5rem), 1fr));
   justify-content: stretch;
   align-items: stretch;
-  gap: 1.25rem;
+  gap: 1rem;
 }
 
 .visitor-dashboard .visitor-reading-list-grid > * {
@@ -434,7 +435,7 @@
 
 .visitor-dashboard .visitor-book-card.visitor-reading-list-card {
   position: relative;
-  min-height: 13.25rem;
+  min-height: 11.5rem;
   height: 100%;
 }
 

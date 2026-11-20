@@ -1332,7 +1332,15 @@ function VisitorDashboardContent() {
     .filter((transaction) => !transaction.isCommunityBook)
     .map((transaction) => {
       const status = String(transaction.status || '').toLowerCase();
+      const fineStatus = transaction.fineStatus || transaction.fine_status;
+      if (fineStatus === 'paid') {
+        return { ...transaction, currentFineAmount: 0 };
+      }
       const recordedFine = Math.max(0, Number(transaction.fineAmount || 0));
+      const finePaid = Number(transaction.finePaidAmount || 0);
+      if (recordedFine > 0 && finePaid >= recordedFine) {
+        return { ...transaction, currentFineAmount: 0 };
+      }
       const recalculatedReturnedFine = status === 'returned' && transaction.dueDate && transaction.returnDate
         ? calculateOverdueFine(
             transaction.dueDate,
@@ -1349,7 +1357,6 @@ function VisitorDashboardContent() {
         : recalculatedReturnedFine != null
           ? Math.max(recalculatedReturnedFine, recordedFine)
           : recordedFine;
-      const finePaid = Number(transaction.finePaidAmount || 0);
       return {
         ...transaction,
         currentFineAmount: Math.max(0, totalFine - finePaid),
@@ -1615,20 +1622,40 @@ function VisitorDashboardContent() {
       ====================================================== */}
       <ShelfHeader
         onNotificationClick={(item) => {
-          const type = String(item?.notificationType || item?.notification_type || item?.reference_type || item?.referenceType || '').toLowerCase();
-          const targetId = item?.reference_id || item?.referenceId || item?.borrow_request_id || item?.requestId || item?.recordId;
-          if (
-            type.includes('feedback') ||
-            type.includes('announcement')
-          ) {
+          const type = String(item?.type || item?.notificationType || item?.notification_type || item?.referenceType || item?.reference_type || '').toLowerCase();
+          const targetId = item?.referenceId || item?.reference_id || item?.borrow_request_id || item?.requestId || item?.recordId;
+          if (type.includes('feedback')) {
+            setShowFineOnly(false);
             setTab('services');
+            setTimeout(() => {
+              const el = document.getElementById('visitor-feedback-history') || document.getElementById('visitor-services');
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+          } else if (type.includes('announcement')) {
+            setShowFineOnly(false);
+            setTab('services');
+          } else if (type === 'community_request_pending' || type.includes('owner')) {
+            setShowFineOnly(false);
+            setTab('personalBooks');
+            if (targetId) setFocusRequestId(targetId);
+            setTimeout(() => {
+              const el = targetId ? document.getElementById(`owner-request-${targetId}`) : null;
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
           } else if (
             type.includes('borrow') ||
             type.includes('fine') ||
             type.includes('due') ||
             type.includes('pickup') ||
-            type.includes('overdue')
+            type.includes('overdue') ||
+            type.includes('return') ||
+            type.includes('community')
           ) {
+            if (type.includes('fine')) {
+              setShowFineOnly(true);
+            } else {
+              setShowFineOnly(false);
+            }
             setTab('myBorrows');
             if (targetId) setFocusRequestId(targetId);
             setTimeout(() => {
@@ -1636,9 +1663,8 @@ function VisitorDashboardContent() {
               if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
               else document.getElementById('visitor-catalog')?.scrollIntoView({ behavior: 'smooth' });
             }, 100);
-          } else if (type.includes('community')) {
-            setTab('communityBooks');
           } else {
+            setShowFineOnly(false);
             setTab('catalog');
           }
         }}
@@ -1755,7 +1781,8 @@ function VisitorDashboardContent() {
                       <>Please return your overdue book{overdueBooksToReturn.length > 1 ? 's' : ''}: {overdueBooksToReturn.map((transaction) => transaction.bookTitle || 'Borrowed book').join(', ')}. </>
                     )}
                     {confirmedOutstandingFineTotal > 0 && 'Contact the library to pay or update your confirmed fine.'}
-                    {confirmedOutstandingFineTotal <= 0 && 'The original checkout fine rate is not recorded for this loan, so SHELF cannot calculate an amount. Contact the library about the overdue return.'}
+                    {confirmedOutstandingFineTotal <= 0 && overdueBooksToReturn.some((t) => Number(t.finePaidAmount || 0) > 0) && 'Your fine for this overdue loan has been paid in full. Please return the book to the library.'}
+                    {confirmedOutstandingFineTotal <= 0 && !overdueBooksToReturn.some((t) => Number(t.finePaidAmount || 0) > 0) && 'The original checkout fine rate is not recorded for this loan, so SHELF cannot calculate an amount. Contact the library about the overdue return.'}
                   </p>
                 </div>
               </div>

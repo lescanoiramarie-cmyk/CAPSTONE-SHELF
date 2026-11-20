@@ -1,6 +1,10 @@
+CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
+BEGIN;
+SELECT extensions.plan(1);
+
 -- Read-only catalog assertions for the audit event contract. Runtime DML
 -- regression coverage is exercised through the isolated Auth/PostgREST suite.
-DO $tests$
+SELECT extensions.lives_ok($tap$DO $tests$
 DECLARE
   v_definition text;
   v_acl_count integer;
@@ -109,4 +113,6 @@ BEGIN
     RAISE EXCEPTION 'FAIL: audit trigger function privileges differ from the reviewed contract.';
   END IF;
 END;
-$tests$;
+$tests$;$tap$, 'audit trigger assertions contract block 1');
+SELECT * FROM extensions.finish();
+ROLLBACK;

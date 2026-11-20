@@ -1,5 +1,9 @@
+CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
+BEGIN;
+SELECT extensions.plan(1);
+
 -- Read-only catalog assertions for migration 20270102001500.
-DO $test$
+SELECT extensions.lives_ok($tap$DO $test$
 DECLARE
   v_rate regprocedure;
   v_alert regprocedure;
@@ -55,12 +59,15 @@ BEGIN
     RAISE EXCEPTION 'Internal alert-target function is missing.';
   END IF;
   v_definition := pg_catalog.pg_get_functiondef(v_alert);
-  IF pg_catalog.strpos(v_definition, 'notification.borrow_request_id::text = br.id::text') = 0
-     OR pg_catalog.strpos(v_definition, 'notification.visitor_id::text = br.visitor_id::text') = 0
+  IF pg_catalog.strpos(v_definition, 'ddn.borrow_request_id = br.id::text') = 0
+     OR pg_catalog.strpos(v_definition, 'ddn.visitor_id = br.visitor_id') = 0
      OR pg_catalog.has_function_privilege('anon', v_alert, 'EXECUTE')
      OR pg_catalog.has_function_privilege('authenticated', v_alert, 'EXECUTE')
      OR pg_catalog.has_function_privilege('service_role', v_alert, 'EXECUTE') THEN
     RAISE EXCEPTION 'Fine-alert cast or authorization assertion failed.';
   END IF;
 END;
-$test$;
+$test$;$tap$, 'fine runtime fix assertions contract block 1');
+
+SELECT * FROM extensions.finish();
+ROLLBACK;

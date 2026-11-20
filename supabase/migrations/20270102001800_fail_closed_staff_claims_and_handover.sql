@@ -70,14 +70,16 @@ BEGIN
         v_expected_arguments := 'text, text';
         v_expected_return_type := 'void'::regtype::oid;
         v_expected_config := ARRAY['search_path=public']::text[];
-        v_expected_grantees := ARRAY['postgres', 'authenticated']::text[];
-        v_expected_service_role := false;
+        -- Supabase's managed default ACL grants service_role on functions
+        -- created by postgres. Verify that exact trusted server grant too.
+        v_expected_grantees := ARRAY['postgres', 'authenticated', 'service_role']::text[];
+        v_expected_service_role := true;
       WHEN 'public.confirm_return(text,text)' THEN
         v_expected_arguments := 'text, text';
         v_expected_return_type := 'void'::regtype::oid;
         v_expected_config := ARRAY['search_path=public']::text[];
-        v_expected_grantees := ARRAY['postgres', 'authenticated']::text[];
-        v_expected_service_role := false;
+        v_expected_grantees := ARRAY['postgres', 'authenticated', 'service_role']::text[];
+        v_expected_service_role := true;
       WHEN 'public.confirm_pickup(uuid,text)' THEN
         v_expected_arguments := 'uuid, text';
         v_expected_return_type := 'void'::regtype::oid;

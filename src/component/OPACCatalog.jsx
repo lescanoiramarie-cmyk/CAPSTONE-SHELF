@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth.js';
 import { getDashboardPath } from '../routes/roleHome.js';
 import { matchesCallNumberSearch } from '../lib/callNumber.js';
+import { persistCommunityBookSaveState } from '../lib/communityBookSave.js';
 import {
   BookOpen,
   Bookmark,
@@ -128,21 +129,25 @@ function getValidStoredFineRate(value) {
 
 function calculateCurrentFine(request) {
   if (!request) return 0;
-  if (request.fineReviewResolvedAt) {
-    return Math.max(0, Number(request.fineAmount || 0) - Number(request.finePaidAmount || 0));
+  const fineStatus = request.fineStatus || request.fine_status;
+  if (fineStatus === 'paid') return 0;
+  const fineAmount = Number(request.fineAmount ?? request.fine_amount ?? 0);
+  const finePaidAmount = Number(request.finePaidAmount ?? request.fine_paid_amount ?? 0);
+  if (fineAmount > 0 && finePaidAmount >= fineAmount) return 0;
+  if (request.fineReviewResolvedAt || request.fine_review_resolved_at) {
+    return Math.max(0, fineAmount - finePaidAmount);
   }
   if (request.status === 'returned') {
-    const assessedAtReturn = request.dueDate && request.returnDate
+    const assessedAtReturn = request.dueDate && (request.returnDate || request.return_date)
       ? calculateOverdueFine(
           request.dueDate,
-          request.returnDate,
-          request.fineRateSnapshot
+          request.returnDate || request.return_date,
+          request.fineRateSnapshot ?? request.fine_rate_snapshot
         )
       : null;
     return Math.max(
       0,
-      Math.max(Number(assessedAtReturn ?? 0), Number(request.fineAmount || 0)) -
-        Number(request.finePaidAmount || 0)
+      Math.max(Number(assessedAtReturn ?? 0), fineAmount) - finePaidAmount
     );
   }
   if (
@@ -154,9 +159,9 @@ function calculateCurrentFine(request) {
   const totalFine = calculateOverdueFine(
     request.dueDate,
     Date.now(),
-    request.fineRateSnapshot
-  ) ?? Number(request.fineAmount || 0);
-  return Math.max(0, totalFine - Number(request.finePaidAmount || 0));
+    request.fineRateSnapshot ?? request.fine_rate_snapshot
+  ) ?? fineAmount;
+  return Math.max(0, totalFine - finePaidAmount);
 }
 
 function getVisitorFineHistoryAmount(request) {
@@ -353,6 +358,11 @@ export default function OPACCatalog({
   const [personalBooksPage, setPersonalBooksPage] = useState(1);
   const personalBooksPageSize = 6;
   const [readingListSearch, setReadingListSearch] = useState('');
+  const [readingListCategory, setReadingListCategory] = useState('All');
+  const [readingListAvailability, setReadingListAvailability] = useState('All');
+  const [readingListSort, setReadingListSort] = useState('title-asc');
+  const [readingListPage, setReadingListPage] = useState(1);
+  const [readingListPageSize, setReadingListPageSize] = useState(20);
   const [myRequestSearch, setMyRequestSearch] = useState('');
   const [myRequestStatus, setMyRequestStatus] = useState('all');
   const [myRequestTypeFilter, setMyRequestTypeFilter] = useState('all');
@@ -544,6 +554,7 @@ export default function OPACCatalog({
   const [savedCommunityBooks, setSavedCommunityBooks] = useState([]);
   const [savedCommunityBookIds, setSavedCommunityBookIds] = useState(new Set());
   const [savedCommunityBooksLoading, setSavedCommunityBooksLoading] = useState(false);
+  const savingCommunityBookIdsRef = useRef(new Set());
 
   useEffect(() => {
     if (externalSelectedBook) {
@@ -567,8 +578,8 @@ export default function OPACCatalog({
             author: b.author || 'Unknown Author',
             category: b.category || 'General',
             isbn: b.isbn || '',
-            coverUrl: b.cover_url || '',
-            cover_url: b.cover_url || '',
+            coverUrl: b.cover_url || b.cover_image_path || '',
+            cover_url: b.cover_url || b.cover_image_path || '',
             ownerVisitorId: b.owner_visitor_id,
             owner_visitor_id: b.owner_visitor_id,
             ownerName: b.owner_name || 'Community Member',
@@ -596,7 +607,7 @@ export default function OPACCatalog({
         }
       });
     return () => { active = false; };
-  }, [user?.id]);
+  }, [user?.id, activeView]);
 
   // Reset saved books when user logs out
   useEffect(() => {
@@ -609,39 +620,45 @@ export default function OPACCatalog({
 
   const handleSaveCommunityBook = async (communityBookId, shouldBeSaved) => {
     if (!user?.id) return;
-    const isCurrentlySaved = savedCommunityBookIds.has(String(communityBookId));
+    const requestUserId = user.id;
+    const normalizedBookId = String(communityBookId);
+    const operationKey = `${requestUserId}:${normalizedBookId}`;
+    if (savingCommunityBookIdsRef.current.has(operationKey)) return;
+    const isCurrentlySaved = savedCommunityBookIds.has(normalizedBookId);
     const wantToSave = shouldBeSaved !== undefined ? Boolean(shouldBeSaved) : !isCurrentlySaved;
+    savingCommunityBookIdsRef.current.add(operationKey);
 
     try {
+      await persistCommunityBookSaveState({
+        bookId: communityBookId,
+        shouldBeSaved: wantToSave,
+        save: saveCommunityBookForLater,
+        unsave: unsaveCommunityBookForLater,
+      });
+      if (user?.id !== requestUserId) return;
       if (!wantToSave) {
-        const result = await unsaveCommunityBookForLater(communityBookId);
-        if (result.success) {
-          setSavedCommunityBooks((prev) => prev.filter((b) => String(b.id) !== String(communityBookId)));
-          setSavedCommunityBookIds((prev) => {
-            const next = new Set(prev);
-            next.delete(String(communityBookId));
-            return next;
-          });
-          setNotice('Book removed from saved list.');
-        } else {
-          setNotice(result.message || 'Unable to remove book from saved list.');
-        }
+        setSavedCommunityBooks((prev) => prev.filter((b) => String(b.id) !== String(communityBookId)));
+        setSavedCommunityBookIds((prev) => {
+          const next = new Set(prev);
+          next.delete(String(communityBookId));
+          return next;
+        });
+        setNotice('Book removed from saved list.');
       } else {
-        const result = await saveCommunityBookForLater(communityBookId);
-        if (result.success) {
-          const found = communityBooks.find((b) => String(b.id) === String(communityBookId));
-          if (found) {
-            setSavedCommunityBooks((prev) => [found, ...prev.filter((b) => String(b.id) !== String(communityBookId))]);
-          }
-          setSavedCommunityBookIds((prev) => new Set(prev).add(String(communityBookId)));
-          setNotice('Book saved for later.');
-        } else {
-          setNotice(result.message || 'Unable to save book for later.');
+        const found = communityBooks.find((b) => String(b.id) === normalizedBookId);
+        if (found) {
+          setSavedCommunityBooks((prev) => [found, ...prev.filter((b) => String(b.id) !== normalizedBookId)]);
         }
+        setSavedCommunityBookIds((prev) => new Set(prev).add(normalizedBookId));
+        setNotice('Book saved for later.');
       }
     } catch (error) {
       console.error('Save/unsave community book error:', error);
-      setNotice(wantToSave ? 'Unable to save book for later.' : 'Unable to remove book from saved list.');
+      if (user?.id === requestUserId) {
+        setNotice(wantToSave ? 'Unable to save book for later.' : 'Unable to remove book from saved list.');
+      }
+    } finally {
+      savingCommunityBookIdsRef.current.delete(operationKey);
     }
   };
 
@@ -1833,9 +1850,12 @@ export default function OPACCatalog({
 
   useEffect(() => {
     if (!focusRequestId || activeView !== 'myBorrows') return;
-    setMyRequestSearch('');
-    setMyRequestStatus('all');
-    setMyRequestTypeFilter('all');
+    const timer = setTimeout(() => {
+      setMyRequestSearch('');
+      setMyRequestStatus('all');
+      setMyRequestTypeFilter('all');
+    }, 0);
+    return () => clearTimeout(timer);
   }, [activeView, focusRequestId]);
 
   useEffect(() => {
@@ -1951,16 +1971,62 @@ export default function OPACCatalog({
     visibleCommunityPage * communityPageSize
   );
   const communityPaginationItems = getCatalogPaginationItems(visibleCommunityPage, communityTotalPages);
+  const readingListCategories = useMemo(() => {
+    const set = new Set();
+    if (Array.isArray(readingListBooks)) {
+      readingListBooks.forEach((b) => {
+        if (b?.category) set.add(b.category);
+      });
+    }
+    return Array.from(set).sort();
+  }, [readingListBooks]);
+
   const readingListFilteredBooks = useMemo(() => {
     const term = readingListSearch.trim().toLowerCase();
-    if (!term) return readingListBooks;
-    return readingListBooks.filter((book) =>
-      `${book.title || ''} ${book.author || ''} ${book.category || ''} ${book.isbn || ''}`
-        .toLowerCase()
-        .includes(term) || matchesCallNumberSearch(book, term)
-    );
-  }, [readingListBooks, readingListSearch]);
-  const readingList = useProgressiveList(readingListFilteredBooks, 12);
+    let result = readingListBooks;
+    if (term) {
+      result = result.filter((book) =>
+        `${book.title || ''} ${book.author || ''} ${book.category || ''} ${book.isbn || ''}`
+          .toLowerCase()
+          .includes(term) || matchesCallNumberSearch(book, term)
+      );
+    }
+    if (readingListCategory !== 'All') {
+      result = result.filter((book) => book.category === readingListCategory);
+    }
+    if (readingListAvailability !== 'All') {
+      result = result.filter((book) => {
+        const available = Number(book.availableCopies || 0) > 0;
+        return readingListAvailability === 'Available' ? available : !available;
+      });
+    }
+    result = [...result].sort((a, b) => {
+      switch (readingListSort) {
+        case 'title-desc':
+          return (b.title || '').localeCompare(a.title || '');
+        case 'author-asc':
+          return (a.author || '').localeCompare(b.author || '');
+        case 'author-desc':
+          return (b.author || '').localeCompare(a.author || '');
+        case 'available':
+          return Number(b.availableCopies || 0) - Number(a.availableCopies || 0);
+        case 'newest':
+          return (b.id || '').localeCompare(a.id || '');
+        case 'title-asc':
+        default:
+          return (a.title || '').localeCompare(b.title || '');
+      }
+    });
+    return result;
+  }, [readingListBooks, readingListSearch, readingListCategory, readingListAvailability, readingListSort]);
+
+  const readingListTotalPages = Math.max(1, Math.ceil(readingListFilteredBooks.length / readingListPageSize));
+  const visibleReadingListPage = Math.min(readingListPage, readingListTotalPages);
+  const visibleReadingListBooks = readingListFilteredBooks.slice(
+    (visibleReadingListPage - 1) * readingListPageSize,
+    visibleReadingListPage * readingListPageSize
+  );
+  const readingListPaginationItems = getCatalogPaginationItems(visibleReadingListPage, readingListTotalPages);
 
   // =========================================================
   // BORROW / RESERVE HANDLER (WITH GUEST MODAL CHECK)
@@ -2309,6 +2375,7 @@ export default function OPACCatalog({
   // =========================================================
   const getPartnerLibraryEntries = (book) => {
     if (!book) return [];
+    const activeBranchFilter = libraryFilter || (selectedLibrary !== 'All' ? selectedLibrary : null);
     const normalize = (value) =>
       String(value ?? '')
         .trim()
@@ -2324,6 +2391,7 @@ export default function OPACCatalog({
     const matchingEntries = books.filter((entry) => {
       if (!entry?.id || !entry?.libraryId) return false;
       if (Number(entry.totalCopies ?? 0) <= 0) return false;
+      if (activeBranchFilter && String(entry.libraryId) !== String(activeBranchFilter)) return false;
       const entryIsbn = normalizeIsbn(entry.isbn);
       const sameBook =
         selectedIsbn && entryIsbn
@@ -2968,123 +3036,250 @@ export default function OPACCatalog({
                 </p>
               </div>
             </div>
-            {readingListBooks.length > 0 && (
+            {/* READING LIST FILTER BAR */}
+            <div className="flex flex-col gap-3">
               <label className="block">
                 <span className="sr-only">Search your reading list</span>
                 <input
                   type="search"
                   value={readingListSearch}
-                  onChange={(event) => setReadingListSearch(event.target.value)}
-                  placeholder="Search title, author, category, or ISBN"
-                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  onChange={(event) => {
+                    setReadingListPage(1);
+                    setReadingListSearch(event.target.value);
+                  }}
+                  placeholder="Search title, author, category, or ISBN..."
+                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
                 />
               </label>
-            )}
+
+              <div className="flex flex-col sm:flex-row flex-wrap gap-3">
+                <div className="w-full sm:w-auto sm:min-w-44">
+                  <label htmlFor="reading-list-category-filter" className="sr-only">Filter by category</label>
+                  <select
+                    id="reading-list-category-filter"
+                    value={readingListCategory}
+                    onChange={(event) => {
+                      setReadingListPage(1);
+                      setReadingListCategory(event.target.value);
+                    }}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none cursor-pointer dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+                  >
+                    <option value="All">All Categories</option>
+                    {readingListCategories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {formatBookCategory(cat)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="w-full sm:w-auto sm:min-w-40">
+                  <label htmlFor="reading-list-availability-filter" className="sr-only">Filter by availability</label>
+                  <select
+                    id="reading-list-availability-filter"
+                    value={readingListAvailability}
+                    onChange={(event) => {
+                      setReadingListPage(1);
+                      setReadingListAvailability(event.target.value);
+                    }}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none cursor-pointer dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+                  >
+                    <option value="All">All Statuses</option>
+                    <option value="Available">Available Only</option>
+                    <option value="Unavailable">Unavailable Only</option>
+                  </select>
+                </div>
+
+                <div className="w-full sm:w-auto sm:min-w-40">
+                  <label htmlFor="reading-list-sort-filter" className="sr-only">Sort reading list</label>
+                  <select
+                    id="reading-list-sort-filter"
+                    value={readingListSort}
+                    onChange={(event) => {
+                      setReadingListPage(1);
+                      setReadingListSort(event.target.value);
+                    }}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none cursor-pointer dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+                  >
+                    <option value="title-asc">Title (A-Z)</option>
+                    <option value="title-desc">Title (Z-A)</option>
+                    <option value="author-asc">Author (A-Z)</option>
+                    <option value="author-desc">Author (Z-A)</option>
+                    <option value="available">Most Available</option>
+                    <option value="newest">Newest First</option>
+                  </select>
+                </div>
+
+                <div className="w-full sm:w-auto sm:min-w-36">
+                  <label htmlFor="reading-list-page-size" className="sr-only">Rows per page</label>
+                  <select
+                    id="reading-list-page-size"
+                    value={readingListPageSize}
+                    onChange={(event) => {
+                      setReadingListPage(1);
+                      setReadingListPageSize(Number(event.target.value));
+                    }}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none cursor-pointer dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+                  >
+                    <option value={10}>10 per page</option>
+                    <option value={20}>20 per page</option>
+                    <option value={30}>30 per page</option>
+                    <option value={40}>40 per page</option>
+                    <option value={50}>50 per page</option>
+                    <option value={100}>100 per page</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
             {readingListLoading ? (
-              <div className="rounded-xl border border-slate-200 bg-white p-10 text-center">
-                <p className="text-sm text-slate-500">
+              <div className="rounded-xl border border-slate-200 bg-white p-10 text-center dark:border-slate-700 dark:bg-slate-800">
+                <p className="text-sm text-slate-500 dark:text-slate-400">
                   Loading your reading list...
                 </p>
               </div>
             ) : readingListBooks.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
-                <Bookmark size={32} className="mx-auto text-slate-300" aria-hidden="true" />
-                <h3 className="mt-3 text-base font-bold text-slate-700">
+              <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center dark:border-slate-700 dark:bg-slate-800">
+                <Bookmark size={32} className="mx-auto text-slate-300 dark:text-slate-600" aria-hidden="true" />
+                <h3 className="mt-3 text-base font-bold text-slate-700 dark:text-slate-200">
                   Your reading list is empty. Go explore the catalog!
                 </h3>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                   Save books you want to revisit later from the catalog or book details.
                 </p>
               </div>
             ) : readingListFilteredBooks.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center dark:border-slate-700 dark:bg-slate-800">
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">No saved books match that search.</p>
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">No saved books match that filter or search.</p>
                 <button
                   type="button"
-                  onClick={() => setReadingListSearch('')}
-                  className="mt-3 min-h-11 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-100"
+                  onClick={() => {
+                    setReadingListSearch('');
+                    setReadingListCategory('All');
+                    setReadingListAvailability('All');
+                    setReadingListPage(1);
+                  }}
+                  className="mt-3 min-h-11 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700"
                 >
-                  Clear search
+                  Clear filters
                 </button>
               </div>
             ) : (
-              <div className="visitor-book-collection-grid visitor-reading-list-grid">
-                {readingList.visibleItems.map((book) => (
-                  <article
-                    key={book.id}
-                    className="visitor-book-card visitor-reading-list-card"
-                  >
-                    <span
-                      className={`opac-book-card-availability visitor-status ${
-                        Number(book.availableCopies || 0) > 0
-                          ? 'visitor-status-success'
-                          : 'visitor-status-neutral'
-                      }`}
+              <>
+                <div className="visitor-book-collection-grid visitor-reading-list-grid">
+                  {visibleReadingListBooks.map((book) => (
+                    <article
+                      key={book.id}
+                      className="visitor-book-card visitor-reading-list-card"
                     >
-                      {Number(book.availableCopies || 0) > 0
-                        ? `${book.availableCopies} copies available`
-                        : 'Unavailable'}
-                    </span>
-                    <div className="visitor-book-card-inner visitor-reading-list-inner">
-                      <div className="visitor-reading-list-main">
-                        <BookCover
-                          src={book.coverUrl}
-                          title={book.title || 'Untitled Book'}
-                          className="visitor-book-cover"
-                        />
-                        <div className="visitor-reading-list-details">
-                          <span className="visitor-book-card-badge visitor-book-card-badge-neutral category-chip">
-                            {formatBookCategory(book.category) || 'Uncategorized'}
-                          </span>
-                          <h3 title={book.title || 'Untitled Book'}>
-                            {book.title || 'Untitled Book'}
-                          </h3>
-                          <p title={book.author || 'Unknown Author'}>
-                            By {book.author || 'Unknown Author'}
-                          </p>
-                          <p className="visitor-reading-list-isbn tabular-nums">
-                            ISBN: {book.isbn || '—'}
-                          </p>
-                          {book.callNumber && (
-                            <p className="visitor-reading-list-isbn tabular-nums">
-                              Call Number: {book.callNumber}
+                      <span
+                        className={`opac-book-card-availability visitor-status ${
+                          Number(book.availableCopies || 0) > 0
+                            ? 'visitor-status-success'
+                            : 'visitor-status-neutral'
+                        }`}
+                      >
+                        {Number(book.availableCopies || 0) > 0
+                          ? `${book.availableCopies} copies available`
+                          : 'Unavailable'}
+                      </span>
+                      <div className="visitor-book-card-inner visitor-reading-list-inner">
+                        <div className="visitor-reading-list-main">
+                          <BookCover
+                            src={book.coverUrl}
+                            title={book.title || 'Untitled Book'}
+                            className="visitor-book-cover"
+                          />
+                          <div className="visitor-reading-list-details">
+                            <span className="visitor-book-card-badge visitor-book-card-badge-neutral category-chip">
+                              {formatBookCategory(book.category) || 'Uncategorized'}
+                            </span>
+                            <h3 title={book.title || 'Untitled Book'}>
+                              {book.title || 'Untitled Book'}
+                            </h3>
+                            <p title={book.author || 'Unknown Author'}>
+                              By {book.author || 'Unknown Author'}
                             </p>
-                          )}
+                            <p className="visitor-reading-list-isbn tabular-nums">
+                              ISBN: {book.isbn || '—'}
+                            </p>
+                            {book.callNumber && (
+                              <p className="visitor-reading-list-isbn tabular-nums">
+                                Call Number: {book.callNumber}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="visitor-book-card-footer visitor-reading-list-footer">
+                          <div className="visitor-book-card-reading-actions">
+                            <button
+                              type="button"
+                              ref={bookModalTriggerRef}
+                              onClick={() => handleBookSelect(book, { currentTarget: bookModalTriggerRef.current })}
+                              className="rounded-lg bg-shelf-primary px-3 py-2 text-sm font-bold text-white hover:opacity-90"
+                            >
+                              View Details
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleReadingList(book)}
+                              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
+                              disabled={savingReadingListBookId === book.id}
+                            >
+                              {savingReadingListBookId === book.id ? 'Saving...' : 'Remove'}
+                            </button>
+                          </div>
                         </div>
                       </div>
-                      <div className="visitor-book-card-footer visitor-reading-list-footer">
-                        <div className="visitor-book-card-reading-actions">
+                    </article>
+                  ))}
+                </div>
+
+                {readingListTotalPages > 1 && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <p className="text-xs text-slate-600 dark:text-slate-300" aria-live="polite">
+                      Showing {(visibleReadingListPage - 1) * readingListPageSize + 1}–{Math.min(visibleReadingListPage * readingListPageSize, readingListFilteredBooks.length)} of {readingListFilteredBooks.length} books
+                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setReadingListPage((p) => Math.max(1, p - 1))}
+                        disabled={visibleReadingListPage === 1}
+                        className="min-h-9 rounded-lg border border-slate-300 px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+                      >
+                        Previous
+                      </button>
+                      {readingListPaginationItems.map((item) =>
+                        typeof item === 'number' ? (
                           <button
+                            key={item}
                             type="button"
-                            ref={bookModalTriggerRef}
-                            onClick={() => handleBookSelect(book, { currentTarget: bookModalTriggerRef.current })}
-                            className="rounded-lg bg-shelf-primary px-3 py-2 text-sm font-bold text-white hover:opacity-90"
+                            onClick={() => setReadingListPage(item)}
+                            aria-current={visibleReadingListPage === item ? 'page' : undefined}
+                            className={`min-h-9 min-w-9 rounded-lg px-2 text-xs font-bold transition ${
+                              visibleReadingListPage === item
+                                ? 'bg-shelf-primary text-white'
+                                : 'border border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700'
+                            }`}
                           >
-                            View Details
+                            {item}
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => handleToggleReadingList(book)}
-                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                            disabled={savingReadingListBookId === book.id}
-                          >
-                            {savingReadingListBookId === book.id ? 'Saving...' : 'Remove'}
-                          </button>
-                        </div>
-                      </div>
+                        ) : (
+                          <span key={item} className="px-2 text-slate-400">…</span>
+                        )
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setReadingListPage((p) => Math.min(readingListTotalPages, p + 1))}
+                        disabled={visibleReadingListPage === readingListTotalPages}
+                        className="min-h-9 rounded-lg border border-slate-300 px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+                      >
+                        Next
+                      </button>
                     </div>
-                  </article>
-                ))}
-                <ProgressiveListFooter
-                  noun="books"
-                  totalCount={readingListFilteredBooks.length}
-                  visibleCount={readingList.visibleCount}
-                  hasMore={readingList.hasMore}
-                  loadMore={readingList.loadMore}
-                  sentinelRef={readingList.sentinelRef}
-                  className="col-span-full w-full"
-                />
-              </div>
+                  </div>
+                )}
+              </>
             )}
           </section>
         ) : activeView === 'communityBooks' ? (
@@ -4016,10 +4211,11 @@ export default function OPACCatalog({
                       request.status === 'borrowed' &&
                       request.dueDate && clockNow > 0 && new Date(request.dueDate).getTime() < clockNow;
                     const finePaidAmount = Number(request.finePaidAmount ?? request.fine_paid_amount ?? 0);
+                    const fineAmount = Number(request.fineAmount ?? request.fine_amount ?? 0);
                     const isFinePaid = Boolean(
                       request.fineStatus === 'paid' ||
                       request.fine_status === 'paid' ||
-                      (isOverdue && finePaidAmount > 0 && currentFine <= 0)
+                      (finePaidAmount > 0 && (currentFine <= 0 || (fineAmount > 0 && finePaidAmount >= fineAmount)))
                     );
                     const overdueDays =
                       request.dueDate && isOverdue

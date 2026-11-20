@@ -207,22 +207,22 @@ export default function QrScanner({
         </button>
       ) : (
         <div className="fixed inset-0 z-200 grid place-items-center bg-slate-950/70 p-4" role="dialog" aria-modal="true" aria-label="Scan visitor QR code">
-          <div className="w-full max-w-xs space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-2xl">
+          <div className="w-full max-w-xs space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-800">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Scan Visitor QR Code</h3>
-                <p className="mt-1 text-xs text-slate-600">Position the QR pass inside the square.</p>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Scan Visitor QR Code</h3>
+                <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Position the QR pass inside the square.</p>
               </div>
               <button
                 type="button"
                 onClick={stopCamera}
                 aria-label="Stop camera"
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-100"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700"
               >
                 <X size={18} aria-hidden="true" />
               </button>
             </div>
-            <div className="mx-auto aspect-square max-w-[240px] w-full overflow-hidden rounded-lg border border-slate-300 bg-black">
+            <div className="mx-auto aspect-square max-w-[200px] w-full overflow-hidden rounded-lg border border-slate-300 bg-black dark:border-slate-600">
               <div
                 id={scannerId}
                 className="h-full min-h-0 w-full [&_video]:h-full [&_video]:w-full [&_video]:object-cover [&_canvas]:h-full [&_canvas]:w-full"

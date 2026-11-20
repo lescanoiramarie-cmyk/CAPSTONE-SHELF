@@ -33,7 +33,6 @@ import {
   FileText,
   X,
   Settings,
-  Sliders,
 } from 'lucide-react';
 import VisitorScanDetails from '../../component/VisitorScanDetails.jsx';
 import SubAdminTermsContent, {

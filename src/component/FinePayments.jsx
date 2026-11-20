@@ -18,6 +18,7 @@ import {
   FINE_PAYMENT_ANALYTICS_RPC,
   sanitizeFinePaymentAnalyticsRows,
 } from '../lib/finePaymentAnalytics.js';
+import { submitFinePayment } from '../lib/finePaymentSubmission.js';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend);
 
@@ -43,6 +44,7 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
   const [method, setMethod] = useState('cash');
   const [reference, setReference] = useState('');
   const [note, setNote] = useState('');
+  const [paymentIdempotencyKey, setPaymentIdempotencyKey] = useState('');
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState({ error: '', message: '' });
   const [historyFor, setHistoryFor] = useState(null);
@@ -149,22 +151,30 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
     setMethod('cash');
     setReference('');
     setNote('');
+    setPaymentIdempotencyKey(globalThis.crypto?.randomUUID?.() || '');
     setFeedback({ error: '', message: '' });
   };
 
   const submitPayment = async (event) => {
     event.preventDefault();
     if (!selectedFine || saving) return;
+    if (!paymentIdempotencyKey) {
+      setFeedback({ error: 'Secure payment retry protection is unavailable in this browser.', message: '' });
+      return;
+    }
     setSaving(true);
     setFeedback({ error: '', message: '' });
-    const { error } = await supabase.rpc('record_fine_payment', {
-      p_request_id: selectedFine.request_id,
-      p_amount: Number(amount),
-      p_payment_method: method,
-      p_reference_number: reference.trim() || null,
-      p_note: note.trim() || null,
-    });
-    if (error) {
+    try {
+      await submitFinePayment({
+        rpc: supabase.rpc.bind(supabase),
+        requestId: selectedFine.request_id,
+        amount: Number(amount),
+        paymentMethod: method,
+        referenceNumber: reference.trim() || null,
+        note: note.trim() || null,
+        idempotencyKey: paymentIdempotencyKey,
+      });
+    } catch (error) {
       setFeedback({ error: error.message || 'Unable to record this payment.', message: '' });
       setSaving(false);
       return;

@@ -9,7 +9,9 @@ export function maskReviewerName(fullName) {
     return 'Verified Reader';
   }
 
-  const trimmed = fullName.trim();
+  let trimmed = fullName.trim();
+  // Strip synthetic test prefix if present
+  trimmed = trimmed.replace(/^\[test\]\s*/i, '').trim();
   if (!trimmed || trimmed.toLowerCase() === 'verified reader') {
     return 'Verified Reader';
   }

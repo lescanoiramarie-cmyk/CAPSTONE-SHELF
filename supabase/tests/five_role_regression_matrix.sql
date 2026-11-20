@@ -1,216 +1,30 @@
--- Phase 3: Group 11 - Authorization Role Regression Test Matrix
--- CORRECTED: Actual authorization roles in the system (based on database constraints and RPC contracts)
---
--- DATABASE ROLES (staff_profiles table constraint):
---   - superadmin (library_id = NULL)
---   - subadmin (library_id = <branch>)
---
--- VISITOR AUTHORIZATION (visitors table + get_current_user_role RPC):
---   - visitor (all approved visitors: institutional + community, otp_verified=true, is_active=true)
---   - community_pending is an ACCOUNT STATE (communityApprovalPending=true), NOT an authorization role
---     - Frontend sets role='community_pending' for routing to /visitor/pending-approval
---     - RPC get_current_user_role returns 'visitor' for all verified visitors
---     - Authorization is enforced by RLS and application logic, not by a separate role
---
--- REGISTRATION TYPES (visitor attribute, not authorization role):
---   - institutional (email domain validated)
---   - community (requires librarian approval -> communityApprovalPending=true initially)
---
--- ACCOUNT STATES:
---   - is_active = true/false
---   - otp_verified = true/false
---   - communityApprovalPending = true/false
---
--- AAL Requirements:
--- - Visitor operations (all visitor RPCs): AAL1 (OTP verified session)
--- - Staff operations (all staff RPCs): AAL2 (MFA verified session)
---
--- NOTE: 'librarian' and 'circulation' appear in frontend display formatting (formatStaffRole)
---       but are NOT in the staff_profiles table constraint and NOT returned by get_current_user_role RPC.
---       They are display aliases only and have no authorization significance.
---
--- This test matrix MUST be executed against a live Supabase project with:
---   - Real Auth users for each authorization role
---   - Real MFA enrollment for staff roles
---   - Proper app_metadata.role set for each user
---   - All 156+ migrations applied
---   - RLS policies active
---
--- DO NOT claim regression verification from:
---   - Source code inspection only
---   - Mocked Auth sessions
---   - Unit tests without real database
+-- Executable contract smoke checks for app authorization states. Real signed
+-- Auth sessions for each role are exercised by the opt-in PostgREST suite;
+-- catalog existence here is not reported as an authorization behavior pass.
+CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
+BEGIN;
+SELECT extensions.plan(5);
 
--- ============================================================================
--- AUTHORIZATION ROLE 1: VISITOR (AAL1) - Includes both institutional and community approved
--- ============================================================================
--- Auth: email/password + OTP verified (otp_verified=true), is_active=true
--- visitors.communityApprovalPending = false (approved)
--- registration_type: 'institutional' OR 'community' (attribute, not role)
--- app_metadata: { role: 'visitor' } (or derived from visitors table)
--- Frontend role: 'visitor' (routes to /visitor)
--- Expected accessible routes:
---   /visitor                    -> VisitorDashboard
---   /catalog                    -> OPACCatalog (public books + own personal books)
---   /visitor-login              -> Login page
--- Expected DENIED routes:
---   /visitor/pending-approval   -> Redirect to /visitor
---   /subadmin                   -> Redirect to /visitor
---   /subadmin/attendance-kiosk  -> Redirect to /visitor
---   /superadmin                 -> Redirect to /visitor
--- API/RPC permissions:
---   CAN: request_borrow_v2, get_visitor_borrow_requests, add_personal_book
---   CAN: get_visitor_profile, get_current_user_role
---   CAN: get_fine_payment_dashboard (own fines only)
---   CANNOT: confirm_pickup, confirm_return, record_fine_payment
---   CANNOT: get_staff_borrowing_history, get_fine_payment_analytics
---   CANNOT: manage-staff, toggle_attendance (staff), send-due-date-notifications (manual)
--- RLS visibility:
---   visitors: own row only (auth_user_id = auth.uid())
---   borrow_requests: own requests only (visitor_id = own)
---   books: all library books (public catalog), available_copies visible
---   personal_books: own books only
---   fine_payments: own fines only (via RPC)
--- Status: PENDING - Requires live Auth + DB verification
+SELECT extensions.ok(
+  to_regprocedure('public.get_current_user_role()') IS NOT NULL,
+  'Current-user role resolver is present'
+);
+SELECT extensions.ok(
+  to_regprocedure('public.get_visitor_profile()') IS NOT NULL,
+  'Visitor identity/profile RPC is present'
+);
+SELECT extensions.ok(
+  to_regprocedure('public.approve_community_visitor(text)') IS NOT NULL,
+  'Community approval workflow RPC is present'
+);
+SELECT extensions.ok(
+  to_regprocedure('public.is_active_staff_for_branch(text)') IS NOT NULL,
+  'Branch-scoped staff authorization helper is present'
+);
+SELECT extensions.ok(
+  to_regprocedure('public.is_shelf_superadmin()') IS NOT NULL,
+  'Global super-admin authorization helper is present'
+);
 
--- ============================================================================
--- AUTHORIZATION ROLE 2: COMMUNITY_PENDING (AAL1) - Account state, not separate role
--- ============================================================================
--- Auth: email/password + OTP verified (otp_verified=true), is_active=true
--- visitors.communityApprovalPending = true (awaiting librarian approval)
--- registration_type: 'community'
--- app_metadata: { role: 'visitor' } (RPC returns 'visitor')
--- Frontend role: 'community_pending' (routes to /visitor/pending-approval) - FRONTEND STATE ONLY
--- Expected accessible routes:
---   /visitor/pending-approval   -> CommunityVisitorPending
---   /visitor-login              -> Login page
--- Expected DENIED routes:
---   /visitor                    -> Redirect to /visitor/pending-approval
---   /catalog                    -> Redirect to /visitor/pending-approval
---   /subadmin                   -> Redirect to /visitor/pending-approval
---   /superadmin                 -> Redirect to /visitor/pending-approval
--- API/RPC permissions:
---   CAN: View own pending status only (get_visitor_profile returns communityApprovalPending=true)
---   CANNOT: request_borrow_v2, borrow books
---   CANNOT: Access OPAC catalog (public books) - per requirements
---   CANNOT: Any staff operations
--- RLS visibility:
---   visitors: own row only (communityApprovalPending = true)
---   borrow_requests: NONE (no borrowing allowed)
---   books: NONE (no catalog access per requirements)
--- Status: PENDING - Requires live Auth + DB verification
-
--- ============================================================================
--- AUTHORIZATION ROLE 3: SUBADMIN - AAL2 (MFA Required)
--- ============================================================================
--- Auth: email/password + TOTP MFA (aal2)
--- staff_profiles: role='subadmin', library_id=<branch>, is_active=true
--- app_metadata: { role: 'subadmin', library_id: <branch> }
--- Frontend role: 'subadmin' (routes to /subadmin)
--- Expected accessible routes:
---   /subadmin                   -> SubAdminDashboard
---   /subadmin/attendance-kiosk  -> AttendanceKiosk
---   /catalog                    -> OPACCatalog (branch-scoped)
--- Expected DENIED routes:
---   /visitor                    -> Redirect to /subadmin
---   /visitor/pending-approval   -> Redirect to /subadmin
---   /superadmin                 -> Redirect to /subadmin
--- API/RPC permissions:
---   CAN: confirm_pickup, confirm_return (branch-scoped)
---   CAN: record_fine_payment, review_fine_payment (branch-scoped)
---   CAN: get_staff_borrowing_history (branch-scoped)
---   CAN: get_fine_payment_analytics (branch-scoped)
---   CAN: toggle_attendance (branch-scoped)
---   CAN: send-due-date-notifications (manual, branch-scoped)
---   CAN: manage announcements, books (branch-scoped)
---   CANNOT: manage-staff (superadmin only)
---   CANNOT: Cross-branch operations
---   CANNOT: Visitor-facing RPCs (get_visitor_profile, request_borrow_v2)
--- RLS visibility:
---   staff_profiles: own profile + subadmins in same branch (via is_active_staff_for_branch)
---   borrow_requests: branch-scoped (library_id = own library_id)
---   books: branch-scoped (library_id = own library_id)
---   visitors: branch-scoped (library_id = own library_id)
---   fine_payments: branch-scoped
---   attendance_logs: branch-scoped
--- Status: PENDING - Requires live Auth (AAL2) + DB verification
-
--- ============================================================================
--- AUTHORIZATION ROLE 4: SUPERADMIN - AAL2 (MFA Required)
--- ============================================================================
--- Auth: email/password + TOTP MFA (aal2)
--- staff_profiles: role='superadmin', library_id=NULL, is_active=true
--- app_metadata: { role: 'superadmin' }
--- Frontend role: 'superadmin' (routes to /superadmin)
--- Expected accessible routes:
---   /superadmin                 -> SuperAdminDashboard
---   /catalog                    -> OPACCatalog (all branches)
--- Expected DENIED routes:
---   /visitor                    -> Redirect to /superadmin
---   /visitor/pending-approval   -> Redirect to /superadmin
---   /subadmin                   -> Redirect to /superadmin
---   /subadmin/attendance-kiosk  -> Redirect to /superadmin
--- API/RPC permissions:
---   CAN: ALL staff operations across ALL branches
---   CAN: manage-staff (create/update/delete subadmins)
---   CAN: get_staff_borrowing_history (all branches)
---   CAN: get_fine_payment_analytics (all branches)
---   CAN: library subscriptions, upgrades, terminations
---   CAN: terms documents management
---   CANNOT: Visitor-facing RPCs (get_visitor_profile, request_borrow_v2)
---   CANNOT: Borrow books as visitor
--- RLS visibility:
---   staff_profiles: ALL (superadmin bypasses RLS via service_role in Edge Functions)
---   borrow_requests: ALL branches
---   books: ALL branches
---   visitors: ALL branches
---   fine_payments: ALL branches
---   libraries: ALL
--- Status: PENDING - Requires live Auth (AAL2) + DB verification
-
--- ============================================================================
--- CROSS-ROLE SECURITY ASSERTIONS
--- ============================================================================
--- 1. Visitor CANNOT escalate to staff via RPC manipulation
--- 2. Community_pending (account state) CANNOT access catalog or borrowing
--- 3. Subadmin CANNOT access other branches' data
--- 4. Subadmin CANNOT manage staff accounts
--- 5. Superadmin CANNOT borrow books (no visitor profile)
--- 6. AAL1 session CANNOT call AAL2-required RPCs (403)
--- 7. AAL2 session CAN call AAL1 RPCs (but not visitor RPCs)
--- 8. Expired MFA session CANNOT perform staff operations
--- 9. Inactive staff account CANNOT access any staff routes/RPCs
--- 10. Role mismatch between app_metadata and staff_profiles -> 403
--- 11. Registration type (institutional/community) does not affect authorization after approval
--- 12. 'librarian'/'circulation' display roles have NO authorization significance
-
--- ============================================================================
--- TEST EXECUTION REQUIREMENTS
--- ============================================================================
--- For EACH authorization role, test:
---   [ ] Route access control (allowed/denied)
---   [ ] RPC authorization (success/403 for each endpoint)
---   [ ] RLS data visibility (SELECT counts match expected scope)
---   [ ] AAL enforcement (AAL1 vs AAL2)
---   [ ] Session persistence across refresh
---   [ ] Logout clears session
---   [ ] Idle timeout behavior
---   [ ] Cross-role API call attempts (should fail)
---
--- For EACH RPC, test with EACH authorization role:
---   [ ] get_current_user_role()
---   [ ] get_visitor_profile()
---   [ ] get_visitor_borrow_requests()
---   [ ] request_borrow_v2()
---   [ ] confirm_pickup()
---   [ ] confirm_return()
---   [ ] record_fine_payment()
---   [ ] review_fine_payment()
---   [ ] get_staff_borrowing_history()
---   [ ] get_fine_payment_analytics()
---   [ ] get_fine_payment_dashboard()
---   [ ] toggle_attendance()
---   [ ] send-due-date-notifications (cron vs manual)
---   [ ] manage-staff operations
---
--- Status: BLOCKED - Requires isolated Supabase project with real Auth/MFA
+SELECT * FROM extensions.finish();
+ROLLBACK;

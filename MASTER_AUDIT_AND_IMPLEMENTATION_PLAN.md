@@ -2053,10 +2053,298 @@ The unit test suite (`npm test`) reports 301 total tests: **258 passed, 0 failed
 
 ---
 
+## Phase 21 — Final Defect Investigation, Critical UI Reconciliation, and Migration 177 Validation
+
+### 1. Defects Identified & Resolved
+1. **Notification Click Routing & Blank Screen:**
+   - In `ShelfHeader.jsx`, `item` was mapped with property `type: r.notification_type`.
+   - `VisitorDashboard.jsx` previously checked `item?.notificationType` only, causing notification clicks to default to `setTab('catalog')` and wiping the view without targeting records.
+   - Reconciled to inspect `item?.type || item?.notificationType || item?.notification_type || item?.referenceType || item?.reference_type`.
+   - Dynamically routes feedback notifications to `services` and scrolls to `#visitor-feedback-history`.
+   - Routes owner requests to `personalBooks` and focuses `#owner-request-${targetId}`.
+   - Routes fine reminders and overdue notices to `myBorrows` with `setShowFineOnly(true)` while clearing fine-only filter on general borrow notifications.
+2. **Community Books "Saved" Persistence & False Warnings:**
+   - In `OPACCatalog.jsx`, added `activeView` to the `getSavedCommunityBooks` effect dependency array, ensuring saved community books refresh whenever visitors navigate to `'savedBooks'`.
+   - Added `(b.is_public IS TRUE OR b.lending_enabled IS TRUE)` in `get_saved_community_books` and `save_community_book_for_later` to prevent books with `lending_enabled = true` from disappearing.
+   - Reconciled `unsave_community_book_for_later` to be strictly idempotent, preventing the spurious "Book was not in your saved list" toast when removing books.
+3. **Ratings & Reviewer Name Masking:**
+   - Updated `maskReviewerName.js` to strip `[TEST] ` or `[test] ` test prefixes before masking.
+   - Reconciled SQL RPC `get_book_reviews` to fall back to `review.visitor_name` when `v.full_name` is absent, and apply `mask_reviewer_name` to return masked initials (e.g. `K*** M.`).
+4. **My Reading List UI, Filter Toolbar, and Card Gaps:**
+   - Integrated full filter toolbar into "My Reading List" view: Search input, Category dropdown, Availability dropdown, Sort dropdown, and Rows per page selector (10, 20, 30, 40, 50, 100).
+   - Added standard numbered pagination matching Community Books.
+   - Replaced card grid gaps in `visitorDashboard.css` with `grid-template-columns: repeat(auto-fill, minmax(min(100%, 16.5rem), 1fr))` and `gap: 1rem` to eliminate wasted whitespace.
+5. **Branch-Scoped Borrowing:**
+   - Scoped `getPartnerLibraryEntries` in `OPACCatalog.jsx` to filter partner library entries by `libraryFilter` or active `selectedLibrary` when a specific branch is selected, preventing borrowing from other branches when filtered.
+6. **Book Transactions Scanner Container:**
+   - Shrunk oversized scanner container in `BookTransactions.jsx` from `max-w-md p-5` to `max-w-sm p-4 space-y-3`.
+   - Reduced `QrScanner.jsx` camera aspect-square box from `max-w-[240px]` to `max-w-[200px]` with dark mode borders.
+7. **Inventory Rows-Per-Page Selector:**
+   - Removed redundant duplicate bottom selector from `BookInventory.jsx` while preserving the clean single selector beside the top filter toolbar.
+8. **PostgreSQL RPC Errors & Handover Text/UUID Type Mismatch:**
+   - Reconciled `get_library_subscription_dashboard` in migration 177: replaced invalid `pg_catalog.current_date` with `CURRENT_DATE`, resolving `missing FROM-clause entry for table pg_catalog`.
+   - Reconciled `confirm_pickup` and `confirm_return` with primary `(p_request_id text, p_staff_name text)` signatures matching `borrow_requests.id` type (`text`), plus backward-compatible `(uuid, text)` overloads delegating via `p_request_id::text`.
+   - Reconciled `confirm_pickup_v2` and `confirm_return_v2` to prioritize `public.confirm_pickup(text,text)` and validate UUID regex format before any fallback `::uuid` cast, preventing `invalid input syntax for type uuid: "REQ-..."`.
+   - Added `'visitor_feedback'` and `'feedback'` to `visitor_notifications` reference type constraint, and updated `create_visitor_notification` to cast text `p_reference_id` safely to UUID.
+9. **Fine Payments Persistence & Overdue Paid History:**
+   - Reconciled `record_fine_payment_subadmin_internal` in migration 177 to update `borrow_requests.fine_amount = GREATEST(COALESCE(fine_amount, 0), v_fine_amount)` alongside `fine_paid_amount`. This permanently prevents paid overdue transactions from reverting back to `Overdue` on subsequent day page refreshes.
+   - Updated `calculateCurrentFine` and `isFinePaid` in `OPACCatalog.jsx` and `VisitorDashboard.jsx` to respect `fineStatus === 'paid'`, persisted `finePaidAmount >= fineAmount`, and render green "Paid" badges with ₱0.00 balance for all paid loans.
+10. **ESLint Codebase Cleanliness:**
+   - Cleaned up obsolete React Leaflet components (`FocusBranch`, `FitLibraries`), unused references (`focusedMarkerRef`, `markerCoordinates`), and unused icons in `LibraryMap.jsx` and `SubAdminDashboard.jsx`.
+   - Refactored `setMyRequestSearch` filter reset in `OPACCatalog.jsx` to defer timer execution, satisfying React compiler and strict effect rules.
+   - `npm run lint` now passes with **0 errors, 0 warnings**.
+
+### 2. Application Verification Results
+- `node scripts/validate-migrations.mjs`: **177/177 migrations valid** (0 errors, SHA-256 manifest verified).
+- `npm test`: **261 passed, 0 failed, 43 skipped** (includes new suite `src/lib/transactionHandoverAndFineHistoryRegression.test.js`).
+- `npm run build`: **Vite production build succeeded cleanly in 4.56s**.
+- `npm run lint`: **0 problems (0 errors, 0 warnings)**.
+
+---
+
 ## Final Production Verdict
-**`VERIFICATION COMPLETE — MIGRATION 176 VALIDATED AND SYSTEM RECONCILED`**
+**`VERIFICATION COMPLETE — MIGRATION 177 VALIDATED AND SYSTEM RECONCILED`**
+
+---
+
+## Phase 22 — Final Pre-Commit and Migration 177 Release Gate (2026-11-20)
+
+This phase supersedes the Phase 21 final verdict above. Migration 177 has **not** been executed or replayed against PostgreSQL. Source-level checks and a successful frontend build do not validate SQL execution, production state, or release readiness.
+
+### Git and file scope
+
+- Branch `main`, HEAD `4ae54f1b6c112f384800a55f1fedc809c77d24ba`; `origin/main...HEAD` is `0 0` (same commit).
+- Nothing is staged. The complete worktree contains 11 modified tracked files and 16 untracked paths (including the reconciliation report directory). Tracked modifications: this checklist, `scripts/validate-migrations.mjs`, `src/component/BookInventory.jsx`, `src/component/BookTransactions.jsx`, `src/component/LibraryMap.jsx`, `src/component/OPACCatalog.jsx`, `src/component/QrScanner.jsx`, `src/lib/maskReviewerName.js`, `src/pages/subadmin/SubAdminDashboard.jsx`, `src/pages/visitor/VisitorDashboard.jsx`, and `src/pages/visitor/visitorDashboard.css`.
+- Migration 177 itself is the untracked `supabase/migrations/20270127000000_reconcile_transactions_subscription_and_notifications.sql`; its associated local static regression test is `src/lib/transactionHandoverAndFineHistoryRegression.test.js`, and the migration validator has a tracked count adjustment. The UI changes and the five untracked audit/procedure reports are additional mixed worktree scope, not all part of Migration 177.
+- Other untracked files are five prior audit/restore-procedure documents, diagnostic/reconciliation SQL and PowerShell/Node scripts, a prior output report, and `backup-production-db.ps1.damaged.20261118_193618`. They remain preserved and are not approved for staging or execution. In particular, the damaged backup candidate remains untrusted. The untracked secure-psql helper tests assert `sslmode=require`; do not use those scripts for production identity verification because they do not prove hostname verification.
+- No `.env`/credential-named file is staged, and the current tracked paths include only `.env.example` templates. Git history does contain `.env` paths (for example commits `d30d9df`, `3777811`, `5188896`, `5231b33`, and `3b12c95`). Their contents were not read or disclosed; an owner must privately determine whether any historical blob held real credentials and rotate any exposed credential through the approved process.
+- A full PostgreSQL replay environment was not available; no production connection, migration, Docker/WSL operation, or deployment was attempted.
+
+### Migration 177 review — FAIL / HOLD
+
+1. The checked-in `borrow_requests` schema defines `borrow_requests.id` as `uuid`, while Migration 177 repeatedly compares that column to `text` variables (`confirm_pickup`, `confirm_return`, their v2 wrappers, and `record_fine_payment_subadmin_internal`). These expressions include `br.id = v_req_id`, `request.id = v_trimmed_id`, and `br.id = v_trimmed_id`; PostgreSQL has no `uuid = text` operator. The migration comment claiming that the ID type is text contradicts the repository schema. Runtime execution is unverified, but these expressions are a concrete type mismatch against the local authoritative schema.
+2. Migration `20270118000000_fail_closed_attendance_lookup_role_claim.sql` changes the text pickup/return RPCs to require an exact JWT role claim. Migration 177 replaces those bodies with `COALESCE(v_jwt_role, v_staff_role) <> v_staff_role`, which accepts a missing claim; it also omits the AAL2 guard from the directly granted legacy text/UUID RPCs. Its v2 functions check AAL2 and exact claims, but the legacy overloads remain executable by `authenticated`, so the v2 check does not protect those entry points. This is a security regression.
+3. `create_visitor_notification` is `SECURITY DEFINER`, owned by `postgres`, and granted to `authenticated`. Its gate checks `current_user` for `postgres`/`service_role`; within a SECURITY DEFINER function `current_user` is the function owner, so the guard does not establish that the invoker is trusted. The callable function accepts a visitor ID and notification contents. This defeats the stated internal-only restriction and can cross visitor boundaries.
+4. UUID overloads delegate to text overloads and preserve names/signatures. Distinct `_v2` names were introduced in migration `20270102001400_borrow_handover_v2_rpcs.sql` specifically to give PostgREST unambiguous endpoints. The frontend search found no direct `.rpc('confirm_pickup'/'confirm_return')` call; SQL callers and legacy compatibility still require a real catalog/replay check. Do not treat overload existence as evidence of PostgREST routing correctness.
+5. `record_fine_payment_subadmin_internal(text, numeric, text, text, text)` is owned by postgres, has an empty `search_path`, and is revoked from `PUBLIC`, `anon`, `authenticated`, and `service_role`; its public wrapper is the intended entry point. The function locks the request, checks AAL2, uses snapshot/book fine rates, retains assessed amounts, inserts a `fine_payments` row, increments `fine_paid_amount`, and does not change loan status. However, comparisons against `uuid` request IDs and database execution remain blockers. It has no idempotency key: a retried partial-payment call can create another payment row; the only check is against the remaining balance. Do not claim duplicate-call safety without database tests and an explicit idempotency design.
+6. The local test `transactionHandoverAndFineHistoryRegression.test.js` checks source text, not PostgreSQL behavior or realistic database fixtures. Paid-overdue persistence, returned paid fines, outstanding balances, payment history, and “payment does not return a book” have not been verified against a database.
+
+### Skipped tests — 43 (none counted as passing)
+
+- `src/lib/fiveRoleRegressionBlocked.test.js` (27): for each of `visitor (aal1)`, `community_pending (aal1)`, `subadmin (aal2)`, `superadmin (aal2)`: `route access`, `RPC authorization`, `RLS data visibility`, `AAL enforcement`, and `cross-role API isolation`; plus `visitor cannot call staff RPCs`, `community_pending cannot access catalog`, `subadmin cannot access other branch data`, `subadmin cannot manage staff`, `superadmin cannot borrow books`, `AAL1 session rejected by AAL2 RPCs`, and `role mismatch (app_metadata vs staff_profiles) -> 403`.
+- `src/lib/concurrencyBlocked.test.js` (8): `two visitors borrowing final copy`, `two simultaneous pickup confirmations`, `two simultaneous return confirmations`, `two fine payments exceeding outstanding balance`, `two simultaneous attendance check-ins`, `duplicate notifications after retries`, `cross-visitor borrow request isolation`, and `cross-library staff access isolation`.
+- `src/lib/migrationIntegrityBlocked.test.js` (8): `no_function_signature_conflicts`, `no_grant_expansion`, `function_ownership_search_path`, `rls_policy_coverage`, `function_volatility`, `type_consistency_visitor_id`, `SECURITY DEFINER functions have empty search_path`, and `no GRANT TO PUBLIC on SECURITY DEFINER functions`.
+- All are intentionally marked skipped pending an isolated PostgreSQL/Supabase environment and real Auth sessions. They cover security/RLS, RPC execution, migration catalog state, and concurrent production-critical workflows; this is a release blocker, not a passing test result.
+
+### Runtime claims and release gate
+
+| Runtime claim | Status | Evidence limit |
+|---|---|---|
+| Visitor login failures | NOT VERIFIED | No correlated sanitized request, Auth response, or Edge Function logs available in this review. |
+| Normal borrow request persistence | NOT VERIFIED | No real authenticated database flow or isolated migration replay. |
+| Fine alert RPC 404/403 | PARTIAL | Local migrations/source tests define and authorize the RPC; deployed schema cache and live role behavior are unknown. |
+| Visitor/SubAdmin/SuperAdmin notification isolation | FAIL in Migration 177 source | SECURITY DEFINER `current_user` gate and `authenticated` EXECUTE grant described above. Production deployment state is not asserted. |
+| Historical named paid transaction | NOT VERIFIED | No production payment data was queried; synthetic local tests are not evidence for a real record. |
+| Return confirmation/fine payment workflow | FAIL / BLOCKED | UUID/text operator mismatch and role-claim/AAL regression; no PostgreSQL execution. |
+| Plan & Subscription `pg_catalog` error | PARTIAL | Source replaces invalid `pg_catalog.current_date` with `CURRENT_DATE`; execution and live behavior unverified. |
+| Partner library visibility/permissions | NOT VERIFIED | Local branch filter change exists; no live branch/RLS test. |
+| Library Map and verified coordinates | PARTIAL | Leaflet code cleanup/build succeeded; no coordinate or map behavior verification. |
+| Dark mode consistency | PARTIAL | Local styling edits exist; no visual/systematic page verification. |
+| Fine analytics/privacy | PARTIAL | Local tests cover aggregate-only source contracts; production grants, role behavior, and deployment are unverified. |
+
+The current `OPACCatalog.jsx` diff also makes unsave optimistic and converts an RPC/network failure into `{ success: true }`, then shows a success message. A failed server-side delete can therefore leave a book saved while the UI reports success. This is a confirmed local UI defect and should be corrected with a regression test before committing.
+
+### Validation evidence
+
+- `node --test`: exit 0; **305 total, 262 passed, 0 failed, 43 skipped** (12.09 s). The skipped tests above are not passed.
+- `npm run lint`: exit 0; no diagnostics.
+- `npm run build`: exit 0; Vite built 2,216 modules. Vite emitted the existing large-chunk warning (some chunks exceed 500 kB).
+- `node scripts/validate-migrations.mjs`: exit 0; 177 filenames/hashes valid, 0 validator errors. This is manifest/source validation only, not PostgreSQL execution.
+- `git diff --check`: exit 0; only Git LF-to-CRLF working-copy warnings.
+- Isolated database replay and SQL/payment regression fixtures: **BLOCKED / NOT RUN**. `psql` was unavailable in this environment; no substitute static test is claimed as execution evidence.
+- Production migration history, production function/grant state, production backup/recovery, and live user behavior: **NOT VERIFIED** in this phase.
+
+### Decision
+
+- Safe to commit: **NO** — the 11 tracked edits and 16 untracked paths mix UI, diagnostics, reports, a damaged backup candidate, and Migration 177; the migration has unresolved type and security defects. No files were staged.
+- Safe to push: **NO** — local source/manifest checks do not clear the same blocking defects or establish a reviewed commit scope.
+- Safe to apply Migration 177 to production: **NO — HOLD** — static blockers above plus no isolated replay, fresh production history/catalog evidence, or verified recovery point.
+- Safe to deploy: **NO** — this migration and the coupled UI workflow are not release validated.
+- Safe for live user acceptance testing: **NO** for workflows depending on Migration 177; first fix the migration and run isolated database/Auth/RLS/payment/concurrency tests.
+
+**Next owner action:** authorize/prepare an isolated Supabase/PostgreSQL test project with synthetic Auth roles and the repository baseline. Correct Migration 177's UUID comparisons, restore AAL2 and exact role-claim checks on every executable handover signature, and replace the notification invoker guard with a trustworthy authorization design before replaying and rerunning the database regression suite. Keep production migration blocked until that replay passes and production history/recovery evidence is separately collected.
+
+
+## Phase 23 — Release-readiness remediation continuation (2026-11-20)
+
+This phase supersedes the outdated Phase 22 migration-177 defect summary above where the local tree now contains a correction. Existing entries are retained as historical evidence; they must not be read as current status.
+
+### Worktree and scope
+
+- Branch `main`, HEAD `4ae54f1b6c112f384800a55f1fedc809c77d24ba`, tracking `origin/main` at `0 ahead / 0 behind`; nothing staged. Existing modified/untracked work was preserved. The damaged backup file remains untouched and untrusted. No production endpoint, migration, or credential was used; no commit or push was made.
+- Application fixes in this phase: OPAC save/unsave now waits for the matching RPC, propagates returned/rejected errors, leaves saved-list state unchanged on failure, and suppresses duplicate same-book requests and stale updates after user change. Fine-payment UI now uses the six-argument idempotent RPC helper and retains the same UUID key for retries in one dialog.
+- Migration 177 now uses UUID request IDs internally after validating text input before cast; active staff and exact role claims plus AAL2 are required at handover entry points; legacy overloads are owner-only and named v2 endpoints are the authenticated API. Fine-payment retries use a private receipt keyed by staff and idempotency UUID, lock the borrow row, reject key reuse with changed payload, and do not change borrow status. The notification creation function is owner-only, with `PUBLIC`, `anon`, `authenticated`, and `service_role` revoked. The subscription dashboard keeps its current text signature/result shape and branch authorization. Return confirmation preserves `GREATEST(existing fine, newly calculated fine)`, including when no valid rate is available, so changed or missing rates cannot erase an assessed historical fine.
+- Important limitation: these are local source changes. Migration 177 has not completed PostgreSQL replay and has not been applied to production. The old Phase 22 text saying `borrow_requests.id` is text and that Migration 177 is definitively validated is not current; the checked-in schema says `borrow_requests.id` is UUID and Migration 177 now validates/casts before comparing UUID values.
+
+### Validation performed
+
+- `node --test --test-reporter=tap`: **315 tests, 272 passed, 0 failed, 43 skipped**, exit 0. Skips are unchanged and remain release blockers: 8 concurrency tests, 27 real-role/Auth/AAL/RLS tests, and 8 PostgreSQL catalog/security tests. None counts as passing.
+- `npm run lint`: exit 0, no diagnostics.
+- `npm run build`: exit 0; Vite build succeeded with a large-chunk advisory (>500 kB).
+- `node scripts/validate-migrations.mjs`: exit 0; 177 migration files, zero manifest validation errors. This does not establish SQL execution correctness.
+- `git diff --check`: exit 0; Git emitted only LF-to-CRLF working-copy warnings.
+- Python: Python 3.13.15 available; compiled both `analytics/*.py` source files without writing bytecode. `py -3 -B -m unittest analytics.test_main -v`: **9 tests passed**, exit 0 (Starlette/httpx deprecation warning only). Pytest is not installed and was not run.
+- Isolated Supabase replay: **BLOCKED / FAILED before Migration 177**. The local replay stopped in `20270102001800_fail_closed_staff_claims_and_handover.sql` at its assertion `Function public.confirm_pickup(text,text) direct or effective EXECUTE grants differ from the reviewed historical baseline.` The container was then stopped by the failed startup. The exact ACL component within that assertion has not been isolated; do not treat replay or Migration 177 as validated. No historical migration was edited to bypass this check.
+- A `supabase db query --local` local-only inspection emitted a security advisory saying `public.community_book_requests` has RLS disabled. The local schema snapshot `supabase/schemas/public/tables/community_book_requests.sql` declares RLS enabled and a participant/staff SELECT policy, while migration `20261124000000_enable_community_request_rls.sql` also enables RLS. Because the local database was shutting down during replay and the catalog state is inconsistent with those source declarations, this is an **unresolved local-environment warning**, not evidence about production. Do not apply the suggested `ALTER TABLE` without confirming current local/production policies and intended write paths.
+
+### Release gates
+
+- Local frontend/source checks: **PASS**; local database execution: **FAIL/BLOCKED** pending diagnosis of the earlier grant assertion and complete replay.
+- Safe to commit/push: **NO**. The tree still mixes owner work, diagnostic artifacts, reports, a damaged backup candidate, and migration/application changes; additionally the migration has not passed isolated PostgreSQL execution. No staging, commit, or push occurred.
+- Production migration, deploy, and live acceptance: **HOLD / NOT READY**. Production migration history, catalog compatibility, backup/recovery point, restore exercise, migration replay, and authenticated integration tests remain unverified. Production was not contacted or modified.
+
+### Next actions
+
+1. In a disposable local Supabase test project, isolate the specific failed direct/effective ACL subcondition in migration `20270102001800` without editing/bypassing the repository migration, then repair the actual baseline/test setup or migration only with catalog evidence.
+2. Replay all 177 migrations from a clean isolated baseline, then run SQL-backed RPC, RLS/AAL, idempotency, and concurrency regressions. Resolve the local `community_book_requests` RLS catalog discrepancy from actual local catalog/policy evidence.
+3. Only after those gates pass, review/stage an explicitly scoped set of intended files. Keep damaged backup material and diagnostic artifacts excluded. Obtain separate owner-approved production read-only history/catalog and supported backup/restore evidence before any production migration decision.
+
+## Phase 24 — Catalog-confirmed access fixes and isolated replay (2026-11-20)
+
+### Confirmed corrections
+
+- A clean local Supabase replay showed `public.accept_subadmin_terms()` still used `COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', staff.role)`, accepting a missing role claim. Migration `20270127000000` now replaces it with an AAL2 requirement and exact active `subadmin` claim match, retains its timestamp result and idempotent terms insert, pins an empty `search_path`, and preserves authenticated/service-role grants while denying PUBLIC/anon.
+- The same replay/catalog inspection showed `shelf_private.request_borrow_unchecked(uuid,text)` had EXECUTE for `authenticated` and `service_role` even though `public.request_borrow_v2(text)` performs visitor ownership and verification checks before delegating. Migration `20270127000000` now makes the unchecked helper owner-only and includes a postflight assertion. Local catalog evidence after a full reset/replay: ACL `{postgres=X/postgres}`; authenticated and service_role EXECUTE are both false.
+- `get_fine_payment_alert_targets_detail_internal(text)` returned request and visitor identifiers and a later reconciliation had regranted it to authenticated and service_role. The new migration revokes all API-role EXECUTE and asserts the helper remains owner-only; the local catalog after replay confirms only the postgres owner ACL. Its authorized wrapper continues to call it as owner.
+- Fine-payment input validation now explicitly rejects a NULL payment method before SQL three-valued `NOT IN` evaluation.
+- Updated several stale catalog assertions: catalog owner OIDs are converted using `pg_get_userbyid`, the direct handover overloads are asserted owner-only while v2 routes carry the caller checks, the community approval ACL includes the owner ACL entry, and the fine-alert predicate assertion reflects the actual alias/expression.
+
+### Validation and remaining database test failures
+
+- `supabase db reset --local`: **PASS**, full ordered replay through `20270127000000` completed twice after the final migration edits. This is isolated local evidence only; no production endpoint was contacted.
+- Local catalog postchecks: **PASS** for owner-only `shelf_private.request_borrow_unchecked` and `get_fine_payment_alert_targets_detail_internal`; `accept_subadmin_terms` definition contains AAL2 plus `v_jwt_role IS DISTINCT FROM staff_row.role` and no fallback.
+- `node --test`: **317 total, 274 passed, 0 failed, 43 skipped**. Skips remain the 27 real-role/Auth/AAL/RLS tests, 8 concurrency tests, and 8 catalog/security tests; none are counted as passed.
+- `npm run lint`: exit 0. `npm run build`: exit 0 (large-chunk warning remains). `npm run validate:migrations`: exit 0, 177 files, no manifest validation errors. `git diff --check`: exit 0 (line-ending notices only). Python compile plus `py -3 -B -m unittest analytics.test_main -v`: 9 passed; Pytest remains unavailable/not run.
+- `supabase test db --local`: **FAIL / NOT A PASS**. Latest run exited 1; all 14 files report zero TAP tests/“no plan found” because they are `DO` assertion blocks rather than pgTAP. Assertion execution errors remain in `aal2_policy_assertions.sql` (obsolete `find_visitor_by_qr(text,uuid)`), `community_borrowing_workflow_assertions.sql` (service-role grant-count assumption), `fine_payment_privacy_assertions.sql` (regprocedure compared to text), `migration_integrity_verification.sql` (`pg_ls_dir` permission denied), `opac_count_rpc_assertions.sql` (stale filtered-count metadata), `public_community_visitor_registration.sql` (stale RPC metadata), `security_hardening_assertions.sql` (expects an exact AAL error although the missing role claim is rejected first), `security_release_assertions.sql` (obsolete QR function metadata), `subscription_authorization_assertions.sql` (stale metadata), and `transaction_integrity_assertions.sql` (expects AAL2 from visitor-only helper although the later visitor workflow explicitly allows AAL1 and the public wrapper validates ownership). Other files complete their blocks but still have no TAP plan. The SQL suite is not release evidence until corrected and converted to a runner-compatible test format.
+- Supabase’s local security advisor flags `public.borrowed_book_counts` because RLS is disabled. Catalog inspection confirms `anon` and `authenticated` have no table privileges (SELECT/INSERT false); its ACL is owner-only, so the advisor’s “fully exposed” generic message is not supported by the actual local grants. Do not apply its suggested `ALTER TABLE` without policy/workflow review. Production catalog state is unknown.
+
+### Release gates
+
+- Migration chain local replay: **PASS**.
+- Source/manifest/frontend/Python checks: **PASS** as listed above.
+- SQL-backed behavioral/Auth/RLS/concurrency tests: **FAIL / BLOCKED**; SQL assertion suite is not a valid TAP suite and multiple final-catalog expectations remain stale. No synthetic Auth-session tests or concurrency fixtures were completed.
+- Commit/push: **NOT READY**; current worktree mixes intended code/migration changes with unrelated owner edits, reports, and diagnostics. Nothing was staged, committed, or pushed.
+- Production migration, deployment, and live acceptance: **HOLD**. Production history/schema, supported recovery point, restore drill, and isolated Auth/RLS/payment/concurrency behavior are not verified.
+
+**Next implementation task:** convert the SQL catalog checks into executable pgTAP tests (with plans), reconcile every signature/grant/search-path expectation against the final replayed catalog, then add synthetic database fixtures for borrowing/return/payment idempotency and role/AAL denial cases. Keep release gates blocked until those tests pass and separate production evidence/recovery requirements are completed.
 
 
 
 
 
+
+## Phase 25 � SQL TAP Infrastructure and Release Blockers (2026-11-20)
+
+- Reworked all 14 files under `supabase/tests/` so the PostgreSQL test runner receives explicit pgTAP plans and `finish()` output: 33 TAP cases are planned, including eight explicit concurrency skips. Eleven existing PL/pgSQL assertion blocks now run through `extensions.lives_ok`; existing contract exceptions remain failures and are surfaced as TAP diagnostics. Actual executed SQL assertions this turn: 0, because local PostgreSQL was unavailable.
+- Replaced the repository-file `pg_ls_dir('migrations')` check with local database migration-history and final-catalog assertions in `migration_integrity_verification.sql`. Repository migration inventory remains the responsibility of `scripts/validate-migrations.mjs` (177 files, no validation errors on this run).
+- Replaced the non-executable role-matrix notes with five catalog smoke assertions. These do not establish real Auth/RLS authorization behavior; the synthetic Auth/PostgREST matrix remains blocked pending an isolated Auth environment.
+- Made the eight concurrency scenarios visible as explicit TAP skips with the multi-session fixture requirement. The separate concurrency harness is not considered executed evidence.
+- Verification this turn: `node --test` � exit 0, 317 tests, 274 passed, 43 skipped, 0 failed. Skips remain 27 Auth/RLS/AAL, 8 concurrency, and 8 live database catalog checks. `npm run build` � exit 0 (large chunk warning). `npm run validate:migrations` � exit 0, 177 migrations, no errors. `git diff --check` � exit 0 (CRLF conversion warnings only). Python compile and `analytics.test_main` � exit 0, 9 tests passed.
+- Local PostgreSQL test execution is BLOCKED: `supabase status` reported local services stopped; `supabase test db --local` failed to connect to `127.0.0.1:54322` because the connection terminated. Therefore no SQL TAP assertion count is reported as executed. Do not treat prior isolated migration replay as evidence for the changed test suite.
+- `npm run lint` -- exit 0; no lint diagnostics.
+- `borrowed_book_counts` API roles remain without direct table privileges in the previously observed local catalog; RLS policy choice and production compatibility remain unverified.
+- Production migration history, production catalog, backup/restore, Auth/RLS behavior, payment concurrency, and release approval remain BLOCKED. No production connection or write was made in this phase.
+
+
+## Phase 26 - Final local SQL and runtime remediation (2026-11-20)
+
+### Confirmed defects and local corrections
+
+- A clean local replay and concurrent RPC harness proved `confirm_pickup(text,text)` referenced nonexistent `pickup_confirmed_by` and `updated_at` columns; `confirm_return(text,text)` referenced absent `updated_at`; and `record_fine_payment_subadmin_internal(...,uuid)` also wrote absent `updated_at`. The reviewed `borrow_requests` columns are `confirmed_by` and `return_confirmed_by`; `id` and `visitor_id` are text in this local baseline.
+- Added forward-only local migration `20270128000000_fix_handover_existing_columns.sql` (Migration 178). It preserves Migration 177, validates required columns, replaces both handover functions and the idempotent internal payment implementation, removes only invalid timestamp writes, uses the existing confirmation columns, and asserts the AAL2, active staff, exact role, branch, row-lock, and idempotency guards remain. No production database was contacted.
+- Fixed the concurrency harness to use valid synthetic UUID request IDs for guarded handover calls and the six-argument idempotent payment RPC. It now checks payment count and outstanding balance; fixture cleanup deletes receipt rows before referenced payment rows.
+- Converted the eight formerly skipped Node concurrency cases and eight skipped catalog/security cases into executable local opt-in checks. The catalog checks query PostgreSQL directly and cover required signatures, private helper grants, critical function ownership/search_path, RLS coverage, a reviewed immutable helper, visitor ID types, approved SECURITY DEFINER paths, and absence of PUBLIC EXECUTE. Added a catalog assertion for `borrowed_book_counts` direct API grants and its aggregate-only OPAC RPC.
+- `borrowed_book_counts` has RLS disabled in the replay, but `anon` and `authenticated` have no direct table privileges. Its trigger-maintained table is accessed through `get_popular_borrowed_book_counts(integer)`, which exposes only `(book_id, borrow_count)` aggregates for the public OPAC; this is an intentional aggregate access path, not direct table exposure. Production compatibility remains unverified.
+- Reconciled assertions with final catalog behavior: UUID handover overloads delegate to guarded text overloads; `lookup_attendance_visitor_v2` grants authenticated plus service_role; `get_fine_payment_analytics` grants authenticated plus service_role; public reviewer names pass through `mask_reviewer_name` (the raw historical field is therefore used only as masked input).
+- Updated migration validator category C expected count to 53 for the new 178-migration chain.
+
+### Verification
+
+- `supabase db reset --local`: PASS; full ordered replay of all 178 migrations completed, including Migration 178.
+- `supabase test db --local`: PASS; 14 SQL files, 34 TAP points, 26 executed assertions and eight concurrency placeholders marked skipped because pgTAP cannot open concurrent sessions. The separate multi-session database harness executed all eight scenarios.
+- `node --test` with `SHELF_TEST_LOCAL_SUPABASE=1` and explicit local database settings: PASS; 323 tests, 296 passed, 0 failed, 27 skipped. The remaining 27 skips are real Auth/PostgREST role/AAL/RLS tests; no synthetic Auth-issued sessions were created because the local Auth/PostgREST services are stopped and the isolated runtime fixture is unavailable.
+- `scripts/concurrency-harness.mjs` against only `127.0.0.1:54322/postgres`: PASS; 13/13 scenarios, comprising 8 concurrency scenarios plus full payment, duplicate idempotency retry, invalid payment method, inactive staff denial, and cross-library payment denial. These use synthetic SQL JWT GUC claims, not Auth-issued sessions.
+- `npm run lint`: PASS after importing Node `process` in the local test runners; no diagnostics. `npm run build`: PASS (large chunk warning). `npm run validate:migrations`: PASS; 178 files and no validation errors. `git diff --check`: PASS (line-ending notices only).
+- `py -3 -B -m py_compile analytics/main.py analytics/test_main.py` and `py -3 -B -m unittest analytics.test_main -v`: PASS; 9 tests. Pytest was not run.
+
+### Release gates remain blocked
+
+- Real Auth/AAL/RLS tests: BLOCKED until an isolated local/staging Supabase Auth and PostgREST runtime plus synthetic user/MFA fixtures are available. The SQL claim-GUC tests and Node source tests are not substitutes for Auth-issued HTTP sessions.
+- Production migration history/schema, owner/index collation OIDs, backup/recovery point, restore drill, and rollback readiness: NOT VERIFIED. No production read/write, migration, backup, or restore was performed.
+- Commit/push and production migration: NOT READY. Existing user changes remain preserved; nothing was staged, committed, or pushed.
+
+**Next owner action:** provide/enable an isolated Supabase Auth/PostgREST test runtime with synthetic role accounts and MFA so the remaining 27 Auth-issued session cases can execute; separately provide authorized production read-only catalog/history and supported backup/restore evidence before release approval.
+
+
+## Phase 27 - Real Auth, final 179-migration replay, and release blockers (2026-11-20)
+
+### Work completed locally
+
+- Replaced the previous Auth/AAL/RLS placeholders with real isolated Supabase Auth and PostgREST tests. The suite created synthetic institutional visitor, pending community visitor, approved community visitor, sub-admin, and super-admin accounts; it used password sessions and Auth-enrolled TOTP factors so the staff requests carried Auth-issued AAL2 tokens. It exercised ownership and branch denial, role mismatch and inactive staff, approved/pending community behavior, borrowing/pickup/return, QR attendance check-in/out, fine privacy, partial payments, idempotent retries, invalid methods, and cross-library denials. The test's cleanup removed its own run-scoped fixtures; the isolated Auth users and fixture row counts were verified empty after the run.
+- The tests found that the live application contract uses text `borrow_requests.id` values such as `REQ-...`, while migration 178's v2 handover/payment paths required UUID-shaped identifiers. Added forward migration 179, `20270129000000_support_text_borrow_request_ids.sql`, to validate IDs according to the actual catalog type and retain UUID validation when the column is UUID. The correction preserves AAL2, active staff, exact role claim, branch checks, row locks, and payment idempotency; it does not rewrite a historical migration.
+- Updated the multi-session test harness for text idempotency keys and added executable cases for the Migration 179 ID and grant contract. Hardened both existing production read-only psql helper scripts to require `sslmode=verify-full` and a readable CA file specified through `SUPABASE_CA_CERT_PATH` before prompting for a password. The connection uses `sslrootcert`; no password is included in process arguments. Static script checks pass. No CA certificate was found in this workspace, so the scripts were not used to connect to production.
+- `borrowed_book_counts` in the isolated 179 replay has RLS disabled, but neither `anon` nor `authenticated` has direct table privileges or CREATE on `public`. Its SECURITY DEFINER aggregate RPC returns only `book_id` and aggregate `borrow_count`; its table references are schema-qualified. This is the intended aggregate public OPAC path. This local finding does not establish the production catalog state.
+- Preserved the damaged backup candidate. No untrusted backup script was run or repaired as a source of backup evidence.
+
+### Verification evidence
+
+- Full ordered isolated Supabase replay: PASS, 179 migrations through `20270129000000_support_text_borrow_request_ids.sql`. The isolated `supabase migration list` reports matching local and database versions. The main repository local database was not reset or advanced as part of this replay.
+- `supabase test db` on the dedicated Auth/PostgREST isolated stack: PASS, 34 pgTAP tests planned; 26 assertions executed; eight concurrent-session items are deliberately marked skipped by pgTAP and are covered by the separate multi-session harness.
+- Real Auth/PostgREST integration suite: PASS, 36 passed, 0 failed, 0 skipped.
+- Database concurrency/payment harness: PASS, 13/13 scenarios.
+- Full `node --test`: PASS, 334 passed, 0 failed, 0 skipped.
+- `npm run lint`: PASS after explicit Node builtin imports were added to the Auth integration suite.
+- `npm run build`: PASS; Vite reports the existing large-chunk advisory.
+- `npm run validate:migrations`: PASS; 179 migration files and no validation errors.
+- Python compile checks and `python -m unittest analytics.test_main -v`: PASS, 9 tests.
+- `scripts/validate-production-catalog-sql.mjs` and `node scripts/test-secure-psql-scripts.mjs`: PASS. `git diff --check`: PASS (Git reports line-ending conversion notices on existing mixed-line-ending files only).
+
+### Production, backup, and recovery gates remain NOT VERIFIED
+
+- No production connection, query, migration, configuration change, or data write was made. Production migration history and catalog remain unreconciled. Obtain a fresh read-only history/catalog result using the prepared SQL and a hostname-verified TLS workflow, then compare all 179 versions and actual object effects. Do not use the local replay as production evidence.
+- No backup/recovery point was inspected or created; no restore was performed. Supabase Dashboard > Database > Backups is the supported owner workflow for checking daily backups/PITR and using Restore to a New Project. The restore-to-new-project path creates a database copy including database data/Auth records and requires a restricted test project; project settings, Storage objects, Edge Functions, and other platform configuration need separate handling. Review extension jobs and external side effects before using a binary clone. Owner must supply the plan/backup evidence and complete the separate-project restore drill. The damaged backup candidate remains preserved and is not trusted.
+- The production runner's CA gate is now present, but no trusted CA file is available locally; no password was requested. The owner must provide the approved CA file path and authorized read-only access, then run only the read-only reconciliation workflow after reviewing its SQL. This does not authorize or prepare migration execution.
+
+### Release decision
+
+**NOT READY** for commit/push approval, production migration, deployment, or live user acceptance. Local code, SQL replay, synthetic Auth/AAL, payment/concurrency, build, lint, and Python checks passed. Production migration history/catalog, production fine-index owner and per-key collation OIDs, supported backup point, and separate-project restore drill are not evidenced. No files were staged, committed, or pushed, and no production migration was applied.
+
+**Next owner actions:** (1) provide/confirm the trusted CA certificate and authorized read-only production access; run the prepared production history/catalog and fine-index diagnostic SQL and return the sanitized output; (2) verify the current Supabase backup/PITR recovery point in the Dashboard and restore it to a separately secured project, then record schema/history/Auth-policy and workflow checks; (3) review Migration 179 and the full reconciled execution order before separately approving any production migration.
+
+
+### Phase 27 verification addendum - backup source and PowerShell parser
+
+- The repository-tracked `backup-production-db.ps1` was inspected without execution. Windows PowerShell 5.1 parsing reports syntax errors at lines 171, 199, 601-602, 999, 1033, 1310, 1432-1433, 1830, 1856, 2255-2256, 2653, 2659, 2662, 2666, and 3092-3093. The file therefore is not a runnable trusted backup source in the installed PowerShell environment. Its associated test file is not evidence of a completed backup. The separate damaged candidate remains untouched. No backup was produced or labeled successful.
+- Both read-only production helper scripts parse under installed Windows PowerShell and their source-security checks pass. No production workflow was invoked because no trusted CA certificate file was available, and no production credentials were requested.
+- `git diff --check` remains clean; the reported messages concern Git's CRLF conversion notices only.
+
+## Phase 28 — Final local verification, read-only guard, and Git release (2026-11-20)
+
+### Local verification completed
+
+- Isolated Supabase stack: reused only `shelf-ilms-auth-release-20261120` (API port 59600, database port 59601); no unrelated containers were stopped or reset. The full ordered migration replay had already completed for all 179 local migrations through `20270129000000_support_text_borrow_request_ids.sql`; the separate migration-list comparison showed local and isolated database versions aligned.
+- Full `node --test`, with local isolated Auth/PostgREST and database variables injected only into the child PowerShell process: **334 passed, 0 failed, 0 skipped**. This included 36 real Auth-issued Auth/PostgREST cases and 13 database concurrency/payment scenarios. Test keys were not printed or written into repository files. The suite cleaned its run-scoped synthetic identities and rows.
+- `supabase test db --workdir <isolated-stack>`: **PASS**, 14 SQL files, 34 pgTAP points, 26 executed assertions; eight multi-session placeholders remain intentionally skipped by pgTAP and were exercised by the 13-case separate concurrency harness.
+- `npm run lint`: PASS. `npm run build`: PASS with the existing Vite large-chunk advisory. `npm run validate:migrations`: PASS, 179 files and no validation errors. `py -3.13 -B -m py_compile analytics/main.py analytics/test_main.py`: PASS. `py -3.13 -B -m unittest analytics.test_main -v`: PASS, 9 tests. `node scripts/test-secure-psql-scripts.mjs`: PASS. `git diff --check`: PASS; Git emitted only line-ending conversion notices.
+- No production command was executed. The provided `prod-ca-2021.crt` is readable and currently valid. The read-only runner now restricts selection to two reviewed SQL files, validates the exact selected file, rejects psql commands outside the safe allowlist, requires `sslmode=verify-full`, checks the CA before the hidden password prompt, and sets/restores `default_transaction_read_only=on`. Its non-production static tests pass. Production history/catalog evidence is still **NOT VERIFIED** because no secure interactive database credential entry was available through this agent channel.
+
+### Backup helper remains blocked
+
+- The tracked `backup-production-db.ps1` remains unchanged and was never run. Windows PowerShell parsing returns 23 errors. Inspection shows concatenated duplicate/interleaved function bodies, malformed fragments, and PowerShell-version operators; Git history contains only the initial addition of this file, with no earlier trusted version to restore. This is not safely repairable as a syntax-only patch without an owner-provided trusted source. Existing damaged candidate and report artifacts remain preserved and excluded from Git staging. No backup or restore was performed.
+
+### Worktree and release disposition
+
+- Branch `main`, HEAD before this release `4ae54f1b6c112f384800a55f1fedc809c77d24ba`, tracking `origin/main`; at the last comparison local and remote were aligned (`0` ahead, `0` behind). No files were staged at the time of this record. `.env` and `env` are ignored and untracked; neither was read or staged. Existing report files, the local reconciliation report, generated artifacts, and damaged backup candidate are excluded.
+- Git commit/push can proceed for the reviewed application, forward migrations, tests, and release documentation independently of production recovery gates. The full backup helper is excluded because it is not validated. Production migration and deployment remain **HOLD** until production history/catalog/index OIDs, backup/PITR evidence, and separate-project restore verification are recorded and reviewed.
+- Backup and restore: **NOT VERIFIED**. Production migration history/catalog: **NOT RECONCILED**. Production migrated: **NO**. No production schema/data/history/configuration was changed.
+- Restore drill remains gated on the owner's confirmation of a separate target Supabase project and acceptance of its costs. Do not restore over production.
