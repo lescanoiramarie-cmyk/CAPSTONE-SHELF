@@ -1339,7 +1339,8 @@ const handleEditStaff = (staff) => {
 
         <div className="border-b border-white/10 p-4">
           <div className="border-l-[3px] border-blue-400 pl-3">
-            <p className="text-base font-bold leading-tight tracking-wide text-white">Super admin</p>
+            <p className="text-sm font-bold leading-tight text-white">{superAdminName}</p>
+            <span className="mt-1 inline-flex rounded-full border border-blue-200/40 bg-blue-400/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-100">Super-admin</span>
             <p className="mt-1 text-xs font-medium text-blue-100/75">System console</p>
           </div>
         </div>
@@ -1566,14 +1567,6 @@ const handleEditStaff = (staff) => {
             </div>
           </nav>
 
-          <div className="space-y-2 border-t border-white/10 p-4">
-            <p className="text-xs text-slate-300">
-              Signed in as
-            </p>
-            <p className="text-sm font-bold">
-              {superAdminName}
-            </p>
-          </div>
         </aside>
 
         {/* MAIN WORKSPACE COLUMN */}

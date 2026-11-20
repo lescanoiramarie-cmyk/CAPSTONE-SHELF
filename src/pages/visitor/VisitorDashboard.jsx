@@ -261,6 +261,13 @@ function VisitorDashboardContent() {
   const [isFaqOpen, setIsFaqOpen] = useState(false);
   const faqDragRef = useRef(null);
 
+  useEffect(() => {
+    if (!isMenuOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [isMenuOpen]);
+
   const [announcements, setAnnouncements] = useState([]);
   const [announcementIndex, setAnnouncementIndex] = useState(0);
   const [isAnnouncementOpen, setIsAnnouncementOpen] = useState(false);
@@ -2082,7 +2089,7 @@ function VisitorDashboardContent() {
 
       {isMenuOpen && (
         <div
-          className={`fixed top-16 inset-x-0 bottom-0 z-30 flex ${menuSection === 'profile' ? 'justify-center' : 'justify-end'}`}
+          className={`fixed inset-0 z-[70] flex ${menuSection === 'profile' ? 'justify-center' : 'justify-end'}`}
           role="dialog"
           aria-modal="true"
           aria-label={menuSection === 'profile' ? 'My profile' : 'Visitor menu'}

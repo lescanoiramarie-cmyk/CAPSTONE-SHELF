@@ -308,6 +308,60 @@ textarea::placeholder {
   min-width: 0;
 }
 
+/* Give community cards the same shared card geometry as the catalog. */
+.visitor-community-book-grid .opac-book-card {
+  height: 100%;
+  min-height: 100%;
+}
+
+.dark .fine-payments article,
+.dark .fine-payments nav,
+.dark .fine-payments [role="dialog"] {
+  border-color: #334155;
+  background-color: #1e293b;
+  color: #e2e8f0;
+}
+
+.dark .fine-payments h2,
+.dark .fine-payments h3,
+.dark .fine-payments td,
+.dark .fine-payments label,
+.dark .fine-payments nav span {
+  color: #e2e8f0;
+}
+
+.dark .fine-payments th,
+.dark .fine-payments thead {
+  background-color: #0f172a;
+  color: #cbd5e1;
+}
+
+.dark .fine-payments input,
+.dark .fine-payments select,
+.dark .fine-payments textarea {
+  border-color: #475569;
+  background-color: #0f172a;
+  color: #f8fafc;
+}
+
+.dark .admin-reports-workspace .bg-white {
+  background-color: #1e293b;
+}
+
+.dark .admin-reports-workspace .bg-slate-50 {
+  background-color: #0f172a;
+}
+
+.dark .admin-reports-workspace .text-slate-900,
+.dark .admin-reports-workspace .text-slate-800,
+.dark .admin-reports-workspace .text-slate-700 {
+  color: #e2e8f0;
+}
+
+.dark .admin-reports-workspace [class*="border-slate-"] {
+  border-color: #334155;
+}
+
 .public-opac-filter-bar,
 .visitor-catalog-filter-bar {
   box-sizing: border-box;

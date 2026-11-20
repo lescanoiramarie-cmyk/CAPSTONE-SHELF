@@ -356,7 +356,7 @@ export default function OPACCatalog({
   const [personalBookSearch, setPersonalBookSearch] = useState('');
   const [personalBookVisibilityFilter, setPersonalBookVisibilityFilter] = useState('all');
   const [personalBooksPage, setPersonalBooksPage] = useState(1);
-  const personalBooksPageSize = 6;
+  const [personalBooksPageSize, setPersonalBooksPageSize] = useState(6);
   const [readingListSearch, setReadingListSearch] = useState('');
   const [readingListCategory, setReadingListCategory] = useState('All');
   const [readingListAvailability, setReadingListAvailability] = useState('All');
@@ -2657,7 +2657,7 @@ export default function OPACCatalog({
           document.body
         )}
 
-        {activeView === 'communityBooks' && (
+        {activeView === 'catalog' && (
             <div className="flex min-w-0 flex-col gap-3 sm:flex-row">
             <form onSubmit={handleSearch} className="flex min-w-0 flex-1 gap-2">
               <input
@@ -3037,8 +3037,8 @@ export default function OPACCatalog({
               </div>
             </div>
             {/* READING LIST FILTER BAR */}
-            <div className="flex flex-col gap-3">
-              <label className="block">
+            <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(12rem,1.2fr)_repeat(4,minmax(9rem,auto))]">
+              <label className="block min-w-0">
                 <span className="sr-only">Search your reading list</span>
                 <input
                   type="search"
@@ -3052,8 +3052,8 @@ export default function OPACCatalog({
                 />
               </label>
 
-              <div className="flex flex-col sm:flex-row flex-wrap gap-3">
-                <div className="w-full sm:w-auto sm:min-w-44">
+              <div className="contents">
+                <div className="min-w-0">
                   <label htmlFor="reading-list-category-filter" className="sr-only">Filter by category</label>
                   <select
                     id="reading-list-category-filter"
@@ -3073,7 +3073,7 @@ export default function OPACCatalog({
                   </select>
                 </div>
 
-                <div className="w-full sm:w-auto sm:min-w-40">
+                <div className="min-w-0">
                   <label htmlFor="reading-list-availability-filter" className="sr-only">Filter by availability</label>
                   <select
                     id="reading-list-availability-filter"
@@ -3090,7 +3090,7 @@ export default function OPACCatalog({
                   </select>
                 </div>
 
-                <div className="w-full sm:w-auto sm:min-w-40">
+                <div className="min-w-0">
                   <label htmlFor="reading-list-sort-filter" className="sr-only">Sort reading list</label>
                   <select
                     id="reading-list-sort-filter"
@@ -3110,7 +3110,7 @@ export default function OPACCatalog({
                   </select>
                 </div>
 
-                <div className="w-full sm:w-auto sm:min-w-36">
+                <div className="min-w-0">
                   <label htmlFor="reading-list-page-size" className="sr-only">Rows per page</label>
                   <select
                     id="reading-list-page-size"
@@ -3299,8 +3299,15 @@ export default function OPACCatalog({
             </div>
 
             {/* COMMUNITY BOOKS FILTER BAR */}
-            <div className="flex flex-col md:flex-row gap-3">
-              <div className="w-full md:w-auto md:min-w-44">
+            <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(12rem,1.4fr)_repeat(4,minmax(9rem,auto))]">
+              <form onSubmit={handleSearch} className="flex min-w-0 gap-2">
+                <label className="min-w-0 flex-1">
+                  <span className="sr-only">Search community books</span>
+                  <input type="search" value={searchInput} onChange={handleSearchInputChange} placeholder="Search community books..." className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+                </label>
+                <button type="submit" className="rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white">Search</button>
+              </form>
+              <div className="min-w-0">
                 <label htmlFor="community-category-filter" className="sr-only">Filter by category</label>
                 <select
                   id="community-category-filter"
@@ -3320,7 +3327,7 @@ export default function OPACCatalog({
                 </select>
               </div>
 
-              <div className="w-full md:w-auto md:min-w-40">
+              <div className="min-w-0">
                 <label htmlFor="community-availability-filter" className="sr-only">Filter by availability</label>
                 <select
                   id="community-availability-filter"
@@ -3337,7 +3344,7 @@ export default function OPACCatalog({
                 </select>
               </div>
 
-              <div className="w-full md:w-auto md:min-w-40">
+              <div className="min-w-0">
                 <label htmlFor="community-sort-filter" className="sr-only">Sort community books</label>
                 <select
                   id="community-sort-filter"
@@ -3358,7 +3365,7 @@ export default function OPACCatalog({
                 </select>
               </div>
 
-              <div className="w-full md:w-auto md:min-w-36">
+              <div className="min-w-0">
                 <label htmlFor="community-page-size" className="sr-only">Rows per page</label>
                 <select
                   id="community-page-size"
@@ -3606,7 +3613,7 @@ export default function OPACCatalog({
                 Add personal book
               </button>
             </div>
-            <div className="order-2 grid w-full min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,auto)]">
+            <div className="order-2 grid w-full min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,auto)_minmax(9rem,auto)]">
               <label>
                 <span className="sr-only">Search personal books</span>
                 <input
@@ -3619,6 +3626,19 @@ export default function OPACCatalog({
                   placeholder="Search title, author, category, or ISBN"
                   className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                 />
+              </label>
+              <label>
+                <span className="sr-only">Personal books rows per page</span>
+                <select
+                  value={personalBooksPageSize}
+                  onChange={(event) => {
+                    setPersonalBooksPage(1);
+                    setPersonalBooksPageSize(Number(event.target.value));
+                  }}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                >
+                  {[6, 12, 24, 48].map((size) => <option key={size} value={size}>{size} per page</option>)}
+                </select>
               </label>
               <label>
                 <span className="sr-only">Filter personal books</span>

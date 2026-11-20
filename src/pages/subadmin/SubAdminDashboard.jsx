@@ -412,7 +412,7 @@ function QRBookBorrowing({
   const [visitorRequests, setVisitorRequests] = useState([]);
   const [manualQrValue, setManualQrValue] = useState('');
   const [loading, setLoading] = useState(false);
-  const [confirming, setConfirming] = useState(false);
+  const [confirmingRequestId, setConfirmingRequestId] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -608,7 +608,7 @@ function QRBookBorrowing({
 
   const handleConfirmBorrow = async (request) => {
     if (!request?.id) return;
-    setConfirming(true);
+    setConfirmingRequestId(request.id);
     setError('');
     setMessage('');
     try {
@@ -627,13 +627,13 @@ function QRBookBorrowing({
       console.error('Book borrowing confirmation error:', err);
       setError(err?.message || 'Unable to confirm this book borrowing.');
     } finally {
-      setConfirming(false);
+      setConfirmingRequestId(null);
     }
   };
 
   const handleConfirmReturn = async (request) => {
     if (!request?.id) return;
-    setConfirming(true);
+    setConfirmingRequestId(request.id);
     setError('');
     setMessage('');
     try {
@@ -651,7 +651,7 @@ function QRBookBorrowing({
       console.error('Book return confirmation error:', err);
       setError(err?.message || 'Unable to confirm this book return.');
     } finally {
-      setConfirming(false);
+      setConfirmingRequestId(null);
     }
   };
 
@@ -867,10 +867,10 @@ function QRBookBorrowing({
                             <button
                               type="button"
                               onClick={() => handleConfirmBorrow(request)}
-                              disabled={confirming}
+                              disabled={Boolean(confirmingRequestId)}
                               className="bg-shelf-accent text-white px-5 py-2.5 rounded-lg text-xs font-bold hover:brightness-90 transition disabled:opacity-50"
                             >
-                              {confirming ? 'Confirming...' : 'Confirm borrowing'}
+                              {confirmingRequestId === request.id ? 'Confirming...' : 'Confirm borrowing'}
                             </button>
                           )}
                         </div>
@@ -908,10 +908,10 @@ function QRBookBorrowing({
                         <button
                           type="button"
                           onClick={() => handleConfirmReturn(request)}
-                          disabled={confirming}
+                          disabled={Boolean(confirmingRequestId)}
                           className="rounded-lg bg-emerald-700 px-5 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
                         >
-                          {confirming ? 'Confirming...' : 'Confirm return'}
+                          {confirmingRequestId === request.id ? 'Confirming...' : 'Confirm return'}
                         </button>
                       </div>
                     </div>

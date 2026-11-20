@@ -88,10 +88,11 @@ test('recommendations compare fixed selected-window weeks and report insufficien
   assert.match(sparse[1], /Insufficient book-request volume/);
 });
 
-test('forecast requires sufficient observations and an explicitly complete attendance feed', () => {
+test('forecast accepts lighter recent history but still requires complete attendance data', () => {
   assert.equal(canRunVisitorForecast({ historyDays: 30, observedVisitDays: 12, totalVisits: 24, attendanceComplete: true }), true);
   assert.equal(canRunVisitorForecast({ historyDays: 30, observedVisitDays: 12, totalVisits: 24, attendanceComplete: false }), false);
-  assert.equal(canRunVisitorForecast({ historyDays: 30, observedVisitDays: 3, totalVisits: 24, attendanceComplete: true }), false);
+  assert.equal(canRunVisitorForecast({ historyDays: 7, observedVisitDays: 2, totalVisits: 3, attendanceComplete: true }), true);
+  assert.equal(canRunVisitorForecast({ historyDays: 7, observedVisitDays: 1, totalVisits: 3, attendanceComplete: true }), false);
 });
 
 test('incomplete attendance blocks a staffing recommendation based on partial history', () => {

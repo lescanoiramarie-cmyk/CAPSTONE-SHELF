@@ -156,6 +156,7 @@ export default function AdminWorkspace({
   const [analyticsLibraryId, setAnalyticsLibraryId] = useState('');
   const [timeframe, setTimeframe] = useState('last_month');
   const [activityTypeFilter, setActivityTypeFilter] = useState('all');
+  const [activitySearch, setActivitySearch] = useState('');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   const [reportSort, setReportSort] = useState('time');
@@ -315,10 +316,14 @@ export default function AdminWorkspace({
   ]);
 
   const filteredReportRows = useMemo(
-    () => activityTypeFilter === 'all'
-      ? reportRows
-      : reportRows.filter((row) => row.type === activityTypeFilter),
-    [activityTypeFilter, reportRows]
+    () => {
+      const term = activitySearch.trim().toLocaleLowerCase();
+      return reportRows.filter((row) =>
+        (activityTypeFilter === 'all' || row.type === activityTypeFilter) &&
+        (!term || `${row.person} ${row.detail} ${row.branch} ${row.status}`.toLocaleLowerCase().includes(term))
+      );
+    },
+    [activitySearch, activityTypeFilter, reportRows]
   );
   const activityHistoryPageCount = Math.max(1, Math.ceil(filteredReportRows.length / activityHistoryPageSize));
   const visibleActivityHistoryPage = Math.min(activityHistoryPage, activityHistoryPageCount);
@@ -1174,7 +1179,7 @@ export default function AdminWorkspace({
 
       {/* REPORTS TAB */}
       {tab === 'reports' && (
-        <section className="flex flex-col gap-6">
+        <section className="admin-reports-workspace flex flex-col gap-6">
           <div className="order-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="flex flex-col gap-4 border-b border-slate-100 bg-linear-to-r from-slate-50 to-white p-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1195,9 +1200,9 @@ export default function AdminWorkspace({
             </div>
 
             <div className="space-y-4 p-5">
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+              <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(10rem,0.7fr)_minmax(10rem,0.7fr)_minmax(12rem,1fr)] xl:items-end">
                 <div className="min-w-0">
-                  <p className="mb-2 text-sm font-semibold text-slate-700">Date range</p>
+                  <p className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">Date range</p>
                   <AnalyticsDateFilter
                     timeframe={timeframe}
                     onTimeframeChange={(value) => {
@@ -1211,12 +1216,12 @@ export default function AdminWorkspace({
                     range={analyticsWindow}
                   />
                 </div>
-                <label className="block text-sm font-semibold text-slate-700">
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
                   Activity type
                   <select
                     value={activityTypeFilter}
                     onChange={(event) => setActivityTypeFilter(event.target.value)}
-                    className="mt-2 block w-full min-w-44 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal text-slate-700 outline-none transition focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20"
+                    className="mt-2 block w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal text-slate-700 outline-none transition focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                   >
                     <option value="all">All activities</option>
                     <option value="Visitor">Visitor check-ins</option>
@@ -1224,16 +1229,20 @@ export default function AdminWorkspace({
                     <option value="Book return">Book returns</option>
                   </select>
                 </label>
-                <label className="block text-sm font-semibold text-slate-700">
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
                   Sort activities
                   <select
                     value={reportSort}
                     onChange={(event) => setReportSort(event.target.value)}
-                    className="mt-2 block w-full min-w-44 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal text-slate-700 outline-none transition focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20"
+                    className="mt-2 block w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal text-slate-700 outline-none transition focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                   >
                     <option value="time">Newest first</option>
                     <option value="name">Visitor name</option>
                   </select>
+                </label>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  Search activity
+                  <input type="search" value={activitySearch} onChange={(event) => { setActivitySearch(event.target.value); setActivityHistoryPage(1); }} placeholder="Visitor, book, branch…" className="mt-2 block w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal text-slate-700 outline-none focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
                 </label>
               </div>
 

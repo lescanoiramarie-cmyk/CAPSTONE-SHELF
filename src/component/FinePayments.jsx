@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, CircleDollarSign, History, Search, X, Bell, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Bar, Doughnut } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -323,40 +323,11 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
                   />
                 </div>
               </article>
-
-              <article className="overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h3 className="font-bold text-slate-900 mb-1">Fine Payment Status Distribution</h3>
-                <p className="text-xs text-slate-500 mb-3">Settlement breakdown across assessed requests.</p>
-                <div className="h-64 flex items-center justify-center">
-                  <Doughnut
-                    data={{
-                      labels: ['Fully Paid', 'Partially Paid', 'Unpaid'],
-                      datasets: [
-                        {
-                          data: [
-                            branchSummaries.reduce((sum, b) => sum + Number(b.paid_request_count || 0), 0),
-                            branchSummaries.reduce((sum, b) => sum + Number(b.partially_paid_request_count || 0), 0),
-                            branchSummaries.reduce((sum, b) => sum + Number(b.unpaid_request_count || 0), 0),
-                          ],
-                          backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
-                        },
-                      ],
-                    }}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        legend: { position: 'bottom' },
-                      },
-                    }}
-                  />
-                </div>
-              </article>
             </div>
 
             {branchSummaries.length > 0 && (
               <article className="overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h3 className="font-bold text-slate-900 mb-3">Branch Collections vs Outstanding</h3>
+                <h3 className="font-bold text-slate-900 mb-1">Collected and remaining balance by branch</h3><p className="mb-3 text-xs text-slate-500">Bars compare payments received with current unpaid balances.</p>
                 <div className="h-64">
                   <Bar
                     data={{
@@ -368,7 +339,7 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
                           backgroundColor: '#10b981',
                         },
                         {
-                          label: 'Outstanding (₱)',
+                          label: 'Remaining balance (₱)',
                           data: branchSummaries.map((b) => Number(b.outstanding_balance || 0)),
                           backgroundColor: '#ef4444',
                         },
@@ -424,7 +395,7 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
   }
 
   return (
-    <section className="space-y-5">
+    <section className="fine-payments space-y-5 text-slate-800 dark:text-slate-100">
       <header className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-4">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">{libraryName || 'Administration'}</p>

@@ -85,15 +85,21 @@ class FAQAnswer(BaseModel):
 
 app = FastAPI(title="SHELF Analytics", version="1.0.0")
 bearer_scheme = HTTPBearer(auto_error=False)
+configured_origins = {
+    origin.strip()
+    for origin in os.getenv("ANALYTICS_ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+}
+configured_origins.update({
+    "http://localhost:5173",
+    "https://shelf-system.vercel.app",
+    "https://capstone-shelf.vercel.app",
+})
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        origin.strip()
-        for origin in os.getenv("ANALYTICS_ALLOWED_ORIGINS", "http://localhost:5173").split(",")
-        if origin.strip()
-    ],
+    allow_origins=sorted(configured_origins),
     allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 

@@ -144,7 +144,7 @@ export function buildOperationalRecommendations({
 }
 
 export function canRunVisitorForecast({ historyDays, observedVisitDays, totalVisits, attendanceComplete = false }) {
-  return historyDays >= 14 && observedVisitDays >= 7 && totalVisits >= 14 && attendanceComplete;
+  return historyDays >= 7 && observedVisitDays >= 2 && totalVisits >= 3 && attendanceComplete;
 }
 
 export const ANALYTICS_DAY_MS = DAY_MS;

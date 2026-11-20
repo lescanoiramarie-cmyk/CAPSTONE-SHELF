@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import '../lib/leafletIcons.js';
 import {
   Building2,
   Clock3,
@@ -51,47 +54,36 @@ function createLibraryInfoWindowContent(library, bookContext = null) {
   return content;
 }
 
-function GoogleMapsEmbed({ libraries, activeFocusBranchId, bookContext }) {
-  const focused = libraries.find((lib) => String(lib.id) === String(activeFocusBranchId)) || libraries[0];
-  const query = focused?.address
-    ? encodeURIComponent(`${focused.name || ''}, ${focused.address}`)
-    : focused?.lat && focused?.lng
-    ? `${focused.lat},${focused.lng}`
-    : 'Batangas State University, Batangas, Philippines';
-  const zoom = activeFocusBranchId ? 16 : 12;
+function LibraryMapFocus({ selectedLibrary, libraries }) {
+  const map = useMap();
+  useEffect(() => {
+    if (selectedLibrary) {
+      map.flyTo([Number(selectedLibrary.lat), Number(selectedLibrary.lng)], 15, { duration: 0.6 });
+    } else if (libraries.length > 0) {
+      map.fitBounds(libraries.map((library) => [Number(library.lat), Number(library.lng)]), { padding: [28, 28], maxZoom: 12 });
+    }
+  }, [map, selectedLibrary, libraries]);
+  return null;
+}
 
+function LeafletLibraryMap({ libraries, activeFocusBranchId, onSelect, bookContext }) {
+  const focused = libraries.find((library) => String(library.id) === String(activeFocusBranchId));
+  const initialCenter = focused ? [Number(focused.lat), Number(focused.lng)] : [13.9, 121.1];
   return (
-    <div className="relative h-full w-full min-h-[400px]">
-      <iframe
-        title="Google Maps Interactive View"
-        width="100%"
-        height="100%"
-        style={{ border: 0, minHeight: '400px' }}
-        loading="lazy"
-        allowFullScreen
-        referrerPolicy="no-referrer-when-downgrade"
-        src={`https://maps.google.com/maps?q=${query}&hl=en&z=${zoom}&output=embed`}
-        className="h-full w-full rounded-b-xl"
-      />
-      {focused && (
-        <div className="absolute bottom-3 left-3 z-10 max-w-sm rounded-lg border border-slate-200 bg-white/95 p-3 shadow-md backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/95">
-          <p className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-blue-600"></span>
-            {focused.name}
-          </p>
-          {focused.address && (
-            <p className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-300">
-              {focused.address}
-            </p>
-          )}
-          {bookContext && (
-            <p className="mt-1 text-[11px] font-semibold text-blue-700 dark:text-blue-300">
-              📖 {bookContext.title} ({bookContext.availableCopies} available)
-            </p>
-          )}
-        </div>
-      )}
-    </div>
+    <MapContainer center={initialCenter} zoom={focused ? 14 : 8} scrollWheelZoom className="h-full w-full min-h-[inherit]">
+      <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+      <LibraryMapFocus selectedLibrary={focused} libraries={libraries} />
+      {libraries.map((library) => (
+        <Marker key={library.id} position={[Number(library.lat), Number(library.lng)]} eventHandlers={{ click: () => onSelect(library.id) }}>
+          <Popup>
+            <strong>{library.name}</strong>
+            {library.address && <div>{library.address}</div>}
+            {library.hours && <div>Hours: {library.hours}</div>}
+            {bookContext?.title && <div>{bookContext.title} ({bookContext.availableCopies} available)</div>}
+          </Popup>
+        </Marker>
+      ))}
+    </MapContainer>
   );
 }
 
@@ -272,7 +264,7 @@ export default function LibraryMap({
   // =========================================================
 
   const librariesWithCoordinates =
-    filteredLibraries.filter(
+    visibleLibraries.filter(
       (library) => {
         const lat = Number(
           library.lat
@@ -437,9 +429,10 @@ export default function LibraryMap({
                 onBrowseLibrary={onBrowseLibrary}
               />
             ) : (
-              <GoogleMapsEmbed
+              <LeafletLibraryMap
                 libraries={librariesWithCoordinates}
                 activeFocusBranchId={activeFocusBranchId}
+                onSelect={setSelectedLibraryId}
                 bookContext={bookContext}
               />
             )}
