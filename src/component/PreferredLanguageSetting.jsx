@@ -14,8 +14,8 @@ export default function PreferredLanguageSetting({ darkMode = false }) {
     : 'border-slate-300 bg-white text-slate-800';
 
   return (
-    <section className={`min-w-0 rounded-2xl border p-5 shadow-sm ${darkMode ? 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800' : 'border-slate-200 bg-white'}`}>
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,14rem)] sm:items-center">
+    <section className={`h-fit min-w-0 self-start rounded-2xl border p-4 shadow-sm sm:p-5 ${darkMode ? 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800' : 'border-slate-200 bg-white'}`}>
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,14rem)] sm:items-center sm:gap-3">
         <div className="min-w-0">
           <h3 className={`font-bold ${tone}`}>{t('Preferred language')}</h3>
           <p className={`mt-1 text-sm leading-5 ${mutedTone}`}>
@@ -35,7 +35,7 @@ export default function PreferredLanguageSetting({ darkMode = false }) {
           <option value="fil">Filipino</option>
         </select>
       </div>
-      <p className={`mt-2 text-xs leading-5 ${mutedTone}`}>
+      <p className={`mt-1.5 text-xs leading-5 ${mutedTone}`}>
         {t('This preference is saved on this device.')}
       </p>
     </section>
