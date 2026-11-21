@@ -45,6 +45,7 @@ import {
   UsersRound,
 } from 'lucide-react';
 import { useAuth } from '../../context/useAuth.js';
+import { useLanguage } from '../../context/LanguageContext.jsx';
 import ShelfHeader from '../../component/ShelfHeader.jsx';
 import {
   useLibraryData,
@@ -187,6 +188,7 @@ function formatStaffRole(role) {
 
 export default function SuperAdminDashboard() {
   const mainScrollRef = useRef(null);
+  const { t } = useLanguage();
   const {
     user,
   } = useAuth();
@@ -1494,7 +1496,7 @@ const handleEditStaff = (staff) => {
           <div className="border-l-[3px] border-blue-400 pl-3">
             <p className="text-sm font-bold leading-tight text-white">{superAdminName}</p>
             <span className="mt-1 inline-flex rounded-full border border-blue-200/40 bg-blue-400/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-100">Super-admin</span>
-            <p className="mt-1 text-xs font-medium text-blue-100/75">System console</p>
+            <p className="mt-1 text-xs font-medium text-blue-100/75">{t('System console')}</p>
           </div>
         </div>
 
@@ -1515,7 +1517,7 @@ const handleEditStaff = (staff) => {
               }`}
             >
               <Activity size={18} className="mr-3 inline-block align-[-3px]" />
-              Overview & analytics
+              {t('Overview & analytics')}
             </button>
 
             {/* INVENTORY */}
@@ -1533,7 +1535,7 @@ const handleEditStaff = (staff) => {
               }`}
             >
               <BookOpen size={18} className="mr-3 inline-block align-[-3px]" />
-              Inventory
+              {t('Inventory')}
             </button>
 
             {/* LIBRARIES & MAP */}
@@ -1551,7 +1553,7 @@ const handleEditStaff = (staff) => {
               }`}
             >
               <MapPinned size={18} className="mr-3 inline-block align-[-3px]" />
-              Libraries & map
+              {t('Libraries & map')}
             </button>
 
             {/* STAFF ACCOUNTS */}
@@ -1569,7 +1571,7 @@ const handleEditStaff = (staff) => {
               }`}
             >
               <ShieldCheck size={18} className="mr-3 inline-block align-[-3px]" />
-              Staff accounts
+              {t('Staff accounts')}
             </button>
 
             <button
@@ -1586,7 +1588,7 @@ const handleEditStaff = (staff) => {
               }`}
             >
               <UsersRound size={18} className="mr-3 inline-block align-[-3px]" />
-              Visitor accounts
+              {t('Visitor accounts')}
             </button>
 
             <button
@@ -1595,7 +1597,7 @@ const handleEditStaff = (staff) => {
               className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${section === 'fines' ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]' : 'text-slate-300 hover:bg-white/5'}`}
             >
               <CircleDollarSign size={18} className="mr-3 inline-block align-[-3px]" />
-              Fine Payments
+              {t('Fine Payments')}
             </button>
             <button
               type="button"
@@ -1603,7 +1605,7 @@ const handleEditStaff = (staff) => {
               className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${section === 'subscriptions' ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]' : 'text-slate-300 hover:bg-white/5'}`}
             >
               <Building2 size={18} className="mr-3 inline-block align-[-3px]" aria-hidden="true" />
-              Subscriptions
+              {t('Subscriptions')}
             </button>
 
             <button
@@ -1612,7 +1614,7 @@ const handleEditStaff = (staff) => {
               className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${section === 'settings' ? 'bg-shelf-accent font-bold text-white ring-1 ring-inset ring-blue-200/40 shadow-[0_4px_14px_rgba(37,99,235,0.38)]' : 'text-slate-300 hover:bg-white/5'}`}
             >
               <Settings size={18} className="mr-3 inline-block align-[-3px]" />
-              Settings
+              {t('Settings')}
             </button>
 
             {/* REPORTS & SERVICES COLLAPSIBLE */}
@@ -1628,7 +1630,7 @@ const handleEditStaff = (staff) => {
               >
                 <span className="flex items-center gap-3">
                   <FileSpreadsheet size={18} />
-                  Reports & services
+                  {t('Reports & services')}
                 </span>
                 {workspaceOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               </button>
@@ -1647,7 +1649,7 @@ const handleEditStaff = (staff) => {
                         : 'text-slate-300 hover:text-white'
                     }`}
                   >
-                    Reports
+                    {t('Reports')}
                   </button>
                   <button
                     type="button"
@@ -1661,7 +1663,7 @@ const handleEditStaff = (staff) => {
                         : 'text-slate-300 hover:text-white'
                     }`}
                   >
-                    Analytics
+                    {t('Analytics')}
                   </button>
                 </div>
               )}
@@ -1680,7 +1682,7 @@ const handleEditStaff = (staff) => {
               >
                 <span className="flex items-center gap-3">
                   <MessageSquare size={18} />
-                  Communication
+                  {t('Communication')}
                 </span>
                 {communicationOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               </button>
@@ -1699,7 +1701,7 @@ const handleEditStaff = (staff) => {
                         : 'text-slate-300 hover:text-white'
                     }`}
                   >
-                    Feedback
+                    {t('Feedback')}
                   </button>
                   <button
                     type="button"
@@ -1713,7 +1715,7 @@ const handleEditStaff = (staff) => {
                         : 'text-slate-300 hover:text-white'
                     }`}
                   >
-                    Announcements
+                    {t('Announcements')}
                   </button>
                 </div>
               )}
@@ -1750,23 +1752,23 @@ const handleEditStaff = (staff) => {
                 onClick={() => setSection('overview')}
                 className="shrink-0 font-medium text-slate-500 transition hover:text-shelf-accent dark:text-slate-400"
               >
-                Dashboard
+                {t('Dashboard')}
               </button>
               {section !== 'overview' && (
                 <>
                   <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">/</span>
                   <span className="truncate font-semibold text-shelf-primary dark:text-white">
-                    {section === 'workspace'
+                    {t(section === 'workspace'
                       ? (activeTab === 'analytics' ? 'Analytics' : 'Reports')
                       : section === 'communication'
                         ? (activeTab === 'announcements' ? 'Announcements' : 'Feedback')
-                        : ({ inventory: 'Inventory', map: 'Libraries & map', accounts: 'Staff accounts', 'visitor-accounts': 'Visitor accounts', fines: 'Fine Payments', subscriptions: 'Subscriptions', settings: 'Settings' }[section] || 'Dashboard')}
+                        : ({ inventory: 'Inventory', map: 'Libraries & map', accounts: 'Staff accounts', 'visitor-accounts': 'Visitor accounts', fines: 'Fine Payments', subscriptions: 'Subscriptions', settings: 'Settings' }[section] || 'Dashboard'))}
                   </span>
                 </>
               )}
               <span className="hidden md:inline-flex ml-2 max-w-xs min-w-0 items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                 <Globe size={13} className="shrink-0 text-shelf-accent" aria-hidden="true" />
-                <span className="truncate">All libraries</span>
+                <span className="truncate">{t('All libraries')}</span>
               </span>
             </div>
           </ShelfHeader>
@@ -2057,44 +2059,44 @@ const handleEditStaff = (staff) => {
                   <Settings size={21} aria-hidden="true" />
                 </span>
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">System console</p>
-                  <h2 className="mt-1 text-2xl font-bold text-shelf-primary">Settings</h2>
-                  <p className="mt-1 text-sm text-slate-600">Manage your account security, terms documents, and dashboard preferences.</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">{t('System console')}</p>
+                  <h2 className="mt-1 text-2xl font-bold text-shelf-primary">{t('Settings')}</h2>
+                  <p className="mt-1 text-sm text-slate-600">{t('Manage your account security, terms documents, and dashboard preferences.')}</p>
                 </div>
               </div>
             </header>
             <div className="grid gap-5 xl:grid-cols-2">
               <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h3 className="text-base font-bold text-slate-900">Administrator account</h3>
+                <h3 className="text-base font-bold text-slate-900">{t('Administrator account')}</h3>
                 <dl className="mt-4 divide-y divide-slate-100 text-sm">
-                  <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500">Name</dt><dd className="text-right font-semibold text-slate-800">{user?.name || superAdminName}</dd></div>
-                  <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500">Email</dt><dd className="break-all text-right font-semibold text-slate-800">{user?.email || 'Not available'}</dd></div>
+                  <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500">{t('Name')}</dt><dd className="text-right font-semibold text-slate-800">{user?.name || superAdminName}</dd></div>
+                  <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500">{t('Email')}</dt><dd className="break-all text-right font-semibold text-slate-800">{user?.email || 'Not available'}</dd></div>
                   <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500">Access level</dt><dd className="text-right font-semibold text-slate-800">Super Admin · All libraries</dd></div>
                 </dl>
               </section>
               <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h3 className="text-base font-bold text-slate-900">Dashboard preferences</h3>
-                <label className="mt-4 block text-sm font-semibold text-slate-700" htmlFor="superadmin-start-page">Open this page when I sign in</label>
+                <h3 className="text-base font-bold text-slate-900">{t('Dashboard preferences')}</h3>
+                <label className="mt-4 block text-sm font-semibold text-slate-700" htmlFor="superadmin-start-page">{t('Open this page when I sign in')}</label>
                 <select id="superadmin-start-page" defaultValue={window.localStorage.getItem('shelf_superadmin_start_page') || 'overview'} onChange={(event) => window.localStorage.setItem('shelf_superadmin_start_page', event.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20">
-                  <option value="overview">Overview & analytics</option><option value="inventory">Inventory</option><option value="map">Libraries & map</option><option value="accounts">Staff accounts</option><option value="visitor-accounts">Visitor accounts</option>
+                  <option value="overview">{t('Overview & analytics')}</option><option value="inventory">{t('Inventory')}</option><option value="map">{t('Libraries & map')}</option><option value="accounts">{t('Staff accounts')}</option><option value="visitor-accounts">Visitor accounts</option>
                 </select>
-                <p className="mt-2 text-xs leading-5 text-slate-500">This preference is saved on this device and used on your next sign-in.</p>
+                <p className="mt-2 text-xs leading-5 text-slate-500">{t('This preference is saved on this device and used on your next sign-in.')}</p>
               </section>
             </div>
-            <PreferredLanguageSetting storageKey={`shelf_language_superadmin_${user?.id || 'current'}`} />
+            <PreferredLanguageSetting />
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-              <h3 className="text-base font-bold text-slate-900">Account security</h3>
-              <p className="mt-1 text-sm text-slate-600">Super Admin sign-ins require an authenticator code. You can update your password here.</p>
+              <h3 className="text-base font-bold text-slate-900">{t('Account security')}</h3>
+              <p className="mt-1 text-sm text-slate-600">{t('Super Admin sign-ins require an authenticator code. You can update your password here.')}</p>
               <form onSubmit={updateAdminPassword} className="mt-4 grid gap-3 sm:grid-cols-2">
-                <label className="text-xs font-semibold text-slate-700">New password<input type="password" required autoComplete="new-password" value={newAdminPassword} onChange={(event) => setNewAdminPassword(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20" /></label>
-                <label className="text-xs font-semibold text-slate-700">Confirm password<input type="password" required autoComplete="new-password" value={confirmAdminPassword} onChange={(event) => setConfirmAdminPassword(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20" /></label>
-                <p className="text-xs text-slate-500 sm:col-span-2">At least 12 characters, with uppercase and lowercase letters, a number, and a symbol.</p>
+                <label className="text-xs font-semibold text-slate-700">{t('New password')}<input type="password" required autoComplete="new-password" value={newAdminPassword} onChange={(event) => setNewAdminPassword(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20" /></label>
+                <label className="text-xs font-semibold text-slate-700">{t('Confirm password')}<input type="password" required autoComplete="new-password" value={confirmAdminPassword} onChange={(event) => setConfirmAdminPassword(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20" /></label>
+                <p className="text-xs text-slate-500 sm:col-span-2">{t('At least 12 characters, with uppercase and lowercase letters, a number, and a symbol.')}</p>
                 <div className="flex flex-wrap items-center gap-3 sm:col-span-2"><button type="submit" disabled={passwordSaving || !newAdminPassword || !confirmAdminPassword} className="rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{passwordSaving ? 'Updating…' : 'Update password'}</button>{passwordFeedback.message && <p role="status" className="text-sm font-semibold text-emerald-700">{passwordFeedback.message}</p>}{passwordFeedback.error && <p role="alert" className="text-sm font-semibold text-rose-700">{passwordFeedback.error}</p>}</div>
               </form>
             </section>
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div><h3 className="text-base font-bold text-slate-900">Terms and Conditions</h3><p className="mt-1 text-sm text-slate-600">Edit the terms shown to visitors or sub-admins. Saving a revision requires users to acknowledge the new version.</p></div>
+                <div><h3 className="text-base font-bold text-slate-900">{t('Terms and Conditions')}</h3><p className="mt-1 text-sm text-slate-600">Edit the terms shown to visitors or sub-admins. Saving a revision requires users to acknowledge the new version.</p></div>
                 {termsDocumentVersion && <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">Current version: {termsDocumentVersion}</span>}
               </div>
               <form onSubmit={saveTermsEditor} className="mt-4 space-y-3">
@@ -2335,7 +2337,7 @@ const handleEditStaff = (staff) => {
                       {/* STATUS */}
                       <div>
                         <label className="mb-1 block text-xs font-semibold text-slate-600">
-                          Status
+                          {t('Status')}
                         </label>
                         <select
                           value={libraryForm.status}
@@ -2368,7 +2370,7 @@ const handleEditStaff = (staff) => {
                         onClick={() => setShowAddLibrary(false)}
                         className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100"
                       >
-                        Cancel
+                        {t('Cancel')}
                       </button>
                       <button
                         type="submit"
@@ -2446,7 +2448,7 @@ const handleEditStaff = (staff) => {
                           onClick={() => startEditLibrary(library)}
                           className="rounded-lg border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
                         >
-                          Edit
+                          {t('Edit')}
                         </button>
 
                         <button
@@ -2563,7 +2565,7 @@ const handleEditStaff = (staff) => {
                   <input type="text" value={staffForm.fullName} onChange={(e) => setStaffForm((prev) => ({ ...prev, fullName: e.target.value }))} placeholder="e.g. Juan Dela Cruz" className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm" required />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-600">Email</label>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">{t('Email')}</label>
                   <input type="email" value={staffForm.email} onChange={(e) => setStaffForm((prev) => ({ ...prev, email: e.target.value }))} placeholder="staff@shelf.edu" className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm" required />
                 </div>
                 <div>
@@ -2633,7 +2635,7 @@ const handleEditStaff = (staff) => {
                   }}
                   className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
-                  Cancel
+                  {t('Cancel')}
                 </button>
               )}
               <button
@@ -2716,7 +2718,7 @@ const handleEditStaff = (staff) => {
                   aria-label="Filter staff accounts by status"
                   className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20"
                 >
-                  <option value="all">All statuses</option>
+                  <option value="all">{t('All statuses')}</option>
                   <option value="active">Active</option>
                   <option value="disabled">Disabled</option>
                 </select>
@@ -2741,12 +2743,12 @@ const handleEditStaff = (staff) => {
                 <table className="w-full min-w-225 text-left text-sm">
                   <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
                     <tr>
-                      <th className="p-3">Name</th>
-                      <th className="p-3">Email</th>
+                      <th className="p-3">{t('Name')}</th>
+                      <th className="p-3">{t('Email')}</th>
                       <th className="p-3">Role</th>
                       <th className="p-3">Assigned Branch</th>
-                      <th className="p-3">Status</th>
-                      <th className="w-64 p-3">Action</th>
+                      <th className="p-3">{t('Status')}</th>
+                      <th className="w-64 p-3">{t('Action')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -2778,7 +2780,7 @@ const handleEditStaff = (staff) => {
                                 disabled={staffLoading}
                                 className="inline-flex min-h-9 w-full items-center justify-center rounded-md border border-blue-200 px-2 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
                               >
-                                Edit
+                                {t('Edit')}
                               </button>
 
                               <button

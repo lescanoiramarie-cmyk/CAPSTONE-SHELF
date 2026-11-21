@@ -40,6 +40,7 @@ import SubAdminTermsContent, {
   SUBADMIN_TERMS_VERSION,
 } from '../../component/SubAdminTermsContent.jsx';
 import { useAuth } from '../../context/useAuth.js';
+import { useLanguage } from '../../context/LanguageContext.jsx';
 import ShelfHeader from '../../component/ShelfHeader.jsx';
 import { useLibrary, useLibraryData } from '../../context/useLibrary.js';
 import AttendanceScanner from '../../component/AttendanceScanner.jsx';
@@ -407,6 +408,7 @@ function QRBookBorrowing({
   confirmPickup,
   confirmReturn,
 }) {
+  const { t } = useLanguage();
   const { borrowRequests = [] } = useLibraryData();
   const scannerRef = useRef(null);
   const [showScanner, setShowScanner] = useState(false);
@@ -771,7 +773,7 @@ function QRBookBorrowing({
                   <p className="text-sm font-bold text-slate-800">Scan Visitor QR Code</p>
                   <p className="text-sm text-slate-600 mt-1">Hold the visitor pass in front of the camera. It will scan automatically.</p>
                 </div>
-                <button type="button" onClick={stopScanner} className="text-xs font-bold text-red-600 hover:text-red-800">Close</button>
+                <button type="button" onClick={stopScanner} className="text-xs font-bold text-red-600 hover:text-red-800">{t('Close')}</button>
               </div>
               <div className="p-4">
                 <div className="mx-auto aspect-4/3 w-full max-w-3xl overflow-hidden rounded-xl border-2 border-shelf-primary bg-black">
@@ -823,7 +825,7 @@ function QRBookBorrowing({
                     onClick={clearVisitor}
                     className="bg-white border border-slate-300 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-50"
                   >
-                    Clear
+                    {t('Clear')}
                   </button>
                 </div>
               </div>
@@ -939,6 +941,7 @@ function QRBookBorrowing({
 
 export default function SubAdminDashboard() {
   const { user, logout } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const { books, borrowRequests, attendanceLogs, libraries, visitorCount } = useLibraryData();
   const [section, setSection] = useState(() => {
@@ -1681,7 +1684,7 @@ export default function SubAdminDashboard() {
                 <p className="min-w-0 truncate text-sm font-bold leading-tight text-white">{user?.name || 'Sub-admin'}</p>
                 <span className="shrink-0 rounded-full border border-blue-200/40 bg-blue-400/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-100">Sub-admin</span>
               </div>
-              <p className="mt-1 text-xs font-medium text-blue-100/75">Library console</p>
+              <p className="mt-1 text-xs font-medium text-blue-100/75">{t('Library console')}</p>
               <div className="mt-2 flex items-start gap-2">
                 <Building2 size={13} className="mt-0.5 shrink-0 text-amber-300" aria-hidden="true" />
                 <p className="min-w-0 text-xs text-slate-300 wrap-break-words">{currentBranchName || 'Branch not found'}</p>
@@ -1701,7 +1704,7 @@ export default function SubAdminDashboard() {
                 }`}
               >
                 <Icon size={18} className="mr-3 inline-block align-[-3px]" aria-hidden="true" />
-                {item.label}
+                {t(item.label)}
               </button>
             ))}
 
@@ -1712,7 +1715,7 @@ export default function SubAdminDashboard() {
               aria-expanded={expandedGroups.reports}
               className="w-full flex items-center justify-between text-left text-sm px-3 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 transition"
             >
-              <span>Reports & services</span>
+              <span>{t('Reports & services')}</span>
               <ChevronDown size={16} className={`transition-transform ${expandedGroups.reports ? 'rotate-180' : ''}`} />
             </button>
             {expandedGroups.reports && (
@@ -1728,7 +1731,7 @@ export default function SubAdminDashboard() {
                         : 'text-slate-300 hover:bg-white/5'
                     }`}
                   >
-                    {item.label}
+                    {t(item.label)}
                   </button>
                 ))}
               </div>
@@ -1741,7 +1744,7 @@ export default function SubAdminDashboard() {
               aria-expanded={expandedGroups.communication}
               className="w-full flex items-center justify-between text-left text-sm px-3 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 transition"
             >
-              <span>Communication</span>
+              <span>{t('Communication')}</span>
               <ChevronDown size={16} className={`transition-transform ${expandedGroups.communication ? 'rotate-180' : ''}`} />
             </button>
             {expandedGroups.communication && (
@@ -1757,7 +1760,7 @@ export default function SubAdminDashboard() {
                         : 'text-slate-300 hover:bg-white/5'
                     }`}
                   >
-                    {item.label}
+                    {t(item.label)}
                   </button>
                 ))}
               </div>
@@ -1804,15 +1807,15 @@ export default function SubAdminDashboard() {
               onClick={() => navigateToSection('overview')}
               className="shrink-0 font-medium text-slate-500 transition hover:text-shelf-accent dark:text-slate-400"
             >
-              Dashboard
+              {t('Dashboard')}
             </button>
             {section !== 'overview' && (
               <>
                 <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">/</span>
                 <span className="truncate font-semibold text-shelf-primary dark:text-white">
-                  {section === 'workspace'
+                  {t(section === 'workspace'
                     ? ({ reports: 'Reports', analytics: 'Analytics' }[workspaceTab] || 'Reports')
-                    : ({ visitors: 'Visitor Accounts', attendance: 'Attendance', transactions: 'Book Transactions', fines: 'Fine Payments', subscription: 'Plan & Subscription', inventory: 'Inventory', queue: 'Reservation Queue', map: 'Branch Map', settings: 'Settings' }[section] || 'Dashboard')}
+                    : ({ visitors: 'Visitor Accounts', attendance: 'Attendance', transactions: 'Book Transactions', fines: 'Fine Payments', subscription: 'Plan & Subscription', inventory: 'Inventory', queue: 'Reservation Queue', map: 'Branch Map', settings: 'Settings' }[section] || 'Dashboard'))}
                 </span>
               </>
             )}
@@ -2178,50 +2181,50 @@ export default function SubAdminDashboard() {
         {section === 'settings' && (
           <section className="w-full max-w-6xl space-y-4">
             <header>
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">Library console</p>
-              <h2 className="mt-1 text-2xl font-bold text-shelf-primary">Settings</h2>
-              <p className="mt-1 text-sm text-slate-600">Manage your dashboard preference and review your account access.</p>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">{t('Library console')}</p>
+              <h2 className="mt-1 text-2xl font-bold text-shelf-primary">{t('Settings')}</h2>
+              <p className="mt-1 text-sm text-slate-600">{t('Manage your dashboard preference and review your account access.')}</p>
             </header>
             <div className="grid gap-4 lg:grid-cols-2">
-            <PreferredLanguageSetting storageKey={`shelf_language_subadmin_${user?.id || 'current'}`} darkMode />
+            <PreferredLanguageSetting darkMode />
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-              <h3 className="font-bold text-slate-900 dark:text-white">Administrator account</h3>
+              <h3 className="font-bold text-slate-900 dark:text-white">{t('Administrator account')}</h3>
               <dl className="mt-3 divide-y divide-slate-100 text-sm dark:divide-slate-700">
-                <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500 dark:text-slate-400">Name</dt><dd className="text-right font-semibold text-slate-800 dark:text-slate-200">{user?.name || 'Sub-Admin'}</dd></div>
-                <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500 dark:text-slate-400">Email</dt><dd className="break-all text-right font-semibold text-slate-800 dark:text-slate-200">{user?.email || 'Not available'}</dd></div>
-                <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500 dark:text-slate-400">Assigned library</dt><dd className="text-right font-semibold text-slate-800 dark:text-slate-200">{currentBranchName || 'Not assigned'}</dd></div>
+                <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500 dark:text-slate-400">{t('Name')}</dt><dd className="text-right font-semibold text-slate-800 dark:text-slate-200">{user?.name || 'Sub-Admin'}</dd></div>
+                <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500 dark:text-slate-400">{t('Email')}</dt><dd className="break-all text-right font-semibold text-slate-800 dark:text-slate-200">{user?.email || 'Not available'}</dd></div>
+                <div className="flex justify-between gap-4 py-3"><dt className="text-slate-500 dark:text-slate-400">{t('Assigned library')}</dt><dd className="text-right font-semibold text-slate-800 dark:text-slate-200">{currentBranchName || 'Not assigned'}</dd></div>
               </dl>
             </section>
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-              <h3 className="font-bold text-slate-900 dark:text-white">Account security</h3>
-              <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Sub-admin sign-ins require an authenticator code. During setup, scan the same QR code on each phone you want to use.</p>
+              <h3 className="font-bold text-slate-900 dark:text-white">{t('Account security')}</h3>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{t('Sub-admin sign-ins require an authenticator code. During setup, scan the same QR code on each phone you want to use.')}</p>
               <form onSubmit={updateSubAdminPassword} className="mt-4 grid gap-3 sm:grid-cols-2">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">New password<input type="password" required autoComplete="new-password" value={newAdminPassword} onChange={(event) => setNewAdminPassword(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-700 dark:text-white" /></label>
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Confirm password<input type="password" required autoComplete="new-password" value={confirmAdminPassword} onChange={(event) => setConfirmAdminPassword(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-700 dark:text-white" /></label>
-                <p className="text-xs text-slate-500 dark:text-slate-400 sm:col-span-2">At least 12 characters, with uppercase and lowercase letters, a number, and a symbol.</p>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('New password')}<input type="password" required autoComplete="new-password" value={newAdminPassword} onChange={(event) => setNewAdminPassword(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-700 dark:text-white" /></label>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('Confirm password')}<input type="password" required autoComplete="new-password" value={confirmAdminPassword} onChange={(event) => setConfirmAdminPassword(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-700 dark:text-white" /></label>
+                <p className="text-xs text-slate-500 dark:text-slate-400 sm:col-span-2">{t('At least 12 characters, with uppercase and lowercase letters, a number, and a symbol.')}</p>
                 <div className="flex flex-wrap items-center gap-3 sm:col-span-2"><button type="submit" disabled={passwordSaving || !newAdminPassword || !confirmAdminPassword} className="rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{passwordSaving ? 'Updating…' : 'Update password'}</button>{passwordFeedback.message && <p role="status" className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">{passwordFeedback.message}</p>}{passwordFeedback.error && <p role="alert" className="text-sm font-semibold text-rose-700 dark:text-rose-400">{passwordFeedback.error}</p>}</div>
               </form>
             </section>
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-              <h3 className="font-bold text-slate-900 dark:text-white">Dashboard preferences</h3>
-              <label htmlFor="subadmin-start-page" className="mt-3 block text-sm font-semibold text-slate-700 dark:text-slate-300">Open this page when I sign in</label>
+              <h3 className="font-bold text-slate-900 dark:text-white">{t('Dashboard preferences')}</h3>
+              <label htmlFor="subadmin-start-page" className="mt-3 block text-sm font-semibold text-slate-700 dark:text-slate-300">{t('Open this page when I sign in')}</label>
               <select id="subadmin-start-page" defaultValue={window.localStorage.getItem('shelf_subadmin_start_page') || 'overview'} onChange={(event) => window.localStorage.setItem('shelf_subadmin_start_page', event.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
-                {NAV.filter((item) => item.id !== 'settings').map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                {NAV.filter((item) => item.id !== 'settings').map((item) => <option key={item.id} value={item.id}>{t(item.label)}</option>)}
               </select>
-              <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">This preference is saved on this device and used on your next sign-in.</p>
+              <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">{t('This preference is saved on this device and used on your next sign-in.')}</p>
             </section>
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
               <div className="flex items-start gap-3">
                 <span className="rounded-xl bg-blue-50 p-3 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300"><Building2 size={20} aria-hidden="true" /></span>
                 <div>
-                  <h3 className="font-bold text-slate-900 dark:text-white">Assigned Branch Overview</h3>
-                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Library profile details and system assignment for this console.</p>
+                  <h3 className="font-bold text-slate-900 dark:text-white">{t('Assigned Branch Overview')}</h3>
+                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{t('Library profile details and system assignment for this console.')}</p>
                 </div>
               </div>
               <dl className="mt-4 divide-y divide-slate-100 text-sm dark:divide-slate-700">
-                <div className="flex justify-between gap-4 py-2.5"><dt className="text-slate-500 dark:text-slate-400">Branch Name</dt><dd className="text-right font-semibold text-slate-800 dark:text-slate-200">{currentBranchName || 'Assigned Library'}</dd></div>
-                <div className="flex justify-between gap-4 py-2.5"><dt className="text-slate-500 dark:text-slate-400">Branch ID</dt><dd className="font-mono text-xs text-right font-semibold text-slate-600 dark:text-slate-300">{currentLibraryId || '—'}</dd></div>
-                <div className="flex justify-between gap-4 py-2.5"><dt className="text-slate-500 dark:text-slate-400">System Role</dt><dd className="text-right font-semibold text-blue-600 dark:text-blue-400">Sub-Administrator</dd></div>
+                <div className="flex justify-between gap-4 py-2.5"><dt className="text-slate-500 dark:text-slate-400">{t('Branch Name')}</dt><dd className="text-right font-semibold text-slate-800 dark:text-slate-200">{currentBranchName || 'Assigned Library'}</dd></div>
+                <div className="flex justify-between gap-4 py-2.5"><dt className="text-slate-500 dark:text-slate-400">{t('Branch ID')}</dt><dd className="font-mono text-xs text-right font-semibold text-slate-600 dark:text-slate-300">{currentLibraryId || '—'}</dd></div>
+                <div className="flex justify-between gap-4 py-2.5"><dt className="text-slate-500 dark:text-slate-400">{t('System Role')}</dt><dd className="text-right font-semibold text-blue-600 dark:text-blue-400">{t('Sub-Administrator')}</dd></div>
               </dl>
             </section>
             </div>
@@ -2279,7 +2282,7 @@ export default function SubAdminDashboard() {
             <div className="flex shrink-0 items-start justify-between gap-4 bg-shelf-primary px-5 py-5 text-white sm:px-6">
               <div>
                 <h2 id="subadmin-terms-title" className="text-lg font-extrabold">
-                  Terms and Conditions
+                  {t('Terms and Conditions')}
                 </h2>
                 <p className="mt-1 text-sm text-slate-200">
                   Responsibilities for accessing branch and visitor information.

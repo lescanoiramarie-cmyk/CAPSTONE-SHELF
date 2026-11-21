@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../../context/useAuth.js';
+import { useLanguage } from '../../context/LanguageContext.jsx';
 import { ThemeProvider } from '../../context/ThemeContext.jsx';
 import { useLibrary, useLibraryData } from '../../context/useLibrary.js';
 import { supabase } from '../../lib/supabaseClient.js';
@@ -194,6 +195,7 @@ function getCommunityReturnReminder(dueDate) {
 
 function VisitorDashboardContent() {
   const { user, logout } = useAuth();
+  const { t } = useLanguage();
   const [currentTime, setCurrentTime] = useState(0);
 
   useEffect(() => {
@@ -1453,7 +1455,7 @@ function VisitorDashboardContent() {
             <div className="flex shrink-0 items-start justify-between gap-4 bg-shelf-primary px-5 py-5 text-white sm:px-6">
               <div>
                 <h2 id="visitor-terms-title" className="text-lg font-extrabold">
-                  Terms and Conditions
+                  {t('Terms and Conditions')}
                 </h2>
                 <p className="mt-1 text-sm text-slate-200">
                   Please review these terms before using your visitor account.
@@ -1510,7 +1512,7 @@ function VisitorDashboardContent() {
                   className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-800 sm:p-6"
                 >
                   <h2 id="visitor-terms-check-title" className="text-lg font-bold text-slate-900 dark:text-white">
-                    Terms and Conditions
+                    {t('Terms and Conditions')}
                   </h2>
                   <p role="alert" className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-200">
                     {termsError}
@@ -1689,7 +1691,7 @@ function VisitorDashboardContent() {
                 className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700/50"
               >
                 <UserRound size={16} aria-hidden="true" />
-                My Profile
+                {t('My Profile')}
               </button>
             </li>
             <li>
@@ -1722,13 +1724,13 @@ function VisitorDashboardContent() {
         <div className="space-y-3">
           <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
             <MapPin size={14} className="shrink-0 text-blue-600 dark:text-blue-300" aria-hidden="true" />
-            <span className="shrink-0">Your library:</span>
+            <span className="shrink-0">{t('Your library:')}</span>
             <span className="truncate">{registeredLibraryName}</span>
           </div>
           <DashboardWelcome
           name={user?.name?.split(' ')[0]}
           visitorAppearance
-          description="Search books, check availability, manage requests, and keep track of your library visits."
+          description={t('Search books, check availability, manage requests, and keep track of your library visits.')}
           showNotifications={false}
           actions={[
             {
@@ -1740,7 +1742,7 @@ function VisitorDashboardContent() {
               },
             },
             {
-              label: 'Search Catalog',
+              label: t('Search Catalog'),
               Icon: Search,
               onClick: () => {
                 setTab('catalog');
@@ -1753,7 +1755,7 @@ function VisitorDashboardContent() {
               },
             },
             {
-              label: 'View Fines',
+              label: t('View Fines'),
               Icon: CircleDollarSign,
               onClick: () => {
                 setTab('myBorrows');
@@ -1939,15 +1941,15 @@ function VisitorDashboardContent() {
           className="relative z-30 flex min-w-0 flex-nowrap gap-2 overflow-x-auto overflow-y-hidden no-scrollbar scroll-px-3 snap-x snap-proximity border-b border-slate-200 bg-shelf-bg/95 px-3 pb-3 pt-2 backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/95 sm:sticky sm:top-20 sm:rounded-2xl sm:border sm:px-3 sm:py-2.5"
         >
           {[
-            { id: 'catalog', label: 'Catalog', Icon: BookOpen },
-            { id: 'categories', label: 'Book Categories', Icon: Bookmark },
-            { id: 'communityBooks', label: 'Community Books', Icon: UsersRound },
-            { id: 'savedBooks', label: 'Saved Books', Icon: BookmarkCheck },
-            { id: 'personalBooks', label: 'My Personal Books', Icon: BookMarked },
-            { id: 'readingList', label: 'My Reading List', Icon: ClipboardList },
-            { id: 'myBorrows', label: 'My Requests & Borrows', Icon: CalendarDays },
-            { id: 'map', label: 'Library Map', Icon: MapPinned },
-            { id: 'services', label: 'Announcements & Feedback', Icon: Megaphone },
+            { id: 'catalog', label: t('Catalog'), Icon: BookOpen },
+            { id: 'categories', label: t('Book Categories'), Icon: Bookmark },
+            { id: 'communityBooks', label: t('Community Books'), Icon: UsersRound },
+            { id: 'savedBooks', label: t('Saved Books'), Icon: BookmarkCheck },
+            { id: 'personalBooks', label: t('My Personal Books'), Icon: BookMarked },
+            { id: 'readingList', label: t('My Reading List'), Icon: ClipboardList },
+            { id: 'myBorrows', label: t('My Requests & Borrows'), Icon: CalendarDays },
+            { id: 'map', label: t('Library Map'), Icon: MapPinned },
+            { id: 'services', label: t('Announcements & Feedback'), Icon: Megaphone },
           ].map(({ id, label, Icon }) => (
             <button
               key={id}
@@ -2116,11 +2118,11 @@ function VisitorDashboardContent() {
                   onClick={() => setIsMenuOpen(false)}
                   className="font-medium text-slate-500 hover:text-shelf-primary dark:text-slate-400 dark:hover:text-white transition"
                 >
-                  Dashboard
+                  {t('Dashboard')}
                 </button>
                 <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">/</span>
                 <span className="font-bold text-shelf-primary dark:text-white">
-                  {menuSection === 'profile' ? 'My Profile' : 'Visitor Menu'}
+                  {menuSection === 'profile' ? t('My Profile') : t('Visitor Menu')}
                 </span>
               </nav>
 
@@ -2128,10 +2130,10 @@ function VisitorDashboardContent() {
                 type="button"
                 onClick={() => setIsMenuOpen(false)}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                aria-label="Back to dashboard"
+                aria-label={t('Back to dashboard')}
               >
                 <X size={15} aria-hidden="true" />
-                Close
+                {t('Close')}
               </button>
             </div>
 
@@ -2154,7 +2156,7 @@ function VisitorDashboardContent() {
                       className={`relative flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-full bg-shelf-primary text-2xl font-bold text-white ring-4 ring-white shadow-md dark:ring-slate-800 ${
                         !isEditingProfile && profileImageSrc && !profileImageFailed ? 'cursor-pointer hover:opacity-90 transition' : ''
                       }`}
-                      title={!isEditingProfile && profileImageSrc && !profileImageFailed ? 'Click to view full photo' : undefined}
+                      title={!isEditingProfile && profileImageSrc && !profileImageFailed ? t('Click to view full photo') : undefined}
                       role={!isEditingProfile && profileImageSrc && !profileImageFailed ? 'button' : undefined}
                       tabIndex={!isEditingProfile && profileImageSrc && !profileImageFailed ? 0 : undefined}
                       onKeyDown={(e) => {
@@ -2175,8 +2177,8 @@ function VisitorDashboardContent() {
                         getVisitorInitials(visitorDetails?.fullName || user?.name)
                       )}
                       {isEditingProfile && (
-                        <label className="absolute inset-x-0 bottom-0 flex cursor-pointer items-center justify-center bg-shelf-primary/95 py-1.5 text-xs font-bold text-white shadow-sm" title="Change profile photo">
-                          Change
+                        <label className="absolute inset-x-0 bottom-0 flex cursor-pointer items-center justify-center bg-shelf-primary/95 py-1.5 text-xs font-bold text-white shadow-sm" title={t('Change profile photo')}>
+                          {t('Change')}
                           <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleProfileImageChange} className="sr-only" />
                         </label>
                       )}
@@ -2190,9 +2192,9 @@ function VisitorDashboardContent() {
                       </p>
                       {isEditingProfile && (
                         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                          <p className="text-xs text-slate-500 dark:text-slate-400">JPG, PNG, or WEBP up to 2 MB</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">{t('JPG, PNG, or WEBP up to 2 MB')}</p>
                           {(profileImageSrc || visitorDetails?.profileImagePath) && (
-                            <button type="button" onClick={() => { setProfileImageFile(null); setProfileImagePreview(''); setRemoveProfileImage(true); setProfileError(''); }} className="text-xs font-semibold text-red-700 hover:underline dark:text-red-300">Remove photo</button>
+                            <button type="button" onClick={() => { setProfileImageFile(null); setProfileImagePreview(''); setRemoveProfileImage(true); setProfileError(''); }} className="text-xs font-semibold text-red-700 hover:underline dark:text-red-300">{t('Remove photo')}</button>
                           )}
                         </div>
                       )}
@@ -2206,13 +2208,13 @@ function VisitorDashboardContent() {
                         </div>
                       ) : <div className="flex h-[120px] w-[120px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-slate-400 dark:border-slate-600 dark:bg-slate-900"><QrCode size={32} aria-hidden="true" /></div>}
                       <div className="min-w-0">
-                        <p className="font-sans text-[10px] font-bold uppercase tracking-[0.16em] text-shelf-primary">Visitor pass</p>
-                        <h3 className="mt-1 font-sans text-base font-bold text-slate-900 dark:text-white">Library QR Pass</h3>
-                        <p className="mt-1 max-w-40 text-xs leading-relaxed text-slate-600 dark:text-slate-300">Show this code at the library desk.</p>
+                        <p className="font-sans text-[10px] font-bold uppercase tracking-[0.16em] text-shelf-primary">{t('Visitor pass')}</p>
+                        <h3 className="mt-1 font-sans text-base font-bold text-slate-900 dark:text-white">{t('Library QR Pass')}</h3>
+                        <p className="mt-1 max-w-40 text-xs leading-relaxed text-slate-600 dark:text-slate-300">{t('Show this code at the library desk.')}</p>
                         {visitorQrCode && <button type="button" onClick={handleSaveQrAsImage} disabled={isSavingQr} className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-shelf-primary px-3 py-2 font-sans text-xs font-bold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50"><Save size={13} aria-hidden="true" />{isSavingQr ? 'Saving…' : 'Save pass'}</button>}
                         {qrSaveMessage && <p role="status" className="mt-2 max-w-44 text-xs text-emerald-700 dark:text-emerald-300">{qrSaveMessage}</p>}
                         {qrSaveError && <p role="alert" className="mt-2 max-w-44 text-xs text-red-700 dark:text-red-300">{qrSaveError}</p>}
-                        {!visitorQrCode && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">QR code is refreshing…</p>}
+                        {!visitorQrCode && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('QR code is refreshing…')}</p>}
                       </div>
                     </div>
                   </section>
@@ -2226,25 +2228,25 @@ function VisitorDashboardContent() {
                   <form onSubmit={handleSaveVisitorProfile}>
                     <section>
                       <div className="mb-3 flex items-center justify-between gap-3">
-                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Personal Information</h3>
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">{t('Personal Information')}</h3>
                         {isEditingProfile ? (
                           <div className="flex gap-2">
-                            <button type="button" onClick={cancelProfileEdit} disabled={isSavingProfile} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">Cancel</button>
+                            <button type="button" onClick={cancelProfileEdit} disabled={isSavingProfile} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">{t('Cancel')}</button>
                             <button type="submit" disabled={isSavingProfile || Boolean(pendingProfileImageFile)} className="inline-flex items-center gap-1.5 rounded-lg bg-shelf-primary px-3 py-2 text-xs font-bold text-white hover:opacity-90 disabled:opacity-50"><Save size={14} aria-hidden="true" />{isSavingProfile ? 'Saving…' : 'Save'}</button>
                           </div>
                         ) : (
-                          <button type="button" onClick={() => { setProfileForm({ contactNumber: visitorDetails?.contactNumber || '' }); setProfileError(''); setProfileMessage(''); setIsEditingProfile(true); }} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"><Pencil size={14} aria-hidden="true" />Edit profile</button>
+                          <button type="button" onClick={() => { setProfileForm({ contactNumber: visitorDetails?.contactNumber || '' }); setProfileError(''); setProfileMessage(''); setIsEditingProfile(true); }} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"><Pencil size={14} aria-hidden="true" />{t('Edit profile')}</button>
                         )}
                       </div>
                       <dl className="divide-y divide-slate-100 border-y border-slate-100 text-sm dark:divide-slate-700 dark:border-slate-700">
                         {[
-                          [UserRound, 'Full name', visitorDetails?.fullName || user?.name],
-                          [Mail, 'Email', visitorDetails?.email || user?.email],
-                          [Phone, 'Contact number', visitorDetails?.contactNumber],
-                          [MapPin, 'Address', visitorDetails?.address],
+                          [UserRound, t('Full name'), visitorDetails?.fullName || user?.name],
+                          [Mail, t('Email'), visitorDetails?.email || user?.email],
+                          [Phone, t('Contact number'), visitorDetails?.contactNumber],
+                          [MapPin, t('Address'), visitorDetails?.address],
                         ].map(([Icon, label, value]) => (
                           <div key={label} className="grid grid-cols-[7rem_1fr] gap-3 py-2.5">
-                            <dt className="flex items-center gap-2 text-slate-600 dark:text-slate-300"><Icon size={14} aria-hidden="true" />{label}</dt>
+                            <dt className="flex items-center gap-2 text-slate-600 dark:text-slate-300"><Icon size={14} aria-hidden="true" />{t(label)}</dt>
                             <dd className="wrap-break-word font-medium text-slate-800 dark:text-slate-200">
                               {isEditingProfile && label === 'Contact number' ? <input type="tel" maxLength={50} value={profileForm.contactNumber} onChange={(event) => setProfileForm((current) => ({ ...current, contactNumber: event.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal text-slate-900 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white" aria-label="Contact number" /> : value || '—'}
                             </dd>
@@ -2252,10 +2254,7 @@ function VisitorDashboardContent() {
                         ))}
                       </dl>
                       <div className="mt-4">
-                        <PreferredLanguageSetting
-                          key={visitorDetails?.id || user?.id || 'visitor'}
-                          storageKey={`shelf_language_visitor_${visitorDetails?.id || user?.id || 'current'}`}
-                        />
+                        <PreferredLanguageSetting />
                       </div>
                       {isEditingProfile && profileError && <p role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">{profileError}</p>}
                     </section>
@@ -2264,7 +2263,7 @@ function VisitorDashboardContent() {
                     <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-start gap-4">
                         <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl ${visitorMfaFactor ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' : 'bg-slate-100 text-shelf-primary dark:bg-slate-700 dark:text-blue-200'}`}><ShieldCheck size={23} aria-hidden="true" /></div>
-                        <div><h3 className="text-base font-bold text-slate-900 dark:text-white">Account security</h3><p className="mt-1 max-w-xl text-sm leading-5 text-slate-600 dark:text-slate-300">Add an authenticator code as a second step when signing in.</p><span className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${visitorMfaFactor ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200'}`}><span className={`h-1.5 w-1.5 rounded-full ${visitorMfaFactor ? 'bg-emerald-500' : 'bg-slate-400'}`} />{visitorMfaFactor ? 'Two-step verification is on' : 'Two-step verification is off'}</span></div>
+                        <div><h3 className="text-base font-bold text-slate-900 dark:text-white">{t('Account security')}</h3><p className="mt-1 max-w-xl text-sm leading-5 text-slate-600 dark:text-slate-300">Add an authenticator code as a second step when signing in.</p><span className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${visitorMfaFactor ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200'}`}><span className={`h-1.5 w-1.5 rounded-full ${visitorMfaFactor ? 'bg-emerald-500' : 'bg-slate-400'}`} />{visitorMfaFactor ? 'Two-step verification is on' : 'Two-step verification is off'}</span></div>
                       </div>
                       {visitorMfaFactor ? <button type="button" onClick={() => { setVisitorMfaDisableConfirm(true); setVisitorMfaCode(''); setVisitorMfaError(''); setVisitorMfaMessage(''); }} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">Turn off MFA</button> : <button type="button" onClick={startVisitorMfaSetup} disabled={visitorMfaLoading || Boolean(visitorMfaSetup)} className="rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:opacity-90 disabled:opacity-50">{visitorMfaLoading ? 'Preparing setup…' : 'Set up MFA'}</button>}
                     </div>
@@ -2282,7 +2281,7 @@ function VisitorDashboardContent() {
                             <div key={passkey.id} className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
                               <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">{passkey.friendly_name || 'Passkey added'}</span>
                               {passkey.created_at && <span>Added {new Date(passkey.created_at).toLocaleDateString()}</span>}
-                              <button type="button" disabled={visitorPasskeyBusy} onClick={() => removeVisitorPasskey(passkey)} className="font-semibold text-rose-700 underline-offset-2 hover:underline disabled:opacity-50 dark:text-rose-300">Remove</button>
+                              <button type="button" disabled={visitorPasskeyBusy} onClick={() => removeVisitorPasskey(passkey)} className="font-semibold text-rose-700 underline-offset-2 hover:underline disabled:opacity-50 dark:text-rose-300">{t('Remove')}</button>
                             </div>
                           ))}
                         </div>
@@ -2296,7 +2295,7 @@ function VisitorDashboardContent() {
                     {visitorPasskeyError && <p role="alert" className="border-t border-rose-100 bg-rose-50 px-5 py-3 text-sm font-semibold text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200">{visitorPasskeyError}</p>}
                   </section>
                   {(visitorMfaSetup?.qrCode || visitorMfaDisableConfirm) && <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !visitorMfaLoading) { setVisitorMfaSetup(null); setVisitorMfaDisableConfirm(false); setVisitorMfaError(''); setVisitorMfaCode(''); } }}><section role="dialog" aria-modal="true" aria-labelledby="visitor-mfa-dialog-title" className="my-auto w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-800">
-                    {visitorMfaSetup?.qrCode ? <><div className="mb-5"><p className="text-xs font-bold uppercase tracking-wider text-shelf-primary">Secure your account</p><h3 id="visitor-mfa-dialog-title" className="mt-1 text-xl font-bold text-slate-900 dark:text-white">Set up two-step verification</h3><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Use an authenticator app such as Google Authenticator or Microsoft Authenticator.</p></div><div className="grid gap-5 sm:grid-cols-[180px_1fr]"><div className="mx-auto rounded-xl border border-slate-200 bg-white p-3"><img src={visitorMfaSetup.qrCode} alt="Scan this QR code with your authenticator app" className="h-[156px] w-[156px]" /></div><div><ol className="space-y-2 text-sm text-slate-700 dark:text-slate-200"><li><b className="mr-2 text-shelf-primary">1.</b>Open your authenticator app and scan this QR code.</li><li><b className="mr-2 text-shelf-primary">2.</b>Enter the six-digit code shown in the app.</li></ol><details className="mt-3"><summary className="cursor-pointer text-xs font-semibold text-slate-600 dark:text-slate-300">Can't scan? Show setup key</summary><p className="mt-2 break-all rounded-lg bg-slate-50 p-2 font-mono text-xs text-slate-700 dark:bg-slate-900 dark:text-slate-200">{visitorMfaSetup.secret}</p></details><form onSubmit={confirmVisitorMfaSetup} className="mt-4"><label htmlFor="visitor-mfa-setup-code" className="block text-xs font-semibold text-slate-700 dark:text-slate-200">Authenticator code</label><input id="visitor-mfa-setup-code" value={visitorMfaCode} onChange={(event) => setVisitorMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em] dark:border-slate-600 dark:bg-slate-900 dark:text-white" />{visitorMfaError && <p role="alert" className="mt-2 text-xs font-semibold text-rose-700">{visitorMfaError}</p>}<div className="mt-4 flex justify-end gap-2"><button type="button" disabled={visitorMfaLoading} onClick={() => { setVisitorMfaSetup(null); setVisitorMfaError(''); setVisitorMfaCode(''); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold dark:border-slate-600 dark:text-slate-200">Cancel</button><button disabled={visitorMfaLoading || visitorMfaCode.length !== 6} className="rounded-lg bg-shelf-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{visitorMfaLoading ? 'Verifying…' : 'Confirm and enable'}</button></div></form></div></div></> : <form onSubmit={disableVisitorMfa}><p className="text-xs font-bold uppercase tracking-wider text-rose-700">Confirm security change</p><h3 id="visitor-mfa-dialog-title" className="mt-1 text-xl font-bold text-slate-900 dark:text-white">Turn off MFA?</h3><p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Your account will no longer require an authenticator code at sign-in. Enter a current code to confirm.</p><label htmlFor="visitor-mfa-disable-code" className="mt-5 block text-sm font-semibold text-slate-700 dark:text-slate-200">Authenticator code</label><input id="visitor-mfa-disable-code" value={visitorMfaCode} onChange={(event) => setVisitorMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em] dark:border-slate-600 dark:bg-slate-900 dark:text-white" />{visitorMfaError && <p role="alert" className="mt-2 text-xs font-semibold text-rose-700">{visitorMfaError}</p>}<div className="mt-5 flex justify-end gap-2"><button type="button" disabled={visitorMfaLoading} onClick={() => { setVisitorMfaDisableConfirm(false); setVisitorMfaError(''); setVisitorMfaCode(''); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold dark:border-slate-600 dark:text-slate-200">Cancel</button><button disabled={visitorMfaLoading || visitorMfaCode.length !== 6} className="rounded-lg bg-rose-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{visitorMfaLoading ? 'Updating…' : 'Confirm and turn off'}</button></div></form>}
+                    {visitorMfaSetup?.qrCode ? <><div className="mb-5"><p className="text-xs font-bold uppercase tracking-wider text-shelf-primary">Secure your account</p><h3 id="visitor-mfa-dialog-title" className="mt-1 text-xl font-bold text-slate-900 dark:text-white">Set up two-step verification</h3><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Use an authenticator app such as Google Authenticator or Microsoft Authenticator.</p></div><div className="grid gap-5 sm:grid-cols-[180px_1fr]"><div className="mx-auto rounded-xl border border-slate-200 bg-white p-3"><img src={visitorMfaSetup.qrCode} alt="Scan this QR code with your authenticator app" className="h-[156px] w-[156px]" /></div><div><ol className="space-y-2 text-sm text-slate-700 dark:text-slate-200"><li><b className="mr-2 text-shelf-primary">1.</b>Open your authenticator app and scan this QR code.</li><li><b className="mr-2 text-shelf-primary">2.</b>Enter the six-digit code shown in the app.</li></ol><details className="mt-3"><summary className="cursor-pointer text-xs font-semibold text-slate-600 dark:text-slate-300">Can't scan? Show setup key</summary><p className="mt-2 break-all rounded-lg bg-slate-50 p-2 font-mono text-xs text-slate-700 dark:bg-slate-900 dark:text-slate-200">{visitorMfaSetup.secret}</p></details><form onSubmit={confirmVisitorMfaSetup} className="mt-4"><label htmlFor="visitor-mfa-setup-code" className="block text-xs font-semibold text-slate-700 dark:text-slate-200">Authenticator code</label><input id="visitor-mfa-setup-code" value={visitorMfaCode} onChange={(event) => setVisitorMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em] dark:border-slate-600 dark:bg-slate-900 dark:text-white" />{visitorMfaError && <p role="alert" className="mt-2 text-xs font-semibold text-rose-700">{visitorMfaError}</p>}<div className="mt-4 flex justify-end gap-2"><button type="button" disabled={visitorMfaLoading} onClick={() => { setVisitorMfaSetup(null); setVisitorMfaError(''); setVisitorMfaCode(''); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold dark:border-slate-600 dark:text-slate-200">{t('Cancel')}</button><button disabled={visitorMfaLoading || visitorMfaCode.length !== 6} className="rounded-lg bg-shelf-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{visitorMfaLoading ? 'Verifying…' : 'Confirm and enable'}</button></div></form></div></div></> : <form onSubmit={disableVisitorMfa}><p className="text-xs font-bold uppercase tracking-wider text-rose-700">Confirm security change</p><h3 id="visitor-mfa-dialog-title" className="mt-1 text-xl font-bold text-slate-900 dark:text-white">Turn off MFA?</h3><p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Your account will no longer require an authenticator code at sign-in. Enter a current code to confirm.</p><label htmlFor="visitor-mfa-disable-code" className="mt-5 block text-sm font-semibold text-slate-700 dark:text-slate-200">Authenticator code</label><input id="visitor-mfa-disable-code" value={visitorMfaCode} onChange={(event) => setVisitorMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em] dark:border-slate-600 dark:bg-slate-900 dark:text-white" />{visitorMfaError && <p role="alert" className="mt-2 text-xs font-semibold text-rose-700">{visitorMfaError}</p>}<div className="mt-5 flex justify-end gap-2"><button type="button" disabled={visitorMfaLoading} onClick={() => { setVisitorMfaDisableConfirm(false); setVisitorMfaError(''); setVisitorMfaCode(''); }} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold dark:border-slate-600 dark:text-slate-200">{t('Cancel')}</button><button disabled={visitorMfaLoading || visitorMfaCode.length !== 6} className="rounded-lg bg-rose-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{visitorMfaLoading ? 'Updating…' : 'Confirm and turn off'}</button></div></form>}
                   </section></div>}
                   {/* =================================================
                       ATTENDANCE HISTORY
@@ -2342,7 +2341,7 @@ function VisitorDashboardContent() {
                           onChange={(event) => setAttendanceLibraryFilter(event.target.value)}
                           className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                         >
-                          <option value="all">All libraries</option>
+                          <option value="all">{t('All libraries')}</option>
                           {libraries.map((library) => (
                             <option key={library.id} value={library.id}>{library.name}</option>
                           ))}
@@ -2498,7 +2497,7 @@ function VisitorDashboardContent() {
           >
             <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-700 sm:px-6">
               <h2 id="visitor-terms-review-title" className="text-lg font-bold text-slate-900 dark:text-white">
-                Terms and Conditions
+                {t('Terms and Conditions')}
               </h2>
               <button
                 type="button"
@@ -2518,7 +2517,7 @@ function VisitorDashboardContent() {
                 onClick={() => setIsTermsReviewOpen(false)}
                 className="min-h-11 w-full rounded-lg bg-shelf-primary px-5 py-3 text-sm font-bold text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary focus-visible:ring-offset-2 sm:w-auto sm:min-w-28"
               >
-                Close
+                {t('Close')}
               </button>
             </footer>
           </section>

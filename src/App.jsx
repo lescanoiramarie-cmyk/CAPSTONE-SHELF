@@ -9,6 +9,7 @@ import {
 import { BadgeCheck, ShieldCheck } from 'lucide-react';
 
 import { AuthProvider } from './context/AuthContext.jsx';
+import { LanguageProvider } from './context/LanguageContext.jsx';
 import { LibraryProvider } from './context/LibraryContext.jsx';
 import { useAuth } from './context/useAuth.js';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
@@ -304,11 +305,13 @@ function AppRouter() {
 export default function App() {
   return (
     <AuthProvider>
-      <LibraryProvider>
-        <BrowserRouter>
-          <AppRouter />
-        </BrowserRouter>
-      </LibraryProvider>
+      <LanguageProvider>
+        <LibraryProvider>
+          <BrowserRouter>
+            <AppRouter />
+          </BrowserRouter>
+        </LibraryProvider>
+      </LanguageProvider>
     </AuthProvider>
   );
 }

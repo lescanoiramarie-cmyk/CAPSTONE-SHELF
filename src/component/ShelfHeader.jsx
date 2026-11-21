@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth.js';
+import { useLanguage } from '../context/LanguageContext.jsx';
 import { getDashboardPath } from '../routes/roleHome.js';
 import {
   Moon,
@@ -56,6 +57,7 @@ export default function ShelfHeader({
   showLogo = true,
 } ) {
   const { user, logout } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [isDarkAppearance, setIsDarkAppearance] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -340,7 +342,7 @@ export default function ShelfHeader({
                   />
                   <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden z-50 dark:border-slate-700 dark:bg-slate-800">
                     <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-700 flex items-center justify-between">
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-white">Notifications</h3>
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white">{t('Notifications')}</h3>
                       {isVisitor && visitorUnreadCount > 0 && (
                         <button
                           type="button"
@@ -349,7 +351,7 @@ export default function ShelfHeader({
                           className="inline-flex items-center gap-1 text-xs font-semibold text-[#174477] hover:underline disabled:cursor-not-allowed disabled:opacity-40 dark:text-blue-300"
                         >
                           <CheckCheck size={14} />
-                          Mark all read
+                          {t('Mark all read')}
                         </button>
                       )}
                     </div>
@@ -372,7 +374,7 @@ export default function ShelfHeader({
                           </button>
                         </div>
                       ) : displayNotificationItems.length === 0 ? (
-                        <p className="px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400">No notifications</p>
+                        <p className="px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400">{t('No notifications')}</p>
                       ) : (
                         <ul role="list" className="divide-y divide-slate-200 dark:divide-slate-700">
                           {displayNotificationItems.map((n) => (
@@ -455,7 +457,7 @@ export default function ShelfHeader({
                                   className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700/50"
                                 >
                                   <LayoutDashboard size={16} aria-hidden="true" />
-                                  Dashboard
+                                  {t('Dashboard')}
                                 </button>
                               </li>
                               <li>
@@ -490,7 +492,7 @@ export default function ShelfHeader({
                                   className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700/50"
                                 >
                                   <ShieldCheck size={16} aria-hidden="true" />
-                                  Sub-Admin Dashboard
+                                  {t('Sub-Admin Dashboard')}
                                 </button>
                               </li>
                               <li>
@@ -511,7 +513,7 @@ export default function ShelfHeader({
                                   className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700/50"
                                 >
                                   <Settings size={16} aria-hidden="true" />
-                                  Super Admin Dashboard
+                                  {t('Super Admin Dashboard')}
                                 </button>
                               </li>
                               <li>
@@ -535,7 +537,7 @@ export default function ShelfHeader({
                           className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
                         >
                           <LogOut size={16} aria-hidden="true" />
-                          Sign out
+                          {t('Sign out')}
                         </button>
                       </li>
                     </ul>

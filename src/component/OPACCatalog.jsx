@@ -12,6 +12,7 @@ import {
 } from 'chart.js';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth.js';
+import { useLanguage } from '../context/LanguageContext.jsx';
 import { getDashboardPath } from '../routes/roleHome.js';
 import { matchesCallNumberSearch } from '../lib/callNumber.js';
 import { persistCommunityBookSaveState } from '../lib/communityBookSave.js';
@@ -300,6 +301,7 @@ export default function OPACCatalog({
   externalSelectedBook = null,
   onClearExternalSelectedBook = () => {},
 }) {
+  const { t } = useLanguage();
   const { user } = useAuth();
   const navigate = useNavigate();
   const {
@@ -2470,7 +2472,7 @@ export default function OPACCatalog({
             <div className="visitor-book-card-text">
               <h3 title={book.title || 'Untitled Book'}>{book.title || 'Untitled Book'}</h3>
               <p title={book.author || 'Unknown Author'}>By {book.author || 'Unknown Author'}</p>
-              <span className="visitor-personal-book-details-hint">View book details</span>
+              <span className="visitor-personal-book-details-hint">{t('View book details')}</span>
             </div>
           </button>
 
@@ -2517,7 +2519,7 @@ export default function OPACCatalog({
                   className="visitor-book-card-action-button visitor-book-card-action-button-outline"
                 >
                   <Pencil size={14} aria-hidden="true" />
-                  <span className="visitor-book-card-action-label visitor-book-card-action-label-secondary">Edit</span>
+                  <span className="visitor-book-card-action-label visitor-book-card-action-label-secondary">{t('Edit')}</span>
                 </button>
                 <button
                   type="button"
@@ -2532,7 +2534,7 @@ export default function OPACCatalog({
                   className="visitor-book-card-action-button visitor-book-card-action-button-danger"
                 >
                   <X size={14} aria-hidden="true" />
-                  <span className="visitor-book-card-action-label visitor-book-card-action-label-secondary">Remove</span>
+                  <span className="visitor-book-card-action-label visitor-book-card-action-label-secondary">{t('Remove')}</span>
                 </button>
               </div>
             )}
@@ -2594,7 +2596,7 @@ export default function OPACCatalog({
             type="button"
             className="flex items-center gap-3 text-left"
             onClick={() => navigate(user?.id ? getDashboardPath(user.role) : '/')}
-            aria-label="Go to SHELF home"
+            aria-label={t('Go to SHELF home')}
           >
             <div className="flex items-center gap-2">
               <img src="/shelf-logo.png" alt="" className="h-9 w-9 object-contain" />
@@ -2602,7 +2604,7 @@ export default function OPACCatalog({
               <span className="text-xs bg-blue-600 px-2 py-0.5 rounded font-semibold text-white">OPAC</span>
             </div>
             <span className="text-xs text-slate-400 border-l border-slate-700 pl-3 hidden sm:inline">
-              Public Catalog Search
+              {t('Public Catalog Search')}
             </span>
           </button>
 
@@ -2619,7 +2621,7 @@ export default function OPACCatalog({
               onClick={() => navigate('/visitor-login')}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition shadow"
             >
-              Sign in
+              {t('Sign in')}
             </button>
           </div>
         </div>
@@ -2645,7 +2647,7 @@ export default function OPACCatalog({
               type="button"
               onClick={() => setNotice('')}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-current/70 transition hover:bg-black/10 hover:text-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-accent dark:hover:bg-white/10"
-              aria-label="Close notification"
+              aria-label={t('Close notification')}
             >
               <X size={15} aria-hidden="true" />
             </button>
@@ -2658,7 +2660,7 @@ export default function OPACCatalog({
             <form onSubmit={handleSearch} className="flex min-w-0 flex-1 gap-2">
               <input
                 type="text"
-                placeholder="Search community books..."
+                placeholder={t('Search community books...')}
                 value={searchInput}
                 onChange={handleSearchInputChange}
                 className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400"
@@ -2667,7 +2669,7 @@ export default function OPACCatalog({
                 type="submit"
                 className="px-5 py-2.5 bg-shelf-primary text-white rounded-lg text-sm font-bold hover:opacity-90"
               >
-                Search
+                {t('Search')}
               </button>
             </form>
             {searchTerm && (
@@ -2676,7 +2678,7 @@ export default function OPACCatalog({
                 onClick={handleClearSearch}
                 className="rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
               >
-                Clear
+                {t('Clear')}
               </button>
             )}
           </div>
@@ -2686,8 +2688,8 @@ export default function OPACCatalog({
           <div className="space-y-6">
             <section aria-labelledby="visitor-borrow-guide-title" className="rounded-2xl border border-blue-200 bg-blue-50/70 p-4 sm:p-5 dark:border-blue-900 dark:bg-blue-950/30">
               <div className="mb-4">
-                <p className="text-xs font-bold uppercase tracking-wide text-blue-700 dark:text-blue-300">Quick guide</p>
-                <h2 id="visitor-borrow-guide-title" className="mt-1 text-lg font-bold text-slate-900 dark:text-white">How to request and borrow a book</h2>
+                <p className="text-xs font-bold uppercase tracking-wide text-blue-700 dark:text-blue-300">{t('Quick guide')}</p>
+                <h2 id="visitor-borrow-guide-title" className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{t('How to request and borrow a book')}</h2>
               </div>
               <ol className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {[
@@ -2699,8 +2701,8 @@ export default function OPACCatalog({
                   <li key={step.title} className="flex gap-3 rounded-xl border border-blue-100 bg-white/80 p-3 dark:border-blue-900 dark:bg-slate-900/60">
                     <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-shelf-primary text-xs font-bold text-white" aria-hidden="true">{index + 1}</span>
                     <div className="min-w-0">
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-white">{step.title}</h3>
-                      <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">{step.description}</p>
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white">{t(step.title)}</h3>
+                      <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">{t(step.description)}</p>
                     </div>
                   </li>
                 ))}
@@ -2717,7 +2719,7 @@ export default function OPACCatalog({
                       {mapLibrary.name}
                     </h2>
                     <p className="text-xs text-slate-500">
-                      {mapLibrary.address || 'Location Map'}
+                      {mapLibrary.address || t('Location Map')}
                     </p>
                   </div>
                   <button
@@ -2725,7 +2727,7 @@ export default function OPACCatalog({
                     onClick={handleCloseMap}
                     className="px-3 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-xs font-bold"
                   >
-                    Close map
+                    {t('Close map')}
                   </button>
                 </div>
                 <LibraryMap
@@ -2740,17 +2742,17 @@ export default function OPACCatalog({
               <form onSubmit={handleSearch} className="flex w-full min-w-0 flex-1 gap-2 md:w-auto md:min-w-[18rem]">
                 <input
                   type="text"
-                  placeholder="Search by Title, Author, ISBN, or Category..."
+                  placeholder={t('Search by Title, Author, ISBN, or Category...')}
                   value={searchInput}
                   onChange={handleSearchInputChange}
                   className="flex-1 min-w-0 px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-shelf-primary/20"
-                  aria-label="Search catalog"
+                  aria-label={t('Search catalog')}
                 />
                 <button
                   type="submit"
                   className="px-5 py-2.5 bg-shelf-primary text-white rounded-lg text-sm font-bold hover:opacity-90 transition shrink-0"
                 >
-                  Search
+                  {t('Search')}
                 </button>
               </form>
               {searchTerm && (
@@ -2759,7 +2761,7 @@ export default function OPACCatalog({
                   onClick={handleClearSearch}
                   className="px-4 py-2.5 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-200 transition shrink-0"
                 >
-                  Clear
+                  {t('Clear')}
                 </button>
               )}
               <select
@@ -2771,10 +2773,10 @@ export default function OPACCatalog({
                 aria-label="Sort catalog books"
                 className="w-full min-w-0 px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none cursor-pointer md:w-auto md:min-w-40"
               >
-                <option value="title-asc">Title (A-Z)</option>
-                <option value="title-desc">Title (Z-A)</option>
-                <option value="author-asc">Author (A-Z)</option>
-                <option value="author-desc">Author (Z-A)</option>
+                <option value="title-asc">{t('Title (A-Z)')}</option>
+                <option value="title-desc">{t('Title (Z-A)')}</option>
+                <option value="author-asc">{t('Author (A-Z)')}</option>
+                <option value="author-desc">{t('Author (Z-A)')}</option>
                 <option value="newest">Newest First</option>
                 <option value="oldest">Oldest First</option>
                 <option value="available">Most Available</option>
@@ -2979,7 +2981,7 @@ export default function OPACCatalog({
           <section aria-labelledby="opac-category-heading" className="space-y-5">
             <div>
               <h2 id="opac-category-heading" className="text-lg font-bold text-slate-800 dark:text-slate-100">
-                Book Categories
+                {t('Book Categories')}
               </h2>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 Unique titles across participating libraries
@@ -3024,7 +3026,7 @@ export default function OPACCatalog({
                 <div className="flex items-center gap-2">
                   <ClipboardList size={20} className="text-shelf-primary dark:text-blue-400" aria-hidden="true" />
                   <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
-                    My Reading List
+                    {t('My Reading List')}
                   </h2>
                 </div>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -3097,17 +3099,17 @@ export default function OPACCatalog({
                     }}
                     className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none cursor-pointer dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
                   >
-                    <option value="title-asc">Title (A-Z)</option>
-                    <option value="title-desc">Title (Z-A)</option>
-                    <option value="author-asc">Author (A-Z)</option>
-                    <option value="author-desc">Author (Z-A)</option>
+                    <option value="title-asc">{t('Title (A-Z)')}</option>
+                    <option value="title-desc">{t('Title (Z-A)')}</option>
+                    <option value="author-asc">{t('Author (A-Z)')}</option>
+                    <option value="author-desc">{t('Author (Z-A)')}</option>
                     <option value="available">Most Available</option>
                     <option value="newest">Newest First</option>
                   </select>
                 </div>
 
                 <div className="min-w-0">
-                  <label htmlFor="reading-list-page-size" className="sr-only">Rows per page</label>
+                  <label htmlFor="reading-list-page-size" className="sr-only">{t('Rows per page')}</label>
                   <select
                     id="reading-list-page-size"
                     value={readingListPageSize}
@@ -3285,7 +3287,7 @@ export default function OPACCatalog({
                 <div className="flex items-center gap-2">
                   <Users size={20} className="text-slate-700 dark:text-slate-200" aria-hidden="true" />
                   <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
-                    Community Books
+                    {t('Community Books')}
                   </h2>
                 </div>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -3301,7 +3303,7 @@ export default function OPACCatalog({
                   <span className="sr-only">Search community books</span>
                   <input type="search" value={searchInput} onChange={handleSearchInputChange} placeholder="Search community books..." className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
                 </label>
-                <button type="submit" className="rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white">Search</button>
+                <button type="submit" className="rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-bold text-white">{t('Search')}</button>
               </form>
               <div className="min-w-0">
                 <label htmlFor="community-category-filter" className="sr-only">Filter by category</label>
@@ -3351,10 +3353,10 @@ export default function OPACCatalog({
                   }}
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-700 focus:outline-none cursor-pointer dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
                 >
-                  <option value="title-asc">Title (A-Z)</option>
-                  <option value="title-desc">Title (Z-A)</option>
-                  <option value="author-asc">Author (A-Z)</option>
-                  <option value="author-desc">Author (Z-A)</option>
+                  <option value="title-asc">{t('Title (A-Z)')}</option>
+                  <option value="title-desc">{t('Title (Z-A)')}</option>
+                  <option value="author-asc">{t('Author (A-Z)')}</option>
+                  <option value="author-desc">{t('Author (Z-A)')}</option>
                   <option value="available">Most Available</option>
                   <option value="newest">Newest First</option>
                   <option value="oldest">Oldest First</option>
@@ -3362,7 +3364,7 @@ export default function OPACCatalog({
               </div>
 
               <div className="min-w-0">
-                <label htmlFor="community-page-size" className="sr-only">Rows per page</label>
+                <label htmlFor="community-page-size" className="sr-only">{t('Rows per page')}</label>
                 <select
                   id="community-page-size"
                   value={communityPageSize}
@@ -3465,7 +3467,7 @@ export default function OPACCatalog({
                 <div className="flex items-center gap-2">
                   <BookmarkCheck size={20} className="text-slate-700 dark:text-slate-200" aria-hidden="true" />
                   <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
-                    Saved Books
+                    {t('Saved Books')}
                   </h2>
                 </div>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -3570,7 +3572,7 @@ export default function OPACCatalog({
                               onClick={() => handleSaveCommunityBook(book.id, false)}
                               className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
                             >
-                              Remove
+                              {t('Remove')}
                             </button>
                           </div>
                         </div>
@@ -3588,7 +3590,7 @@ export default function OPACCatalog({
                 <div className="flex items-center gap-2">
                   <UserRound size={20} className="text-shelf-primary dark:text-slate-200" aria-hidden="true" />
                   <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
-                    My Personal Books
+                    {t('My Personal Books')}
                   </h2>
                 </div>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -4076,13 +4078,13 @@ export default function OPACCatalog({
               {requestAnalytics.total > 0 && (
                 <div className="mt-4 grid gap-3 border-t border-slate-200 pt-4 dark:border-slate-700 md:grid-cols-2">
                   <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-slate-900/40">
-                    <h3 className="mb-2 text-xs font-bold text-slate-700 dark:text-slate-200">Requests by status</h3>
+                    <h3 className="mb-2 text-xs font-bold text-slate-700 dark:text-slate-200">{t('Requests by status')}</h3>
                     <div className="h-56">
                       <Doughnut data={requestStatusChartData} options={visitorDoughnutOptions} />
                     </div>
                   </div>
                   <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-slate-900/40">
-                    <h3 className="mb-2 text-xs font-bold text-slate-700 dark:text-slate-200">Requests over the last 6 months</h3>
+                    <h3 className="mb-2 text-xs font-bold text-slate-700 dark:text-slate-200">{t('Requests over the last 6 months')}</h3>
                     <div className="h-56">
                       <Bar data={requestMonthlyChartData} options={visitorBarOptions} />
                     </div>
@@ -4133,7 +4135,7 @@ export default function OPACCatalog({
                     }}
                     className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   >
-                    <option value="all">All statuses</option>
+                    <option value="all">{t('All statuses')}</option>
                     <option value="fine_due">Outstanding fines</option>
                     {[...new Set(myRequests.map((request) => String(request.status || '').toLowerCase()))]
                       .filter(Boolean)
@@ -4157,11 +4159,11 @@ export default function OPACCatalog({
                   >
                     <option value="all">All book types</option>
                     <option value="library">Library Books</option>
-                    <option value="community">Community Books</option>
+                    <option value="community">{t('Community Books')}</option>
                   </select>
                 </label>
                 <label>
-                  <span className="sr-only">Rows per page</span>
+                  <span className="sr-only">{t('Rows per page')}</span>
                   <select
                     value={myRequestPageSize}
                     onChange={(event) => {
@@ -4210,11 +4212,11 @@ export default function OPACCatalog({
               <table className="visitor-requests-table-content w-full text-left text-sm">
                 <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase tracking-wider">
                   <tr>
-                    <th className="p-4">Book Title</th>
-                    <th className="p-4">Status</th>
-                    <th className="p-4">Details</th>
-                    <th className="p-4 pr-6 text-center">Fine (PHP)</th>
-                    <th className="p-4 pl-6 text-right">Action</th>
+                    <th className="p-4">{t('Book Title')}</th>
+                    <th className="p-4">{t('Status')}</th>
+                    <th className="p-4">{t('Details')}</th>
+                    <th className="p-4 pr-6 text-center">{t('Fine (PHP)')}</th>
+                    <th className="p-4 pl-6 text-right">{t('Action')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -4540,7 +4542,7 @@ export default function OPACCatalog({
             <div className="w-12 h-12 bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300 rounded-full flex items-center justify-center mx-auto mb-4">
               <Lock size={24} />
             </div>
-            <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">Sign In Required</h3>
+            <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">{t('Sign In Required')}</h3>
             <p className="text-sm text-slate-600 dark:text-slate-300 mt-2">
               You need an active visitor account to {pendingActionText || 'perform this action'}.
             </p>
@@ -4622,7 +4624,7 @@ export default function OPACCatalog({
                   }}
                   className="px-4 py-2.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600 disabled:opacity-50"
                 >
-                  Cancel
+                  {t('Cancel')}
                 </button>
                 <button
                   type="button"
@@ -4726,7 +4728,7 @@ export default function OPACCatalog({
                           onClick={removePersonalCover}
                           className="min-h-11 rounded-lg px-2 text-xs font-semibold text-slate-700 hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary dark:text-slate-200 dark:hover:bg-slate-700"
                         >
-                          Remove
+                          {t('Remove')}
                         </button>
                       </div>
                     )}
@@ -5114,7 +5116,7 @@ export default function OPACCatalog({
                   }}
                   className="min-h-11 px-4 py-2.5 rounded-lg bg-slate-100 text-slate-600 text-sm font-bold hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600 disabled:opacity-50"
                 >
-                  Cancel
+                  {t('Cancel')}
                 </button>
                 <button
                   type="submit"
@@ -5163,7 +5165,7 @@ export default function OPACCatalog({
                 }}
                 className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Cancel
+                {t('Cancel')}
               </button>
               <button
                 type="button"
@@ -5429,7 +5431,7 @@ export default function OPACCatalog({
                     {savedCommunityBookIds.has(String(selectedBook.id)) ? (
                       <>
                         <BookmarkCheck size={16} className="text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-                        <span>Saved</span>
+                        <span>{t('Saved')}</span>
                       </>
                     ) : (
                       <>
