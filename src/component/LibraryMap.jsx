@@ -189,6 +189,9 @@ export default function LibraryMap({
   bookContext = null,
   libraryScopeId = null,
   showLibraryList = true,
+  showRowsPerPageControl = false,
+  rowsPerPage = 3,
+  onRowsPerPageChange,
 }) {
   const { libraries = [] } = useLibraryData();
   const visibleLibraries = libraryScopeId == null
@@ -204,7 +207,7 @@ export default function LibraryMap({
   const [selectedLibraryId, setSelectedLibraryId] = useState(null);
   const [libraryPage, setLibraryPage] = useState(1);
   const [useInteractiveGoogleMap, setUseInteractiveGoogleMap] = useState(() => hasGoogleMapsKey());
-  const librariesPerPage = 3;
+  const librariesPerPage = showRowsPerPageControl ? rowsPerPage : 3;
   const activeFocusBranchId = focusBranchId ?? selectedLibraryId;
 
   useEffect(() => {
@@ -348,7 +351,25 @@ export default function LibraryMap({
           />
         </label>
 
-        {libraryScopeId == null && (
+        {showRowsPerPageControl ? (
+          <label className="block min-w-0">
+            <span className="sr-only">Rows per page</span>
+            <select
+              aria-label="Rows per page"
+              value={rowsPerPage}
+              onChange={(event) => {
+                onRowsPerPageChange?.(Number(event.target.value));
+                setLibraryPage(1);
+              }}
+              className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+            >
+              <option value={5}>5 per page</option>
+              <option value={10}>10 per page</option>
+              <option value={20}>20 per page</option>
+              <option value={50}>50 per page</option>
+            </select>
+          </label>
+        ) : libraryScopeId == null && (
           <label className="block min-w-0">
             <span className="sr-only">Filter by campus</span>
             <select

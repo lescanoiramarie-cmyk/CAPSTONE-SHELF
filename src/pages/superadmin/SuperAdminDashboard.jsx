@@ -565,7 +565,7 @@ export default function SuperAdminDashboard() {
   const geocodeRequestId = useRef(0);
   const geocodingPromiseRef = useRef(null);
   const [libraryPage, setLibraryPage] = useState(1);
-  const librariesPerPage = 10;
+  const [librariesPerPage, setLibrariesPerPage] = useState(10);
   const libraryPageCount = Math.max(1, Math.ceil(libraries.length / librariesPerPage));
   const visibleLibraryPage = Math.min(libraryPage, libraryPageCount);
   const paginatedLibraries = libraries.slice(
@@ -680,6 +680,7 @@ export default function SuperAdminDashboard() {
     staffLoading,
     setStaffLoading,
   ] = useState(false);
+  const staffHasLoadedRef = useRef(false);
   const [
     staffError,
     setStaffError,
@@ -828,6 +829,7 @@ export default function SuperAdminDashboard() {
         setStaffAccounts(
           data || []
         );
+        staffHasLoadedRef.current = true;
       } catch (error) {
         console.error(
           'Load staff accounts error:',
@@ -843,9 +845,7 @@ export default function SuperAdminDashboard() {
     };
 
   useEffect(() => {
-    if (
-      section === 'accounts'
-    ) {
+    if (section === 'accounts' || !staffHasLoadedRef.current) {
       void Promise.resolve().then(loadStaffAccounts);
     }
   }, [section]);
@@ -2481,7 +2481,15 @@ const handleEditStaff = (staff) => {
 
             {/* MAIN LIBRARY MAP */}
 {!showAddLibrary && (
-  <LibraryMap showLibraryList={false} />
+  <LibraryMap
+    showLibraryList={false}
+    showRowsPerPageControl
+    rowsPerPage={librariesPerPage}
+    onRowsPerPageChange={(value) => {
+      setLibrariesPerPage(value);
+      setLibraryPage(1);
+    }}
+  />
 )}
 
             {/* LIBRARY MANAGEMENT LIST */}
