@@ -26,6 +26,22 @@ function respond(
   });
 }
 
+// Keep database internals out of client responses while returning actionable
+// guidance for common CRUD failures.
+function sanitizeDbError(message: string) {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("duplicate key") || normalized.includes("already exists")) {
+    return "A staff account with this email already exists.";
+  }
+  if (normalized.includes("schema cache") || (normalized.includes("column") && normalized.includes("does not exist"))) {
+    return "The staff database is not up to date. Apply the latest database migrations, then try again.";
+  }
+  if (normalized.includes("constraint") || normalized.includes("foreign key")) {
+    return "This staff change conflicts with related records. Review the branch and related records, then try again.";
+  }
+  return "The staff profile could not be saved. Refresh the staff list and try again.";
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers });
@@ -226,7 +242,7 @@ Deno.serve(async (request) => {
         );
 
         return respond(400, {
-          error: profileError.message,
+          error: sanitizeDbError(profileError.message),
         });
       }
 
@@ -269,7 +285,7 @@ Deno.serve(async (request) => {
 
       const { data: profile, error: profileError } = await admin
         .from("staff_profiles")
-        .select("id, role, library_id, is_active")
+        .select("id, email, full_name, role, library_id, is_active")
         .eq("id", userId)
         .maybeSingle();
 
@@ -312,6 +328,21 @@ Deno.serve(async (request) => {
         });
       }
 
+      const { error: updateError } = await admin
+        .from("staff_profiles")
+        .update({
+          full_name: fullName,
+          email,
+          library_id: libraryId,
+        })
+        .eq("id", userId);
+
+      if (updateError) {
+        return respond(400, {
+          error: sanitizeDbError(updateError.message),
+        });
+      }
+
       const { error: authUpdateError } =
         await admin.auth.admin.updateUserById(userId, {
           email,
@@ -330,23 +361,20 @@ Deno.serve(async (request) => {
         });
 
       if (authUpdateError) {
+        // Restore the database profile if updating Auth fails. The staff
+        // profile trigger also restores the corresponding role claims.
+        const { error: rollbackError } = await admin
+          .from("staff_profiles")
+          .update({
+            full_name: profile.full_name,
+            email: authUser.user.email || profile.email,
+            library_id: profile.library_id,
+          })
+          .eq("id", userId);
         return respond(400, {
-          error: authUpdateError.message,
-        });
-      }
-
-      const { error: updateError } = await admin
-        .from("staff_profiles")
-        .update({
-          full_name: fullName,
-          email,
-          library_id: libraryId,
-        })
-        .eq("id", userId);
-
-      if (updateError) {
-        return respond(400, {
-          error: updateError.message,
+          error: rollbackError
+            ? "The account update failed and could not be rolled back. Ask an administrator to review this account."
+            : authUpdateError.message,
         });
       }
 
@@ -516,8 +544,14 @@ Deno.serve(async (request) => {
           .eq("id", userId);
 
       if (updateError) {
+        const { error: rollbackError } = await admin.auth.admin.updateUserById(userId, {
+          ban_duration: profile.is_active ? "none" : "876000h",
+          app_metadata: authUser.user.app_metadata || {},
+        });
         return respond(400, {
-          error: updateError.message,
+          error: rollbackError
+            ? "The account status update failed and could not be rolled back. Ask an administrator to review this account."
+            : sanitizeDbError(updateError.message),
         });
       }
 

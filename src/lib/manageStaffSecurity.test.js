@@ -36,6 +36,15 @@ test('manage-staff Edge Function rejects self-targeting and Super Admin escalati
 });
 
 test('manage-staff Edge Function checks target user profile and sanitizes DB errors before mutation', () => {
+  assert.match(manageStaffSource, /function sanitizeDbError\(message: string\)/);
   assert.match(manageStaffSource, /sanitizeDbError\(profileError\.message\)/);
   assert.match(manageStaffSource, /if \(!profile \|\| profile\.role !== ['"]subadmin['"]\)/);
+});
+
+test('manage-staff provides all CRUD operations and compensates failed multi-system updates', () => {
+  for (const operation of ['create', 'update', 'delete', 'set-active']) {
+    assert.match(manageStaffSource, new RegExp(`body\\.operation === ['"]${operation}['"]`));
+  }
+  assert.match(manageStaffSource, /Restore the database profile if updating Auth fails/);
+  assert.match(manageStaffSource, /account status update failed and could not be rolled back/);
 });

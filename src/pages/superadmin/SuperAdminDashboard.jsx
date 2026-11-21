@@ -872,8 +872,12 @@ const handleCreateStaff = async (event) => {
         : 'Sub-admin account created successfully.'
     );
   } catch (error) {
-    console.error('Save staff account error:', error);
-    setStaffError(await getStaffFunctionErrorMessage(error));
+    const message = await getStaffFunctionErrorMessage(error);
+    console.error('Save staff account error:', {
+      message,
+      status: error?.context?.status,
+    });
+    setStaffError(message);
   } finally {
     setStaffLoading(false);
   }
@@ -917,8 +921,12 @@ const handleToggleStaff = async (staff) => {
       `Sub-admin account ${nextIsActive ? 'enabled' : 'disabled'} successfully.`
     );
   } catch (error) {
-    console.error('Toggle staff account error:', error);
-    setStaffError(await getStaffFunctionErrorMessage(error));
+    const message = await getStaffFunctionErrorMessage(error);
+    console.error('Toggle staff account error:', {
+      message,
+      status: error?.context?.status,
+    });
+    setStaffError(message);
   } finally {
     setStaffLoading(false);
   }
@@ -968,8 +976,12 @@ const handleEditStaff = (staff) => {
       await loadStaffAccounts();
       setStaffMessage('Sub-admin account deleted successfully.');
     } catch (error) {
-      console.error('Delete staff account error:', error);
-      setStaffError(await getStaffFunctionErrorMessage(error));
+      const message = await getStaffFunctionErrorMessage(error);
+      console.error('Delete staff account error:', {
+        message,
+        status: error?.context?.status,
+      });
+      setStaffError(message);
     } finally {
       setStaffLoading(false);
     }
