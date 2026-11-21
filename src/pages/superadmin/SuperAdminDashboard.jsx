@@ -12,6 +12,7 @@ import {
   Line,
 } from 'react-chartjs-2';
 import LocationPickerMap from '../../component/LocationPickerMap.jsx';
+import GooglePlaceAddressInput from '../../component/GooglePlaceAddressInput.jsx';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -81,6 +82,9 @@ import {
 } from '../../lib/attendanceReportUtils.js';
 import {
   getRequestLibraryId,
+  getAnalyticsMonthKey,
+  getAnalyticsMonthOptions,
+  getAnalyticsMonthWindow,
 } from '../../lib/dashboardAnalytics.js';
 
 const VisitorAccountManagement = lazy(
@@ -97,6 +101,27 @@ ChartJS.register(
   Tooltip,
   Legend
 );
+
+function AdminSectionInsights({ title, metrics, recommendation }) {
+  return (
+    <section aria-label={`${title} analytics`} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div><p className="text-[11px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">Descriptive analytics</p><h3 className="mt-1 text-sm font-bold text-slate-800 dark:text-white">{title}</h3></div>
+        <p className="max-w-2xl text-xs leading-5 text-slate-600 dark:text-slate-300"><span className="font-bold text-emerald-800 dark:text-emerald-300">Recommended action: </span>{recommendation}</p>
+      </div>
+      <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+        {metrics.map((metric) => <div key={metric.label} className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-900"><dt className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{metric.label}</dt><dd className="mt-0.5 text-base font-bold text-slate-900 dark:text-white">{metric.value}</dd></div>)}
+      </dl>
+    </section>
+  );
+}
+
+function hasValidLibraryCoordinates(library) {
+  if (library?.lat == null || library?.lng == null || String(library.lat).trim() === '' || String(library.lng).trim() === '') return false;
+  const lat = Number(library.lat);
+  const lng = Number(library.lng);
+  return Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+}
 
 function StatCard({
   label,
@@ -203,6 +228,8 @@ export default function SuperAdminDashboard() {
     const saved = window.localStorage.getItem('shelf_superadmin_start_page');
     return superAdminStartPages.includes(saved) ? saved : 'overview';
   });
+  const [overviewMonth, setOverviewMonth] = useState(() => getAnalyticsMonthKey());
+  const overviewMonthOptions = getAnalyticsMonthOptions();
   const [termsDocumentKey, setTermsDocumentKey] = useState('visitor');
   const [termsDocumentContent, setTermsDocumentContent] = useState('');
   const [termsDocumentVersion, setTermsDocumentVersion] = useState('');
@@ -506,6 +533,10 @@ export default function SuperAdminDashboard() {
     status: 'Open',
   });
   const [mapPosition, setMapPosition] = useState([14.5995, 120.9842]); // Manila center
+  const [geocodingAddress, setGeocodingAddress] = useState(false);
+  const [geocodingMessage, setGeocodingMessage] = useState('');
+  const geocodeRequestId = useRef(0);
+  const geocodingPromiseRef = useRef(null);
   const [libraryPage, setLibraryPage] = useState(1);
   const librariesPerPage = 10;
   const libraryPageCount = Math.max(1, Math.ceil(libraries.length / librariesPerPage));
@@ -521,6 +552,60 @@ export default function SuperAdminDashboard() {
       lat: String(lat),
       lng: String(lng),
     }));
+  };
+
+  const geocodeLibraryAddress = async () => {
+    const address = libraryForm.address.trim();
+    if (!address) return null;
+    if (geocodingPromiseRef.current?.address === address) {
+      return geocodingPromiseRef.current.promise;
+    }
+
+    const requestId = ++geocodeRequestId.current;
+    setGeocodingAddress(true);
+    setGeocodingMessage('Finding this address on the map…');
+    const promise = (async () => {
+      try {
+      const query = [libraryForm.name, libraryForm.campus, address, 'Philippines']
+        .filter(Boolean)
+        .join(', ');
+      const params = new URLSearchParams({
+        format: 'jsonv2',
+        limit: '1',
+        countrycodes: 'ph',
+        q: query,
+      });
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`);
+      if (!response.ok) throw new Error('Address lookup is temporarily unavailable.');
+      const results = await response.json();
+      if (requestId !== geocodeRequestId.current) return null;
+      const match = results[0];
+      if (!match || !Number.isFinite(Number(match.lat)) || !Number.isFinite(Number(match.lon))) {
+        setGeocodingMessage('Could not find that address. Add the city/municipality and province to the address, then try again.');
+        return null;
+      }
+
+      const lat = Number(match.lat);
+      const lng = Number(match.lon);
+      setMapPosition([lat, lng]);
+      handleCoordinateChange(lat.toFixed(6), lng.toFixed(6));
+      setGeocodingMessage('Address located and map pin updated automatically.');
+      return { lat: lat.toFixed(6), lng: lng.toFixed(6) };
+    } catch (error) {
+      if (requestId === geocodeRequestId.current) {
+        setGeocodingMessage(error.message || 'Could not locate this address. Please try again.');
+      }
+      return null;
+    } finally {
+      if (requestId === geocodeRequestId.current) setGeocodingAddress(false);
+      }
+    })();
+    geocodingPromiseRef.current = { address, promise };
+    try {
+      return await promise;
+    } finally {
+      if (geocodingPromiseRef.current?.promise === promise) geocodingPromiseRef.current = null;
+    }
   };
 
   // ============================================================
@@ -932,14 +1017,20 @@ const handleEditStaff = (staff) => {
       event.preventDefault();
       if (
         !libraryForm.name.trim() ||
-        !libraryForm.address.trim() ||
-        !libraryForm.lat ||
-        !libraryForm.lng
+        !libraryForm.address.trim()
       ) {
         setLibraryMessage(
-          'Please enter the library name, address, and pin exact location on the map.'
+          'Please enter the library name and complete address.'
         );
         return;
+      }
+      let coordinates = { lat: libraryForm.lat, lng: libraryForm.lng };
+      if (!coordinates.lat || !coordinates.lng) {
+        coordinates = await geocodeLibraryAddress();
+        if (!coordinates) {
+          setLibraryMessage('The address could not be located automatically. Add more address details and try again.');
+          return;
+        }
       }
       const formattedDomain = libraryForm.emailDomain
         .toLowerCase()
@@ -963,8 +1054,8 @@ const handleEditStaff = (staff) => {
           address: libraryForm.address.trim(),
           email_domain: formattedDomain,
           emailDomain: formattedDomain,
-          lat: libraryForm.lat,
-          lng: libraryForm.lng,
+          lat: coordinates.lat,
+          lng: coordinates.lng,
           hours: libraryForm.hours,
           status: libraryForm.status,
         };
@@ -1010,14 +1101,20 @@ const handleEditStaff = (staff) => {
     if (
       !editingLibraryId ||
       !libraryForm.name.trim() ||
-      !libraryForm.address.trim() ||
-      !libraryForm.lat ||
-      !libraryForm.lng
+      !libraryForm.address.trim()
     ) {
       setLibraryMessage(
-        'Please enter the library name, address, and exact map coordinates.'
+        'Please enter the library name and complete address.'
       );
       return;
+    }
+    let coordinates = { lat: libraryForm.lat, lng: libraryForm.lng };
+    if (!coordinates.lat || !coordinates.lng) {
+      coordinates = await geocodeLibraryAddress();
+      if (!coordinates) {
+        setLibraryMessage('The address could not be located automatically. Add more address details and try again.');
+        return;
+      }
     }
 
     const formattedDomain = libraryForm.emailDomain
@@ -1042,8 +1139,8 @@ const handleEditStaff = (staff) => {
         campus: libraryForm.campus.trim(),
         address: libraryForm.address.trim(),
         email_domain: formattedDomain,
-        lat: libraryForm.lat,
-        lng: libraryForm.lng,
+        lat: coordinates.lat,
+        lng: coordinates.lng,
         hours: libraryForm.hours,
         status: libraryForm.status,
       });
@@ -1174,26 +1271,38 @@ const handleEditStaff = (staff) => {
       (library) =>
         library.status === 'Open'
     ).length;
+  const inventorySummary = useMemo(() => books.reduce((totals, book) => {
+    const total = Number(book.totalCopies ?? book.total_copies ?? 0);
+    const available = Number(book.availableCopies ?? book.available_copies ?? total);
+    totals.copies += Number.isFinite(total) ? total : 0;
+    totals.available += Number.isFinite(available) ? available : 0;
+    if (available <= 0) totals.unavailableTitles += 1;
+    if (!book.libraryId && !book.library_id) totals.unassignedTitles += 1;
+    return totals;
+  }, { copies: 0, available: 0, unavailableTitles: 0, unassignedTitles: 0 }), [books]);
+  const mapSummary = useMemo(() => ({
+    geocoded: libraries.filter(hasValidLibraryCoordinates).length,
+    missingCoordinates: libraries.filter((library) => !hasValidLibraryCoordinates(library)).length,
+  }), [libraries]);
+  const staffSummary = useMemo(() => ({
+    active: staffAccounts.filter((staff) => staff.is_active !== false && staff.isActive !== false).length,
+    inactive: staffAccounts.filter((staff) => staff.is_active === false || staff.isActive === false).length,
+  }), [staffAccounts]);
 
   // ============================================================
   // TREND DATA
   // ============================================================
   const trendData = useMemo(() => {
-    const today = new Date();
-    const firstDayOfThisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const firstDayOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const lastMonthDays = new Date(today.getFullYear(), today.getMonth(), 0).getDate();
-    const monthLabel = firstDayOfLastMonth.toLocaleDateString('en-US', {
-      month: 'long',
-      year: 'numeric',
-    });
-    const firstWeekday = firstDayOfLastMonth.getDay();
-    const weekCount = Math.ceil((firstWeekday + lastMonthDays) / 7);
+    const monthWindow = getAnalyticsMonthWindow(overviewMonth);
+    if (!monthWindow) return { monthLabel: '', labels: [], visitCounts: [], borrowCounts: [], hasActivity: false };
+    const { start: firstDayOfMonth, endExclusive: firstDayOfNextMonth, days: daysInMonth, monthLabel } = monthWindow;
+    const firstWeekday = firstDayOfMonth.getDay();
+    const weekCount = Math.ceil((firstWeekday + daysInMonth) / 7);
     const weeks = Array.from({ length: weekCount }, (_, index) => {
       const firstDate = Math.max(1, index * 7 - firstWeekday + 1);
-      const lastDate = Math.min(lastMonthDays, (index + 1) * 7 - firstWeekday);
+      const lastDate = Math.min(daysInMonth, (index + 1) * 7 - firstWeekday);
       return {
-        label: `${firstDayOfLastMonth.toLocaleDateString('en-US', { month: 'short' })} ${firstDate}–${lastDate}`,
+        label: `${firstDayOfMonth.toLocaleDateString('en-US', { month: 'short' })} ${firstDate}–${lastDate}`,
         visitCount: 0,
         borrowCount: 0,
       };
@@ -1203,8 +1312,8 @@ const handleEditStaff = (staff) => {
       const date = new Date(value);
       if (
         Number.isNaN(date.getTime()) ||
-        date < firstDayOfLastMonth ||
-        date >= firstDayOfThisMonth
+        date < firstDayOfMonth ||
+        date >= firstDayOfNextMonth
       ) return;
       const weekIndex = Math.floor((date.getDate() - 1 + firstWeekday) / 7);
       weeks[weekIndex][field] += 1;
@@ -1217,20 +1326,16 @@ const handleEditStaff = (staff) => {
       labels: weeks.map((week) => week.label),
       visitCounts: weeks.map((week) => week.visitCount),
       borrowCounts: weeks.map((week) => week.borrowCount),
+      totalVisits: weeks.reduce((total, week) => total + week.visitCount, 0),
+      totalBorrows: weeks.reduce((total, week) => total + week.borrowCount, 0),
       hasActivity: weeks.some((week) => week.visitCount > 0 || week.borrowCount > 0),
     };
-  }, [
-    attendanceLogs,
-    borrowRequests,
-  ]);
+  }, [attendanceLogs, borrowRequests, overviewMonth]);
 
   const branchActivityData = useMemo(() => {
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    start.setDate(start.getDate() - 6);
-    const end = new Date();
-    end.setHours(0, 0, 0, 0);
-    end.setDate(end.getDate() + 1);
+    const monthWindow = getAnalyticsMonthWindow(overviewMonth);
+    if (!monthWindow) return { labels: [], checkIns: [], transactions: [] };
+    const { start, endExclusive: end } = monthWindow;
     const isInRange = (value) => {
       const timestamp = new Date(value).getTime();
       return Number.isFinite(timestamp) && timestamp >= start.getTime() && timestamp < end.getTime();
@@ -1269,7 +1374,7 @@ const handleEditStaff = (staff) => {
       checkIns: topBranches.map((branch) => branch.checkIns),
       transactions: topBranches.map((branch) => branch.transactions),
     };
-  }, [libraries, attendanceLogs, borrowRequests, books]);
+  }, [libraries, attendanceLogs, borrowRequests, books, overviewMonth]);
 
   // ============================================================
   // CATEGORY DATA
@@ -1646,17 +1751,22 @@ const handleEditStaff = (staff) => {
               <StatCard label="Branches Open" value={openLibraries} tone="amber" />
             </div>
 
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+              <div><h3 className="text-sm font-bold text-slate-800">System activity analytics</h3><p className="mt-0.5 text-xs text-slate-500">Counts reflect recorded events in the selected calendar month.</p></div>
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Month<select aria-label="Filter overview charts by month" value={overviewMonth} onChange={(event) => setOverviewMonth(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">{overviewMonthOptions.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select></label>
+            </div>
+
             {/* CHARTS */}
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h3 className="mb-3 text-sm font-bold text-slate-800">Visits & Borrows — Last Month · {trendData.monthLabel}</h3>
+                <h3 className="mb-3 text-sm font-bold text-slate-800">Check-ins & Confirmed Borrows · {trendData.monthLabel}</h3>
                 <div className="h-82.5">
                   <Line
                     data={{
                       labels: trendData.labels,
                       datasets: [
-                        { label: 'Attendance', data: trendData.visitCounts, borderColor: '#2563eb', backgroundColor: '#2563eb', tension: 0.3 },
-                        { label: 'Books Borrowed', data: trendData.borrowCounts, borderColor: '#002046', backgroundColor: '#002046', tension: 0.3 },
+                        { label: 'Visitor check-ins', data: trendData.visitCounts, borderColor: '#2563eb', backgroundColor: '#2563eb', tension: 0.3 },
+                        { label: 'Confirmed borrow events', data: trendData.borrowCounts, borderColor: '#002046', backgroundColor: '#002046', tension: 0.3 },
                       ],
                     }}
                     options={{
@@ -1680,7 +1790,7 @@ const handleEditStaff = (staff) => {
                 )}
               </div>
               <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h3 className="mb-3 text-sm font-bold text-slate-800">Catalog by Category</h3>
+                <h3 className="mb-3 text-sm font-bold text-slate-800">All-Time Catalog Titles by Category</h3>
                 {categoryData.labels.length === 0 ? (
                   <p className="text-xs text-slate-500">No books in the catalog yet.</p>
                 ) : (
@@ -1729,11 +1839,11 @@ const handleEditStaff = (staff) => {
               </div>
               <div className="h-full rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
                 <div className="mb-3">
-                  <h3 className="text-sm font-bold text-slate-800">Top 5 Branches — Check-ins & Book Requests/Borrows</h3>
-                  <p className="mt-1 text-xs text-slate-500">Branch comparison for the last 7 calendar days. Request/borrow records with conflicting request and book branches are excluded.</p>
+                  <h3 className="text-sm font-bold text-slate-800">Top Branches — Check-ins & Circulation Records</h3>
+                  <p className="mt-1 text-xs text-slate-500">{trendData.monthLabel}. One request/borrow row is counted once using its latest available request or borrow date; conflicting branch records are excluded.</p>
                 </div>
                 {branchActivityData.labels.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-slate-500">No branch check-ins or request/borrow activity was recorded in the last 7 days.</p>
+                  <p className="py-8 text-center text-sm text-slate-500">No branch check-ins or request/borrow activity was recorded in {trendData.monthLabel}.</p>
                 ) : (
                   <div className="h-80">
                     <Bar
@@ -1836,10 +1946,11 @@ const handleEditStaff = (staff) => {
         )}
 
         {/* INVENTORY */}
-        {section === 'inventory' && <BookInventory />}
+        {section === 'inventory' && <div className="space-y-4"><AdminSectionInsights title="System inventory health" metrics={[{ label: 'Titles', value: books.length.toLocaleString() }, { label: 'Total copies', value: inventorySummary.copies.toLocaleString() }, { label: 'Available copies', value: inventorySummary.available.toLocaleString() }, { label: 'Unavailable titles', value: inventorySummary.unavailableTitles.toLocaleString() }]} recommendation={inventorySummary.unavailableTitles ? 'Review titles with no available copies against active loans, returns, and inventory condition before replenishing.' : 'Keep monitoring stock changes and validate branch assignment when adding or editing copies.'} /><BookInventory /></div>}
 
         {section === 'settings' && (
           <section className="w-full max-w-6xl space-y-5">
+            <AdminSectionInsights title="System data quality" metrics={[{ label: 'Libraries missing map coordinates', value: mapSummary.missingCoordinates.toLocaleString() }, { label: 'Catalog titles without branch', value: inventorySummary.unassignedTitles.toLocaleString() }, { label: 'Staff accounts flagged inactive', value: staffSummary.inactive.toLocaleString() }]} recommendation="Resolve missing location and branch assignments, and periodically review inactive staff access." />
             <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
               <div className="flex items-start gap-4">
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-shelf-primary">
@@ -1904,6 +2015,7 @@ const handleEditStaff = (staff) => {
         {/* LIBRARIES & MAP */}
         {section === 'map' && (
           <div className="space-y-4">
+            <AdminSectionInsights title="Branch coverage" metrics={[{ label: 'Libraries', value: libraries.length.toLocaleString() }, { label: 'Open branches', value: openLibraries.toLocaleString() }, { label: 'Mapped branches', value: mapSummary.geocoded.toLocaleString() }, { label: 'Missing coordinates', value: mapSummary.missingCoordinates.toLocaleString() }]} recommendation={mapSummary.missingCoordinates ? 'Complete the address for unmapped libraries so every branch appears on visitor and staff maps.' : 'All libraries have coordinates; review pins after any address change.'} />
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                 <div>
@@ -1999,19 +2111,38 @@ const handleEditStaff = (staff) => {
                         <label className="mb-1 block text-xs font-semibold text-slate-600">
                           Address *
                         </label>
-                        <input
-                          type="text"
+                        <GooglePlaceAddressInput
                           value={libraryForm.address}
-                          onChange={(e) =>
+                          onChange={(address) => {
+                            geocodeRequestId.current += 1;
+                            setGeocodingAddress(false);
+                            setGeocodingMessage('');
+                            setLibraryForm((prev) => ({ ...prev, address, lat: '', lng: '' }));
+                          }}
+                          onPlaceSelected={({ address, lat, lng }) => {
+                            geocodeRequestId.current += 1;
+                            setGeocodingAddress(false);
+                            setGeocodingMessage('Place selected; map pin updated automatically.');
+                            setMapPosition([lat, lng]);
                             setLibraryForm((prev) => ({
                               ...prev,
-                              address: e.target.value,
-                            }))
-                          }
+                              address,
+                              lat: lat.toFixed(6),
+                              lng: lng.toFixed(6),
+                            }));
+                          }}
+                          onBlur={() => {
+                            if (!libraryForm.lat || !libraryForm.lng) void geocodeLibraryAddress();
+                          }}
                           placeholder="Complete library address"
                           className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
                           required
                         />
+                        <p className="mt-1 text-xs text-slate-500">Choose a suggested place to set the pin. Suggestions require `VITE_GOOGLE_MAPS_API_KEY` and Places API (New); without them, type the full address and the map will still try to locate it.</p>
+                        <p className={`mt-1.5 text-xs ${geocodingMessage.startsWith('Could not') || geocodingMessage.includes('unavailable') ? 'text-rose-600' : 'text-slate-500'}`} aria-live="polite">
+                          {geocodingAddress ? 'Finding this address on the map…' : geocodingMessage || 'The map pin will be placed automatically from the address. You can adjust it on the map if needed.'}
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-400">Address lookup by <a className="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>.</p>
                       </div>
 
                       {/* Allowed Student Email Domain */}
@@ -2045,8 +2176,8 @@ const handleEditStaff = (staff) => {
 
                       {/* MAP PICKER COMPONENT */}
                       <div className="md:col-span-2 my-1">
-                        <label className="mb-1 block text-xs font-semibold text-slate-600">
-                          Pin Exact Location on Map (Click or Drag marker) *
+                          <label className="mb-1 block text-xs font-semibold text-slate-600">
+                            Automatically located pin (adjust only if needed)
                         </label>
                         <LocationPickerMap
                           position={mapPosition}
@@ -2058,28 +2189,26 @@ const handleEditStaff = (staff) => {
                       {/* LATITUDE (READ ONLY) */}
                       <div>
                         <label className="mb-1 block text-xs font-semibold text-slate-600">
-                          Latitude *
+                          Latitude
                         </label>
                         <input
                           type="text"
                           readOnly
                           value={libraryForm.lat}
                           className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2.5 text-sm text-slate-600 cursor-not-allowed"
-                          required
                         />
                       </div>
 
                       {/* LONGITUDE (READ ONLY) */}
                       <div>
                         <label className="mb-1 block text-xs font-semibold text-slate-600">
-                          Longitude *
+                          Longitude
                         </label>
                         <input
                           type="text"
                           readOnly
                           value={libraryForm.lng}
                           className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2.5 text-sm text-slate-600 cursor-not-allowed"
-                          required
                         />
                       </div>
 
@@ -2142,7 +2271,7 @@ const handleEditStaff = (staff) => {
                       </button>
                       <button
                         type="submit"
-                        disabled={savingLibrary}
+                        disabled={savingLibrary || geocodingAddress}
                         className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
                       >
                         {savingLibrary ? (editingLibraryId ? 'Saving...' : 'Adding...') : (editingLibraryId ? 'Save Changes' : 'Add library')}
@@ -2264,6 +2393,8 @@ const handleEditStaff = (staff) => {
 
         {/* STAFF ACCOUNTS */}
         {section === 'visitor-accounts' && (
+          <div className="space-y-4">
+          <AdminSectionInsights title="Visitor account oversight" metrics={[{ label: 'Registered visitors', value: Number(visitorCount || 0).toLocaleString() }, { label: 'Libraries served', value: libraries.length.toLocaleString() }]} recommendation="Review each visitor’s verification and approval status in the account list before granting access to library features." />
           <Suspense
             fallback={
               <div role="status" className="rounded-lg bg-white p-5 text-sm text-slate-500">
@@ -2276,6 +2407,7 @@ const handleEditStaff = (staff) => {
               libraries={libraries}
             />
           </Suspense>
+          </div>
         )}
 
         {section === 'fines' && <FinePayments isSuperAdmin libraries={libraries} />}
@@ -2283,6 +2415,7 @@ const handleEditStaff = (staff) => {
 
         {section === 'accounts' && (
           <div className="space-y-6">
+            <AdminSectionInsights title="Staff account coverage" metrics={[{ label: 'Staff accounts', value: staffAccounts.length.toLocaleString() }, { label: 'Active', value: staffSummary.active.toLocaleString() }, { label: 'Inactive', value: staffSummary.inactive.toLocaleString() }, { label: 'Libraries', value: libraries.length.toLocaleString() }]} recommendation={staffSummary.inactive ? 'Review inactive accounts and confirm active staff are assigned to the correct branch.' : 'Review branch assignments when staff move or library responsibilities change.'} />
             <header className="border-b border-slate-200 pb-4">
               <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">Administration</p>
               <h2 className="text-lg font-bold text-slate-800">Staff Accounts</h2>

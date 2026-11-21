@@ -110,6 +110,52 @@ function formatLocalDateInput(value) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
 }
 
+function buildLocalVisitorForecast(dailyCounts, historyBuckets, startDate) {
+  const observed = dailyCounts.slice(-56);
+  const observedBuckets = historyBuckets.slice(-observed.length);
+  const recent = observed.slice(-14);
+  const previous = observed.slice(-28, -14);
+  const recentAverage = recent.length ? recent.reduce((sum, value) => sum + value, 0) / recent.length : 0;
+  const previousAverage = previous.length ? previous.reduce((sum, value) => sum + value, 0) / previous.length : recentAverage;
+  const trendFactor = previousAverage > 0
+    ? Math.max(0.7, Math.min(1.3, recentAverage / previousAverage))
+    : 1;
+  const weekdaySamples = Array.from({ length: 7 }, () => []);
+  observed.forEach((count, index) => {
+    const date = observedBuckets[index]?.start;
+    if (date instanceof Date && Number.isFinite(date.getTime())) weekdaySamples[date.getDay()].push(count);
+  });
+
+  const forecasts = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(startDate);
+    date.setDate(date.getDate() + index);
+    const samples = weekdaySamples[date.getDay()];
+    const weekdayAverage = samples?.length
+      ? samples.reduce((sum, value) => sum + value, 0) / samples.length
+      : recentAverage;
+    return { date: formatLocalDateInput(date), visitorCount: Math.max(0, Math.round(weekdayAverage * trendFactor)) };
+  });
+
+  const observedTotal = observed.reduce((sum, value) => sum + value, 0);
+  const changeLabel = previousAverage > 0
+    ? `Recent average check-ins changed from ${previousAverage.toFixed(1)} to ${recentAverage.toFixed(1)} per day.`
+    : `Recent average check-ins were ${recentAverage.toFixed(1)} per day.`;
+  const recommendations = trendFactor >= 1.2
+    ? ['Recent check-ins are trending upward. Compare actual demand with the forecast and consider additional desk coverage on the busier weekdays.']
+    : trendFactor <= 0.8
+      ? ['Recent check-ins are trending downward. Keep scheduled coverage stable until the lower demand persists across additional weeks.']
+      : ['Recent check-ins are broadly stable. Keep current desk coverage and review forecast error after the next week of actual attendance.'];
+  return {
+    source: 'local_history',
+    forecasts,
+    insights: [
+      `Local estimate based on ${observed.length} recent calendar days and weekday patterns; ${observedTotal} visits were recorded in that window.`,
+      changeLabel,
+    ],
+    recommendations,
+  };
+}
+
 function getDaysUntilExpiration(expiryDate) {
   return Math.max(1, Math.ceil((expiryDate.getTime() - Date.now()) / 86400000));
 }
@@ -1021,11 +1067,18 @@ export default function AdminWorkspace({
       if (!validForecasts) throw new Error('Forecast service returned invalid dates or visitor counts.');
       setForecast({
         ...forecastResult,
+        source: 'analytics_service',
         forecasts: forecastResult.forecasts.map((item) => ({ ...item, visitorCount: Number(item.visitorCount) })),
       });
     } catch (forecastError) {
-      const errorMessage = forecastError instanceof Error ? forecastError.message : '';
-      setError(errorMessage || 'Forecast request failed.');
+      console.warn('Analytics forecast service unavailable; using local history model.', forecastError);
+      const fallbackForecast = buildLocalVisitorForecast(
+        forecastDailyVisitorCounts,
+        forecastHistoryBuckets,
+        analyticsWindow.endExclusive
+      );
+      setForecast(fallbackForecast);
+      setError('');
     } finally {
       setForecastLoading(false);
     }
@@ -1744,8 +1797,10 @@ export default function AdminWorkspace({
                   </button>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">
-                  Uses actual visits from the selected range and the analytics service for the following 7 days. A forecast needs at least 14 calendar days, 14 visits across 7 active days, and a complete attendance feed.
+                  Estimates the following 7 days from actual visits in the selected range. It requires at least 7 calendar days, 3 visits across 2 active days, and a complete attendance feed; small samples are less reliable.
                 </p>
+                {forecast?.source === 'local_history' && <p className="mt-1 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-800">Analytics service unavailable; showing a local estimate from recent weekday averages.</p>}
+                {forecast?.source === 'analytics_service' && <p className="mt-1 text-xs text-emerald-700">Forecast returned by the analytics service.</p>}
                 <p className="mt-1 text-xs text-slate-500">
                   History available: {forecastHistoryDays} days · {forecastTotalVisits.toLocaleString()} visits across {forecastObservedVisitDays} active days.
                 </p>
@@ -1863,6 +1918,7 @@ export default function AdminWorkspace({
       {/* FEEDBACK TAB */}
       {tab === 'feedback' && (
         <section className="space-y-4">
+          {!loading && <section aria-label="Feedback descriptive analytics" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[11px] font-bold uppercase tracking-wider text-blue-700">Descriptive analytics</p><h3 className="mt-1 text-sm font-bold text-slate-900">Visitor feedback workload</h3></div><p className="max-w-2xl text-xs leading-5 text-slate-600"><strong className="text-emerald-800">Recommended action: </strong>{feedbackTotal ? `Prioritize ${feedbackTotal} unanswered message(s), then compare with ${answeredFeedbackTotal} replied message(s).` : 'Keep monitoring incoming messages and respond promptly when new feedback arrives.'}</p></div><dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3"><div className="rounded-lg bg-amber-50 px-3 py-2"><dt className="text-[11px] font-medium text-amber-800">Unanswered</dt><dd className="mt-0.5 text-base font-bold text-amber-950">{feedbackTotal}</dd></div><div className="rounded-lg bg-emerald-50 px-3 py-2"><dt className="text-[11px] font-medium text-emerald-800">Answered</dt><dd className="mt-0.5 text-base font-bold text-emerald-950">{answeredFeedbackTotal}</dd></div><div className="rounded-lg bg-slate-50 px-3 py-2"><dt className="text-[11px] font-medium text-slate-500">Response coverage</dt><dd className="mt-0.5 text-base font-bold text-slate-900">{feedbackTotal + answeredFeedbackTotal ? `${Math.round((answeredFeedbackTotal / (feedbackTotal + answeredFeedbackTotal)) * 100)}%` : '—'}</dd></div></dl></section>}
           {user?.role === 'superadmin' && (
             <div className="flex items-center gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-200">
               <ShieldCheck size={18} className="shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
@@ -1918,6 +1974,7 @@ export default function AdminWorkspace({
       {tab === 'announcements' && (
         <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
           <div className="space-y-3">
+            {!loading && <section aria-label="Announcement descriptive analytics" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-[11px] font-bold uppercase tracking-wider text-blue-700">Descriptive analytics</p><h3 className="mt-1 text-sm font-bold text-slate-900">Published notices</h3><p className="mt-2 text-xs leading-5 text-slate-600">{announcementsTotal} published announcement(s) match the current search and status filters. {announcements.length} are shown on this page.</p><p className="mt-1 text-xs leading-5 text-emerald-800"><strong>Recommended action: </strong>Review current notices for outdated content and near-expiration dates before publishing new guidance.</p></section>}
             <div className="space-y-3">
               <div>
                 <h2 className="text-lg font-bold text-slate-800">Announcements</h2>

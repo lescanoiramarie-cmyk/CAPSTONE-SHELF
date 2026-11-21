@@ -1,5 +1,37 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+export function getAnalyticsMonthKey(value = new Date()) {
+  const date = new Date(value);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+export function getAnalyticsMonthOptions(count = 12, value = new Date()) {
+  const current = new Date(value.getFullYear(), value.getMonth(), 1);
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(current.getFullYear(), current.getMonth() - index, 1);
+    return {
+      value: getAnalyticsMonthKey(date),
+      label: date.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' }),
+    };
+  });
+}
+
+export function getAnalyticsMonthWindow(monthKey) {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(monthKey || ''));
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  if (month < 0 || month > 11) return null;
+  const start = new Date(year, month, 1);
+  const endExclusive = new Date(year, month + 1, 1);
+  return {
+    start,
+    endExclusive,
+    days: new Date(year, month + 1, 0).getDate(),
+    monthLabel: start.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' }),
+  };
+}
+
 export function normalizeAnalyticsId(value) {
   return value == null || value === '' ? '' : String(value);
 }

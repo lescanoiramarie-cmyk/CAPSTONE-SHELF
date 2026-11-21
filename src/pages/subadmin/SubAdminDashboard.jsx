@@ -69,6 +69,9 @@ import {
 import {
   filterRequestsForLibrary,
   filterRowsForLibrary,
+  getAnalyticsMonthKey,
+  getAnalyticsMonthOptions,
+  getAnalyticsMonthWindow,
 } from '../../lib/dashboardAnalytics.js';
 
 const VisitorAccountManagement = lazy(
@@ -132,13 +135,11 @@ function getSubAdminTermsErrorMessage(error, action) {
     : 'We could not save your acceptance. Please check your connection and try again.';
 }
 
-function AttendanceTrendChart({ attendance = [] }) {
-  const today = new Date();
-  const firstDayOfThisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-  const firstDayOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-  const lastMonthDays = new Date(today.getFullYear(), today.getMonth(), 0).getDate();
-  const monthLabel = firstDayOfLastMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  const dailyCounts = Array.from({ length: lastMonthDays }, (_, index) => ({
+function AttendanceTrendChart({ attendance = [], monthKey }) {
+  const monthWindow = getAnalyticsMonthWindow(monthKey);
+  if (!monthWindow) return null;
+  const { start: firstDayOfMonth, endExclusive: firstDayOfNextMonth, days: daysInMonth, monthLabel } = monthWindow;
+  const dailyCounts = Array.from({ length: daysInMonth }, (_, index) => ({
     day: index + 1,
     count: 0,
   }));
@@ -149,15 +150,15 @@ function AttendanceTrendChart({ attendance = [] }) {
     const recordDate = new Date(timestamp);
     if (
       Number.isNaN(recordDate.getTime()) ||
-      recordDate < firstDayOfLastMonth ||
-      recordDate >= firstDayOfThisMonth
+      recordDate < firstDayOfMonth ||
+      recordDate >= firstDayOfNextMonth
     ) return;
     dailyCounts[recordDate.getDate() - 1].count += 1;
   });
   const attendanceTotal = dailyCounts.reduce((total, day) => total + day.count, 0);
   const maxCount = Math.max(1, ...dailyCounts.map((day) => day.count));
   const calendarCells = [
-    ...Array(firstDayOfLastMonth.getDay()).fill(null),
+    ...Array(firstDayOfMonth.getDay()).fill(null),
     ...dailyCounts,
   ];
   const getIntensityClass = (count) => {
@@ -211,25 +212,23 @@ function AttendanceTrendChart({ attendance = [] }) {
         <span className="flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm border border-blue-500 bg-blue-500" />High</span>
       </div>
       {attendanceTotal === 0 && (
-        <p className="mt-2 text-center text-xs text-slate-500">No attendance records for this month.</p>
+        <p className="mt-2 text-center text-xs text-slate-500">No attendance records for {monthLabel}.</p>
       )}
     </div>
   );
 }
 
-function BorrowingActivityTrendChart({ requests = [] }) {
-  const today = new Date();
-  const firstDayOfThisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-  const firstDayOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-  const lastMonthDays = new Date(today.getFullYear(), today.getMonth(), 0).getDate();
-  const firstWeekday = firstDayOfLastMonth.getDay();
-  const weekCount = Math.ceil((firstWeekday + lastMonthDays) / 7);
-  const monthLabel = firstDayOfLastMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+function BorrowingActivityTrendChart({ requests = [], monthKey }) {
+  const monthWindow = getAnalyticsMonthWindow(monthKey);
+  if (!monthWindow) return null;
+  const { start: firstDayOfMonth, endExclusive: firstDayOfNextMonth, days: daysInMonth, monthLabel } = monthWindow;
+  const firstWeekday = firstDayOfMonth.getDay();
+  const weekCount = Math.ceil((firstWeekday + daysInMonth) / 7);
   const weeks = Array.from({ length: weekCount }, (_, index) => {
     const firstDate = Math.max(1, index * 7 - firstWeekday + 1);
-    const lastDate = Math.min(lastMonthDays, (index + 1) * 7 - firstWeekday);
+    const lastDate = Math.min(daysInMonth, (index + 1) * 7 - firstWeekday);
     return {
-      label: `${firstDayOfLastMonth.toLocaleDateString('en-US', { month: 'short' })} ${firstDate}–${lastDate}`,
+      label: `${firstDayOfMonth.toLocaleDateString('en-US', { month: 'short' })} ${firstDate}–${lastDate}`,
       requests: 0,
       borrows: 0,
       returns: 0,
@@ -241,8 +240,8 @@ function BorrowingActivityTrendChart({ requests = [] }) {
     const date = new Date(dateValue);
     if (
       Number.isNaN(date.getTime()) ||
-      date < firstDayOfLastMonth ||
-      date >= firstDayOfThisMonth
+      date < firstDayOfMonth ||
+      date >= firstDayOfNextMonth
     ) return;
     const weekIndex = Math.floor((date.getDate() - 1 + firstWeekday) / 7);
     weeks[weekIndex][eventType] += 1;
@@ -942,6 +941,8 @@ export default function SubAdminDashboard() {
     const saved = window.localStorage.getItem('shelf_subadmin_start_page');
     return NAV.some((item) => item.id === saved && item.id !== 'settings') ? saved : 'overview';
   });
+  const [overviewMonth, setOverviewMonth] = useState(() => getAnalyticsMonthKey());
+  const overviewMonthOptions = getAnalyticsMonthOptions();
   const mainContentRef = useRef(null);
   const [focusRequestId, setFocusRequestId] = useState(null);
   const [focusNotificationType, setFocusNotificationType] = useState(null);
@@ -1196,6 +1197,32 @@ export default function SubAdminDashboard() {
     () => filterRequestsForLibrary(borrowRequests, branchBooksById, currentLibraryId),
     [borrowRequests, branchBooksById, currentLibraryId]
   );
+
+  const branchOverviewMetrics = useMemo(() => {
+    const monthWindow = getAnalyticsMonthWindow(overviewMonth);
+    const inventory = branchBooks.reduce((totals, book) => {
+      const copies = Number(book.totalCopies ?? book.total_copies ?? 0);
+      const available = Number(book.availableCopies ?? book.available_copies ?? copies);
+      totals.totalCopies += Number.isFinite(copies) ? copies : 0;
+      totals.availableCopies += Number.isFinite(available) ? available : 0;
+      if (available <= 0) totals.unavailableTitles += 1;
+      return totals;
+    }, { totalCopies: 0, availableCopies: 0, unavailableTitles: 0 });
+    const borrowedCounts = new Map();
+    branchBorrowRequests.forEach((request) => {
+      const borrowedAt = request.borrowDate || request.borrow_date;
+      const timestamp = new Date(borrowedAt || '').getTime();
+      if (!monthWindow || !Number.isFinite(timestamp) || timestamp < monthWindow.start.getTime() || timestamp >= monthWindow.endExclusive.getTime()) return;
+      const bookId = String(request.bookId ?? request.book_id ?? '');
+      if (bookId) borrowedCounts.set(bookId, (borrowedCounts.get(bookId) || 0) + 1);
+    });
+    const topBorrowed = [...borrowedCounts.entries()]
+      .map(([bookId, count]) => ({ book: branchBooksById.get(bookId), count }))
+      .filter((entry) => entry.book)
+      .sort((left, right) => right.count - left.count || String(left.book.title).localeCompare(String(right.book.title)))
+      .slice(0, 5);
+    return { ...inventory, topBorrowed, monthLabel: monthWindow?.monthLabel || '' };
+  }, [branchBooks, branchBooksById, branchBorrowRequests, overviewMonth]);
 
   useEffect(() => {
     if (section !== 'overview') return undefined;
@@ -1791,10 +1818,32 @@ export default function SubAdminDashboard() {
             </div>
 
             {/* OVERVIEW CHARTS */}
-            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-              <AttendanceTrendChart attendance={branchAttendance} />
-              <BorrowingActivityTrendChart requests={branchBorrowRequests} />
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+              <div><h3 className="text-sm font-bold text-slate-800">Branch activity analytics</h3><p className="mt-0.5 text-xs text-slate-500">Descriptive view of actual check-ins and circulation records.</p></div>
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Month<select aria-label="Filter overview charts by month" value={overviewMonth} onChange={(event) => setOverviewMonth(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">{overviewMonthOptions.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select></label>
             </div>
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+              <AttendanceTrendChart attendance={branchAttendance} monthKey={overviewMonth} />
+              <BorrowingActivityTrendChart requests={branchBorrowRequests} monthKey={overviewMonth} />
+            </div>
+            <section className="grid gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:grid-cols-[0.8fr_1.2fr]" aria-labelledby="branch-inventory-insights-title">
+              <div>
+                <h3 id="branch-inventory-insights-title" className="text-sm font-bold text-slate-800">Branch inventory health</h3>
+                <p className="mt-1 text-xs text-slate-500">Current stock snapshot for {currentBranchName || 'your branch'}.</p>
+                <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[11px] font-semibold text-slate-500">Titles</p><p className="mt-1 text-lg font-bold text-slate-900">{branchBooks.length}</p></div>
+                  <div className="rounded-lg bg-emerald-50 p-3"><p className="text-[11px] font-semibold text-emerald-700">Available copies</p><p className="mt-1 text-lg font-bold text-emerald-900">{branchOverviewMetrics.availableCopies}</p></div>
+                  <div className="rounded-lg bg-amber-50 p-3"><p className="text-[11px] font-semibold text-amber-700">Unavailable titles</p><p className="mt-1 text-lg font-bold text-amber-900">{branchOverviewMetrics.unavailableTitles}</p></div>
+                </div>
+                {branchOverviewMetrics.unavailableTitles > 0 && <p className="mt-3 text-xs font-medium text-amber-800">Review unavailable titles for pending returns, damaged copies, or replenishment needs.</p>}
+              </div>
+              <div className="border-t border-slate-100 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
+                <h3 className="text-sm font-bold text-slate-800">Most borrowed titles · {branchOverviewMetrics.monthLabel}</h3>
+                <p className="mt-1 text-xs text-slate-500">Counts confirmed borrow events by borrow date.</p>
+                {branchOverviewMetrics.topBorrowed.length ? <ol className="mt-3 space-y-2">{branchOverviewMetrics.topBorrowed.map(({ book, count }, index) => <li key={book.id} className="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-2 text-sm"><span className="text-xs font-bold text-slate-400">{index + 1}</span><span className="truncate font-medium text-slate-700">{book.title || 'Untitled book'}</span><span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-800">{count} borrows</span></li>)}</ol> : <p className="mt-3 text-sm text-slate-500">No confirmed borrows in the selected month.</p>}
+                {branchOverviewMetrics.topBorrowed[0] && <p className="mt-3 text-xs text-blue-800">Prescriptive cue: check availability of “{branchOverviewMetrics.topBorrowed[0].book.title}” before increasing copies.</p>}
+              </div>
+            </section>
             <div className="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-3">
               <div className="h-full lg:col-span-1 [&>section]:h-full">
                 <BookRatingsChart books={branchBooks} fillHeight />
