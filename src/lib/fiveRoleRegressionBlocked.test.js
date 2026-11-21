@@ -85,7 +85,7 @@ function assertDenied(response, description) {
 
 function visitor(alias) { return state.visitors.find((row) => row.alias === alias); }
 
-async function makeAccount(alias, role, { registrationType, approvalStatus, active } = {}) {
+async function makeAccount(alias, role, { registrationType, approvalStatus, active, otpVerified = true } = {}) {
   const email = `${alias}-${runId}@shelf-test.invalid`;
   const created = await request('/auth/v1/admin/users', {
     method: 'POST', admin: true,
@@ -110,7 +110,7 @@ async function makeAccount(alias, role, { registrationType, approvalStatus, acti
         contact_number: '09000000000',
         address: 'Isolated release test fixture',
         library_id: state.libraries[0].id,
-        otp_verified: true,
+        otp_verified: otpVerified,
         is_active: active,
         qr_code: qrCode,
         registration_type: registrationType,
@@ -180,18 +180,30 @@ async function setup() {
   await makeAccount('community_pending', 'visitor', {
     registrationType: 'community', approvalStatus: 'pending', active: false,
   });
+  await makeAccount('institutional_pending', 'visitor', {
+    registrationType: 'institutional', approvalStatus: 'pending', active: false,
+  });
+  await makeAccount('institutional_unverified', 'visitor', {
+    registrationType: 'institutional', approvalStatus: 'pending', active: false, otpVerified: false,
+  });
   await makeAccount('community_approved', 'visitor', {
     registrationType: 'community', approvalStatus: 'approved', active: true,
   });
   await makeAccount('subadmin', 'subadmin');
+  await makeAccount('subadmin_branch_b', 'subadmin');
   await makeAccount('superadmin', 'superadmin');
 
-  for (const account of state.users.filter((item) => ['subadmin', 'superadmin'].includes(item.alias))) {
+  for (const account of state.users.filter((item) => ['subadmin', 'subadmin_branch_b', 'superadmin'].includes(item.alias))) {
     const staff = await request('/rest/v1/staff_profiles', {
       method: 'POST', admin: true,
       body: {
         id: account.id, email: account.email, full_name: `Synthetic ${account.alias}`,
-        role: account.alias, library_id: account.alias === 'superadmin' ? null : state.libraries[0].id,
+        role: account.alias === 'superadmin' ? 'superadmin' : 'subadmin',
+        library_id: account.alias === 'superadmin'
+          ? null
+          : account.alias === 'subadmin_branch_b'
+            ? state.libraries[1].id
+            : state.libraries[0].id,
         is_active: true,
       },
     });
@@ -254,7 +266,7 @@ async function setup() {
   }
 
   for (const account of state.users) account.aal1 = await passwordSession(account);
-  for (const alias of ['subadmin', 'superadmin']) {
+  for (const alias of ['subadmin', 'subadmin_branch_b', 'superadmin']) {
     const account = state.users.find((item) => item.alias === alias);
     account.aal2 = await enrollAal2(account, account.aal1);
   }
@@ -335,13 +347,43 @@ authTest('auth-role regression: community pending visitor receives a real visito
   assert.equal(jwtClaims(token).app_metadata.role, 'visitor');
   assertAllowed(await request('/auth/v1/user', { token }), 'verify pending visitor Auth session');
 });
-authTest('auth-role regression: community pending visitor can read only their own pending status', async () => {
-  const row = visitor('community_pending');
-  const result = await request(`/rest/v1/visitors?auth_user_id=eq.${row.userId}&select=id,registration_type,approval_status,is_active`, { token: state.sessions.community_pending.aal1.access_token });
-  assertAllowed(result, 'read pending visitor status');
-  assert.equal(result.data.length, 1);
-  assert.equal(result.data[0].approval_status, 'pending');
-  assert.equal(result.data[0].is_active, false);
+for (const alias of ['institutional_pending', 'community_pending']) {
+  authTest(`visitor privacy regression: ${alias} reads only its own approval status`, async () => {
+    const row = visitor(alias);
+    const token = state.sessions[alias].aal1.access_token;
+    const status = await request('/rest/v1/rpc/get_my_visitor_approval_status', {
+      method: 'POST', token, body: {},
+    });
+    assertAllowed(status, `${alias} approval status RPC`);
+    assert.equal(status.data.length, 1);
+    assert.deepEqual(Object.keys(status.data[0]).sort(), [
+      'approval_status', 'is_active', 'otp_verified', 'registration_type',
+    ]);
+    assert.equal(status.data[0].registration_type, alias === 'community_pending' ? 'community' : 'institutional');
+    assert.equal(status.data[0].approval_status, 'pending');
+    assert.equal(status.data[0].otp_verified, true);
+    assert.equal(status.data[0].is_active, false);
+
+    const directStatus = await request(`/rest/v1/visitors?auth_user_id=eq.${row.userId}&select=id,approval_status,is_active`, { token });
+    assertAllowed(directStatus, `${alias} direct status query`);
+    assert.deepEqual(directStatus.data, [], 'pending visitor rows must not be directly readable');
+
+    const privateColumns = await request(`/rest/v1/visitors?auth_user_id=eq.${row.userId}&select=email,full_name,address,qr_code,profile_image_path`, { token });
+    assertDenied(privateColumns, `${alias} private-column query`);
+    const legacyProfile = await request('/rest/v1/rpc/get_visitor_profile', {
+      method: 'POST', token, body: {},
+    });
+    assertDenied(legacyProfile, `${alias} legacy full-profile RPC`);
+    const otherStatus = await request('/rest/v1/rpc/get_my_visitor_approval_status', {
+      method: 'POST', token, body: { p_visitor_id: visitor('community_approved').id },
+    });
+    assertDenied(otherStatus, `${alias} supplied-other-visitor status query`);
+  });
+}
+authTest('visitor privacy regression: OTP-unverified visitor cannot read approval status', async () => {
+  assertDenied(await request('/rest/v1/rpc/get_my_visitor_approval_status', {
+    method: 'POST', token: state.sessions.institutional_unverified.aal1.access_token, body: {},
+  }), 'OTP-unverified visitor approval status');
 });
 authTest('auth-role regression: community pending visitor retains public catalog read access only', async () => {
   const catalog = await request(`/rest/v1/books?id=eq.${encodeURIComponent(state.books[0].id)}&select=id`, { token: state.sessions.community_pending.aal1.access_token });
@@ -358,6 +400,12 @@ authTest('auth-role regression: community pending visitor cannot view fine analy
     method: 'POST', token: state.sessions.community_pending.aal1.access_token, body: { p_library_id: state.libraries[0].id },
   }), 'pending visitor fine analytics');
 });
+authTest('visitor approval regression: pending institutional visitor cannot borrow', async () => {
+  assertDenied(await request('/rest/v1/rpc/request_borrow_v2', {
+    method: 'POST', token: state.sessions.institutional_pending.aal1.access_token,
+    body: { p_book_id: state.books[0].id },
+  }), 'pending institutional visitor borrowing');
+});
 
 authTest('auth-role regression: community approved visitor receives a real AAL1 session', async () => {
   const token = state.sessions.community_approved.aal1.access_token;
@@ -367,11 +415,18 @@ authTest('auth-role regression: community approved visitor receives a real AAL1 
 });
 authTest('auth-role regression: community approved visitor profile is active and scoped', async () => {
   const row = visitor('community_approved');
-  const result = await request(`/rest/v1/visitors?auth_user_id=eq.${row.userId}&select=id,approval_status,is_active`, { token: state.sessions.community_approved.aal1.access_token });
+  const result = await request('/rest/v1/rpc/get_my_visitor_profile_v2', {
+    method: 'POST', token: state.sessions.community_approved.aal1.access_token, body: {},
+  });
   assertAllowed(result, 'read approved visitor profile');
   assert.equal(result.data.length, 1);
+  assert.equal(result.data[0].id, row.id);
   assert.equal(result.data[0].approval_status, 'approved');
   assert.equal(result.data[0].is_active, true);
+  const privateColumns = await request(`/rest/v1/visitors?auth_user_id=eq.${row.userId}&select=email,full_name,address,qr_code`, {
+    token: state.sessions.community_approved.aal1.access_token,
+  });
+  assertDenied(privateColumns, 'approved visitor direct private-column query');
 });
 authTest('auth-role regression: approved community visitor can submit a borrowing request', async () => {
   const result = await request('/rest/v1/rpc/request_borrow_v2', {
@@ -422,6 +477,46 @@ authTest('auth-role regression: verified subadmin TOTP session is genuine AAL2',
   assert.equal(jwtClaims(token).app_metadata.role, 'subadmin');
   assertAllowed(await request('/auth/v1/user', { token }), 'verify subadmin AAL2 session');
 });
+authTest('visitor privacy regression: AAL2 Sub-Admin reads only visitor accounts in the assigned branch', async () => {
+  const token = state.sessions.subadmin.aal2.access_token;
+  const ownBranch = await request('/rest/v1/rpc/list_visitor_accounts_v2', {
+    method: 'POST', token,
+    body: {
+      p_filter_library: true, p_library_id: state.libraries[0].id,
+      p_visitor_id: null, p_search: null, p_offset: 0, p_limit: 100,
+    },
+  });
+  assertAllowed(ownBranch, 'assigned Sub-Admin visitor list');
+  assert.ok(ownBranch.data.length > 0);
+  assert.ok(ownBranch.data.every((row) => row.library_id === state.libraries[0].id));
+
+  assertDenied(await request('/rest/v1/rpc/list_visitor_accounts_v2', {
+    method: 'POST', token,
+    body: {
+      p_filter_library: true, p_library_id: state.libraries[1].id,
+      p_visitor_id: null, p_search: null, p_offset: 0, p_limit: 100,
+    },
+  }), 'cross-branch visitor-list RPC');
+  assertDenied(await request('/rest/v1/rpc/list_visitor_accounts_v2', {
+    method: 'POST', token: state.sessions.subadmin.aal1.access_token,
+    body: {
+      p_filter_library: true, p_library_id: state.libraries[0].id,
+      p_visitor_id: null, p_search: null, p_offset: 0, p_limit: 100,
+    },
+  }), 'AAL1 visitor-list RPC');
+});
+authTest('visitor privacy regression: AAL2 Super-Admin retains read-only system-wide visitor listing', async () => {
+  const result = await request('/rest/v1/rpc/list_visitor_accounts_v2', {
+    method: 'POST', token: state.sessions.superadmin.aal2.access_token,
+    body: {
+      p_filter_library: false, p_library_id: null,
+      p_visitor_id: null, p_search: null, p_offset: 0, p_limit: 100,
+    },
+  });
+  assertAllowed(result, 'Super-Admin visitor list');
+  assert.ok(result.data.some((row) => row.library_id === state.libraries[0].id));
+  assert.ok(result.data.some((row) => row.library_id === state.libraries[1].id));
+});
 authTest('auth-role regression: subadmin can look up an active same-branch synthetic visitor', async () => {
   const result = await request('/rest/v1/rpc/lookup_attendance_visitor_v2', {
     method: 'POST', token: state.sessions.subadmin.aal2.access_token,
@@ -451,6 +546,81 @@ authTest('auth-role regression: subadmin cannot look up another branch', async (
     method: 'POST', token: state.sessions.subadmin.aal2.access_token,
     body: { p_qr: visitor('institutional').qrCode, p_library_id: state.libraries[1].id },
   }), 'subadmin cross-branch QR lookup');
+});
+authTest('visitor approval regression: pending institutional QR is not usable before approval', async () => {
+  const pending = visitor('institutional_pending');
+  assertDenied(await request('/rest/v1/rpc/lookup_attendance_visitor_v2', {
+    method: 'POST', token: state.sessions.subadmin.aal2.access_token,
+    body: { p_qr: pending.qrCode, p_library_id: state.libraries[0].id },
+  }), 'pending institutional QR lookup');
+});
+authTest('visitor approval regression: AAL1 cannot approve an institutional visitor', async () => {
+  assertDenied(await request('/rest/v1/rpc/approve_visitor', {
+    method: 'POST', token: state.sessions.subadmin.aal1.access_token,
+    body: { p_visitor_id: visitor('institutional_pending').id },
+  }), 'AAL1 institutional visitor approval');
+});
+authTest('visitor approval regression: wrong-branch Sub-Admin cannot approve', async () => {
+  assertDenied(await request('/rest/v1/rpc/approve_visitor', {
+    method: 'POST', token: state.sessions.subadmin_branch_b.aal2.access_token,
+    body: { p_visitor_id: visitor('institutional_pending').id },
+  }), 'cross-branch institutional visitor approval');
+});
+authTest('visitor approval regression: OTP-unverified institutional visitor cannot be approved', async () => {
+  assertDenied(await request('/rest/v1/rpc/approve_visitor', {
+    method: 'POST', token: state.sessions.subadmin.aal2.access_token,
+    body: { p_visitor_id: visitor('institutional_unverified').id },
+  }), 'unverified institutional visitor approval');
+});
+authTest('visitor approval regression: activation RPC cannot bypass pending approval', async () => {
+  assertDenied(await request('/rest/v1/rpc/set_visitor_active', {
+    method: 'POST', token: state.sessions.subadmin.aal2.access_token,
+    body: { p_visitor_id: visitor('institutional_pending').id, p_is_active: true },
+  }), 'pending institutional direct activation');
+});
+authTest('visitor approval regression: visitor cannot approve its own account', async () => {
+  const account = state.sessions.institutional_pending;
+  account.aal2 = await enrollAal2(account, account.aal1);
+  assertDenied(await request('/rest/v1/rpc/approve_visitor', {
+    method: 'POST', token: account.aal2.access_token,
+    body: { p_visitor_id: visitor('institutional_pending').id },
+  }), 'institutional visitor self-approval');
+});
+authTest('visitor approval regression: assigned AAL2 Sub-Admin approves institutional visitor once', async () => {
+  const pending = visitor('institutional_pending');
+  const result = await request('/rest/v1/rpc/approve_visitor', {
+    method: 'POST', token: state.sessions.subadmin.aal2.access_token,
+    body: { p_visitor_id: pending.id },
+  });
+  assertAllowed(result, 'assigned Sub-Admin institutional visitor approval');
+  assert.equal(result.data, true);
+
+  const rows = await request(`/rest/v1/visitors?id=eq.${encodeURIComponent(pending.id)}&select=approval_status,is_active,otp_verified`, {
+    token: state.sessions.subadmin.aal2.access_token,
+  });
+  assertAllowed(rows, 'read approved institutional status');
+  assert.deepEqual(rows.data, [{ approval_status: 'approved', is_active: true, otp_verified: true }]);
+
+  const existingRows = await request(`/rest/v1/visitors?id=eq.${encodeURIComponent(visitor('institutional').id)}&select=approval_status,is_active`, {
+    token: state.sessions.subadmin.aal2.access_token,
+  });
+  assertAllowed(existingRows, 'read existing institutional visitor status');
+  assert.deepEqual(existingRows.data, [{ approval_status: 'approved', is_active: true }]);
+});
+authTest('visitor approval regression: repeated approval fails safely', async () => {
+  assertDenied(await request('/rest/v1/rpc/approve_visitor', {
+    method: 'POST', token: state.sessions.subadmin.aal2.access_token,
+    body: { p_visitor_id: visitor('institutional_pending').id },
+  }), 'repeated institutional visitor approval');
+});
+authTest('visitor approval regression: community compatibility RPC still approves community visitors', async () => {
+  const pending = visitor('community_pending');
+  const result = await request('/rest/v1/rpc/approve_community_visitor', {
+    method: 'POST', token: state.sessions.subadmin.aal2.access_token,
+    body: { p_visitor_id: pending.id },
+  });
+  assertAllowed(result, 'community compatibility approval');
+  assert.equal(result.data, true);
 });
 authTest('auth-role regression: subadmin cannot manage staff through direct table access', async () => {
   assertDenied(await request('/rest/v1/staff_profiles', {

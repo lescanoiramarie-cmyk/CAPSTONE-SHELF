@@ -8,6 +8,7 @@ SELECT extensions.lives_ok($tap$DO $test$
 DECLARE
   v_proc record;
   v_definition text;
+  v_helper_definition text;
   v_policy_count integer;
   v_policy_roles oid[];
   v_policy_command "char";
@@ -40,8 +41,13 @@ BEGIN
     WHERE trigger_row.tgrelid = 'auth.users'::pg_catalog.regclass
       AND trigger_row.tgname = 'on_auth_user_visitor_link_insert'
       AND NOT trigger_row.tgisinternal
+  ) OR NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_trigger trigger_row
+    WHERE trigger_row.tgrelid = 'auth.users'::pg_catalog.regclass
+      AND trigger_row.tgname = 'on_auth_user_visitor_confirm'
+      AND NOT trigger_row.tgisinternal
   ) THEN
-    RAISE EXCEPTION 'Auth signup validation and visitor-link triggers must remain attached.';
+    RAISE EXCEPTION 'Auth signup validation, insert-link, and confirmation-link triggers must remain attached.';
   END IF;
 
   SELECT pg_catalog.pg_get_functiondef('public.register_visitor_v2(uuid,text,text,text,text,text,uuid,text)'::pg_catalog.regprocedure)
@@ -98,13 +104,22 @@ BEGIN
     RAISE EXCEPTION 'Signup RPC must have exactly the reviewed owner/anon/authenticated EXECUTE grants.';
   END IF;
 
+  SELECT pg_catalog.pg_get_functiondef('public.shelf_approve_pending_visitor(text,text)'::pg_catalog.regprocedure)
+    INTO v_helper_definition;
+  IF v_helper_definition NOT ILIKE '%aal2%'
+     OR v_helper_definition NOT ILIKE '%is_active_staff_for_branch%'
+     OR v_helper_definition NOT ILIKE '%Visitors cannot approve their own accounts%'
+     OR v_helper_definition NOT ILIKE '%otp_verified%'
+     OR v_helper_definition NOT ILIKE '%approval_status%'
+     OR v_helper_definition NOT ILIKE '%generate_visitor_qr_code%'
+     OR v_helper_definition NOT ILIKE '%FOR UPDATE%' THEN
+    RAISE EXCEPTION 'Shared approval must enforce AAL2, branch staff, verified email, self-approval rejection, pending state, locking, and QR generation.';
+  END IF;
   SELECT pg_catalog.pg_get_functiondef('public.approve_community_visitor(text)'::pg_catalog.regprocedure)
     INTO v_definition;
-  IF v_definition NOT ILIKE '%aal2%'
-     OR v_definition NOT ILIKE '%is_active_staff_for_branch%'
-     OR v_definition NOT ILIKE '%Visitors cannot approve their own accounts%'
-     OR v_definition NOT ILIKE '%otp_verified%' THEN
-    RAISE EXCEPTION 'Community approval must enforce AAL2, active branch staff, verified email, and self-approval rejection.';
+  IF v_definition NOT ILIKE '%shelf_approve_pending_visitor%'
+     OR v_definition NOT ILIKE '%community%' THEN
+    RAISE EXCEPTION 'Community approval must remain a compatibility wrapper restricted to community registrations.';
   END IF;
   SELECT procedure_row.prosecdef, procedure_row.proconfig
     INTO v_proc
@@ -119,14 +134,14 @@ BEGIN
     JOIN pg_catalog.pg_language language_row ON language_row.oid = procedure_row.prolang
     WHERE procedure_row.oid = 'public.approve_community_visitor(text)'::pg_catalog.regprocedure
       AND procedure_row.proowner = 'postgres'::pg_catalog.regrole::oid
-      AND language_row.lanname = 'plpgsql'
+      AND language_row.lanname = 'sql'
       AND procedure_row.prorettype = 'boolean'::pg_catalog.regtype::oid
       AND procedure_row.proretset IS FALSE
       AND procedure_row.provolatile = 'v'::"char"
       AND procedure_row.prosecdef IS TRUE
       AND procedure_row.proconfig IS NOT DISTINCT FROM ARRAY['search_path=""']::text[]
   ) THEN
-    RAISE EXCEPTION 'Community approval RPC metadata differs from its reviewed security contract.';
+    RAISE EXCEPTION 'Community approval compatibility wrapper metadata differs from its reviewed security contract.';
   END IF;
   SELECT pg_catalog.count(*)::integer INTO v_acl_count
   FROM pg_catalog.pg_proc procedure_row
@@ -150,6 +165,26 @@ BEGIN
      OR NOT pg_catalog.has_function_privilege('authenticated', 'public.approve_community_visitor(text)', 'EXECUTE')
      OR pg_catalog.has_function_privilege('service_role', 'public.approve_community_visitor(text)', 'EXECUTE') THEN
     RAISE EXCEPTION 'Community approval RPC must have exactly the reviewed owner/authenticated EXECUTE grants.';
+  END IF;
+  SELECT pg_catalog.pg_get_functiondef('public.approve_visitor(text)'::pg_catalog.regprocedure)
+    INTO v_definition;
+  IF v_definition NOT ILIKE '%shelf_approve_pending_visitor%'
+     OR NOT EXISTS (
+       SELECT 1
+       FROM pg_catalog.pg_proc procedure_row
+       JOIN pg_catalog.pg_language language_row ON language_row.oid = procedure_row.prolang
+       WHERE procedure_row.oid = 'public.approve_visitor(text)'::pg_catalog.regprocedure
+         AND procedure_row.proowner = 'postgres'::pg_catalog.regrole::oid
+         AND language_row.lanname = 'sql'
+         AND procedure_row.prorettype = 'boolean'::pg_catalog.regtype::oid
+         AND procedure_row.proretset IS FALSE
+         AND procedure_row.prosecdef IS TRUE
+         AND procedure_row.proconfig IS NOT DISTINCT FROM ARRAY['search_path=""']::text[]
+     )
+     OR NOT pg_catalog.has_function_privilege('authenticated', 'public.approve_visitor(text)', 'EXECUTE')
+     OR pg_catalog.has_function_privilege('anon', 'public.approve_visitor(text)', 'EXECUTE')
+     OR pg_catalog.has_function_privilege('service_role', 'public.approve_visitor(text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'Generic approval RPC must have the reviewed SECURITY DEFINER contract and authenticated-only access.';
   END IF;
 
   SELECT pg_catalog.count(*)::integer INTO v_policy_count
@@ -177,13 +212,14 @@ BEGIN
      OR v_policy_using !~* 'auth_user_id[[:space:]]*=[[:space:]]*(auth[.])?uid[[:space:]]*[(][[:space:]]*[)]'
      OR v_policy_using !~* 'otp_verified([[:space:]]+IS[[:space:]]+TRUE)?'
      OR v_policy_using !~* 'is_active'
-     OR v_policy_using !~* 'approval_status[[:space:]]*=[[:space:]]*''pending'''
+     OR v_policy_using !~* 'approval_status[[:space:]]*=[[:space:]]*''approved'''
+     OR v_policy_using ~* 'approval_status[[:space:]]*=[[:space:]]*''pending'''
      OR v_policy_using !~* 'is_active_staff_for_branch[[:space:]]*[(][[:space:]]*[(]?library_id[)]?[[:space:]]*::[[:space:]]*text[)]'
      OR pg_catalog.regexp_count(v_policy_using, 'auth_user_id', 1, 'i') <> 1
      OR pg_catalog.regexp_count(v_policy_using, 'otp_verified', 1, 'i') <> 1
      OR pg_catalog.regexp_count(v_policy_using, 'approval_status', 1, 'i') <> 1
      OR pg_catalog.regexp_count(v_policy_using, 'is_active_staff_for_branch', 1, 'i') <> 1 THEN
-    RAISE EXCEPTION 'Visitor policy identity, RLS, command, roles, USING, or WITH CHECK differs from the verified owner/branch contract.';
+    RAISE EXCEPTION 'Visitor policy must allow only verified, approved, active self-reads and authorized staff reads.';
   END IF;
 
   SELECT pg_catalog.pg_get_functiondef('public.verify_visitor_otp(text,text)'::pg_catalog.regprocedure)
@@ -191,7 +227,7 @@ BEGIN
   IF v_definition NOT ILIKE '%otp_attempts%'
      OR v_definition NOT ILIKE '%approval_status%'
      OR v_definition NOT ILIKE '%generate_visitor_qr_code%' THEN
-    RAISE EXCEPTION 'OTP verification must retain attempt lockout and defer pending community QR issuance.';
+    RAISE EXCEPTION 'OTP verification must retain attempt lockout and defer pending visitor QR issuance.';
   END IF;
 END;
 $test$;$tap$, 'public community visitor registration contract block 1');

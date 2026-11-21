@@ -1,7 +1,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { QRCodeSVG } from 'qrcode.react';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import {
   Check,
@@ -968,16 +967,6 @@ useEffect(() => {
     }
   };
 
-  const candidateQrPass =
-    registeredVisitor?.qr_code ||
-    registeredVisitor?.visitor?.qr_code ||
-    registeredVisitor?.qrCode ||
-    registeredVisitor?.visitor?.qrCode;
-  const qrPassValue =
-    /^SHELF-QR-[0-9]{6}$/i.test(String(candidateQrPass || ''))
-      ? String(candidateQrPass).toUpperCase()
-      : '';
-
   return (
     <div className="auth-shell flex min-h-screen w-full bg-shelf-bg">
       <style>
@@ -1680,63 +1669,36 @@ useEffect(() => {
             </form>
             )}
 
-          {/* Registration success / QR pass */}
+          {/* Registration success */}
           {view === 'success' && (
             <div className="space-y-4 text-center">
               <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-700">
-                Your email verification was successful.
+                Your email verification was successful. Your selected library must approve your account before visitor services are enabled.
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-white p-5">
-                <p className="mb-1 text-sm font-bold text-slate-800">
-                  SHELF Digital Library Pass
+                <p className="text-sm font-bold text-slate-800">
+                  Librarian approval is pending
                 </p>
-                <p className="mb-4 text-xs text-slate-500">
-                  {registeredVisitor?.fullName ||
-                    registeredVisitor?.visitor?.full_name ||
-                    formData.fullName}
+                <p className="mt-2 text-sm text-slate-600">
+                  Restricted visitor features and an active QR pass will become available only after approval.
                 </p>
-
-                {qrPassValue ? (
-                  <>
-                    <div className="flex justify-center">
-                      <QRCodeSVG
-                        value={qrPassValue}
-                        size={190}
-                        level="H"
-                        includeMargin
-                        fgColor="#000000"
-                        bgColor="#FFFFFF"
-                      />
-                    </div>
-
-                    <p className="mt-3 break-all text-xs text-slate-500">
-                      {qrPassValue}
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-sm text-red-600" role="alert">
-                    Your QR pass could not be loaded. Please sign in and contact
-                    library staff to have it reissued.
-                  </p>
-                )}
               </div>
-
-              <p className="text-xs text-slate-500">
-                Keep your QR pass for library attendance and circulation
-                services.
-              </p>
 
               <button
                 type="button"
                 onClick={async () => {
                   try {
                     setBusy(true);
-                    await login({
+                    const loginResult = await login({
                       identifier: pendingEmail,
                       password: formData.password,
                     });
-                    navigate('/visitor');
+                    navigate(
+                      loginResult?.pendingApproval
+                        ? '/visitor/pending-approval'
+                        : '/visitor'
+                    );
                   } catch (err) {
                     setError(
                       err.message ||

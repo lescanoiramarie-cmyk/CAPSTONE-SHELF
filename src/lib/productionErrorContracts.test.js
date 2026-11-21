@@ -140,9 +140,11 @@ test('visitor password login request fields and account gates remain explicit an
   assert.match(visitorLogin, /Invalid email or password/);
   assert.doesNotMatch(visitorLogin, /console\.(?:error|warn)\([^\n]*(?:error|Error|password|email)/i);
   assert.match(authContext, /reportClientError\('Visitor login attempt failed\.'\)/);
-  assert.match(store, /visitor\.otp_verified !== true/);
-  assert.match(store, /communityApprovalPending/);
-  assert.match(store, /qrCode:\s*communityApprovalPending \? null : visitor\.qr_code/);
+  assert.match(store, /status\.otp_verified !== true/);
+  assert.match(store, /approvalPending: true/);
+  assert.match(store, /status\.approval_status !== 'approved' \|\| status\.is_active !== true/);
+  assert.match(store, /get_my_visitor_approval_status[\s\S]*get_my_visitor_profile_v2/);
+  assert.doesNotMatch(store, /qrCode:\s*approvalPending \? null : visitor\.qr_code/);
 });
 
 test('latest staff role-claim migration retains exact fail-closed guards', () => {

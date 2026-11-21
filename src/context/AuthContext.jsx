@@ -297,15 +297,10 @@ useEffect(() => {
           return;
         }
 
-        // If visitor became a pending community visitor (should not happen for active sessions),
+        // A pending visitor must never keep a full app session.
         // clear the session and redirect to pending-approval.
-        if (visitor.communityApprovalPending === true) {
+        if (visitor.approvalStatus === 'pending') {
           if (!cancelled) {
-            try {
-              globalThis.sessionStorage.setItem('pending_visitor_id', visitor.id);
-            } catch {
-              // Ignore
-            }
             clearClientSessionState();
           }
           return;
@@ -334,10 +329,12 @@ useEffect(() => {
             qrCode: visitor.qrCode,
             libraryId: visitor.libraryId,
             registrationType: visitor.registrationType || current.registrationType,
+            approvalPending: false,
             communityApprovalPending: false,
           };
         });
       } catch {
+        clearClientSessionState();
         reportClientError('Visitor profile refresh failed.');
       }
     };
@@ -484,19 +481,14 @@ useEffect(() => {
   // BUILD VISITOR SESSION
   // =========================================================
   const createVisitorSession = (visitor) => {
+    const approvalPending = visitor.approvalPending === true
+      || visitor.communityApprovalPending === true;
+    // Pending visitors do NOT get a full visitor session.
+    if (approvalPending) {
+      return null;
+    }
     if (!visitor?.id) {
       throw new Error('Visitor information is incomplete.');
-    }
-    const communityApprovalPending = visitor.communityApprovalPending === true;
-    // Pending community visitors do NOT get a full session.
-    // They are redirected to the pending-approval page with visitor_id in query params.
-    if (communityApprovalPending) {
-      try {
-        globalThis.sessionStorage.setItem('pending_visitor_id', visitor.id);
-      } catch {
-        // Ignore storage errors
-      }
-      return null;
     }
     return {
       role: 'visitor',
@@ -506,6 +498,7 @@ useEffect(() => {
       qrCode: visitor.qrCode,
       libraryId: visitor.libraryId,
       registrationType: visitor.registrationType || VISITOR_REGISTRATION_TYPES.INSTITUTIONAL,
+      approvalPending: false,
       communityApprovalPending: false,
     };
   };
@@ -613,8 +606,8 @@ const completeMfaLogin = async (code) => {
       }
       const visitorSession = createVisitorSession(visitor);
       if (!visitorSession) {
-        // Pending community visitor - no session created, redirect to pending-approval
-        return { pendingApproval: true, visitorId: visitor.id };
+        // Pending visitor - no full session is created.
+        return { pendingApproval: true };
       }
       const mfaStep = await beginMfaLogin(visitorSession, false);
       if (mfaStep) return { ...visitor, ...mfaStep };
@@ -636,7 +629,7 @@ const completeMfaLogin = async (code) => {
       const visitor = await store.fetchVisitorForPasskey(data?.user?.id);
       const visitorSession = createVisitorSession(visitor);
       if (!visitorSession) {
-        return { pendingApproval: true, visitorId: visitor.id };
+        return { pendingApproval: true };
       }
       const mfaStep = await beginMfaLogin(visitorSession, false);
       if (mfaStep) {
@@ -670,7 +663,7 @@ const completeMfaLogin = async (code) => {
     }
     const visitorSession = createVisitorSession(visitor);
     if (!visitorSession) {
-      return { pendingApproval: true, visitorId: visitor.id };
+      return { pendingApproval: true };
     }
     setUserWithIdentityTracking(visitorSession);
     return visitorSession;
@@ -778,8 +771,7 @@ const completeMfaLogin = async (code) => {
       if (visitor) {
         const visitorSession = createVisitorSession(visitor);
         if (!visitorSession) {
-          // Pending community visitor
-          return { pendingApproval: true, visitorId: visitor.id };
+          return { pendingApproval: true };
         }
         const mfaStep = await beginMfaLogin(visitorSession, false);
         if (mfaStep) return { success: true, ...mfaStep, user: visitor };

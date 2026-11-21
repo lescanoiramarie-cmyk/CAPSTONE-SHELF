@@ -8,7 +8,13 @@ import {
 } from './visitorRegistration.js';
 
 test('community visitors may use valid personal email domains with a selected library', () => {
-  for (const email of ['reader@gmail.com', 'reader@yahoo.com', 'reader@outlook.com']) {
+  for (const email of [
+    'reader@gmail.com',
+    'reader@yahoo.com',
+    'reader@outlook.com',
+    'reader@icloud.com',
+    'reader+test@proton.me',
+  ]) {
     assert.equal(validateVisitorRegistrationEmail(email, 'community', null), '');
   }
 });
@@ -53,4 +59,31 @@ test('pending community visitor is the only inactive visitor allowed to read its
   const migration = readFileSync(fileURLToPath(new URL('../../supabase/migrations/20270102001700_public_community_visitor_registration.sql', import.meta.url)), 'utf8');
   assert.match(migration, /auth_user_id\s*=\s*auth\.uid\(\)\s+AND\s+otp_verified\s+IS\s+TRUE[\s\S]*is_active\s+IS\s+TRUE\s+OR\s*\(registration_type\s*=\s*'community'\s+AND\s+approval_status\s*=\s*'pending'\)/i);
   assert.match(migration, /registration_type\s*=\s*'community'\s+AND\s+v_visitor\.approval_status\s*=\s*'pending'[\s\S]*v_qr\s*:=\s*v_visitor\.qr_code/i);
+});
+
+test('latest migration requires OTP and librarian approval for both visitor types', () => {
+  const migration = readFileSync(fileURLToPath(new URL('../../supabase/migrations/20270204000000_institutional_visitor_librarian_approval.sql', import.meta.url)), 'utf8');
+
+  assert.match(migration, /v_type NOT IN \('institutional', 'community'\)/);
+  assert.match(migration, /INSERT INTO public\.visitors[\s\S]*otp_verified[\s\S]*is_active[\s\S]*registration_type[\s\S]*approval_status[\s\S]*false,[\s\S]*false,[\s\S]*v_type,[\s\S]*'pending'/);
+  assert.match(migration, /v_profile_approval IS DISTINCT FROM 'pending'[\s\S]*v_profile_active IS DISTINCT FROM false[\s\S]*v_profile_otp_verified IS DISTINCT FROM false/);
+  assert.match(migration, /registration_type IN \('institutional', 'community'\)/);
+  assert.match(migration, /Multiple visitor profiles match this email/);
+  assert.match(migration, /A visitor profile already exists for this email/);
+  assert.match(migration, /This email is already linked to a visitor account/);
+
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.approve_visitor\(p_visitor_id text\)/);
+  assert.match(migration, /shelf_approve_pending_visitor\(p_visitor_id, NULL\)/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.approve_community_visitor\(p_visitor_id text\)/);
+  assert.match(migration, /shelf_approve_pending_visitor\(p_visitor_id, 'community'\)/);
+  assert.match(migration, /auth\.jwt\(\) ->> 'aal'[\s\S]*'aal2'/);
+  assert.match(migration, /public\.is_active_staff_for_branch\(v_visitor\.library_id::text\)/);
+  assert.match(migration, /v_visitor\.auth_user_id = auth\.uid\(\)/);
+  assert.match(migration, /v_visitor\.otp_verified IS NOT TRUE/);
+  assert.match(migration, /v_visitor\.approval_status IS DISTINCT FROM 'pending'/);
+  assert.match(migration, /The visitor approval state changed/);
+  assert.match(migration, /p_is_active IS TRUE AND v_visitor\.approval_status = 'pending'/);
+  const authLinkFunction = migration.match(/CREATE OR REPLACE FUNCTION public\.link_visitor_auth_user\(\)[\s\S]*?\$function\$;/)?.[0] || '';
+  assert.ok(authLinkFunction);
+  assert.doesNotMatch(authLinkFunction, /UPDATE public\.visitors/);
 });

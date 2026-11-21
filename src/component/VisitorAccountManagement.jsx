@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Search, ChevronLeft, ChevronRight, UsersRound, ShieldCheck } from 'lucide-react';
 import {
   fetchVisitorAccounts,
-  approveCommunityVisitor,
+  approveVisitor,
   setVisitorActive,
 } from '../data/visitorAccounts.js';
 
@@ -118,24 +118,32 @@ export default function VisitorAccountManagement({
   const handleToggleVisitor = async (visitor) => {
     if (isSuperAdmin || !visitor?.id || updatingVisitorId) return;
 
+    const isPendingApproval = visitor.approvalStatus === 'pending';
+    const canApprove = isPendingApproval
+      && visitor.otpVerified === true
+      && visitor.isActive === false;
+    if (isPendingApproval && !canApprove) return;
+
     const nextIsActive = !visitor.isActive;
     setUpdatingVisitorId(visitor.id);
     setActionError('');
     setActionMessage('');
 
     try {
-      const isPendingCommunity = visitor.registrationType === 'community'
-        && visitor.approvalStatus === 'pending';
-      if (isPendingCommunity) await approveCommunityVisitor(visitor.id);
+      if (canApprove) await approveVisitor(visitor.id);
       else await setVisitorActive(visitor.id, nextIsActive);
       setVisitors((current) =>
         current.map((item) =>
           item.id === visitor.id
-            ? { ...item, isActive: true, approvalStatus: 'approved' }
+            ? {
+                ...item,
+                isActive: canApprove ? true : nextIsActive,
+                approvalStatus: canApprove ? 'approved' : item.approvalStatus,
+              }
             : item
         )
       );
-      setActionMessage(isPendingCommunity ? 'Community visitor approved successfully.' : `Visitor account ${nextIsActive ? 'enabled' : 'disabled'} successfully.`);
+      setActionMessage(canApprove ? 'Visitor approved successfully.' : `Visitor account ${nextIsActive ? 'enabled' : 'disabled'} successfully.`);
     } catch (updateError) {
       console.error('Visitor account status update failed:', updateError);
       setActionError(
@@ -283,7 +291,13 @@ export default function VisitorAccountManagement({
                     </td>
                     <td className="px-4 py-3 text-slate-600">
                       <span className="block capitalize">{visitor.registrationType === 'community' ? 'Public / Community' : 'Institutional'}</span>
-                      {visitor.registrationType === 'community' && <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold ${visitor.approvalStatus === 'pending' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>{visitor.approvalStatus === 'pending' ? 'Approval pending' : 'Approved'}</span>}
+                      <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold ${visitor.approvalStatus === 'pending' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                        {visitor.approvalStatus === 'pending'
+                          ? visitor.otpVerified
+                            ? 'Email verified · Approval pending'
+                            : 'Email verification pending'
+                          : 'Approved'}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-slate-600">{formatDate(visitor.registeredAt)}</td>
                     <td className="px-4 py-3">
@@ -298,9 +312,9 @@ export default function VisitorAccountManagement({
                       ) : (
                         <button
                           type="button"
-                          data-confirm-message={`${visitor.registrationType === 'community' && visitor.approvalStatus === 'pending' ? 'Approve' : visitor.isActive ? 'Disable' : 'Enable'} the visitor account for "${visitor.fullName || visitor.email || 'this visitor'}"?`}
+                          data-confirm-message={`${visitor.approvalStatus === 'pending' ? 'Approve' : visitor.isActive ? 'Disable' : 'Enable'} the visitor account for "${visitor.fullName || visitor.email || 'this visitor'}"?`}
                           onClick={() => void handleToggleVisitor(visitor)}
-                          disabled={Boolean(updatingVisitorId)}
+                          disabled={Boolean(updatingVisitorId) || (visitor.approvalStatus === 'pending' && !(visitor.otpVerified === true && visitor.isActive === false))}
                           className={`rounded-md border px-3 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
                             visitor.isActive
                               ? 'border-red-200 text-red-700 hover:bg-red-50'
@@ -309,8 +323,12 @@ export default function VisitorAccountManagement({
                         >
                           {updatingVisitorId === visitor.id
                             ? 'Updating...'
-                            : visitor.registrationType === 'community' && visitor.approvalStatus === 'pending'
-                              ? 'Approve visitor'
+                            : visitor.approvalStatus === 'pending'
+                              ? visitor.otpVerified === true && visitor.isActive === false
+                                ? 'Approve visitor'
+                                : visitor.otpVerified !== true
+                                  ? 'Awaiting email verification'
+                                  : 'Review pending state'
                               : visitor.isActive
                                 ? 'Disable'
                                 : 'Enable'}

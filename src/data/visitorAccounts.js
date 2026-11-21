@@ -16,7 +16,6 @@ function mapVisitor(row) {
     isActive: row.is_active,
     registrationType: row.registration_type || 'institutional',
     approvalStatus: row.approval_status || 'approved',
-    qrCode: row.qr_code,
     registeredAt: row.registered_at,
   };
 }
@@ -39,14 +38,30 @@ export async function setVisitorActive(visitorId, isActive) {
   return isActive;
 }
 
-export async function approveCommunityVisitor(visitorId) {
-  const { data, error } = await supabase.rpc('approve_community_visitor', {
+async function approveVisitorWithRpc(rpcName, visitorId, errorMessage) {
+  const { data, error } = await supabase.rpc(rpcName, {
     p_visitor_id: visitorId,
   });
-  if (error) throw new Error(error.message || 'Unable to approve this community visitor.');
-  if (data !== true) throw new Error('The community visitor was not approved.');
+  if (error) throw new Error(error.message || errorMessage);
+  if (data !== true) throw new Error(errorMessage);
   invalidateVisitorAccountsCache();
   return true;
+}
+
+export function approveVisitor(visitorId) {
+  return approveVisitorWithRpc(
+    'approve_visitor',
+    visitorId,
+    'Unable to approve this visitor.',
+  );
+}
+
+export function approveCommunityVisitor(visitorId) {
+  return approveVisitorWithRpc(
+    'approve_community_visitor',
+    visitorId,
+    'Unable to approve this community visitor.',
+  );
 }
 
 function pruneExpiredCacheEntries() {
@@ -134,46 +149,30 @@ export async function fetchVisitorAccounts({
     return cached.value;
   }
 
-  let query = supabase
-    .from('visitors')
-    .select(
-      'id, full_name, contact_number, email, address, otp_verified, is_active, qr_code, registered_at, library_id, registration_type, approval_status',
-      { count: 'exact' }
-    )
-    .order('registered_at', { ascending: false });
-
-  if (effectiveLibraryId === null) {
-    query = query.is('library_id', null);
-  } else if (effectiveLibraryId !== undefined) {
-    query = query.eq('library_id', effectiveLibraryId);
-  }
-
   const safeSearch = normalizedSearch
     .replaceAll(String.fromCharCode(0), ' ')
     .replaceAll('\n', ' ')
     .replaceAll('\r', ' ')
     .replace(/[, %_*()"\\]/g, ' ')
     .trim();
-  if (safeSearch) {
-    const pattern = `%${safeSearch}%`;
-    query = query.or(
-      `full_name.ilike.${pattern},email.ilike.${pattern},contact_number.ilike.${pattern}`
-    );
-  }
-
   const from = (safePage - 1) * safePageSize;
-  const { data, error, count } = await query.range(
-    from,
-    from + safePageSize - 1
-  );
+  const { data, error } = await supabase.rpc('list_visitor_accounts_v2', {
+    p_filter_library: effectiveLibraryId !== undefined,
+    p_library_id: effectiveLibraryId ?? null,
+    p_visitor_id: null,
+    p_search: safeSearch || null,
+    p_offset: from,
+    p_limit: safePageSize,
+  });
 
   if (error) {
     throw new Error(error.message || 'Unable to load visitor accounts.');
   }
 
+  const rows = Array.isArray(data) ? data : [];
   const result = {
-    visitors: (data || []).map(mapVisitor),
-    total: count || 0,
+    visitors: rows.map(mapVisitor),
+    total: Number(rows[0]?.total_count) || 0,
   };
 
   pruneExpiredCacheEntries();

@@ -154,7 +154,7 @@ test('staff borrowing history is branch-scoped and limited to recent or active r
 test('staff and visitor dashboards do not load every visitor profile into shared state', () => {
   assert.match(
     storeSource,
-    /export async function fetchVisitorCount\(\)[\s\S]*?select\('id',\s*\{\s*count:\s*'exact',\s*head:\s*true\s*\}\)/
+    /export async function fetchVisitorCount\(\)[\s\S]*?list_visitor_accounts_v2/
   );
   assert.match(
     libraryContextSource,
@@ -204,11 +204,11 @@ test('visitor dashboard loads only the signed-in visitor profile', () => {
   );
   assert.match(
     storeSource,
-    /knownVisitor\?\.id[\s\S]*?normalizeText\(knownVisitor\.id\) === normalizedVisitorId/
+    /scope\.type === 'visitor'[\s\S]*?get_my_visitor_profile_v2[\s\S]*?visitor\.auth_user_id/
   );
   assert.match(
     storeSource,
-    /\.eq\('id', normalizedVisitorId\)[\s\S]*?\.maybeSingle\(\)/
+    /list_visitor_accounts_v2/
   );
   assert.match(
     libraryContextSource,
@@ -220,23 +220,12 @@ test('visitor dashboard loads only the signed-in visitor profile', () => {
   );
 });
 
-test('visitor profiles remain readable before the profile-photo migration is applied', () => {
+test('visitor profiles load through the approval-gated profile RPC', () => {
   assert.match(
     storeSource,
-    /function isMissingVisitorProfileImageColumn\(error\)[\s\S]*?profile_image_path/
+    /export async function getVisitor\([\s\S]*?get_my_visitor_profile_v2/
   );
-  assert.match(
-    storeSource,
-    /export async function getVisitor\([\s\S]*?isMissingVisitorProfileImageColumn\(error\)[\s\S]*?LEGACY_VISITOR_PROFILE_COLUMNS/
-  );
-  assert.match(
-    storeSource,
-    /export async function fetchVisitors\([\s\S]*?isMissingVisitorProfileImageColumn\(error\)[\s\S]*?LEGACY_VISITOR_PROFILE_COLUMNS/
-  );
-  assert.match(
-    storeSource,
-    /visitor profile photos are unavailable because profile_image_path is missing/i
-  );
+  assert.match(storeSource, /getAuthenticatedVisitorForSession[\s\S]*?get_my_visitor_approval_status[\s\S]*?get_my_visitor_profile_v2/);
 });
 
 test('staff session resolution skips visitor-profile lookup', () => {

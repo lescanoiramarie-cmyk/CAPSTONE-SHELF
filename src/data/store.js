@@ -161,11 +161,6 @@ const isValidUuid = (value) =>
 const isValidVisitorId = (value) =>
   Boolean(normalizeText(value));
 
-const VISITOR_PROFILE_COLUMNS =
-  'id, full_name, contact_number, email, address, profile_image_path, otp_verified, qr_code, registered_at, library_id, registration_type, approval_status, is_active';
-const LEGACY_VISITOR_PROFILE_COLUMNS =
-  'id, full_name, contact_number, email, address, otp_verified, qr_code, registered_at, library_id, registration_type, approval_status, is_active';
-
 function isMissingVisitorProfileImageColumn(error) {
   const message = normalizeText(error?.message || error);
   return (
@@ -320,6 +315,7 @@ const mapVisitor = (r) => ({
   registrationType: r.registration_type || 'institutional',
   approvalStatus: r.approval_status || 'approved',
   isActive: r.is_active,
+  approvalPending: r.approval_status === 'pending',
   communityApprovalPending: r.registration_type === 'community' && r.approval_status === 'pending',
 });
 
@@ -371,7 +367,6 @@ const mapAttendance = (r) => ({
 });
 
 const FETCH_PAGE_SIZE = 1000;
-const FETCH_PAGE_BATCH_SIZE = 2;
 const authenticatedDataScopeRequests = new Map();
 
 async function getAuthenticatedDataScope() {
@@ -428,37 +423,6 @@ async function getAuthenticatedDataScope() {
   } finally {
     if (authenticatedDataScopeRequests.get(accessToken) === request) {
       authenticatedDataScopeRequests.delete(accessToken);
-    }
-  }
-}
-
-async function fetchAllRowsInPages(buildQuery, resourceName) {
-  const rows = [];
-
-  for (
-    let batchOffset = 0;
-    ;
-    batchOffset += FETCH_PAGE_SIZE * FETCH_PAGE_BATCH_SIZE
-  ) {
-    const pages = await Promise.all(
-      Array.from({ length: FETCH_PAGE_BATCH_SIZE }, (_, pageIndex) => {
-        const from = batchOffset + pageIndex * FETCH_PAGE_SIZE;
-        return buildQuery().range(from, from + FETCH_PAGE_SIZE - 1);
-      })
-    );
-
-    for (const page of pages) {
-      if (page.error) {
-        throw cleanErr(
-          page.error,
-          `Unable to fetch all ${resourceName}.`
-        );
-      }
-      rows.push(...(page.data || []));
-    }
-
-    if (pages.some((page) => (page.data || []).length < FETCH_PAGE_SIZE)) {
-      return rows;
     }
   }
 }
@@ -956,102 +920,63 @@ export async function getSavedCommunityBooks() {
 
 export async function fetchVisitors(visitorId = null, knownVisitor = null) {
   const normalizedVisitorId = normalizeText(visitorId);
-
-  // When a specific visitorId is provided (staff looking up a visitor),
-  // continue using direct table access with proper RLS/grants.
-  if (normalizedVisitorId) {
-    if (
-      knownVisitor?.id &&
-      normalizeText(knownVisitor.id) === normalizedVisitorId
-    ) {
-      return [knownVisitor];
-    }
-
-    let { data, error } = await supabase
-      .from('visitors')
-      .select(VISITOR_PROFILE_COLUMNS)
-      .eq('id', normalizedVisitorId)
-      .maybeSingle();
-
-    if (isMissingVisitorProfileImageColumn(error)) {
-      warnVisitorProfileMigrationRequired();
-      ({ data, error } = await supabase
-        .from('visitors')
-        .select(LEGACY_VISITOR_PROFILE_COLUMNS)
-        .eq('id', normalizedVisitorId)
-        .maybeSingle());
-    }
-
-    if (error) throw cleanErr(error, 'Unable to fetch the visitor profile.');
-
-    return data ? [mapVisitor(data)] : [];
-  }
-
-  // No specific visitorId: return current user's own profile (visitor)
-  // or list of visitors (staff) using RPC for current visitor profile.
   const scope = await getAuthenticatedDataScope();
   if (scope.type === 'anonymous') return [];
 
-  // Visitor fetching their own profile - use RPC
   if (scope.type === 'visitor') {
-    const { data, error } = await supabase.rpc('get_visitor_profile');
+    const { data, error } = await supabase.rpc('get_my_visitor_profile_v2');
     if (error) throw cleanErr(error, 'Unable to fetch your visitor profile.');
-    return data ? [mapVisitor(data[0])] : [];
+    const visitor = firstRow(data);
+    if (!visitor || (normalizedVisitorId
+      && ![visitor.id, visitor.auth_user_id].some(
+        (value) => normalizeText(value) === normalizedVisitorId
+      ))) {
+      return [];
+    }
+    const mappedVisitor = mapVisitor(visitor);
+    return [knownVisitor?.id === mappedVisitor.id
+      ? { ...knownVisitor, ...mappedVisitor }
+      : mappedVisitor];
   }
 
-  // Staff fetching list of visitors - continue using direct table access
-  // with RLS scoping (subadmin limited to their branch)
-  const buildQuery = (columns) => {
-      let query = supabase
-        .from('visitors')
-        .select(columns)
-        .order('registered_at', { ascending: false })
-        .order('id', { ascending: true });
+  const rows = [];
+  for (let offset = 0; ; offset += FETCH_PAGE_SIZE) {
+    const { data, error } = await supabase.rpc('list_visitor_accounts_v2', {
+      p_filter_library: scope.type === 'subadmin',
+      p_library_id: scope.type === 'subadmin' ? scope.libraryId : null,
+      p_visitor_id: normalizedVisitorId || null,
+      p_search: null,
+      p_offset: offset,
+      p_limit: FETCH_PAGE_SIZE,
+    });
+    if (error) throw cleanErr(error, 'Unable to fetch visitor profiles.');
 
-      if (scope.type === 'subadmin') {
-        query = query.eq('library_id', scope.libraryId);
-      }
-
-      return query;
-    };
-  let data;
-  try {
-    data = await fetchAllRowsInPages(
-      () => buildQuery(VISITOR_PROFILE_COLUMNS),
-      'visitor profiles'
-    );
-  } catch (error) {
-    if (!isMissingVisitorProfileImageColumn(error)) throw error;
-    warnVisitorProfileMigrationRequired();
-    data = await fetchAllRowsInPages(
-      () => buildQuery(LEGACY_VISITOR_PROFILE_COLUMNS),
-      'visitor profiles'
-    );
+    const page = Array.isArray(data) ? data : [];
+    rows.push(...page);
+    if (page.length < FETCH_PAGE_SIZE) break;
   }
-
-  return data.map(mapVisitor);
+  return rows.map(mapVisitor);
 }
 
 export async function fetchVisitorCount() {
   const scope = await getAuthenticatedDataScope();
   if (scope.type === 'anonymous') return 0;
 
-  let query = supabase
-    .from('visitors')
-    .select('id', { count: 'exact', head: true });
-
-  if (scope.type === 'subadmin') {
-    if (!scope.libraryId) {
-      throw new Error('Your staff account has no assigned library branch.');
-    }
-    query = query.eq('library_id', scope.libraryId);
-  } else if (scope.type === 'visitor') {
-    query = query.eq('id', scope.visitorId);
+  if (scope.type === 'visitor') {
+    const visitor = await getVisitor(scope.visitorId);
+    return visitor ? 1 : 0;
   }
 
-  const { count, error } = await query;
+  const { data, error } = await supabase.rpc('list_visitor_accounts_v2', {
+    p_filter_library: scope.type === 'subadmin',
+    p_library_id: scope.type === 'subadmin' ? scope.libraryId : null,
+    p_visitor_id: null,
+    p_search: null,
+    p_offset: 0,
+    p_limit: 1,
+  });
   if (error) throw cleanErr(error, 'Unable to count registered visitors.');
-  return Number(count) || 0;
+  return Number(firstRow(data)?.total_count) || 0;
 }
 
 // ============================================================================
@@ -1664,30 +1589,21 @@ export async function getVisitor(
     );
   }
 
-  const buildQuery = (columns) => {
-    let query = supabase
-    .from('visitors')
-    .select(columns);
-
-    query = isValidUuid(normalizedVisitorId)
-      ? query.eq('auth_user_id', normalizedVisitorId)
-      : query.eq('id', normalizedVisitorId);
-    return query;
-  };
-
-  let { data, error } = await buildQuery(VISITOR_PROFILE_COLUMNS).maybeSingle();
-  if (isMissingVisitorProfileImageColumn(error)) {
-    warnVisitorProfileMigrationRequired();
-    ({ data, error } = await buildQuery(LEGACY_VISITOR_PROFILE_COLUMNS).maybeSingle());
-  }
-
+  const {
+    data,
+    error,
+  } = await supabase.rpc('get_my_visitor_profile_v2');
   if (error) {
     throw cleanErr(error);
   }
 
-  return data
-    ? mapVisitor(data)
-    : null;
+  const visitor = firstRow(data);
+  if (!visitor || ![visitor.id, visitor.auth_user_id].some(
+    (value) => normalizeText(value) === normalizedVisitorId
+  )) {
+    return null;
+  }
+  return mapVisitor(visitor);
 }
 
 export async function updateVisitorProfile({
@@ -1724,16 +1640,14 @@ export async function updateVisitorProfile({
     throw new Error('Sign in again before updating your profile.');
   }
 
-  let { data, error } = await supabase
+  let { error } = await supabase
     .from('visitors')
     .update({
       contact_number: normalizedContactNumber || null,
       profile_image_path: normalizedProfileImagePath || null,
     })
     .eq('id', normalizedVisitorId)
-    .eq('auth_user_id', authenticatedUser.id)
-    .select(VISITOR_PROFILE_COLUMNS)
-    .single();
+    .eq('auth_user_id', authenticatedUser.id);
 
   if (isMissingVisitorProfileImageColumn(error)) {
     if (normalizedProfileImagePath) {
@@ -1742,22 +1656,24 @@ export async function updateVisitorProfile({
       );
     }
     warnVisitorProfileMigrationRequired();
-    ({ data, error } = await supabase
+    ({ error } = await supabase
       .from('visitors')
       .update({
         contact_number: normalizedContactNumber || null,
       })
       .eq('id', normalizedVisitorId)
-      .eq('auth_user_id', authenticatedUser.id)
-      .select(LEGACY_VISITOR_PROFILE_COLUMNS)
-      .single());
+      .eq('auth_user_id', authenticatedUser.id));
   }
 
   if (error) {
     throw cleanErr(error, 'Unable to update your visitor profile.');
   }
 
-  return mapVisitor(data);
+  const updatedVisitor = await getVisitor(authenticatedUser.id);
+  if (!updatedVisitor || updatedVisitor.id !== normalizedVisitorId) {
+    throw new Error('Unable to confirm the updated visitor profile.');
+  }
+  return updatedVisitor;
 }
 
 export const resolveVisitorAuthUserId = async (
@@ -2627,6 +2543,50 @@ export async function applyPasswordReset({
 // VISITOR LOGIN
 // ============================================================================
 
+async function getAuthenticatedVisitorForSession() {
+  const { data: statusData, error: statusError } = await supabase.rpc(
+    'get_my_visitor_approval_status'
+  );
+  if (statusError) {
+    throw cleanErr(statusError, 'Unable to verify your visitor account.');
+  }
+
+  const status = firstRow(statusData);
+  if (!status) return null;
+  if (status.otp_verified !== true) {
+    throw new Error('Please verify your email before logging in.');
+  }
+  if (!['institutional', 'community'].includes(status.registration_type)) {
+    throw new Error('This visitor account has an invalid registration type.');
+  }
+
+  if (status.approval_status === 'pending') {
+    if (status.is_active !== false) {
+      throw new Error('This visitor registration has an invalid approval state.');
+    }
+    return {
+      approvalPending: true,
+      registrationType: status.registration_type,
+    };
+  }
+
+  if (status.approval_status !== 'approved' || status.is_active !== true) {
+    throw new Error('This visitor account is not approved for access.');
+  }
+
+  const { data: profileData, error: profileError } = await supabase.rpc(
+    'get_my_visitor_profile_v2'
+  );
+  if (profileError) {
+    throw cleanErr(profileError, 'Unable to load your visitor profile.');
+  }
+  const profile = firstRow(profileData);
+  if (!profile) {
+    throw new Error('This account is not registered as a SHELF visitor.');
+  }
+  return mapVisitor(profile);
+}
+
 export async function loginVisitor({
   identifier,
   password,
@@ -2723,77 +2683,19 @@ const authData = {
     );
   }
 
-  const {
-    data: visitor,
-    error: visitorError,
-  } =
-    await supabase
-      .from('visitors')
-      .select(
-        'id, full_name, email, otp_verified, qr_code, is_active, auth_user_id, registration_type, approval_status'
-      )
-      .eq(
-        'auth_user_id',
-        authUserId
-      )
-      .maybeSingle();
-
-  if (visitorError) {
+  let visitor;
+  try {
+    visitor = await getAuthenticatedVisitorForSession();
+  } catch (visitorError) {
     await safeSignOut();
-
-    throw cleanErr(
-      visitorError,
-      'Unable to load the visitor profile.'
-    );
+    throw visitorError;
   }
 
   if (!visitor) {
     await safeSignOut();
-
-    throw new Error(
-      'This account is not registered as a SHELF visitor.'
-    );
+    throw new Error('This account is not registered as a SHELF visitor.');
   }
-
-  const communityApprovalPending = visitor.registration_type === 'community'
-    && visitor.approval_status === 'pending'
-    && visitor.is_active === false
-    && visitor.otp_verified === true;
-
-  if (visitor.is_active === false && !communityApprovalPending) {
-    await safeSignOut();
-
-    throw new Error(
-      'This visitor account is currently inactive.'
-    );
-  }
-
-  if (
-    visitor.otp_verified !== true
-  ) {
-    await safeSignOut();
-
-    throw new Error(
-      'Please verify your OTP code before logging in.'
-    );
-  }
-
-  return {
-    id:
-      visitor.id,
-
-    fullName:
-      visitor.full_name,
-
-    email:
-      visitor.email,
-
-    qrCode:
-      communityApprovalPending ? null : visitor.qr_code,
-
-    registrationType: visitor.registration_type || 'institutional',
-    communityApprovalPending,
-  };
+  return visitor;
 }
 
 export async function fetchVisitorForPasskey(authUserId) {
@@ -2801,26 +2703,18 @@ export async function fetchVisitorForPasskey(authUserId) {
   if (!normalizedAuthUserId) {
     throw new Error('The passkey sign-in did not return an account.');
   }
-  const { data: visitor, error } = await supabase
-    .from('visitors')
-    .select('id, full_name, email, otp_verified, qr_code, is_active, auth_user_id, registration_type, approval_status')
-    .eq('auth_user_id', normalizedAuthUserId)
-    .maybeSingle();
-  if (error) throw cleanErr(error, 'Unable to load your visitor account.');
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError) throw cleanErr(authError, 'Unable to verify your passkey session.');
+  if (!user?.id || user.id !== normalizedAuthUserId) {
+    throw new Error('The passkey session does not match the visitor account.');
+  }
+
+  const visitor = await getAuthenticatedVisitorForSession();
   if (!visitor) throw new Error('This passkey is not linked to a SHELF visitor account.');
-  if (visitor.otp_verified !== true) throw new Error('Please verify your email before signing in.');
-  const communityApprovalPending = visitor.registration_type === 'community'
-    && visitor.approval_status === 'pending'
-    && visitor.is_active === false;
-  if (visitor.is_active === false && !communityApprovalPending) throw new Error('This visitor account is currently inactive.');
-  return {
-    id: visitor.id,
-    fullName: visitor.full_name,
-    email: visitor.email,
-    qrCode: communityApprovalPending ? null : visitor.qr_code,
-    registrationType: visitor.registration_type || 'institutional',
-    communityApprovalPending,
-  };
+  return visitor;
 }
 
 // ============================================================================

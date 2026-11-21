@@ -568,7 +568,7 @@ useEffect(() => {
       if (
         result?.pendingApproval
       ) {
-        navigate(`/visitor/pending-approval?visitor_id=${result.visitorId}`);
+        navigate('/visitor/pending-approval');
       } else if (
         result?.role ===
         'visitor'
@@ -643,7 +643,7 @@ useEffect(() => {
         setMfaCode('');
         setView('mfa');
       } else if (result?.pendingApproval) {
-        navigate(`/visitor/pending-approval?visitor_id=${result.visitorId}`);
+        navigate('/visitor/pending-approval');
       } else if (result?.role === 'visitor') {
         navigate(getInternalReturnPath(location.state?.from) || '/visitor');
       } else {
@@ -1047,25 +1047,9 @@ setOtpResendRemaining(
     }
 
     try {
-      const visitor =
-        await verifyVisitorOtp(
-          pendingVisitorId,
-          cleanOtp
-        );
+      await verifyVisitorOtp(pendingVisitorId, cleanOtp);
 
-      // For community visitors pending approval, redirect to pending-approval page
-      // instead of showing success view. The verifyVisitorOtp RPC doesn't return
-      // communityApprovalPending, so we need to check the registration type.
-      // If it's a community registration, the account will be pending approval.
-      if (registrationType === VISITOR_REGISTRATION_TYPES.COMMUNITY) {
-        navigate(`/visitor/pending-approval?visitor_id=${visitor.id}`);
-        return;
-      }
-
-      setRegisteredVisitor({ ...visitor, registrationType });
-
-      setError('');
-      setView('success');
+      navigate('/visitor/pending-approval');
     } catch (err) {
       setError(
         err?.message ||
@@ -1609,9 +1593,8 @@ setOtpResendRemaining(
               {view === 'otp' &&
                 'Enter the one-time verification code sent to your email.'}
 
-              {view === 'success' && (registeredVisitor?.registrationType === VISITOR_REGISTRATION_TYPES.COMMUNITY
-                ? 'Your email is verified. Your preferred library must approve your community account before visitor services and a QR pass are enabled.'
-                : 'Your QR pass is for library attendance, borrowing, pickup, and returns. Keep it private and present it at the library when requested.')}
+              {view === 'success' &&
+                'Your email is verified. An authorized librarian at your selected library must approve your account before visitor services or an active QR pass are available.'}
 
               {view === 'forgot' &&
                 resetStep === 'request' &&
@@ -1680,7 +1663,10 @@ setOtpResendRemaining(
                   !
                 </h3>
 
-                {registeredVisitor.registrationType !== VISITOR_REGISTRATION_TYPES.COMMUNITY && registeredVisitor.qrCode && <div className="flex justify-center">
+                {registeredVisitor.registrationType !== VISITOR_REGISTRATION_TYPES.COMMUNITY &&
+                  registeredVisitor.approvalStatus === 'approved' &&
+                  registeredVisitor.isActive === true &&
+                  registeredVisitor.qrCode && <div className="flex justify-center">
                   <div className="p-4 bg-white rounded-lg shadow-sm inline-block border border-slate-200 max-w-full overflow-hidden">
                     <QRCodeSVG
                       value={
@@ -1696,13 +1682,14 @@ setOtpResendRemaining(
                   </div>
                 </div>}
 
-                {registeredVisitor.registrationType !== VISITOR_REGISTRATION_TYPES.COMMUNITY && registeredVisitor.qrCode && <p className="text-xs font-mono font-bold text-shelf-primary break-all">{registeredVisitor.qrCode}</p>}
+                {registeredVisitor.registrationType !== VISITOR_REGISTRATION_TYPES.COMMUNITY &&
+                  registeredVisitor.approvalStatus === 'approved' &&
+                  registeredVisitor.isActive === true &&
+                  registeredVisitor.qrCode && <p className="text-xs font-mono font-bold text-shelf-primary break-all">{registeredVisitor.qrCode}</p>}
 
-                {registeredVisitor.registrationType === VISITOR_REGISTRATION_TYPES.COMMUNITY ? (
-                  <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-left text-xs text-blue-900">
-                    Your account is pending approval by the selected library. You may sign in for limited access to the public catalog and approval status; borrowing, reviews, attendance identification, and your QR pass stay unavailable until approval.
-                  </p>
-                ) : <p className="text-xs text-slate-500">Your QR pass is for library attendance, borrowing, pickup, and returns. Sign in with your institutional email and password.</p>}
+                <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-left text-xs text-blue-900">
+                  Your email is verified. An authorized librarian at your selected library must approve your account before visitor services or an active QR pass are available.
+                </p>
 
                 <button
                   type="button"
@@ -1717,7 +1704,7 @@ setOtpResendRemaining(
                   }}
                   className="w-full bg-shelf-primary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition"
                 >
-                  {registeredVisitor.registrationType === VISITOR_REGISTRATION_TYPES.COMMUNITY ? 'Sign in for limited access' : 'Sign in to library portal'}
+                  Sign in to check approval status
                 </button>
               </div>
             )}

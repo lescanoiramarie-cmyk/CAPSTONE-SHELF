@@ -205,11 +205,7 @@ function AppRouter() {
                 />
                 <Route
                   path="/visitor/pending-approval"
-                  element={
-                    <ProtectedRoute unauthenticatedTo="/visitor-login">
-                      <CommunityVisitorPending />
-                    </ProtectedRoute>
-                  }
+                  element={<CommunityVisitorPending />}
                 />
                 <Route
                   path="/visitor"

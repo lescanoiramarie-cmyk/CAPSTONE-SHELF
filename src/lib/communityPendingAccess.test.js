@@ -6,8 +6,9 @@ const app = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
 const protectedRoute = readFileSync(new URL('../routes/ProtectedRoute.jsx', import.meta.url), 'utf8');
 const roleHome = readFileSync(new URL('../routes/roleHome.js', import.meta.url), 'utf8');
 const authContext = readFileSync(new URL('../context/AuthContext.jsx', import.meta.url), 'utf8');
+const pendingPage = readFileSync(new URL('../pages/visitor/CommunityVisitorPending.jsx', import.meta.url), 'utf8');
 
-test('pending community visitors access pending-approval page without full session', () => {
+test('pending visitors access pending-approval page without a full app session', () => {
   // The pending-approval route allows unauthenticated access (visitor_id passed via query param)
   assert.match(app, /path="\/visitor\/pending-approval"/);
   assert.match(app, /unauthenticatedTo="\/visitor-login"/);
@@ -20,11 +21,15 @@ test('pending community visitors access pending-approval page without full sessi
   // community_pending should not be in roleHome
   assert.ok(!roleHome.includes('community_pending'));
 
-  // AuthContext handles pending community visitors by returning null from createVisitorSession
+  // AuthContext handles either pending visitor type by returning null from createVisitorSession
   // and storing visitor_id in sessionStorage for the pending-approval page
-  assert.match(authContext, /if \(communityApprovalPending\) \{/);
+  assert.match(authContext, /const approvalPending = visitor\.approvalPending === true/);
+  assert.match(authContext, /if \(approvalPending\) \{/);
   assert.match(authContext, /return null/);
-  assert.match(authContext, /sessionStorage\.setItem\('pending_visitor_id'/);
+  assert.doesNotMatch(authContext, /pending_visitor_id/);
+  assert.match(pendingPage, /supabase\.auth\.getUser\(\)/);
+  assert.match(pendingPage, /get_my_visitor_approval_status/);
+  assert.doesNotMatch(pendingPage, /\.from\('visitors'\)/);
 });
 
 test('protected routes fail closed to role home when role is not allowed', () => {
