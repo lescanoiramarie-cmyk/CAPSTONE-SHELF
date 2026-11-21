@@ -1280,26 +1280,6 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.visitor-dashboard .visitor-book-collection-grid.visitor-community-book-grid {
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 17rem));
-  width: 100%;
-  justify-content: start;
-  align-items: stretch;
-  gap: 0.75rem;
-}
-
-.visitor-dashboard .visitor-book-collection-grid.visitor-community-book-grid > * {
-  height: 100%;
-}
-
-.visitor-dashboard .visitor-book-collection-grid.visitor-community-book-grid > .opac-community-book-card {
-  box-sizing: border-box;
-  height: auto;
-  min-height: 13.5rem;
-  max-height: none;
-  align-self: stretch;
-}
-
 .visitor-dashboard .opac-community-book-card .opac-book-card-details {
   align-self: stretch;
   overflow-wrap: anywhere;
@@ -1447,12 +1427,6 @@
     width: auto;
     max-height: calc(100dvh - var(--visitor-header-height) - 1rem);
     margin-top: 0;
-  }
-
-  .visitor-dashboard .visitor-book-collection-grid.visitor-community-book-grid {
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 17rem));
-    justify-content: start;
-    gap: 1rem;
   }
 
   .visitor-dashboard .visitor-book-modal-body {
