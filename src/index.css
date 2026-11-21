@@ -985,6 +985,34 @@ label.text-xs {
   background-color: var(--color-shelf-bg);
 }
 
+/* Admin workspaces use Tailwind utility surfaces throughout the dashboards;
+   map the neutral surfaces and labels consistently when global dark mode is on. */
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) > main :is(.bg-white, .bg-slate-50, .bg-slate-100) {
+  background-color: #111c2e;
+}
+
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) > main :is(.text-slate-950, .text-slate-900, .text-slate-800, .text-slate-700) {
+  color: #e2e8f0;
+}
+
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) > main :is(.text-slate-600, .text-slate-500, .text-slate-400) {
+  color: #a8b5c7;
+}
+
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) > main :is(.border-slate-100, .border-slate-200, .border-slate-300) {
+  border-color: #334155;
+}
+
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) > main :is(input, select, textarea) {
+  border-color: #475569;
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) > main :is(th, td) {
+  border-color: #334155;
+}
+
 .subadmin-dashboard > main input,
 .subadmin-dashboard > main select,
 .subadmin-dashboard > main textarea,

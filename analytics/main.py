@@ -327,9 +327,15 @@ def require_active_staff(
         raise HTTPException(status_code=401, detail="An authenticated staff session is required.")
 
     supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
-    anon_key = os.getenv("SUPABASE_ANON_KEY", "")
+    anon_key = os.getenv("SUPABASE_ANON_KEY", "") or os.getenv("SUPABASE_PUBLISHABLE_KEY", "")
     if not supabase_url or not anon_key:
-        raise HTTPException(status_code=503, detail="Staff authorization is not configured.")
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Staff authorization is not configured. Set SUPABASE_URL and "
+                "SUPABASE_ANON_KEY (or SUPABASE_PUBLISHABLE_KEY) on the analytics service."
+            ),
+        )
     parsed_url = urlparse(supabase_url)
     if parsed_url.scheme != "https" and not (
         parsed_url.scheme == "http" and parsed_url.hostname in ("localhost", "127.0.0.1", "::1")

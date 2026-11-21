@@ -259,7 +259,6 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
       ['Fines assessed', overall.fines_assessed],
       ['Fines collected', overall.fines_collected],
       ['Outstanding', overall.outstanding_balance],
-      ['Paid / partial / unpaid', `${overall.paid_request_count || 0} / ${overall.partially_paid_request_count || 0} / ${overall.unpaid_request_count || 0}`],
     ];
     return (
       <section className="space-y-5">
@@ -280,11 +279,11 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
         {loadError ? <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{loadError}</p> : null}
         {!loading && !loadError && (
           <>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {metricCards.map(([label, value]) => (
                 <article key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-                  <p className="mt-2 text-xl font-bold text-slate-900">{typeof value === 'number' || (value != null && label !== 'Paid / partial / unpaid') ? peso(value) : value ?? '—'}</p>
+                  <p className="mt-2 text-xl font-bold text-slate-900">{peso(value)}</p>
                 </article>
               ))}
             </div>
@@ -367,10 +366,10 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
               <div className="border-b border-slate-100 px-4 py-3"><h3 className="font-bold text-slate-900">Branch comparison</h3></div>
               <div className="max-h-80 overflow-y-auto overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500 shadow-sm"><tr><th className="px-4 py-3">Library</th><th className="px-4 py-3">Assessed</th><th className="px-4 py-3">Collected</th><th className="px-4 py-3">Outstanding</th><th className="px-4 py-3">Paid / partial / unpaid</th><th className="px-4 py-3">Cash / transfer / other</th></tr></thead>
+                  <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500 shadow-sm"><tr><th className="px-4 py-3">Library</th><th className="px-4 py-3">Assessed</th><th className="px-4 py-3">Collected</th><th className="px-4 py-3">Outstanding</th><th className="px-4 py-3">Paid</th><th className="px-4 py-3">Partial</th><th className="px-4 py-3">Unpaid</th><th className="px-4 py-3">Cash</th><th className="px-4 py-3">Transfer</th><th className="px-4 py-3">Other</th></tr></thead>
                   <tbody className="divide-y divide-slate-100">
-                    {branchSummaries.map((row) => <tr key={row.branch_id}><td className="px-4 py-3 font-medium">{row.branch_name}</td><td className="px-4 py-3">{peso(row.fines_assessed)}</td><td className="px-4 py-3">{peso(row.fines_collected)}</td><td className="px-4 py-3">{peso(row.outstanding_balance)}</td><td className="px-4 py-3">{row.paid_request_count} / {row.partially_paid_request_count} / {row.unpaid_request_count}</td><td className="px-4 py-3">{peso(row.cash_collected)} / {peso(row.bank_transfer_collected)} / {peso(row.other_collected)}</td></tr>)}
-                    {branchSummaries.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">No aggregate fine data is available.</td></tr>}
+                    {branchSummaries.map((row) => <tr key={row.branch_id}><td className="px-4 py-3 font-medium">{row.branch_name}</td><td className="px-4 py-3">{peso(row.fines_assessed)}</td><td className="px-4 py-3">{peso(row.fines_collected)}</td><td className="px-4 py-3">{peso(row.outstanding_balance)}</td><td className="px-4 py-3">{row.paid_request_count || 0}</td><td className="px-4 py-3">{row.partially_paid_request_count || 0}</td><td className="px-4 py-3">{row.unpaid_request_count || 0}</td><td className="px-4 py-3">{peso(row.cash_collected)}</td><td className="px-4 py-3">{peso(row.bank_transfer_collected)}</td><td className="px-4 py-3">{peso(row.other_collected)}</td></tr>)}
+                    {branchSummaries.length === 0 && <tr><td colSpan={10} className="px-4 py-8 text-center text-slate-500">No aggregate fine data is available.</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -380,10 +379,10 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
               <div className="border-b border-slate-100 px-4 py-3"><h3 className="font-bold text-slate-900">Monthly collection trend details</h3></div>
               <div className="max-h-80 overflow-y-auto overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500 shadow-sm"><tr><th className="px-4 py-3">Month</th><th className="px-4 py-3">Library</th><th className="px-4 py-3">Collected</th><th className="px-4 py-3">Cash / transfer / other</th></tr></thead>
+                  <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500 shadow-sm"><tr><th className="px-4 py-3">Month</th><th className="px-4 py-3">Library</th><th className="px-4 py-3">Collected</th><th className="px-4 py-3">Cash</th><th className="px-4 py-3">Transfer</th><th className="px-4 py-3">Other</th></tr></thead>
                   <tbody className="divide-y divide-slate-100">
-                    {monthlyRows.map((row, index) => <tr key={`${row.period_month}-${row.branch_id || 'all'}-${index}`}><td className="px-4 py-3">{fmtMonth(row.period_month)}</td><td className="px-4 py-3">{row.branch_name}</td><td className="px-4 py-3">{peso(row.fines_collected)}</td><td className="px-4 py-3">{peso(row.cash_collected)} / {peso(row.bank_transfer_collected)} / {peso(row.other_collected)}</td></tr>)}
-                    {monthlyRows.length === 0 && <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-500">No collection history is available.</td></tr>}
+                    {monthlyRows.map((row, index) => <tr key={`${row.period_month}-${row.branch_id || 'all'}-${index}`}><td className="px-4 py-3">{fmtMonth(row.period_month)}</td><td className="px-4 py-3">{row.branch_name}</td><td className="px-4 py-3">{peso(row.fines_collected)}</td><td className="px-4 py-3">{peso(row.cash_collected)}</td><td className="px-4 py-3">{peso(row.bank_transfer_collected)}</td><td className="px-4 py-3">{peso(row.other_collected)}</td></tr>)}
+                    {monthlyRows.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">No collection history is available.</td></tr>}
                   </tbody>
                 </table>
               </div>

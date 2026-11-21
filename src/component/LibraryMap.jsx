@@ -1,7 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import '../lib/leafletIcons.js';
 import {
   Building2,
   Clock3,
@@ -54,44 +51,12 @@ function createLibraryInfoWindowContent(library, bookContext = null) {
   return content;
 }
 
-function LibraryMapFocus({ selectedLibrary, libraries }) {
-  const map = useMap();
-  useEffect(() => {
-    if (selectedLibrary) {
-      map.flyTo([Number(selectedLibrary.lat), Number(selectedLibrary.lng)], 15, { duration: 0.6 });
-    } else if (libraries.length > 0) {
-      map.fitBounds(libraries.map((library) => [Number(library.lat), Number(library.lng)]), { padding: [28, 28], maxZoom: 12 });
-    }
-  }, [map, selectedLibrary, libraries]);
-  return null;
-}
-
-function LeafletLibraryMap({ libraries, activeFocusBranchId, onSelect, bookContext }) {
-  const focused = libraries.find((library) => String(library.id) === String(activeFocusBranchId));
-  const initialCenter = focused ? [Number(focused.lat), Number(focused.lng)] : [13.9, 121.1];
-  return (
-    <MapContainer center={initialCenter} zoom={focused ? 14 : 8} scrollWheelZoom className="h-full w-full min-h-[inherit]">
-      <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-      <LibraryMapFocus selectedLibrary={focused} libraries={libraries} />
-      {libraries.map((library) => (
-        <Marker key={library.id} position={[Number(library.lat), Number(library.lng)]} eventHandlers={{ click: () => onSelect(library.id) }}>
-          <Popup>
-            <strong>{library.name}</strong>
-            {library.address && <div>{library.address}</div>}
-            {library.hours && <div>Hours: {library.hours}</div>}
-            {bookContext?.title && <div>{bookContext.title} ({bookContext.availableCopies} available)</div>}
-          </Popup>
-        </Marker>
-      ))}
-    </MapContainer>
-  );
-}
-
 function GoogleLibraryMap({
   libraries,
   activeFocusBranchId,
   setSelectedLibraryId,
   bookContext,
+  onLoadError,
 }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -100,7 +65,11 @@ function GoogleLibraryMap({
   useEffect(() => {
     let active = true;
     void loadGoogleMaps().then((maps) => {
-      if (!active || !maps || !containerRef.current) return;
+      if (!active) return;
+      if (!maps || !containerRef.current) {
+        onLoadError();
+        return;
+      }
 
       const map = new maps.Map(containerRef.current, {
         center: { lat: 13.9, lng: 121.1 },
@@ -163,7 +132,7 @@ function GoogleLibraryMap({
       markersRef.current = [];
       mapRef.current = null;
     };
-  }, [libraries, activeFocusBranchId, setSelectedLibraryId, bookContext]);
+  }, [libraries, activeFocusBranchId, setSelectedLibraryId, bookContext, onLoadError]);
 
   return <div ref={containerRef} className="h-full w-full min-h-[inherit]" />;
 }
@@ -188,16 +157,12 @@ export default function LibraryMap({
   const [showMap, setShowMap] = useState(true);
   const [selectedLibraryId, setSelectedLibraryId] = useState(null);
   const [libraryPage, setLibraryPage] = useState(1);
-  const [useGoogle, setUseGoogle] = useState(() => hasGoogleMapsKey());
+  const [mapError, setMapError] = useState(() => !hasGoogleMapsKey());
   const librariesPerPage = 3;
   const activeFocusBranchId = focusBranchId ?? selectedLibraryId;
 
   useEffect(() => {
-    if (hasGoogleMapsKey()) {
-      void loadGoogleMaps().then((maps) => {
-        if (!maps) setUseGoogle(false);
-      });
-    }
+    if (hasGoogleMapsKey()) void loadGoogleMaps().then((maps) => { if (!maps) setMapError(true); });
   }, []);
 
   // =========================================================
@@ -420,21 +385,22 @@ export default function LibraryMap({
               )}
             </button>
 
-            {useGoogle ? (
+            {!mapError ? (
               <GoogleLibraryMap
                 libraries={librariesWithCoordinates}
                 activeFocusBranchId={activeFocusBranchId}
                 setSelectedLibraryId={setSelectedLibraryId}
                 bookContext={bookContext}
+                onLoadError={setMapError}
                 onBrowseLibrary={onBrowseLibrary}
               />
             ) : (
-              <LeafletLibraryMap
-                libraries={librariesWithCoordinates}
-                activeFocusBranchId={activeFocusBranchId}
-                onSelect={setSelectedLibraryId}
-                bookContext={bookContext}
-              />
+              <div role="status" className="flex h-full min-h-[inherit] items-center justify-center bg-slate-100 p-6 text-center dark:bg-slate-900">
+                <div className="max-w-md rounded-xl border border-amber-300 bg-white p-5 text-sm text-slate-700 shadow dark:border-amber-700 dark:bg-slate-800 dark:text-slate-200">
+                  <strong className="block text-base">Google Maps is not configured</strong>
+                  <span className="mt-2 block">Set <code>VITE_GOOGLE_MAPS_API_KEY</code> for the Vercel Preview and Production environments, then redeploy.</span>
+                </div>
+              </div>
             )}
 
           </div>

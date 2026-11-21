@@ -3412,7 +3412,7 @@ export default function OPACCatalog({
               </div>
             ) : (
               <>
-                <div className="opac-book-grid book-card-grid visitor-book-collection-grid visitor-community-book-grid">
+                <div className="visitor-book-collection-grid visitor-community-book-grid">
                   {visibleCommunityBooks.map(renderCommunityBookCard)}
                 </div>
                 {communityTotalPages > 1 && (

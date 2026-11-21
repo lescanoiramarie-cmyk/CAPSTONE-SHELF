@@ -25,12 +25,9 @@ export async function sendFineReminder(borrowRequestId) {
     return data;
   }
 
-  // Also trigger edge function in background for external email delivery if configured
-  try {
-    supabase.functions.invoke('send-fine-reminder', { body: { borrowRequestId: id } }).catch(() => {});
-  } catch {
-    // Non-blocking
-  }
-
+  // The authenticated RPC is the authoritative alert: it records the daily
+  // claim and creates the visitor's in-app notification atomically. Calling
+  // the email edge function here used the same daily claim and often returned
+  // 403/duplicate after the in-app alert had already succeeded.
   return rpcData;
 }

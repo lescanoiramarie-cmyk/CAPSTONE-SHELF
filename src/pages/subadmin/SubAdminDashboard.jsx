@@ -1250,6 +1250,21 @@ export default function SubAdminDashboard() {
       : { items: [], total: 0, newCount: 0, loading: true, error: '' };
 
   const [notificationNow, setNotificationNow] = useState(() => Date.now());
+  const branchNotificationStorageKey = `shelf-read-branch-notifications:${user?.id || 'staff'}:${currentLibraryId || 'unassigned'}`;
+  const [storedReadBranchNotifications, setStoredReadBranchNotifications] = useState(() => {
+    try {
+      const stored = localStorage.getItem(branchNotificationStorageKey);
+      return { key: branchNotificationStorageKey, ids: new Set(JSON.parse(stored || '[]').map(String)) };
+    } catch {
+      return { key: branchNotificationStorageKey, ids: new Set() };
+    }
+  });
+  const readBranchNotificationIds = useMemo(
+    () => storedReadBranchNotifications.key === branchNotificationStorageKey
+      ? storedReadBranchNotifications.ids
+      : new Set(),
+    [storedReadBranchNotifications, branchNotificationStorageKey],
+  );
   useEffect(() => {
     const intervalId = setInterval(() => setNotificationNow(Date.now()), 60_000);
     return () => clearInterval(intervalId);
@@ -1354,6 +1369,45 @@ export default function SubAdminDashboard() {
 
     return items.sort((a, b) => a.priority - b.priority || b.timestamp - a.timestamp).slice(0, 20);
   }, [branchBorrowRequests, currentLibraryId, notificationNow, subscriptionRenewalNotifications]);
+
+  const unreadBranchNotifications = useMemo(
+    () => branchNotifications.filter((notification) => !readBranchNotificationIds.has(String(notification.id))),
+    [branchNotifications, readBranchNotificationIds],
+  );
+
+  const handleBranchNotificationClick = async (notification) => {
+    const id = String(notification.id || '');
+    if (id && notification.type !== 'subscription_renewal') {
+      const next = new Set(readBranchNotificationIds);
+      next.add(id);
+      setStoredReadBranchNotifications({ key: branchNotificationStorageKey, ids: next });
+      try {
+        localStorage.setItem(
+          branchNotificationStorageKey,
+          JSON.stringify([...next]),
+        );
+      } catch { /* private browsing may disable storage */ }
+    }
+
+    if (notification.type === 'subscription_renewal') {
+      const { error } = await supabase.rpc('mark_subscription_renewal_notification_read', {
+        p_notification_id: notification.notificationId,
+      });
+      if (!error) setSubscriptionRenewalNotifications((current) => current.filter((item) => item.id !== notification.notificationId));
+      setSection('subscription');
+      return;
+    }
+
+    const requestId = notification.recordId || notification.requestId;
+    const target = branchBorrowRequests.find((request) => String(request.id) === String(requestId));
+    setFocusRequestId(requestId);
+    setFocusNotificationType(notification.type);
+    setNotificationTargetMessage(
+      target ? '' : 'This notification refers to a request that no longer exists in your assigned branch or has already been removed.',
+    );
+    if (notification.targetSection) setSection(notification.targetSection);
+    if (notification.targetTab) setWorkspaceTab(notification.targetTab);
+  };
 
   const handleOverdueFollowUp = async (notification) => {
     await sendDueDateFollowUp(notification.requestId);
@@ -1655,19 +1709,13 @@ export default function SubAdminDashboard() {
         {/* TOP BAR WITH SHELFHEADER */}
         <ShelfHeader
           showLogo={false}
-          notificationCount={branchNotifications.length}
-          notificationItems={branchNotifications.map((n) => ({
-            id: n.id,
-            message: n.message,
-            created_at: new Date(n.timestamp).toISOString(),
-            read: false,
+          notificationCount={unreadBranchNotifications.length}
+          notificationItems={branchNotifications.map((item) => ({
+            ...item,
+            created_at: new Date(item.timestamp).toISOString(),
+            read: readBranchNotificationIds.has(String(item.id)),
           }))}
-          onNotificationClick={(item) => {
-            if (item.targetSection) navigateToSection(item.targetSection);
-            if (item.targetTab) setWorkspaceTab(item.targetTab);
-            if (item.recordId) setFocusRequestId(item.recordId);
-            if (item.type) setFocusNotificationType(item.type);
-          }}
+          onNotificationClick={handleBranchNotificationClick}
           profileMenuContent={
             <>
               <li>
@@ -1723,26 +1771,7 @@ export default function SubAdminDashboard() {
           description={`Manage circulation, reservations, and inventory${currentBranchName ? ` for ${currentBranchName}` : ' for your assigned branch'}.`}
           notifications={branchNotifications}
           onNotificationFollowUp={handleOverdueFollowUp}
-          onNotificationClick={async (notification) => {
-            if (notification.type === 'subscription_renewal') {
-              const { error } = await supabase.rpc('mark_subscription_renewal_notification_read', { p_notification_id: notification.notificationId });
-              if (!error) setSubscriptionRenewalNotifications((current) => current.filter((item) => item.id !== notification.notificationId));
-              setSection('subscription');
-              return;
-            }
-            const requestId = notification.recordId || notification.requestId;
-            const target = branchBorrowRequests.find(
-              (request) => String(request.id) === String(requestId)
-            );
-            setFocusRequestId(requestId);
-            setFocusNotificationType(notification.type);
-            setNotificationTargetMessage(
-              target
-                ? ''
-                : 'This notification refers to a request that no longer exists in your assigned branch or has already been removed.'
-            );
-            setSection(notification.targetSection);
-          }}
+          onNotificationClick={handleBranchNotificationClick}
           actions={[
             { label: 'Scan Visitor QR', Icon: QrCode, onClick: () => navigateToSection('attendance') },
             { label: 'Open Inventory', Icon: BookOpen, onClick: () => navigateToSection('inventory') },
