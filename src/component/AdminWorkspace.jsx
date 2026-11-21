@@ -115,52 +115,6 @@ function roundNarrativeDecimals(value) {
   return String(value).replace(/-?\d+\.\d+/g, (number) => String(Math.round(Number(number))));
 }
 
-function buildLocalVisitorForecast(dailyCounts, historyBuckets, startDate) {
-  const observed = dailyCounts.slice(-56);
-  const observedBuckets = historyBuckets.slice(-observed.length);
-  const recent = observed.slice(-14);
-  const previous = observed.slice(-28, -14);
-  const recentAverage = recent.length ? recent.reduce((sum, value) => sum + value, 0) / recent.length : 0;
-  const previousAverage = previous.length ? previous.reduce((sum, value) => sum + value, 0) / previous.length : recentAverage;
-  const trendFactor = previousAverage > 0
-    ? Math.max(0.7, Math.min(1.3, recentAverage / previousAverage))
-    : 1;
-  const weekdaySamples = Array.from({ length: 7 }, () => []);
-  observed.forEach((count, index) => {
-    const date = observedBuckets[index]?.start;
-    if (date instanceof Date && Number.isFinite(date.getTime())) weekdaySamples[date.getDay()].push(count);
-  });
-
-  const forecasts = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(startDate);
-    date.setDate(date.getDate() + index);
-    const samples = weekdaySamples[date.getDay()];
-    const weekdayAverage = samples?.length
-      ? samples.reduce((sum, value) => sum + value, 0) / samples.length
-      : recentAverage;
-    return { date: formatLocalDateInput(date), visitorCount: Math.max(0, Math.round(weekdayAverage * trendFactor)) };
-  });
-
-  const observedTotal = observed.reduce((sum, value) => sum + value, 0);
-  const changeLabel = previousAverage > 0
-    ? `Recent average check-ins changed from ${Math.round(previousAverage)} to ${Math.round(recentAverage)} per day.`
-    : `Recent average check-ins were ${Math.round(recentAverage)} per day.`;
-  const recommendations = trendFactor >= 1.2
-    ? ['Visitor numbers have been rising. Compare next week’s actual visits with this estimate and consider extra desk coverage on busier weekdays.']
-    : trendFactor <= 0.8
-      ? ['Fewer visitors have checked in recently. Keep the current desk schedule and review the next few weeks before making changes.']
-      : ['Visitor numbers have stayed similar. Keep the current desk schedule and compare this estimate with next week’s visits.'];
-  return {
-    source: 'local_history',
-    forecasts,
-    insights: [
-      `Local estimate based on ${observed.length} recent calendar days and weekday patterns; ${observedTotal} visits were recorded in that window.`,
-      changeLabel,
-    ],
-    recommendations,
-  };
-}
-
 function getDaysUntilExpiration(expiryDate) {
   return Math.max(1, Math.ceil((expiryDate.getTime() - Date.now()) / 86400000));
 }
@@ -1048,6 +1002,7 @@ export default function AdminWorkspace({
 
     setForecastLoading(true);
     setError('');
+    setForecast(null);
     try {
       const categorySeries = topCategories.map(([category]) => {
         const weekCount = Math.max(
@@ -1102,6 +1057,13 @@ export default function AdminWorkspace({
         throw new Error(errorResponse.detail || `Forecast service returned ${response.status}.`);
       }
       const forecastResult = await response.json();
+      if (forecastResult?.analyticsSource !== 'gemini') {
+        const geminiDetails = [
+          ...(Array.isArray(forecastResult?.insights) ? forecastResult.insights : []),
+          ...(Array.isArray(forecastResult?.recommendations) ? forecastResult.recommendations : []),
+        ].filter((item) => typeof item === 'string' && item.trim());
+        throw new Error(geminiDetails.join(' ') || 'Gemini did not return forecast insights. Check the analytics service and try again.');
+      }
       if (!Array.isArray(forecastResult?.forecasts) || forecastResult.forecasts.length !== 7) {
         throw new Error('Forecast service did not return exactly seven daily estimates.');
       }
@@ -1114,18 +1076,14 @@ export default function AdminWorkspace({
       if (!validForecasts) throw new Error('Forecast service returned invalid dates or visitor counts.');
       setForecast({
         ...forecastResult,
-        source: 'analytics_service',
+        source: 'gemini',
         forecasts: forecastResult.forecasts.map((item) => ({ ...item, visitorCount: Number(item.visitorCount) })),
       });
     } catch (forecastError) {
-      console.warn('Analytics forecast service unavailable; using local history model.', forecastError);
-      const fallbackForecast = buildLocalVisitorForecast(
-        forecastDailyVisitorCounts,
-        forecastHistoryBuckets,
-        analyticsWindow.endExclusive
-      );
-      setForecast(fallbackForecast);
-      setError('');
+      console.error('Gemini forecast request failed.', forecastError);
+      const errorMessage = forecastError instanceof Error ? forecastError.message : '';
+      setForecast(null);
+      setError(errorMessage || 'Gemini could not run the forecast. Check the analytics service and try again.');
     } finally {
       setForecastLoading(false);
     }
@@ -1846,8 +1804,7 @@ export default function AdminWorkspace({
                 <p className="mt-2 text-xs text-slate-500">
                   Estimates visits for the next 7 days using the selected records. At least 7 days of records, 3 visits across 2 days, and a complete attendance list are needed.
                 </p>
-                {forecast?.source === 'local_history' && <p className="mt-1 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-900">Estimate based on recent weekday averages because the analytics service is unavailable.</p>}
-                {forecast?.source === 'analytics_service' && <p className="mt-1 text-xs text-emerald-700">Estimate provided by the analytics service.</p>}
+                {forecast?.source === 'gemini' && <p className="mt-1 text-xs text-emerald-700">Gemini reviewed the selected records and generated these insights and suggested actions. Visitor counts are estimated from the attendance history.</p>}
                 <p className="mt-1 text-xs text-slate-500">
                   Records included: {forecastHistoryDays} days - {forecastTotalVisits.toLocaleString()} check-ins on {forecastObservedVisitDays} days.
                 </p>
