@@ -5,6 +5,7 @@ export default function BookRatingsChart({ books = [], fillHeight = false }) {
   const [summaries, setSummaries] = useState([]);
   const [error, setError] = useState('');
   const [loadedBookIdKey, setLoadedBookIdKey] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
   const bookIds = useMemo(
     () => books.map((book) => String(book.id)).filter(Boolean),
     [books]
@@ -22,13 +23,20 @@ export default function BookRatingsChart({ books = [], fillHeight = false }) {
       bookIdBatches.push(bookIds.slice(index, index + 100));
     }
 
-    async function loadSummaries() {
+    async function loadSummaries(attempt = 0) {
       if (!supabase) {
         throw new Error('Supabase is not configured.');
       }
-      return Promise.all(bookIdBatches.map((batch) =>
+      const results = await Promise.all(bookIdBatches.map((batch) =>
         supabase.rpc('get_book_rating_summaries', { p_book_ids: batch })
       ));
+      const failedResult = results.find((result) => result.error);
+      const failureMessage = failedResult?.error?.message || '';
+      if (failedResult && attempt < 1 && /http2|network|fetch|timeout/i.test(failureMessage)) {
+        await new Promise((resolve) => window.setTimeout(resolve, 350));
+        return loadSummaries(attempt + 1);
+      }
+      return results;
     }
 
     loadSummaries().then((results) => {
@@ -36,7 +44,7 @@ export default function BookRatingsChart({ books = [], fillHeight = false }) {
         const failedResult = results.find((result) => result.error);
         if (failedResult) {
           console.error('Book rating summary RPC failed:', failedResult.error);
-          setError('Unable to load book ratings.');
+          setError(failedResult.error.message || 'Unable to load book ratings.');
           setSummaries([]);
         } else {
           setError('');
@@ -54,7 +62,7 @@ export default function BookRatingsChart({ books = [], fillHeight = false }) {
     return () => { cancelled = true; };
   // bookIdKey changes only when the scoped set of books changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookIdKey]);
+  }, [bookIdKey, retryCount]);
 
   const loading = bookIds.length > 0 && loadedBookIdKey !== bookIdKey;
   const visibleError = loadedBookIdKey === bookIdKey ? error : '';
@@ -86,7 +94,7 @@ export default function BookRatingsChart({ books = [], fillHeight = false }) {
       {loading ? (
         <p className="py-8 text-center text-sm text-slate-500">Loading ratings…</p>
       ) : visibleError ? (
-        <p role="alert" className="py-8 text-center text-sm text-rose-600">{visibleError}</p>
+        <div className="py-6 text-center"><p role="alert" className="text-sm text-rose-600">Unable to load book ratings right now.</p><button type="button" onClick={() => { setError(''); setLoadedBookIdKey(''); setRetryCount((current) => current + 1); }} className="mt-2 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Try again</button></div>
       ) : rows.length === 0 ? (
         <p className="py-8 text-center text-sm text-slate-500">No visitor ratings for these books yet.</p>
       ) : (

@@ -110,7 +110,7 @@ test('Migration 177 uses a private transaction-safe idempotency receipt and deni
 });
 
 test('Migration 177 return confirmation never lowers or erases an existing fine assessment', () => {
-  const sql = fs.readFileSync(path.join(REPO_ROOT, 'supabase/migrations/20270127000000_reconcile_transactions_subscription_and_notifications.sql'), 'utf8');
+  const sql = fs.readFileSync(path.join(REPO_ROOT, 'supabase/migrations/20270127000000_reconcile_transactions_subscription_and_notifications.sql'), 'utf8').replace(/\r\n/g, '\n');
   const start = sql.indexOf('CREATE OR REPLACE FUNCTION public.confirm_return(\n    p_request_id text');
   const end = sql.indexOf('ALTER FUNCTION public.confirm_return(text, text)', start);
   const definition = sql.slice(start, end);
@@ -138,7 +138,7 @@ test('Migration 177 fails closed on subadmin terms claims and hides fine alert d
 });
 
 test('Migration 177 keeps notification creation owner-only and removes current_user as an authorization test', () => {
-  const sql = fs.readFileSync(path.join(REPO_ROOT, 'supabase/migrations/20270127000000_reconcile_transactions_subscription_and_notifications.sql'), 'utf8');
+  const sql = fs.readFileSync(path.join(REPO_ROOT, 'supabase/migrations/20270127000000_reconcile_transactions_subscription_and_notifications.sql'), 'utf8').replace(/\r\n/g, '\n');
   const start = sql.indexOf('CREATE OR REPLACE FUNCTION public.create_visitor_notification');
   const end = sql.indexOf('-- ============================================================================\n-- 5.', start);
   const definition = sql.slice(start, end);

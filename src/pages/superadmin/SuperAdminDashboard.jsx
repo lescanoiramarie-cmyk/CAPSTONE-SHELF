@@ -105,6 +105,20 @@ ChartJS.register(
   Legend
 );
 
+async function getStaffFunctionErrorMessage(error) {
+  const response = error?.context;
+  if (response && typeof response.clone === 'function') {
+    try {
+      const payload = await response.clone().json();
+      const message = payload?.error || payload?.message || payload?.msg;
+      if (message) return message;
+    } catch {
+      // Keep the SDK message when the response body is empty or not JSON.
+    }
+  }
+  return error?.message || 'The staff account action could not be completed.';
+}
+
 function AdminSectionInsights({ title, metrics, recommendation, prediction }) {
   return <AdminAnalyticsPanel title={title} metrics={metrics} recommendation={recommendation} prediction={prediction} />;
 }
@@ -859,9 +873,7 @@ const handleCreateStaff = async (event) => {
     );
   } catch (error) {
     console.error('Save staff account error:', error);
-    setStaffError(
-      error.message || 'Unable to save staff account.'
-    );
+    setStaffError(await getStaffFunctionErrorMessage(error));
   } finally {
     setStaffLoading(false);
   }
@@ -906,9 +918,7 @@ const handleToggleStaff = async (staff) => {
     );
   } catch (error) {
     console.error('Toggle staff account error:', error);
-    setStaffError(
-      error.message || 'Unable to update the sub-admin account status.'
-    );
+    setStaffError(await getStaffFunctionErrorMessage(error));
   } finally {
     setStaffLoading(false);
   }
@@ -959,9 +969,7 @@ const handleEditStaff = (staff) => {
       setStaffMessage('Sub-admin account deleted successfully.');
     } catch (error) {
       console.error('Delete staff account error:', error);
-      setStaffError(
-        error.message || 'Unable to delete staff account.'
-      );
+      setStaffError(await getStaffFunctionErrorMessage(error));
     } finally {
       setStaffLoading(false);
     }
