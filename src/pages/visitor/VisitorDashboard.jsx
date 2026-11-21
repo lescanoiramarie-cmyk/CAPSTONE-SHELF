@@ -61,6 +61,7 @@ import VisitorTermsContent, {
 import DashboardDataBoundary from '../../component/DashboardDataBoundary.jsx';
 import VisitorProfilePhotoCropDialog from '../../component/VisitorProfilePhotoCropDialog.jsx';
 import ShelfHeader from '../../component/ShelfHeader.jsx';
+import PreferredLanguageSetting from '../../component/PreferredLanguageSetting.jsx';
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip);
 
@@ -2250,6 +2251,12 @@ function VisitorDashboardContent() {
                           </div>
                         ))}
                       </dl>
+                      <div className="mt-4">
+                        <PreferredLanguageSetting
+                          key={visitorDetails?.id || user?.id || 'visitor'}
+                          storageKey={`shelf_language_visitor_${visitorDetails?.id || user?.id || 'current'}`}
+                        />
+                      </div>
                       {isEditingProfile && profileError && <p role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">{profileError}</p>}
                     </section>
                   </form>

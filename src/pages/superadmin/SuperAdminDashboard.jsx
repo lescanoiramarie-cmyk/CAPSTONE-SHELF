@@ -56,6 +56,7 @@ import AdminWorkspace from '../../component/AdminWorkspace.jsx';
 import DashboardWelcome from '../../component/DashboardWelcome.jsx';
 import BookRatingsChart from '../../component/BookRatingsChart.jsx';
 import DashboardDataBoundary from '../../component/DashboardDataBoundary.jsx';
+import PreferredLanguageSetting from '../../component/PreferredLanguageSetting.jsx';
 import FinePayments from '../../component/FinePayments.jsx';
 import SubscriptionManagement from '../../component/SubscriptionManagement.jsx';
 import VisitorTermsContent, { VISITOR_TERMS_VERSION } from '../../component/VisitorTermsContent.jsx';
@@ -2080,6 +2081,7 @@ const handleEditStaff = (staff) => {
                 <p className="mt-2 text-xs leading-5 text-slate-500">This preference is saved on this device and used on your next sign-in.</p>
               </section>
             </div>
+            <PreferredLanguageSetting storageKey={`shelf_language_superadmin_${user?.id || 'current'}`} />
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
               <h3 className="text-base font-bold text-slate-900">Account security</h3>
               <p className="mt-1 text-sm text-slate-600">Super Admin sign-ins require an authenticator code. You can update your password here.</p>

@@ -35,6 +35,7 @@ import {
   Settings,
 } from 'lucide-react';
 import VisitorScanDetails from '../../component/VisitorScanDetails.jsx';
+import PreferredLanguageSetting from '../../component/PreferredLanguageSetting.jsx';
 import SubAdminTermsContent, {
   SUBADMIN_TERMS_VERSION,
 } from '../../component/SubAdminTermsContent.jsx';
@@ -2182,6 +2183,7 @@ export default function SubAdminDashboard() {
               <p className="mt-1 text-sm text-slate-600">Manage your dashboard preference and review your account access.</p>
             </header>
             <div className="grid gap-4 lg:grid-cols-2">
+            <PreferredLanguageSetting storageKey={`shelf_language_subadmin_${user?.id || 'current'}`} darkMode />
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
               <h3 className="font-bold text-slate-900 dark:text-white">Administrator account</h3>
               <dl className="mt-3 divide-y divide-slate-100 text-sm dark:divide-slate-700">
