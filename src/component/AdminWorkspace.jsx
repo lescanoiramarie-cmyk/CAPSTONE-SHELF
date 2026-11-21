@@ -146,10 +146,10 @@ function buildLocalVisitorForecast(dailyCounts, historyBuckets, startDate) {
     ? `Recent average check-ins changed from ${Math.round(previousAverage)} to ${Math.round(recentAverage)} per day.`
     : `Recent average check-ins were ${Math.round(recentAverage)} per day.`;
   const recommendations = trendFactor >= 1.2
-    ? ['Recent check-ins are trending upward. Compare actual demand with the forecast and consider additional desk coverage on the busier weekdays.']
+    ? ['Visitor numbers have been rising. Compare next week’s actual visits with this estimate and consider extra desk coverage on busier weekdays.']
     : trendFactor <= 0.8
-      ? ['Recent check-ins are trending downward. Keep scheduled coverage stable until the lower demand persists across additional weeks.']
-      : ['Recent check-ins are broadly stable. Keep current desk coverage and review forecast error after the next week of actual attendance.'];
+      ? ['Fewer visitors have checked in recently. Keep the current desk schedule and review the next few weeks before making changes.']
+      : ['Visitor numbers have stayed similar. Keep the current desk schedule and compare this estimate with next week’s visits.'];
   return {
     source: 'local_history',
     forecasts,
@@ -644,7 +644,7 @@ export default function AdminWorkspace({
           pointRadius: 2,
         },
         {
-          label: 'Forecast visitors',
+          label: 'Expected visits',
           data: [
             ...forecastDailyVisitorCounts.slice(0, -1).map(() => null),
             anchor,
@@ -1445,7 +1445,7 @@ export default function AdminWorkspace({
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 cursor-pointer group">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium text-slate-500">Active loans from selected requests</p>
+                  <p className="text-sm font-medium text-slate-500">Books currently borrowed</p>
                   <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
                     {scopedBorrows.filter(
                       (item) =>
@@ -1692,7 +1692,7 @@ export default function AdminWorkspace({
           <section className="grid gap-5 xl:grid-cols-2">
             <div className="border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
               <div className="mb-4">
-                <h2 className="text-lg font-bold text-slate-900">Branch demand</h2>
+                <h2 className="text-lg font-bold text-slate-900">Library visits and book borrowing</h2>
                 <p className="text-sm text-slate-500">
                   {isSubAdmin
                     ? getLibraryName(libraries, currentLibraryId)
@@ -1709,7 +1709,7 @@ export default function AdminWorkspace({
                     labels: periodCounts.labels,
                     datasets: [
                       {
-                        label: 'Visitors',
+                        label: 'Library visits',
                         data: periodCounts.visits,
                         backgroundColor: '#0f766e',
                       },
@@ -1741,7 +1741,7 @@ export default function AdminWorkspace({
                 <Metric label="Visitors" value={analyticsAttendance.length} />
                 <Metric label="Book requests" value={analyticsBorrows.length} />
                 <Metric
-                  label="Active loans from selected requests"
+                  label="Books currently borrowed"
                   value={analyticsBorrows.filter((item) => getRequestStatus(item) === 'borrowed').length}
                 />
               </div>
@@ -1750,8 +1750,8 @@ export default function AdminWorkspace({
             <section className="flex min-h-0 min-w-0 flex-col border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900">Most requested categories</h2>
-                  <p className="mt-1 text-sm text-slate-500">Top categories from book requests in the selected range.</p>
+                  <h2 className="text-lg font-bold text-slate-900">Most requested book categories</h2>
+                  <p className="mt-1 text-sm text-slate-500">Categories visitors requested most during the selected dates.</p>
                 </div>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
                   Total: {totalCategoryRequests} requests
@@ -1823,7 +1823,7 @@ export default function AdminWorkspace({
 
             <div className="space-y-4 xl:col-span-2">
               <section className="border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
-                <h2 className="text-base font-bold text-slate-800">Operational recommendations</h2>
+                <h2 className="text-base font-bold text-slate-800">Suggested actions</h2>
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-600">
                   {demandRecommendations.map((item) => (
                     <li key={item}>{item}</li>
@@ -1833,7 +1833,7 @@ export default function AdminWorkspace({
 
               <section className="border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
                 <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-base font-bold text-slate-800">Estimate future visitor check-ins</h2>
+                  <h2 className="text-base font-bold text-slate-800">Estimate upcoming library visits</h2>
                   <button
                     type="button"
                     onClick={runForecast}
@@ -1844,12 +1844,12 @@ export default function AdminWorkspace({
                   </button>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">
-                  Estimates the following 7 days from actual visits in the selected range. It requires at least 7 calendar days, 3 visits across 2 active days, and a complete attendance feed; small samples are less reliable.
+                  Estimates visits for the next 7 days using the selected records. At least 7 days of records, 3 visits across 2 days, and a complete attendance list are needed.
                 </p>
-                {forecast?.source === 'local_history' && <p className="mt-1 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-900">Local forecast active: the analytics service returned an error, so this estimate uses recent weekday averages.</p>}
-                {forecast?.source === 'analytics_service' && <p className="mt-1 text-xs text-emerald-700">Forecast returned by the analytics service.</p>}
+                {forecast?.source === 'local_history' && <p className="mt-1 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-900">Estimate based on recent weekday averages because the analytics service is unavailable.</p>}
+                {forecast?.source === 'analytics_service' && <p className="mt-1 text-xs text-emerald-700">Estimate provided by the analytics service.</p>}
                 <p className="mt-1 text-xs text-slate-500">
-                  Records available: {forecastHistoryDays} days · {forecastTotalVisits.toLocaleString()} check-ins across {forecastObservedVisitDays} days with visits.
+                  Records included: {forecastHistoryDays} days - {forecastTotalVisits.toLocaleString()} check-ins on {forecastObservedVisitDays} days.
                 </p>
                 {!attendanceDataComplete && <p className="mt-1 text-xs font-medium text-amber-700">Some check-in records are missing, so an estimate cannot be made yet.</p>}
                 {forecast?.forecasts?.length ? (
@@ -1920,7 +1920,7 @@ export default function AdminWorkspace({
                   </section>
                 </div>
                 <p className="mt-3 text-xs leading-5 text-slate-500">
-                  These estimates use the dates and filters selected above. Compare them with your branch records before changing schedules or book copies.
+                  These estimates use the selected dates and filters. Compare them with your branch records before changing staff schedules or book copy counts.
                 </p>
               </section>
             </div>

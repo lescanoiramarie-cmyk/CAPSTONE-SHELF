@@ -14,13 +14,13 @@ export default function AdminAnalyticsPanel({
         <div className="flex items-start gap-3">
           <span className="rounded-xl bg-blue-100 p-2.5 text-blue-800 dark:bg-blue-950 dark:text-blue-300"><Activity size={19} aria-hidden="true" /></span>
           <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">At a glance</p>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">Analytics summary</p>
             <h3 className="mt-0.5 text-lg font-bold text-slate-900 dark:text-white">{title}</h3>
             {description && <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">{description}</p>}
           </div>
         </div>
       </div>
-      {metrics.length > 0 && <><p className="px-4 pt-3 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Current numbers</p><dl className="grid grid-cols-2 divide-x divide-y divide-slate-100 sm:grid-cols-4 sm:divide-y-0 dark:divide-slate-700">
+      {metrics.length > 0 && <><p className="px-4 pt-3 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Current totals</p><dl className="grid grid-cols-2 divide-x divide-y divide-slate-100 sm:grid-cols-4 sm:divide-y-0 dark:divide-slate-700">
         {metrics.map((metric) => <div key={metric.label} className="px-4 py-3"><dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{metric.label}</dt><dd className="mt-1 text-xl font-extrabold tabular-nums text-slate-900 dark:text-white">{metric.value}</dd>{metric.note && <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{metric.note}</p>}</div>)}
       </dl></>}
       <div className="grid gap-3 border-t border-slate-100 p-4 sm:grid-cols-2 dark:border-slate-700">

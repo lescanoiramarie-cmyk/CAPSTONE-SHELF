@@ -1915,8 +1915,8 @@ const handleEditStaff = (staff) => {
               </div>
               <div className="h-full rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
                 <div className="mb-3">
-                  <h3 className="text-sm font-bold text-slate-800">Top Branches — Check-ins & Circulation Records</h3>
-                <p className="mt-1 text-xs text-slate-500">{trendData.monthLabel}. One request/borrow row is counted once using its latest available request or borrow date; conflicting branch records are excluded{borrowRequestsLoadError ? ', and borrowing data is currently unavailable.' : '.'}</p>
+                  <h3 className="text-sm font-bold text-slate-800">Branch visits and book borrows</h3>
+                <p className="mt-1 text-xs text-slate-500">{trendData.monthLabel}. Each borrow request is counted once. Records with conflicting branch details are left out{borrowRequestsLoadError ? ', and borrowing data is currently unavailable.' : '.'}</p>
                 </div>
                 {branchActivityData.labels.length === 0 ? (
                   <p className="py-8 text-center text-sm text-slate-500">{borrowRequestsLoadError ? `No branch check-ins were recorded in ${trendData.monthLabel}; request/borrow activity is unavailable because its history request failed.` : `No branch check-ins or request/borrow activity was recorded in ${trendData.monthLabel}.`}</p>
