@@ -38,7 +38,7 @@ export default function OPACBookCard({
       role="button"
       tabIndex={0}
       aria-label={`View details for ${title}`}
-      className="opac-book-card cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+      className={`opac-book-card ${community ? 'opac-community-book-card' : ''} cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600`}
     >
       <BookCover
         src={book?.coverUrl}
@@ -64,14 +64,18 @@ export default function OPACBookCard({
         <p className="opac-book-card-isbn">
           ISBN: {book?.isbn || '—'}
         </p>
-        <div className="opac-book-card-actions mt-auto w-full pt-2">
+        <div
+          className={`opac-book-card-actions mt-auto w-full pt-2 ${
+            community ? 'opac-community-book-card-actions' : ''
+          }`}
+        >
           {community && onSaveToggle && (
             <button
               type="button"
               onClick={handleSaveToggle}
               aria-label={isSaved ? 'Remove from saved' : 'Save for later'}
               aria-pressed={isSaved}
-              className={`opac-book-card-save-btn w-full mb-2 ${
+              className={`opac-book-card-save-btn ${
                 isSaved ? 'opac-book-card-saved' : ''
               }`}
             >
