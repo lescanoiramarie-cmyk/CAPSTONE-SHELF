@@ -10,6 +10,52 @@ import {
 import { useLibraryData } from '../context/useLibrary.js';
 import { loadGoogleMaps, hasGoogleMapsKey } from '../lib/googleMaps.js';
 
+function GoogleMapsEmbed({ libraries, activeFocusBranchId, bookContext }) {
+  const focusedLibrary = libraries.find(
+    (library) => String(library.id) === String(activeFocusBranchId)
+  ) || libraries[0];
+  const query = focusedLibrary?.address
+    ? encodeURIComponent(`${focusedLibrary.name || ''}, ${focusedLibrary.address}`)
+    : focusedLibrary?.lat != null && focusedLibrary?.lng != null
+      ? `${focusedLibrary.lat},${focusedLibrary.lng}`
+      : 'Batangas State University, Batangas, Philippines';
+  const zoom = activeFocusBranchId ? 16 : 12;
+
+  return (
+    <div className="relative h-full min-h-[inherit] w-full">
+      <iframe
+        title="Google Maps library locations"
+        width="100%"
+        height="100%"
+        style={{ border: 0, minHeight: 'inherit' }}
+        loading="lazy"
+        allowFullScreen
+        referrerPolicy="no-referrer-when-downgrade"
+        src={`https://maps.google.com/maps?q=${query}&hl=en&z=${zoom}&output=embed`}
+        className="h-full min-h-[inherit] w-full rounded-xl"
+      />
+      {focusedLibrary && (
+        <div className="absolute bottom-3 left-3 z-10 max-w-sm rounded-lg border border-slate-200 bg-white/95 p-3 shadow-md backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/95">
+          <p className="flex items-center gap-1.5 text-xs font-bold text-slate-900 dark:text-white">
+            <span className="h-2 w-2 rounded-full bg-blue-600" />
+            {focusedLibrary.name}
+          </p>
+          {focusedLibrary.address && (
+            <p className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-300">
+              {focusedLibrary.address}
+            </p>
+          )}
+          {bookContext?.title && (
+            <p className="mt-1 text-[11px] font-semibold text-blue-700 dark:text-blue-300">
+              {bookContext.title} ({bookContext.availableCopies} available)
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function createLibraryInfoWindowContent(library, bookContext = null) {
   const content = document.createElement('div');
   content.style.fontFamily = 'inherit';
@@ -157,12 +203,16 @@ export default function LibraryMap({
   const [showMap, setShowMap] = useState(true);
   const [selectedLibraryId, setSelectedLibraryId] = useState(null);
   const [libraryPage, setLibraryPage] = useState(1);
-  const [mapError, setMapError] = useState(() => !hasGoogleMapsKey());
+  const [useInteractiveGoogleMap, setUseInteractiveGoogleMap] = useState(() => hasGoogleMapsKey());
   const librariesPerPage = 3;
   const activeFocusBranchId = focusBranchId ?? selectedLibraryId;
 
   useEffect(() => {
-    if (hasGoogleMapsKey()) void loadGoogleMaps().then((maps) => { if (!maps) setMapError(true); });
+    if (hasGoogleMapsKey()) {
+      void loadGoogleMaps().then((maps) => {
+        if (!maps) setUseInteractiveGoogleMap(false);
+      });
+    }
   }, []);
 
   // =========================================================
@@ -385,22 +435,21 @@ export default function LibraryMap({
               )}
             </button>
 
-            {!mapError ? (
+            {useInteractiveGoogleMap ? (
               <GoogleLibraryMap
                 libraries={librariesWithCoordinates}
                 activeFocusBranchId={activeFocusBranchId}
                 setSelectedLibraryId={setSelectedLibraryId}
                 bookContext={bookContext}
-                onLoadError={setMapError}
+                onLoadError={() => setUseInteractiveGoogleMap(false)}
                 onBrowseLibrary={onBrowseLibrary}
               />
             ) : (
-              <div role="status" className="flex h-full min-h-[inherit] items-center justify-center bg-slate-100 p-6 text-center dark:bg-slate-900">
-                <div className="max-w-md rounded-xl border border-amber-300 bg-white p-5 text-sm text-slate-700 shadow dark:border-amber-700 dark:bg-slate-800 dark:text-slate-200">
-                  <strong className="block text-base">Google Maps is not configured</strong>
-                  <span className="mt-2 block">Set <code>VITE_GOOGLE_MAPS_API_KEY</code> for the Vercel Preview and Production environments, then redeploy.</span>
-                </div>
-              </div>
+              <GoogleMapsEmbed
+                libraries={librariesWithCoordinates}
+                activeFocusBranchId={activeFocusBranchId}
+                bookContext={bookContext}
+              />
             )}
 
           </div>
