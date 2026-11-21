@@ -48,6 +48,7 @@ import AdminWorkspace from '../../component/AdminWorkspace.jsx';
 import BookRatingsChart from '../../component/BookRatingsChart.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
 import DashboardDataBoundary from '../../component/DashboardDataBoundary.jsx';
+import AdminAnalyticsPanel from '../../component/AdminAnalyticsPanel.jsx';
 import FinePayments from '../../component/FinePayments.jsx';
 import SubscriptionManagement from '../../component/SubscriptionManagement.jsx';
 import PremiumFeatureGate from '../../component/PremiumFeatureGate.jsx';
@@ -218,7 +219,7 @@ function AttendanceTrendChart({ attendance = [], monthKey }) {
   );
 }
 
-function BorrowingActivityTrendChart({ requests = [], monthKey }) {
+function BorrowingActivityTrendChart({ requests = [], monthKey, loadError = '' }) {
   const monthWindow = getAnalyticsMonthWindow(monthKey);
   if (!monthWindow) return null;
   const { start: firstDayOfMonth, endExclusive: firstDayOfNextMonth, days: daysInMonth, monthLabel } = monthWindow;
@@ -267,7 +268,9 @@ function BorrowingActivityTrendChart({ requests = [], monthKey }) {
           <p className="mt-1 text-xs text-slate-500">Requests, borrows, and returns by week · {monthLabel}</p>
         </div>
       </div>
-      {!hasActivity ? (
+      {loadError ? (
+        <p role="status" className="my-6 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-900">Borrowing analytics could not load. Check the borrowing-history RPC error before using these numbers.</p>
+      ) : !hasActivity ? (
         <p className="py-10 text-center text-sm text-slate-500">
           No borrowing activity recorded for {monthLabel}.
         </p>
@@ -298,9 +301,9 @@ function BorrowingActivityTrendChart({ requests = [], monthKey }) {
         </div>
       )}
       <div className="mt-3 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3 text-center">
-        <div><p className="text-sm font-bold tabular-nums text-blue-700">{totals.requests.toLocaleString()}</p><p className="text-xs text-slate-500">Requests</p></div>
-        <div><p className="text-sm font-bold tabular-nums text-amber-600">{totals.borrows.toLocaleString()}</p><p className="text-xs text-slate-500">Borrows</p></div>
-        <div><p className="text-sm font-bold tabular-nums text-emerald-600">{totals.returns.toLocaleString()}</p><p className="text-xs text-slate-500">Returns</p></div>
+        <div><p className="text-sm font-bold tabular-nums text-blue-700">{loadError ? '—' : totals.requests.toLocaleString()}</p><p className="text-xs text-slate-500">Requests</p></div>
+        <div><p className="text-sm font-bold tabular-nums text-amber-600">{loadError ? '—' : totals.borrows.toLocaleString()}</p><p className="text-xs text-slate-500">Borrows</p></div>
+        <div><p className="text-sm font-bold tabular-nums text-emerald-600">{loadError ? '—' : totals.returns.toLocaleString()}</p><p className="text-xs text-slate-500">Returns</p></div>
       </div>
     </div>
   );
@@ -967,6 +970,8 @@ export default function SubAdminDashboard() {
     addBooksBulk,
     confirmPickup,
     confirmReturn,
+    borrowRequestsLoadError,
+    retryBorrowRequests,
     loading: libraryLoading,
     initialDataReady,
     attendanceLoadError,
@@ -1200,28 +1205,50 @@ export default function SubAdminDashboard() {
 
   const branchOverviewMetrics = useMemo(() => {
     const monthWindow = getAnalyticsMonthWindow(overviewMonth);
-    const inventory = branchBooks.reduce((totals, book) => {
-      const copies = Number(book.totalCopies ?? book.total_copies ?? 0);
-      const available = Number(book.availableCopies ?? book.available_copies ?? copies);
-      totals.totalCopies += Number.isFinite(copies) ? copies : 0;
-      totals.availableCopies += Number.isFinite(available) ? available : 0;
-      if (available <= 0) totals.unavailableTitles += 1;
-      return totals;
-    }, { totalCopies: 0, availableCopies: 0, unavailableTitles: 0 });
+    if (!monthWindow) return { topBorrowed: [], totalBorrowEvents: 0, comparableBorrowEvents: 0, projectedNextMonth: null, pressureTitles: 0, monthLabel: '' };
+    const now = new Date();
+    const isCurrentMonth = getAnalyticsMonthKey(now) === overviewMonth;
+    const elapsedDays = isCurrentMonth ? now.getDate() : monthWindow.days;
+    const previousStart = new Date(monthWindow.start.getFullYear(), monthWindow.start.getMonth() - 1, 1);
+    const previousEnd = new Date(previousStart.getFullYear(), previousStart.getMonth(), Math.min(elapsedDays, new Date(previousStart.getFullYear(), previousStart.getMonth() + 1, 0).getDate()) + 1);
     const borrowedCounts = new Map();
+    const previousBorrowedCounts = new Map();
     branchBorrowRequests.forEach((request) => {
       const borrowedAt = request.borrowDate || request.borrow_date;
       const timestamp = new Date(borrowedAt || '').getTime();
-      if (!monthWindow || !Number.isFinite(timestamp) || timestamp < monthWindow.start.getTime() || timestamp >= monthWindow.endExclusive.getTime()) return;
+      if (!Number.isFinite(timestamp)) return;
       const bookId = String(request.bookId ?? request.book_id ?? '');
-      if (bookId) borrowedCounts.set(bookId, (borrowedCounts.get(bookId) || 0) + 1);
+      if (!bookId) return;
+      if (timestamp >= monthWindow.start.getTime() && timestamp < monthWindow.endExclusive.getTime() && new Date(borrowedAt).getDate() <= elapsedDays) {
+        borrowedCounts.set(bookId, (borrowedCounts.get(bookId) || 0) + 1);
+      } else if (timestamp >= previousStart.getTime() && timestamp < previousEnd.getTime()) {
+        previousBorrowedCounts.set(bookId, (previousBorrowedCounts.get(bookId) || 0) + 1);
+      }
     });
     const topBorrowed = [...borrowedCounts.entries()]
-      .map(([bookId, count]) => ({ book: branchBooksById.get(bookId), count }))
+      .map(([bookId, count]) => {
+        const book = branchBooksById.get(bookId);
+        const previousCount = previousBorrowedCounts.get(bookId) || 0;
+        const available = Number(book?.availableCopies ?? book?.available_copies ?? 0);
+        return {
+          book,
+          count,
+          previousCount,
+          projectedNextMonth: count >= 3 ? Math.max(0, Math.round((count / Math.max(1, elapsedDays)) * 30)) : null,
+          changePercent: previousCount > 0 ? Math.round(((count - previousCount) / previousCount) * 100) : null,
+          available: Number.isFinite(available) ? available : 0,
+        };
+      })
       .filter((entry) => entry.book)
       .sort((left, right) => right.count - left.count || String(left.book.title).localeCompare(String(right.book.title)))
       .slice(0, 5);
-    return { ...inventory, topBorrowed, monthLabel: monthWindow?.monthLabel || '' };
+    const totalBorrowEvents = [...borrowedCounts.values()].reduce((total, count) => total + count, 0);
+    const comparableBorrowEvents = [...previousBorrowedCounts.values()].reduce((total, count) => total + count, 0);
+    const projectedNextMonth = totalBorrowEvents >= 3
+      ? Math.max(0, Math.round((totalBorrowEvents / Math.max(1, elapsedDays)) * 30))
+      : null;
+    const pressureTitles = topBorrowed.filter((entry) => entry.count >= 3 && entry.available <= 1).length;
+    return { topBorrowed, totalBorrowEvents, comparableBorrowEvents, projectedNextMonth, pressureTitles, monthLabel: monthWindow.monthLabel };
   }, [branchBooks, branchBooksById, branchBorrowRequests, overviewMonth]);
 
   useEffect(() => {
@@ -1824,26 +1851,37 @@ export default function SubAdminDashboard() {
             </div>
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
               <AttendanceTrendChart attendance={branchAttendance} monthKey={overviewMonth} />
-              <BorrowingActivityTrendChart requests={branchBorrowRequests} monthKey={overviewMonth} />
+              <BorrowingActivityTrendChart requests={branchBorrowRequests} monthKey={overviewMonth} loadError={borrowRequestsLoadError} />
             </div>
-            <section className="grid gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:grid-cols-[0.8fr_1.2fr]" aria-labelledby="branch-inventory-insights-title">
-              <div>
-                <h3 id="branch-inventory-insights-title" className="text-sm font-bold text-slate-800">Branch inventory health</h3>
-                <p className="mt-1 text-xs text-slate-500">Current stock snapshot for {currentBranchName || 'your branch'}.</p>
-                <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-[11px] font-semibold text-slate-500">Titles</p><p className="mt-1 text-lg font-bold text-slate-900">{branchBooks.length}</p></div>
-                  <div className="rounded-lg bg-emerald-50 p-3"><p className="text-[11px] font-semibold text-emerald-700">Available copies</p><p className="mt-1 text-lg font-bold text-emerald-900">{branchOverviewMetrics.availableCopies}</p></div>
-                  <div className="rounded-lg bg-amber-50 p-3"><p className="text-[11px] font-semibold text-amber-700">Unavailable titles</p><p className="mt-1 text-lg font-bold text-amber-900">{branchOverviewMetrics.unavailableTitles}</p></div>
-                </div>
-                {branchOverviewMetrics.unavailableTitles > 0 && <p className="mt-3 text-xs font-medium text-amber-800">Review unavailable titles for pending returns, damaged copies, or replenishment needs.</p>}
-              </div>
-              <div className="border-t border-slate-100 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
-                <h3 className="text-sm font-bold text-slate-800">Most borrowed titles · {branchOverviewMetrics.monthLabel}</h3>
-                <p className="mt-1 text-xs text-slate-500">Counts confirmed borrow events by borrow date.</p>
-                {branchOverviewMetrics.topBorrowed.length ? <ol className="mt-3 space-y-2">{branchOverviewMetrics.topBorrowed.map(({ book, count }, index) => <li key={book.id} className="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-2 text-sm"><span className="text-xs font-bold text-slate-400">{index + 1}</span><span className="truncate font-medium text-slate-700">{book.title || 'Untitled book'}</span><span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-800">{count} borrows</span></li>)}</ol> : <p className="mt-3 text-sm text-slate-500">No confirmed borrows in the selected month.</p>}
-                {branchOverviewMetrics.topBorrowed[0] && <p className="mt-3 text-xs text-blue-800">Prescriptive cue: check availability of “{branchOverviewMetrics.topBorrowed[0].book.title}” before increasing copies.</p>}
-              </div>
-            </section>
+            <div className="space-y-4">
+              <AdminAnalyticsPanel
+                title="Borrowing demand outlook"
+                description={`Branch activity for ${branchOverviewMetrics.monthLabel}; comparisons use the same number of calendar days from the prior month.`}
+                metrics={[
+                  { label: 'Borrow events', value: borrowRequestsLoadError ? '—' : branchOverviewMetrics.totalBorrowEvents },
+                  { label: 'Comparable prior period', value: borrowRequestsLoadError ? '—' : branchOverviewMetrics.comparableBorrowEvents },
+                  { label: 'Estimated next 30 days', value: borrowRequestsLoadError ? '—' : branchOverviewMetrics.projectedNextMonth ?? '—' },
+                  { label: 'High-demand, low-stock titles', value: borrowRequestsLoadError ? '—' : branchOverviewMetrics.pressureTitles },
+                ]}
+                prediction={borrowRequestsLoadError
+                  ? 'Borrowing history failed to load. No demand projection is available until the borrowing-history RPC succeeds.'
+                  : branchOverviewMetrics.projectedNextMonth == null
+                  ? 'Fewer than 3 borrow events were recorded in the selected period; there is not enough volume for a useful demand projection.'
+                  : `If the recent daily pace continues, the branch may see about ${branchOverviewMetrics.projectedNextMonth} borrow events in the next 30 days${branchOverviewMetrics.comparableBorrowEvents >= 3 ? ` (${branchOverviewMetrics.totalBorrowEvents >= branchOverviewMetrics.comparableBorrowEvents ? 'up' : 'down'} ${Math.abs(Math.round(((branchOverviewMetrics.totalBorrowEvents - branchOverviewMetrics.comparableBorrowEvents) / branchOverviewMetrics.comparableBorrowEvents) * 100))}% versus the comparable prior period)` : ''}.`}
+                recommendation={borrowRequestsLoadError
+                  ? 'Retry the borrowing data load and check the Supabase RPC response details before changing inventory or staffing.'
+                  : branchOverviewMetrics.pressureTitles
+                  ? `Check active copies and pending requests for ${branchOverviewMetrics.topBorrowed.find((entry) => entry.count >= 3 && entry.available <= 1)?.book.title || 'high-demand titles'} before reallocating or purchasing copies.`
+                  : branchOverviewMetrics.topBorrowed.length
+                    ? `Review availability and pending requests for ${branchOverviewMetrics.topBorrowed[0].book.title}; use confirmed demand and current stock before changing copy levels.`
+                    : 'Keep the reservation queue current and review stock only after confirmed borrowing demand is recorded.'}
+              />
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800" aria-labelledby="branch-top-borrowed-title">
+                <h3 id="branch-top-borrowed-title" className="text-sm font-bold text-slate-900 dark:text-white">Most borrowed titles · {branchOverviewMetrics.monthLabel}</h3>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Confirmed borrow events by borrow date; the estimate is a pace projection, not a guaranteed demand count.</p>
+                {borrowRequestsLoadError ? <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><p>Most-borrowed titles are unavailable while borrowing history is failing.</p><button type="button" onClick={() => void retryBorrowRequests()} className="mt-2 rounded-lg bg-amber-900 px-3 py-1.5 text-xs font-bold text-white">Retry borrowing data</button></div> : branchOverviewMetrics.topBorrowed.length ? <ol className="mt-3 grid gap-2 md:grid-cols-2">{branchOverviewMetrics.topBorrowed.map(({ book, count, previousCount, projectedNextMonth, changePercent, available }, index) => <li key={book.id} className="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900"><span className="text-xs font-bold text-slate-400">{index + 1}</span><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{book.title || 'Untitled book'}</span><span className="text-[11px] text-slate-500 dark:text-slate-400">{count} borrow(s) · {available} currently available{previousCount ? ` · ${changePercent >= 0 ? '+' : ''}${changePercent}% vs prior period` : ''}</span></span><span className="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-extrabold text-indigo-900 dark:bg-indigo-950 dark:text-indigo-200">{projectedNextMonth ?? '—'} projected</span></li>)}</ol> : <p className="mt-3 rounded-lg bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">No confirmed borrows in the selected month.</p>}
+              </section>
+            </div>
             <div className="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-3">
               <div className="h-full lg:col-span-1 [&>section]:h-full">
                 <BookRatingsChart books={branchBooks} fillHeight />

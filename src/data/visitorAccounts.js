@@ -171,9 +171,40 @@ export async function fetchVisitorAccounts({
     throw new Error(error.message || 'Unable to load visitor accounts.');
   }
 
+  const scopedCountQuery = () => {
+    let countQuery = supabase.from('visitors').select('id', { count: 'exact', head: true });
+    if (effectiveLibraryId === null) countQuery = countQuery.is('library_id', null);
+    else if (effectiveLibraryId !== undefined) countQuery = countQuery.eq('library_id', effectiveLibraryId);
+    return countQuery;
+  };
+  const now = new Date();
+  const recentStart = new Date(now);
+  recentStart.setDate(recentStart.getDate() - 30);
+  const previousStart = new Date(recentStart);
+  previousStart.setDate(previousStart.getDate() - 30);
+  const [allCount, activeCount, pendingCount, unverifiedCount, recentCount, previousCount] = await Promise.all([
+    scopedCountQuery(),
+    scopedCountQuery().eq('is_active', true),
+    scopedCountQuery().eq('registration_type', 'community').eq('approval_status', 'pending'),
+    scopedCountQuery().or('otp_verified.eq.false,otp_verified.is.null'),
+    scopedCountQuery().gte('registered_at', recentStart.toISOString()),
+    scopedCountQuery().gte('registered_at', previousStart.toISOString()).lt('registered_at', recentStart.toISOString()),
+  ]);
+  const analytics = [allCount, activeCount, pendingCount, unverifiedCount, recentCount, previousCount].some((result) => result.error)
+    ? null
+    : {
+        total: allCount.count || 0,
+        active: activeCount.count || 0,
+        pendingCommunity: pendingCount.count || 0,
+        unverified: unverifiedCount.count || 0,
+        registeredLast30Days: recentCount.count || 0,
+        registeredPrevious30Days: previousCount.count || 0,
+      };
+
   const result = {
     visitors: (data || []).map(mapVisitor),
     total: count || 0,
+    analytics,
   };
 
   pruneExpiredCacheEntries();

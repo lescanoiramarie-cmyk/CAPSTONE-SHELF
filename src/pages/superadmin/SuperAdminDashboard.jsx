@@ -13,6 +13,7 @@ import {
 } from 'react-chartjs-2';
 import LocationPickerMap from '../../component/LocationPickerMap.jsx';
 import GooglePlaceAddressInput from '../../component/GooglePlaceAddressInput.jsx';
+import AdminAnalyticsPanel from '../../component/AdminAnalyticsPanel.jsx';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -102,18 +103,8 @@ ChartJS.register(
   Legend
 );
 
-function AdminSectionInsights({ title, metrics, recommendation }) {
-  return (
-    <section aria-label={`${title} analytics`} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div><p className="text-[11px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">Descriptive analytics</p><h3 className="mt-1 text-sm font-bold text-slate-800 dark:text-white">{title}</h3></div>
-        <p className="max-w-2xl text-xs leading-5 text-slate-600 dark:text-slate-300"><span className="font-bold text-emerald-800 dark:text-emerald-300">Recommended action: </span>{recommendation}</p>
-      </div>
-      <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
-        {metrics.map((metric) => <div key={metric.label} className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-900"><dt className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{metric.label}</dt><dd className="mt-0.5 text-base font-bold text-slate-900 dark:text-white">{metric.value}</dd></div>)}
-      </dl>
-    </section>
-  );
+function AdminSectionInsights({ title, metrics, recommendation, prediction }) {
+  return <AdminAnalyticsPanel title={title} metrics={metrics} recommendation={recommendation} prediction={prediction} />;
 }
 
 function hasValidLibraryCoordinates(library) {
@@ -211,6 +202,8 @@ export default function SuperAdminDashboard() {
     loading: libraryLoading,
     initialDataReady,
     attendanceLoadError,
+    borrowRequestsLoadError,
+    retryBorrowRequests,
     connectionError,
     refreshAll,
   } = useLibrary();
@@ -1287,7 +1280,33 @@ const handleEditStaff = (staff) => {
   const staffSummary = useMemo(() => ({
     active: staffAccounts.filter((staff) => staff.is_active !== false && staff.isActive !== false).length,
     inactive: staffAccounts.filter((staff) => staff.is_active === false || staff.isActive === false).length,
-  }), [staffAccounts]);
+    uncoveredOpenLibraries: libraries.filter((library) => library.status === 'Open' && !staffAccounts.some((staff) => {
+      const staffLibraryId = staff.library_id ?? staff.libraryId;
+      return String(staffLibraryId || '') === String(library.id) && staff.is_active !== false && staff.isActive !== false;
+    })).length,
+  }), [staffAccounts, libraries]);
+  const inventoryDemand = useMemo(() => {
+    const monthWindow = getAnalyticsMonthWindow(overviewMonth);
+    if (!monthWindow) return { atRiskTitles: [], periodLabel: '' };
+    if (borrowRequestsLoadError) return { atRiskTitles: [], periodLabel: monthWindow.monthLabel };
+    const demand = new Map();
+    borrowRequests.forEach((request) => {
+      if (String(request.status || '').toLowerCase() !== 'borrowed' && String(request.status || '').toLowerCase() !== 'returned') return;
+      const borrowedAt = request.borrowDate ?? request.borrow_date;
+      const timestamp = new Date(borrowedAt ?? '').getTime();
+      if (!Number.isFinite(timestamp) || timestamp < monthWindow.start.getTime() || timestamp >= monthWindow.endExclusive.getTime()) return;
+      const bookId = String(request.bookId ?? request.book_id ?? '');
+      if (bookId) demand.set(bookId, (demand.get(bookId) || 0) + 1);
+    });
+    const atRiskTitles = [...demand.entries()].map(([bookId, count]) => {
+      const book = books.find((item) => String(item.id) === bookId);
+      const available = Number(book?.availableCopies ?? book?.available_copies ?? 0);
+      return { book, count, available: Number.isFinite(available) ? available : 0 };
+    }).filter((item) => item.book && item.count >= 3 && item.available <= 1)
+      .sort((left, right) => right.count - left.count)
+      .slice(0, 5);
+    return { atRiskTitles, periodLabel: monthWindow.monthLabel };
+  }, [books, borrowRequests, overviewMonth, borrowRequestsLoadError]);
 
   // ============================================================
   // TREND DATA
@@ -1320,17 +1339,18 @@ const handleEditStaff = (staff) => {
     };
 
     attendanceLogs.forEach((attendance) => addToWeek(attendance.timeIn || attendance.time_in, 'visitCount'));
-    borrowRequests.forEach((request) => addToWeek(request.borrowDate || request.borrow_date, 'borrowCount'));
+    if (!borrowRequestsLoadError) borrowRequests.forEach((request) => addToWeek(request.borrowDate || request.borrow_date, 'borrowCount'));
     return {
       monthLabel,
       labels: weeks.map((week) => week.label),
       visitCounts: weeks.map((week) => week.visitCount),
       borrowCounts: weeks.map((week) => week.borrowCount),
       totalVisits: weeks.reduce((total, week) => total + week.visitCount, 0),
-      totalBorrows: weeks.reduce((total, week) => total + week.borrowCount, 0),
-      hasActivity: weeks.some((week) => week.visitCount > 0 || week.borrowCount > 0),
+      totalBorrows: borrowRequestsLoadError ? null : weeks.reduce((total, week) => total + week.borrowCount, 0),
+      borrowDataAvailable: !borrowRequestsLoadError,
+      hasActivity: weeks.some((week) => week.visitCount > 0 || (!borrowRequestsLoadError && week.borrowCount > 0)),
     };
-  }, [attendanceLogs, borrowRequests, overviewMonth]);
+  }, [attendanceLogs, borrowRequests, overviewMonth, borrowRequestsLoadError]);
 
   const branchActivityData = useMemo(() => {
     const monthWindow = getAnalyticsMonthWindow(overviewMonth);
@@ -1356,7 +1376,7 @@ const handleEditStaff = (staff) => {
     });
 
     const booksById = new Map(books.map((book) => [String(book.id), book]));
-    borrowRequests.forEach((request) => {
+    if (!borrowRequestsLoadError) borrowRequests.forEach((request) => {
       const transactionDate = request.borrowDate || request.borrow_date || request.requestDate || request.request_date;
       if (!isInRange(transactionDate)) return;
       const branchId = getRequestLibraryId(request, booksById);
@@ -1372,9 +1392,9 @@ const handleEditStaff = (staff) => {
     return {
       labels: topBranches.map((branch) => branch.name),
       checkIns: topBranches.map((branch) => branch.checkIns),
-      transactions: topBranches.map((branch) => branch.transactions),
+      transactions: borrowRequestsLoadError ? topBranches.map(() => null) : topBranches.map((branch) => branch.transactions),
     };
-  }, [libraries, attendanceLogs, borrowRequests, books, overviewMonth]);
+  }, [libraries, attendanceLogs, borrowRequests, books, overviewMonth, borrowRequestsLoadError]);
 
   // ============================================================
   // CATEGORY DATA
@@ -1755,6 +1775,7 @@ const handleEditStaff = (staff) => {
               <div><h3 className="text-sm font-bold text-slate-800">System activity analytics</h3><p className="mt-0.5 text-xs text-slate-500">Counts reflect recorded events in the selected calendar month.</p></div>
               <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Month<select aria-label="Filter overview charts by month" value={overviewMonth} onChange={(event) => setOverviewMonth(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">{overviewMonthOptions.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select></label>
             </div>
+            {borrowRequestsLoadError && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"><span>Borrowing-history data failed to load. Borrow totals and branch transaction counts are marked unavailable; check the Supabase RPC response before acting on them.</span><button type="button" onClick={() => void retryBorrowRequests()} className="rounded-lg bg-amber-900 px-3 py-2 text-xs font-bold text-white">Retry borrowing data</button></div>}
 
             {/* CHARTS */}
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -1766,7 +1787,7 @@ const handleEditStaff = (staff) => {
                       labels: trendData.labels,
                       datasets: [
                         { label: 'Visitor check-ins', data: trendData.visitCounts, borderColor: '#2563eb', backgroundColor: '#2563eb', tension: 0.3 },
-                        { label: 'Confirmed borrow events', data: trendData.borrowCounts, borderColor: '#002046', backgroundColor: '#002046', tension: 0.3 },
+                        { label: trendData.borrowDataAvailable ? 'Confirmed borrow events' : 'Confirmed borrow events (unavailable)', data: trendData.borrowDataAvailable ? trendData.borrowCounts : trendData.borrowCounts.map(() => null), borderColor: '#002046', backgroundColor: '#002046', tension: 0.3 },
                       ],
                     }}
                     options={{
@@ -1785,7 +1806,7 @@ const handleEditStaff = (staff) => {
                 </div>
                 {!trendData.hasActivity && (
                   <p className="mt-2 text-center text-xs text-slate-500">
-                    No attendance or completed borrowing activity was recorded for {trendData.monthLabel}.
+                    {borrowRequestsLoadError ? `No attendance was recorded for ${trendData.monthLabel}; borrowing activity is unavailable because its history request failed.` : `No attendance or completed borrowing activity was recorded for ${trendData.monthLabel}.`}
                   </p>
                 )}
               </div>
@@ -1840,10 +1861,10 @@ const handleEditStaff = (staff) => {
               <div className="h-full rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
                 <div className="mb-3">
                   <h3 className="text-sm font-bold text-slate-800">Top Branches — Check-ins & Circulation Records</h3>
-                  <p className="mt-1 text-xs text-slate-500">{trendData.monthLabel}. One request/borrow row is counted once using its latest available request or borrow date; conflicting branch records are excluded.</p>
+                <p className="mt-1 text-xs text-slate-500">{trendData.monthLabel}. One request/borrow row is counted once using its latest available request or borrow date; conflicting branch records are excluded{borrowRequestsLoadError ? ', and borrowing data is currently unavailable.' : '.'}</p>
                 </div>
                 {branchActivityData.labels.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-slate-500">No branch check-ins or request/borrow activity was recorded in {trendData.monthLabel}.</p>
+                  <p className="py-8 text-center text-sm text-slate-500">{borrowRequestsLoadError ? `No branch check-ins were recorded in ${trendData.monthLabel}; request/borrow activity is unavailable because its history request failed.` : `No branch check-ins or request/borrow activity was recorded in ${trendData.monthLabel}.`}</p>
                 ) : (
                   <div className="h-80">
                     <Bar
@@ -1946,11 +1967,10 @@ const handleEditStaff = (staff) => {
         )}
 
         {/* INVENTORY */}
-        {section === 'inventory' && <div className="space-y-4"><AdminSectionInsights title="System inventory health" metrics={[{ label: 'Titles', value: books.length.toLocaleString() }, { label: 'Total copies', value: inventorySummary.copies.toLocaleString() }, { label: 'Available copies', value: inventorySummary.available.toLocaleString() }, { label: 'Unavailable titles', value: inventorySummary.unavailableTitles.toLocaleString() }]} recommendation={inventorySummary.unavailableTitles ? 'Review titles with no available copies against active loans, returns, and inventory condition before replenishing.' : 'Keep monitoring stock changes and validate branch assignment when adding or editing copies.'} /><BookInventory /></div>}
+        {section === 'inventory' && <div className="space-y-4"><AdminSectionInsights title="Inventory demand & stockout outlook" metrics={[{ label: 'Catalog titles', value: books.length.toLocaleString() }, { label: 'Available copies', value: inventorySummary.available.toLocaleString() }, { label: 'Unavailable titles', value: inventorySummary.unavailableTitles.toLocaleString() }, { label: `Demand-risk titles · ${inventoryDemand.periodLabel}`, value: borrowRequestsLoadError ? '—' : inventoryDemand.atRiskTitles.length.toLocaleString() }]} prediction={borrowRequestsLoadError ? 'Borrowing-history data failed to load, so this page cannot calculate demand risk or predict possible stockouts.' : inventoryDemand.atRiskTitles.length ? `${inventoryDemand.atRiskTitles.length} title(s) had at least 3 confirmed borrows and 1 or fewer available copies in ${inventoryDemand.periodLabel}; the same pace could lead to unmet requests next month.` : `No catalog title met the high-demand/low-stock threshold in ${inventoryDemand.periodLabel}. This is a month-based risk signal, not a guaranteed shortage forecast.`} recommendation={borrowRequestsLoadError ? 'Retry the borrowing data load before changing copy levels; investigate the reported RPC failure first.' : inventoryDemand.atRiskTitles.length ? `Check live reservations and branch copy counts for ${inventoryDemand.atRiskTitles[0].book.title} first; redistribute or replenish only after confirming current holdings.` : inventorySummary.unavailableTitles ? 'Review titles at zero availability against active loans and incoming returns before ordering replacements.' : 'Continue tracking confirmed borrows and keep copy counts updated at each branch.'} /><BookInventory /></div>}
 
         {section === 'settings' && (
           <section className="w-full max-w-6xl space-y-5">
-            <AdminSectionInsights title="System data quality" metrics={[{ label: 'Libraries missing map coordinates', value: mapSummary.missingCoordinates.toLocaleString() }, { label: 'Catalog titles without branch', value: inventorySummary.unassignedTitles.toLocaleString() }, { label: 'Staff accounts flagged inactive', value: staffSummary.inactive.toLocaleString() }]} recommendation="Resolve missing location and branch assignments, and periodically review inactive staff access." />
             <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
               <div className="flex items-start gap-4">
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-shelf-primary">
@@ -2015,7 +2035,7 @@ const handleEditStaff = (staff) => {
         {/* LIBRARIES & MAP */}
         {section === 'map' && (
           <div className="space-y-4">
-            <AdminSectionInsights title="Branch coverage" metrics={[{ label: 'Libraries', value: libraries.length.toLocaleString() }, { label: 'Open branches', value: openLibraries.toLocaleString() }, { label: 'Mapped branches', value: mapSummary.geocoded.toLocaleString() }, { label: 'Missing coordinates', value: mapSummary.missingCoordinates.toLocaleString() }]} recommendation={mapSummary.missingCoordinates ? 'Complete the address for unmapped libraries so every branch appears on visitor and staff maps.' : 'All libraries have coordinates; review pins after any address change.'} />
+            <AdminSectionInsights title="Library map coverage" metrics={[{ label: 'Libraries', value: libraries.length.toLocaleString() }, { label: 'Open branches', value: openLibraries.toLocaleString() }, { label: 'Mapped branches', value: mapSummary.geocoded.toLocaleString() }, { label: 'Missing coordinates', value: mapSummary.missingCoordinates.toLocaleString() }]} prediction={mapSummary.missingCoordinates ? `${mapSummary.missingCoordinates} library pin(s) cannot appear on the map until coordinates are saved; address-only records need lookup and confirmation.` : 'All current library records have valid coordinates, so every branch can appear as a map pin.'} recommendation={mapSummary.missingCoordinates ? 'Open each unmapped library, enter its complete address and use automatic address lookup; verify or adjust the pin before saving.' : 'Verify the pin whenever an address changes so visitors and staff see the correct location.'} />
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                 <div>
@@ -2138,11 +2158,11 @@ const handleEditStaff = (staff) => {
                           className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
                           required
                         />
-                        <p className="mt-1 text-xs text-slate-500">Choose a suggested place to set the pin. Suggestions require `VITE_GOOGLE_MAPS_API_KEY` and Places API (New); without them, type the full address and the map will still try to locate it.</p>
+                        <p className="mt-1 text-xs text-slate-500">Walang Google Maps API key? I-type ang buong address; susubukan naming ilagay ang pin gamit ang OpenStreetMap. Hindi lalabas ang Google place suggestions kapag walang key, kaya pakisuri ang pin bago i-save.</p>
                         <p className={`mt-1.5 text-xs ${geocodingMessage.startsWith('Could not') || geocodingMessage.includes('unavailable') ? 'text-rose-600' : 'text-slate-500'}`} aria-live="polite">
                           {geocodingAddress ? 'Finding this address on the map…' : geocodingMessage || 'The map pin will be placed automatically from the address. You can adjust it on the map if needed.'}
                         </p>
-                        <p className="mt-1 text-[11px] text-slate-400">Address lookup by <a className="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>.</p>
+                        <p className="mt-1 text-[11px] text-slate-400">Location lookup: <a className="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>.</p>
                       </div>
 
                       {/* Allowed Student Email Domain */}
@@ -2393,8 +2413,6 @@ const handleEditStaff = (staff) => {
 
         {/* STAFF ACCOUNTS */}
         {section === 'visitor-accounts' && (
-          <div className="space-y-4">
-          <AdminSectionInsights title="Visitor account oversight" metrics={[{ label: 'Registered visitors', value: Number(visitorCount || 0).toLocaleString() }, { label: 'Libraries served', value: libraries.length.toLocaleString() }]} recommendation="Review each visitor’s verification and approval status in the account list before granting access to library features." />
           <Suspense
             fallback={
               <div role="status" className="rounded-lg bg-white p-5 text-sm text-slate-500">
@@ -2407,7 +2425,6 @@ const handleEditStaff = (staff) => {
               libraries={libraries}
             />
           </Suspense>
-          </div>
         )}
 
         {section === 'fines' && <FinePayments isSuperAdmin libraries={libraries} />}
@@ -2415,7 +2432,7 @@ const handleEditStaff = (staff) => {
 
         {section === 'accounts' && (
           <div className="space-y-6">
-            <AdminSectionInsights title="Staff account coverage" metrics={[{ label: 'Staff accounts', value: staffAccounts.length.toLocaleString() }, { label: 'Active', value: staffSummary.active.toLocaleString() }, { label: 'Inactive', value: staffSummary.inactive.toLocaleString() }, { label: 'Libraries', value: libraries.length.toLocaleString() }]} recommendation={staffSummary.inactive ? 'Review inactive accounts and confirm active staff are assigned to the correct branch.' : 'Review branch assignments when staff move or library responsibilities change.'} />
+            <AdminSectionInsights title="Staff coverage & access outlook" metrics={[{ label: 'Staff accounts', value: staffAccounts.length.toLocaleString() }, { label: 'Active', value: staffSummary.active.toLocaleString() }, { label: 'Inactive', value: staffSummary.inactive.toLocaleString() }, { label: 'Open libraries without active staff', value: staffSummary.uncoveredOpenLibraries.toLocaleString() }]} prediction={staffSummary.uncoveredOpenLibraries ? `${staffSummary.uncoveredOpenLibraries} open library/libraries currently have no active staff account assigned; service coverage may be affected until assignment is restored.` : staffSummary.inactive ? `${staffSummary.inactive} inactive staff account(s) need review; confirm branch coverage before disabling or replacing access.` : 'Every open library currently has at least one active staff account assigned.'} recommendation={staffSummary.uncoveredOpenLibraries ? 'Assign an active Sub Admin or librarian to each uncovered open library, then verify the account can sign in.' : staffSummary.inactive ? 'Review inactive staff accounts and confirm replacements are active at the affected branches.' : 'Review branch assignments whenever staff roles or library responsibilities change.'} />
             <header className="border-b border-slate-200 pb-4">
               <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">Administration</p>
               <h2 className="text-lg font-bold text-slate-800">Staff Accounts</h2>

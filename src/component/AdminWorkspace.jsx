@@ -19,6 +19,7 @@ import {
 import { supabase } from '../lib/supabaseClient.js';
 import { exportReport } from '../lib/excelUtils.js';
 import AnalyticsDateFilter from './AnalyticsDateFilter.jsx';
+import AdminAnalyticsPanel from './AdminAnalyticsPanel.jsx';
 import AuditLogViewer from './AuditLogViewer.jsx';
 import {
   getTimeframeBucketKey,
@@ -110,6 +111,10 @@ function formatLocalDateInput(value) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
 }
 
+function roundNarrativeDecimals(value) {
+  return String(value).replace(/-?\d+\.\d+/g, (number) => String(Math.round(Number(number))));
+}
+
 function buildLocalVisitorForecast(dailyCounts, historyBuckets, startDate) {
   const observed = dailyCounts.slice(-56);
   const observedBuckets = historyBuckets.slice(-observed.length);
@@ -138,8 +143,8 @@ function buildLocalVisitorForecast(dailyCounts, historyBuckets, startDate) {
 
   const observedTotal = observed.reduce((sum, value) => sum + value, 0);
   const changeLabel = previousAverage > 0
-    ? `Recent average check-ins changed from ${previousAverage.toFixed(1)} to ${recentAverage.toFixed(1)} per day.`
-    : `Recent average check-ins were ${recentAverage.toFixed(1)} per day.`;
+    ? `Recent average check-ins changed from ${Math.round(previousAverage)} to ${Math.round(recentAverage)} per day.`
+    : `Recent average check-ins were ${Math.round(recentAverage)} per day.`;
   const recommendations = trendFactor >= 1.2
     ? ['Recent check-ins are trending upward. Compare actual demand with the forecast and consider additional desk coverage on the busier weekdays.']
     : trendFactor <= 0.8
@@ -214,10 +219,13 @@ export default function AdminWorkspace({
   const [answeredFeedback, setAnsweredFeedback] = useState([]);
   const [answeredFeedbackTotal, setAnsweredFeedbackTotal] = useState(0);
   const [answeredFeedbackPage, setAnsweredFeedbackPage] = useState(1);
+  const [oldestUnansweredAt, setOldestUnansweredAt] = useState(null);
+  const [oldestUnansweredUnavailable, setOldestUnansweredUnavailable] = useState(false);
   const [feedbackSearch, setFeedbackSearch] = useState('');
   const feedbackPageSize = 5;
   const [announcements, setAnnouncements] = useState([]);
   const [announcementsTotal, setAnnouncementsTotal] = useState(0);
+  const [announcementsExpiringCount, setAnnouncementsExpiringCount] = useState(null);
   const [announcementsPage, setAnnouncementsPage] = useState(1);
   const [announcementsSearch, setAnnouncementsSearch] = useState('');
   const [announcementsStatusFilter, setAnnouncementsStatusFilter] = useState('all');
@@ -419,22 +427,41 @@ export default function AdminWorkspace({
           }
           return query.range((page - 1) * feedbackPageSize, page * feedbackPageSize - 1);
         };
-        const [pendingResult, answeredResult] = await Promise.all([
+        let oldestPendingQuery = supabase
+          .from('visitor_feedback')
+          .select('created_at')
+          .is('admin_reply', null)
+          .order('created_at', { ascending: true })
+          .limit(1);
+        if (isSubAdmin) oldestPendingQuery = oldestPendingQuery.eq('library_id', currentLibraryId);
+        const [pendingResult, answeredResult, oldestPendingResult] = await Promise.all([
           feedbackQuery(false, visibleFeedbackPage),
           feedbackQuery(true, visibleAnsweredFeedbackPage),
+          oldestPendingQuery.maybeSingle(),
         ]);
         if (!active) return;
         if (pendingResult.error || answeredResult.error) {
           setError(pendingResult.error?.message || answeredResult.error?.message);
+          setFeedback([]);
+          setFeedbackTotal(0);
+          setAnsweredFeedback([]);
+          setAnsweredFeedbackTotal(0);
+          setOldestUnansweredAt(null);
+          setOldestUnansweredUnavailable(true);
         } else {
           setFeedback(pendingResult.data || []);
           setFeedbackTotal(pendingResult.count || 0);
           setAnsweredFeedback(answeredResult.data || []);
           setAnsweredFeedbackTotal(answeredResult.count || 0);
+          setOldestUnansweredAt(oldestPendingResult.data?.created_at || null);
+          setOldestUnansweredUnavailable(Boolean(oldestPendingResult.error));
         }
         setLoading(false);
         return;
       } else if (tab === 'announcements') {
+        const now = new Date();
+        const nextWeek = new Date(now);
+        nextWeek.setDate(nextWeek.getDate() + 7);
         let query = supabase
           .from('announcements')
           .select('*', { count: 'exact' })
@@ -456,11 +483,25 @@ export default function AdminWorkspace({
           query = query.ilike('title', `%${announcementsSearch.trim()}%`);
         }
         query = query.range((visibleAnnouncementsPage - 1) * 10, visibleAnnouncementsPage * 10 - 1);
-        result = await query;
+        let expiringQuery = supabase
+          .from('announcements')
+          .select('id', { count: 'exact', head: true })
+          .eq('published', true)
+          .not('expires_at', 'is', null)
+          .gte('expires_at', now.toISOString())
+          .lte('expires_at', nextWeek.toISOString());
+        if (isSubAdmin) expiringQuery = expiringQuery.eq('library_id', currentLibraryId);
+        const [announcementResult, expiringResult] = await Promise.all([query, expiringQuery]);
+        result = announcementResult;
+        setAnnouncementsExpiringCount(expiringResult.error ? null : expiringResult.count || 0);
       }
       if (!active) return;
       if (result.error) {
         setError(result.error.message);
+        if (tab === 'announcements') {
+          setAnnouncements([]);
+          setAnnouncementsTotal(0);
+        }
       } else if (tab === 'feedback') {
         setFeedback(result.data || []);
         setFeedbackTotal(result.count || 0);
@@ -657,7 +698,13 @@ export default function AdminWorkspace({
   const categoryAxisStep = getCategoryAxisStep(maxCategoryRequestCount);
   const categoryAxisMax = Math.max(categoryAxisStep, Math.ceil(maxCategoryRequestCount / categoryAxisStep) * categoryAxisStep);
 
-  const forecastNarrative = useMemo(() => getForecastNarrative(forecast), [forecast]);
+  const forecastNarrative = useMemo(() => {
+    const narrative = getForecastNarrative(forecast);
+    return {
+      insights: narrative.insights.map(roundNarrativeDecimals),
+      recommendations: narrative.recommendations.map(roundNarrativeDecimals),
+    };
+  }, [forecast]);
 
   const demandRecommendations = useMemo(() => {
     if (!analyticsWindow.valid) return [analyticsWindow.error || 'Select a valid analytics date range.'];
@@ -995,7 +1042,7 @@ export default function AdminWorkspace({
     if (!forecastCanRun) {
       setError(!attendanceDataComplete
         ? 'Forecasting is unavailable because the attendance history did not load completely.'
-        : 'Insufficient actual attendance history. Forecasting requires 14 days, at least 14 visits across 7 active days, and a complete feed.');
+        : 'Insufficient actual attendance history. Forecasting requires at least 7 calendar days, 3 visits across 2 active days, and a complete feed.');
       return;
     }
 
@@ -1799,7 +1846,7 @@ export default function AdminWorkspace({
                 <p className="mt-2 text-xs text-slate-500">
                   Estimates the following 7 days from actual visits in the selected range. It requires at least 7 calendar days, 3 visits across 2 active days, and a complete attendance feed; small samples are less reliable.
                 </p>
-                {forecast?.source === 'local_history' && <p className="mt-1 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-800">Analytics service unavailable; showing a local estimate from recent weekday averages.</p>}
+                {forecast?.source === 'local_history' && <p className="mt-1 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-900">Local forecast active: the analytics service returned an error, so this estimate uses recent weekday averages.</p>}
                 {forecast?.source === 'analytics_service' && <p className="mt-1 text-xs text-emerald-700">Forecast returned by the analytics service.</p>}
                 <p className="mt-1 text-xs text-slate-500">
                   History available: {forecastHistoryDays} days · {forecastTotalVisits.toLocaleString()} visits across {forecastObservedVisitDays} active days.
@@ -1839,15 +1886,15 @@ export default function AdminWorkspace({
                   </p>
                 )}
                 <div className="mt-5 grid gap-4 border-t border-slate-200 pt-4 lg:grid-cols-2">
-                  <section
-                    className="rounded-lg border border-blue-100 bg-blue-50/60 p-4"
+                    <section
+                    className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/40"
                     aria-labelledby="forecast-insights-heading"
                   >
                     <h3
                       id="forecast-insights-heading"
                       className="text-sm font-bold text-slate-800"
                     >
-                      System Analytics Insights
+                      Descriptive insight
                     </h3>
                     <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-700">
                       {forecastNarrative.insights.map((item) => (
@@ -1855,17 +1902,17 @@ export default function AdminWorkspace({
                       ))}
                     </ul>
                   </section>
-                  <section
-                    className="rounded-lg border border-emerald-100 bg-emerald-50/60 p-4"
+                    <section
+                    className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/40"
                     aria-labelledby="forecast-recommendations-heading"
                   >
                     <h3
                       id="forecast-recommendations-heading"
-                      className="text-sm font-bold text-emerald-900"
+                      className="text-sm font-bold text-amber-950 dark:text-amber-100"
                     >
-                      Predictive Recommendations
+                      Prescriptive actions
                     </h3>
-                    <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-6 text-emerald-900">
+                    <ul className="mt-2 list-disc space-y-2 pl-5 text-sm font-medium leading-6 text-amber-950 dark:text-amber-100">
                       {forecastNarrative.recommendations.map((item) => (
                         <li key={item}>{item}</li>
                       ))}
@@ -1918,7 +1965,7 @@ export default function AdminWorkspace({
       {/* FEEDBACK TAB */}
       {tab === 'feedback' && (
         <section className="space-y-4">
-          {!loading && <section aria-label="Feedback descriptive analytics" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[11px] font-bold uppercase tracking-wider text-blue-700">Descriptive analytics</p><h3 className="mt-1 text-sm font-bold text-slate-900">Visitor feedback workload</h3></div><p className="max-w-2xl text-xs leading-5 text-slate-600"><strong className="text-emerald-800">Recommended action: </strong>{feedbackTotal ? `Prioritize ${feedbackTotal} unanswered message(s), then compare with ${answeredFeedbackTotal} replied message(s).` : 'Keep monitoring incoming messages and respond promptly when new feedback arrives.'}</p></div><dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3"><div className="rounded-lg bg-amber-50 px-3 py-2"><dt className="text-[11px] font-medium text-amber-800">Unanswered</dt><dd className="mt-0.5 text-base font-bold text-amber-950">{feedbackTotal}</dd></div><div className="rounded-lg bg-emerald-50 px-3 py-2"><dt className="text-[11px] font-medium text-emerald-800">Answered</dt><dd className="mt-0.5 text-base font-bold text-emerald-950">{answeredFeedbackTotal}</dd></div><div className="rounded-lg bg-slate-50 px-3 py-2"><dt className="text-[11px] font-medium text-slate-500">Response coverage</dt><dd className="mt-0.5 text-base font-bold text-slate-900">{feedbackTotal + answeredFeedbackTotal ? `${Math.round((answeredFeedbackTotal / (feedbackTotal + answeredFeedbackTotal)) * 100)}%` : '—'}</dd></div></dl></section>}
+            {!loading && <AdminAnalyticsPanel title="Visitor feedback workload" description="Counts respect the current search and branch scope; the oldest-wait prediction covers the full branch or system scope." metrics={[{ label: 'Unanswered', value: feedbackTotal }, { label: 'Answered', value: answeredFeedbackTotal }, { label: 'Response coverage', value: feedbackTotal + answeredFeedbackTotal ? `${Math.round((answeredFeedbackTotal / (feedbackTotal + answeredFeedbackTotal)) * 100)}%` : '—' }]} prediction={oldestUnansweredUnavailable ? 'The oldest unanswered message could not be loaded, so waiting time is unavailable.' : oldestUnansweredAt ? `The oldest unanswered message has been waiting ${Math.max(0, Math.floor((Date.now() - new Date(oldestUnansweredAt).getTime()) / 86400000))} days. A continuing backlog may delay visitor support.` : 'There are currently no unanswered messages in this scope.'} recommendation={feedbackTotal ? 'Reply to the oldest unanswered messages first, then check the queue daily until the backlog is cleared.' : 'Keep the response queue clear and review new feedback as it arrives.'} />}
           {user?.role === 'superadmin' && (
             <div className="flex items-center gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-200">
               <ShieldCheck size={18} className="shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
@@ -1974,7 +2021,7 @@ export default function AdminWorkspace({
       {tab === 'announcements' && (
         <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
           <div className="space-y-3">
-            {!loading && <section aria-label="Announcement descriptive analytics" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-[11px] font-bold uppercase tracking-wider text-blue-700">Descriptive analytics</p><h3 className="mt-1 text-sm font-bold text-slate-900">Published notices</h3><p className="mt-2 text-xs leading-5 text-slate-600">{announcementsTotal} published announcement(s) match the current search and status filters. {announcements.length} are shown on this page.</p><p className="mt-1 text-xs leading-5 text-emerald-800"><strong>Recommended action: </strong>Review current notices for outdated content and near-expiration dates before publishing new guidance.</p></section>}
+            {!loading && <AdminAnalyticsPanel title="Announcement reach & expiry" description="Published notices are scoped to the selected branch or system view. The matching and page counts follow current filters; the expiry count covers all published notices in scope." metrics={[{ label: 'Published notices matching filters', value: announcementsTotal }, { label: 'Expiring in 7 days', value: announcementsExpiringCount ?? '—' }, { label: 'Shown on this page', value: announcements.length }]} prediction={announcementsExpiringCount == null ? 'Expiry data is unavailable because its query failed.' : announcementsExpiringCount ? `${announcementsExpiringCount} published notice(s) are due to expire within 7 days and may soon disappear from visitor views.` : 'No published notices in this scope are due to expire within 7 days.'} recommendation={announcementsExpiringCount == null ? 'Retry the announcement load and verify the Supabase response before renewing notices.' : announcementsExpiringCount ? 'Review each upcoming expiry and renew or replace notices that visitors still need.' : 'Keep expiry dates current and verify the audience before publishing the next notice.'} />}
             <div className="space-y-3">
               <div>
                 <h2 className="text-lg font-bold text-slate-800">Announcements</h2>
