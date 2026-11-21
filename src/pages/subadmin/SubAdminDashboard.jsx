@@ -264,8 +264,8 @@ function BorrowingActivityTrendChart({ requests = [], monthKey, loadError = '' }
     <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-bold text-slate-800">Borrowing Activity Trend</h3>
-          <p className="mt-1 text-xs text-slate-500">Requests, borrows, and returns by week · {monthLabel}</p>
+          <h3 className="text-sm font-bold text-slate-800">Hiram na libro bawat linggo</h3>
+          <p className="mt-1 text-xs text-slate-500">Mga request, hiram, at balik na libro · {monthLabel}</p>
         </div>
       </div>
       {loadError ? (
@@ -945,7 +945,7 @@ export default function SubAdminDashboard() {
     return NAV.some((item) => item.id === saved && item.id !== 'settings') ? saved : 'overview';
   });
   const [overviewMonth, setOverviewMonth] = useState(() => getAnalyticsMonthKey());
-  const overviewMonthOptions = getAnalyticsMonthOptions();
+  const overviewMonthOptions = getAnalyticsMonthOptions(2);
   const mainContentRef = useRef(null);
   const [focusRequestId, setFocusRequestId] = useState(null);
   const [focusNotificationType, setFocusNotificationType] = useState(null);
@@ -1205,12 +1205,16 @@ export default function SubAdminDashboard() {
 
   const branchOverviewMetrics = useMemo(() => {
     const monthWindow = getAnalyticsMonthWindow(overviewMonth);
-    if (!monthWindow) return { topBorrowed: [], totalBorrowEvents: 0, comparableBorrowEvents: 0, projectedNextMonth: null, pressureTitles: 0, monthLabel: '' };
+    if (!monthWindow) return { topBorrowed: [], totalBorrowEvents: 0, comparableBorrowEvents: null, projectedNextMonth: null, pressureTitles: 0, monthLabel: '', comparisonAvailable: false };
     const now = new Date();
     const isCurrentMonth = getAnalyticsMonthKey(now) === overviewMonth;
     const elapsedDays = isCurrentMonth ? now.getDate() : monthWindow.days;
     const previousStart = new Date(monthWindow.start.getFullYear(), monthWindow.start.getMonth() - 1, 1);
     const previousEnd = new Date(previousStart.getFullYear(), previousStart.getMonth(), Math.min(elapsedDays, new Date(previousStart.getFullYear(), previousStart.getMonth() + 1, 0).getDate()) + 1);
+    const historyStart = new Date();
+    historyStart.setHours(0, 0, 0, 0);
+    historyStart.setDate(historyStart.getDate() - 65);
+    const comparisonAvailable = previousStart >= historyStart;
     const borrowedCounts = new Map();
     const previousBorrowedCounts = new Map();
     branchBorrowRequests.forEach((request) => {
@@ -1221,14 +1225,14 @@ export default function SubAdminDashboard() {
       if (!bookId) return;
       if (timestamp >= monthWindow.start.getTime() && timestamp < monthWindow.endExclusive.getTime() && new Date(borrowedAt).getDate() <= elapsedDays) {
         borrowedCounts.set(bookId, (borrowedCounts.get(bookId) || 0) + 1);
-      } else if (timestamp >= previousStart.getTime() && timestamp < previousEnd.getTime()) {
+      } else if (comparisonAvailable && timestamp >= previousStart.getTime() && timestamp < previousEnd.getTime()) {
         previousBorrowedCounts.set(bookId, (previousBorrowedCounts.get(bookId) || 0) + 1);
       }
     });
     const topBorrowed = [...borrowedCounts.entries()]
       .map(([bookId, count]) => {
         const book = branchBooksById.get(bookId);
-        const previousCount = previousBorrowedCounts.get(bookId) || 0;
+        const previousCount = comparisonAvailable ? previousBorrowedCounts.get(bookId) || 0 : null;
         const available = Number(book?.availableCopies ?? book?.available_copies ?? 0);
         return {
           book,
@@ -1243,12 +1247,14 @@ export default function SubAdminDashboard() {
       .sort((left, right) => right.count - left.count || String(left.book.title).localeCompare(String(right.book.title)))
       .slice(0, 5);
     const totalBorrowEvents = [...borrowedCounts.values()].reduce((total, count) => total + count, 0);
-    const comparableBorrowEvents = [...previousBorrowedCounts.values()].reduce((total, count) => total + count, 0);
+    const comparableBorrowEvents = comparisonAvailable
+      ? [...previousBorrowedCounts.values()].reduce((total, count) => total + count, 0)
+      : null;
     const projectedNextMonth = totalBorrowEvents >= 3
       ? Math.max(0, Math.round((totalBorrowEvents / Math.max(1, elapsedDays)) * 30))
       : null;
     const pressureTitles = topBorrowed.filter((entry) => entry.count >= 3 && entry.available <= 1).length;
-    return { topBorrowed, totalBorrowEvents, comparableBorrowEvents, projectedNextMonth, pressureTitles, monthLabel: monthWindow.monthLabel };
+    return { topBorrowed, totalBorrowEvents, comparableBorrowEvents, projectedNextMonth, pressureTitles, monthLabel: monthWindow.monthLabel, comparisonAvailable };
   }, [branchBooks, branchBooksById, branchBorrowRequests, overviewMonth]);
 
   useEffect(() => {
@@ -1855,31 +1861,31 @@ export default function SubAdminDashboard() {
             </div>
             <div className="space-y-4">
               <AdminAnalyticsPanel
-                title="Borrowing demand outlook"
-                description={`Branch activity for ${branchOverviewMetrics.monthLabel}; comparisons use the same number of calendar days from the prior month.`}
+                title="Mga nahiram na libro sa inyong branch"
+                description={`${branchOverviewMetrics.monthLabel}. Ipinapakita ng charts ang buwang ito at nakaraang buwan.`}
                 metrics={[
-                  { label: 'Borrow events', value: borrowRequestsLoadError ? '—' : branchOverviewMetrics.totalBorrowEvents },
-                  { label: 'Comparable prior period', value: borrowRequestsLoadError ? '—' : branchOverviewMetrics.comparableBorrowEvents },
-                  { label: 'Estimated next 30 days', value: borrowRequestsLoadError ? '—' : branchOverviewMetrics.projectedNextMonth ?? '—' },
-                  { label: 'High-demand, low-stock titles', value: borrowRequestsLoadError ? '—' : branchOverviewMetrics.pressureTitles },
+                  { label: 'Mga librong nahiram', value: borrowRequestsLoadError ? '—' : branchOverviewMetrics.totalBorrowEvents, note: 'Kumpirmadong pagkuha ngayong napiling buwan.' },
+                  { label: 'Nahiram sa kaparehong panahon last month', value: borrowRequestsLoadError ? '—' : branchOverviewMetrics.comparableBorrowEvents ?? 'Hindi available', note: branchOverviewMetrics.comparisonAvailable ? 'Parehong bilang ng araw para patas ang paghahambing.' : 'Walang sapat na lumang tala para ikumpara ang panahong ito.' },
+                  { label: 'Tantyang mahihiram sa susunod na 30 araw', value: borrowRequestsLoadError ? '—' : branchOverviewMetrics.projectedNextMonth ?? '—', note: 'Batay sa bilis ng paghiram sa napiling buwan.' },
+                  { label: 'Madalas hiramin, 0–1 na lang ang kopya', value: borrowRequestsLoadError ? '—' : branchOverviewMetrics.pressureTitles, note: 'Hindi bababa sa 3 hiram ngayong buwan at 0–1 kopyang available.' },
                 ]}
                 prediction={borrowRequestsLoadError
-                  ? 'Borrowing history failed to load. No demand projection is available until the borrowing-history RPC succeeds.'
+                  ? 'Hindi nabasa ang talaan ng mga hiram. Walang maipapakitang tantya hangga’t hindi gumagana ang data request.'
                   : branchOverviewMetrics.projectedNextMonth == null
-                  ? 'Fewer than 3 borrow events were recorded in the selected period; there is not enough volume for a useful demand projection.'
-                  : `If the recent daily pace continues, the branch may see about ${branchOverviewMetrics.projectedNextMonth} borrow events in the next 30 days${branchOverviewMetrics.comparableBorrowEvents >= 3 ? ` (${branchOverviewMetrics.totalBorrowEvents >= branchOverviewMetrics.comparableBorrowEvents ? 'up' : 'down'} ${Math.abs(Math.round(((branchOverviewMetrics.totalBorrowEvents - branchOverviewMetrics.comparableBorrowEvents) / branchOverviewMetrics.comparableBorrowEvents) * 100))}% versus the comparable prior period)` : ''}.`}
+                  ? 'Kaunti pa ang naitalang hiram para makagawa ng kapaki-pakinabang na tantya. Tingnan muli kapag mas marami nang naitalang hiram.'
+                  : `Sa takbo ng paghiram ngayong napiling buwan, maaaring umabot sa humigit-kumulang ${branchOverviewMetrics.projectedNextMonth} ang mahihiram sa susunod na 30 araw${branchOverviewMetrics.comparableBorrowEvents >= 3 ? ` (${Math.abs(Math.round(((branchOverviewMetrics.totalBorrowEvents - branchOverviewMetrics.comparableBorrowEvents) / branchOverviewMetrics.comparableBorrowEvents) * 100))}% ${branchOverviewMetrics.totalBorrowEvents >= branchOverviewMetrics.comparableBorrowEvents ? 'mas marami' : 'mas kaunti'} kaysa sa kaparehong mga araw noong nakaraang buwan)` : ''}.`}
                 recommendation={borrowRequestsLoadError
-                  ? 'Retry the borrowing data load and check the Supabase RPC response details before changing inventory or staffing.'
+                  ? 'Subukang i-load muli ang talaan. Suriin ang error bago magdagdag ng kopya o magbago ng iskedyul.'
                   : branchOverviewMetrics.pressureTitles
-                  ? `Check active copies and pending requests for ${branchOverviewMetrics.topBorrowed.find((entry) => entry.count >= 3 && entry.available <= 1)?.book.title || 'high-demand titles'} before reallocating or purchasing copies.`
+                  ? `Tingnan muna ang natitirang kopya at mga nakapilang request ng ${branchOverviewMetrics.topBorrowed.find((entry) => entry.count >= 3 && entry.available <= 1)?.book.title || 'mga librong madalas hiramin'} bago bumili o maglipat ng kopya.`
                   : branchOverviewMetrics.topBorrowed.length
-                    ? `Review availability and pending requests for ${branchOverviewMetrics.topBorrowed[0].book.title}; use confirmed demand and current stock before changing copy levels.`
-                    : 'Keep the reservation queue current and review stock only after confirmed borrowing demand is recorded.'}
+                    ? `Suriin ang natitirang kopya at mga request para sa ${branchOverviewMetrics.topBorrowed[0].book.title} bago magbago ng bilang ng kopya.`
+                    : 'Panatilihing updated ang listahan ng request at suriin ang stock kapag may naitalang kumpirmadong hiram.'}
               />
               <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800" aria-labelledby="branch-top-borrowed-title">
-                <h3 id="branch-top-borrowed-title" className="text-sm font-bold text-slate-900 dark:text-white">Most borrowed titles · {branchOverviewMetrics.monthLabel}</h3>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Confirmed borrow events by borrow date; the estimate is a pace projection, not a guaranteed demand count.</p>
-                {borrowRequestsLoadError ? <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><p>Most-borrowed titles are unavailable while borrowing history is failing.</p><button type="button" onClick={() => void retryBorrowRequests()} className="mt-2 rounded-lg bg-amber-900 px-3 py-1.5 text-xs font-bold text-white">Retry borrowing data</button></div> : branchOverviewMetrics.topBorrowed.length ? <ol className="mt-3 grid gap-2 md:grid-cols-2">{branchOverviewMetrics.topBorrowed.map(({ book, count, previousCount, projectedNextMonth, changePercent, available }, index) => <li key={book.id} className="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900"><span className="text-xs font-bold text-slate-400">{index + 1}</span><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{book.title || 'Untitled book'}</span><span className="text-[11px] text-slate-500 dark:text-slate-400">{count} borrow(s) · {available} currently available{previousCount ? ` · ${changePercent >= 0 ? '+' : ''}${changePercent}% vs prior period` : ''}</span></span><span className="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-extrabold text-indigo-900 dark:bg-indigo-950 dark:text-indigo-200">{projectedNextMonth ?? '—'} projected</span></li>)}</ol> : <p className="mt-3 rounded-lg bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">No confirmed borrows in the selected month.</p>}
+                <h3 id="branch-top-borrowed-title" className="text-sm font-bold text-slate-900 dark:text-white">Pinakamaraming nahiram na libro · {branchOverviewMetrics.monthLabel}</h3>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Mga kumpirmadong hiram sa napiling buwan.</p>
+                {borrowRequestsLoadError ? <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><p>Hindi mabasa ang talaan ng mga hiram: {borrowRequestsLoadError}</p><button type="button" onClick={() => void retryBorrowRequests()} className="mt-2 rounded-lg bg-amber-900 px-3 py-1.5 text-xs font-bold text-white">Subukang i-load muli</button></div> : branchOverviewMetrics.topBorrowed.length ? <ol className="mt-3 grid gap-2 md:grid-cols-2">{branchOverviewMetrics.topBorrowed.map(({ book, count, previousCount, projectedNextMonth, changePercent, available }, index) => <li key={book.id} className="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900"><span className="text-xs font-bold text-slate-400">{index + 1}</span><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{book.title || 'Untitled book'}</span><span className="text-[11px] text-slate-500 dark:text-slate-400">{count} nahiram · {available} kopyang natitira{previousCount ? ` · ${changePercent >= 0 ? '+' : ''}${changePercent}% kaysa last month` : ''}</span></span><span className="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-extrabold text-indigo-900 dark:bg-indigo-950 dark:text-indigo-200">{projectedNextMonth == null ? 'Kulang ang data' : `Tantya: ${projectedNextMonth} sa 30 araw`}</span></li>)}</ol> : <p className="mt-3 rounded-lg bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">Wala pang kumpirmadong nahiram na libro sa napiling buwan.</p>}
               </section>
             </div>
             <div className="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-3">

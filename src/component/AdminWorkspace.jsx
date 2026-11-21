@@ -1833,14 +1833,14 @@ export default function AdminWorkspace({
 
               <section className="border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
                 <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-base font-bold text-slate-800">Visitor forecast</h2>
+                  <h2 className="text-base font-bold text-slate-800">Estimate future visitor check-ins</h2>
                   <button
                     type="button"
                     onClick={runForecast}
                     disabled={forecastLoading || !analyticsWindow.valid || !forecastCanRun}
                     className="bg-shelf-primary px-3 py-2 text-xs font-bold text-white rounded-lg transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {forecastLoading ? 'Forecasting...' : 'Run forecast'}
+                    {forecastLoading ? 'Preparing estimate...' : 'Show estimate'}
                   </button>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">
@@ -1849,9 +1849,9 @@ export default function AdminWorkspace({
                 {forecast?.source === 'local_history' && <p className="mt-1 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-900">Local forecast active: the analytics service returned an error, so this estimate uses recent weekday averages.</p>}
                 {forecast?.source === 'analytics_service' && <p className="mt-1 text-xs text-emerald-700">Forecast returned by the analytics service.</p>}
                 <p className="mt-1 text-xs text-slate-500">
-                  History available: {forecastHistoryDays} days · {forecastTotalVisits.toLocaleString()} visits across {forecastObservedVisitDays} active days.
+                  Records available: {forecastHistoryDays} days · {forecastTotalVisits.toLocaleString()} check-ins across {forecastObservedVisitDays} days with visits.
                 </p>
-                {!attendanceDataComplete && <p className="mt-1 text-xs font-medium text-amber-700">The attendance feed is incomplete; forecasting is disabled until a complete history is loaded.</p>}
+                {!attendanceDataComplete && <p className="mt-1 text-xs font-medium text-amber-700">Some check-in records are missing, so an estimate cannot be made yet.</p>}
                 {forecast?.forecasts?.length ? (
                   <>
                     {forecastChartData && (
@@ -1881,8 +1881,8 @@ export default function AdminWorkspace({
                 ) : (
                   <p className="mt-3 text-xs text-slate-500">
                     {forecastCanRun
-                      ? 'Run the forecast to estimate the next seven days from the selected actual attendance history.'
-                      : 'Insufficient complete attendance history for a reliable forecast.'}
+                      ? 'Show an estimate for the next seven days using the check-in records selected above.'
+                    : 'Not enough complete attendance records yet. Add more check-ins, then try again.'}
                   </p>
                 )}
                 <div className="mt-5 grid gap-4 border-t border-slate-200 pt-4 lg:grid-cols-2">
@@ -1894,7 +1894,7 @@ export default function AdminWorkspace({
                       id="forecast-insights-heading"
                       className="text-sm font-bold text-slate-800"
                     >
-                      Descriptive insight
+                      Recent pattern
                     </h3>
                     <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-700">
                       {forecastNarrative.insights.map((item) => (
@@ -1910,7 +1910,7 @@ export default function AdminWorkspace({
                       id="forecast-recommendations-heading"
                       className="text-sm font-bold text-amber-950 dark:text-amber-100"
                     >
-                      Prescriptive actions
+                      Suggested next step
                     </h3>
                     <ul className="mt-2 list-disc space-y-2 pl-5 text-sm font-medium leading-6 text-amber-950 dark:text-amber-100">
                       {forecastNarrative.recommendations.map((item) => (
@@ -1920,7 +1920,7 @@ export default function AdminWorkspace({
                   </section>
                 </div>
                 <p className="mt-3 text-xs leading-5 text-slate-500">
-                  Forecasts are estimates from the selected date range and filters, not guarantees. Use these insights with branch schedules and verified inventory before changing staffing, hours, or purchasing plans.
+                  These estimates use the dates and filters selected above. Compare them with your branch records before changing schedules or book copies.
                 </p>
               </section>
             </div>

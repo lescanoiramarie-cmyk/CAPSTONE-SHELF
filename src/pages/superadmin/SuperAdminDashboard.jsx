@@ -222,7 +222,7 @@ export default function SuperAdminDashboard() {
     return superAdminStartPages.includes(saved) ? saved : 'overview';
   });
   const [overviewMonth, setOverviewMonth] = useState(() => getAnalyticsMonthKey());
-  const overviewMonthOptions = getAnalyticsMonthOptions();
+  const overviewMonthOptions = getAnalyticsMonthOptions(2);
   const [termsDocumentKey, setTermsDocumentKey] = useState('visitor');
   const [termsDocumentContent, setTermsDocumentContent] = useState('');
   const [termsDocumentVersion, setTermsDocumentVersion] = useState('');
@@ -1273,6 +1273,33 @@ const handleEditStaff = (staff) => {
     if (!book.libraryId && !book.library_id) totals.unassignedTitles += 1;
     return totals;
   }, { copies: 0, available: 0, unavailableTitles: 0, unassignedTitles: 0 }), [books]);
+  const branchInventoryData = useMemo(() => {
+    const branchCopies = new Map(libraries.map((library) => [String(library.id), {
+      id: String(library.id),
+      name: library.name || 'Unnamed branch',
+      available: 0,
+      unavailable: 0,
+      total: 0,
+    }]));
+    books.forEach((book) => {
+      const branch = branchCopies.get(String(book.libraryId ?? book.library_id ?? ''));
+      if (!branch) return;
+      const total = Math.max(0, Number(book.totalCopies ?? book.total_copies ?? 0) || 0);
+      const available = Math.min(total, Math.max(0, Number(book.availableCopies ?? book.available_copies ?? total) || 0));
+      branch.available += available;
+      branch.unavailable += total - available;
+      branch.total += total;
+    });
+    const branches = [...branchCopies.values()]
+      .filter((branch) => branch.total > 0)
+      .sort((left, right) => right.total - left.total || left.name.localeCompare(right.name))
+      .slice(0, 8);
+    return {
+      labels: branches.map((branch) => branch.name),
+      available: branches.map((branch) => branch.available),
+      unavailable: branches.map((branch) => branch.unavailable),
+    };
+  }, [books, libraries]);
   const mapSummary = useMemo(() => ({
     geocoded: libraries.filter(hasValidLibraryCoordinates).length,
     missingCoordinates: libraries.filter((library) => !hasValidLibraryCoordinates(library)).length,
@@ -1775,7 +1802,32 @@ const handleEditStaff = (staff) => {
               <div><h3 className="text-sm font-bold text-slate-800">System activity analytics</h3><p className="mt-0.5 text-xs text-slate-500">Counts reflect recorded events in the selected calendar month.</p></div>
               <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Month<select aria-label="Filter overview charts by month" value={overviewMonth} onChange={(event) => setOverviewMonth(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">{overviewMonthOptions.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select></label>
             </div>
-            {borrowRequestsLoadError && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"><span>Borrowing-history data failed to load. Borrow totals and branch transaction counts are marked unavailable; check the Supabase RPC response before acting on them.</span><button type="button" onClick={() => void retryBorrowRequests()} className="rounded-lg bg-amber-900 px-3 py-2 text-xs font-bold text-white">Retry borrowing data</button></div>}
+            {borrowRequestsLoadError && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"><span>Borrowing history failed to load: {borrowRequestsLoadError}</span><button type="button" onClick={() => void retryBorrowRequests()} className="rounded-lg bg-amber-900 px-3 py-2 text-xs font-bold text-white">Try again</button></div>}
+            <AdminSectionInsights
+              title="System priorities"
+              metrics={[
+                { label: 'Open branches', value: openLibraries.toLocaleString() },
+                { label: 'Open branches without active staff', value: staffSummary.uncoveredOpenLibraries.toLocaleString() },
+                { label: 'Branches without a map pin', value: mapSummary.missingCoordinates.toLocaleString() },
+                { label: 'Books that may run low', value: borrowRequestsLoadError ? '—' : inventoryDemand.atRiskTitles.length.toLocaleString() },
+              ]}
+              prediction={borrowRequestsLoadError
+                ? 'Borrowing records are unavailable, so book-demand alerts cannot be shown. Branch staffing and map counts are current.'
+                : staffSummary.uncoveredOpenLibraries
+                  ? `${staffSummary.uncoveredOpenLibraries} open branch(es) have no active staff account assigned and may need coverage.`
+                  : inventoryDemand.atRiskTitles.length
+                    ? `${inventoryDemand.atRiskTitles.length} book(s) were borrowed often while few copies were available in ${inventoryDemand.periodLabel}.`
+                    : 'Every open branch has active staff assigned, and no book met the low-copy alert for the selected month.'}
+              recommendation={staffSummary.uncoveredOpenLibraries
+                ? 'Assign active staff to the open branches listed under Staff Accounts.'
+                : mapSummary.missingCoordinates
+                  ? 'Add or confirm map locations for the branches without pins.'
+                  : borrowRequestsLoadError
+                    ? 'Reload borrowing data before changing inventory based on demand.'
+                    : inventoryDemand.atRiskTitles.length
+                      ? `Review current loans and copies for ${inventoryDemand.atRiskTitles[0].book.title} first.`
+                      : 'Review these numbers again after the next busy month.'}
+            />
 
             {/* CHARTS */}
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -1890,6 +1942,33 @@ const handleEditStaff = (staff) => {
                 )}
               </div>
             </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-3">
+                <h3 className="text-sm font-bold text-slate-800">Book copies by branch</h3>
+                <p className="mt-1 text-xs text-slate-500">Current copy counts; “not available” includes copies currently on loan or otherwise unavailable.</p>
+              </div>
+              {branchInventoryData.labels.length ? <div className="h-80">
+                <Bar
+                  data={{
+                    labels: branchInventoryData.labels,
+                    datasets: [
+                      { label: 'Available now', data: branchInventoryData.available, backgroundColor: '#16a34a', borderRadius: 4 },
+                      { label: 'Not available now', data: branchInventoryData.unavailable, backgroundColor: '#f59e0b', borderRadius: 4 },
+                    ],
+                  }}
+                  options={{
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { x: { beginAtZero: true, stacked: true, ticks: { precision: 0 } }, y: { stacked: true } },
+                    plugins: {
+                      legend: { position: 'bottom' },
+                      tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${context.raw} copies` } },
+                    },
+                  }}
+                />
+              </div> : <p className="py-8 text-center text-sm text-slate-500">No branch book copies are available to compare.</p>}
+            </div>
             {/* DATA MANAGEMENT */}
             <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-col justify-between gap-2 border-b border-slate-100 pb-3 md:flex-row md:items-center">
@@ -1967,7 +2046,7 @@ const handleEditStaff = (staff) => {
         )}
 
         {/* INVENTORY */}
-        {section === 'inventory' && <div className="space-y-4"><AdminSectionInsights title="Inventory demand & stockout outlook" metrics={[{ label: 'Catalog titles', value: books.length.toLocaleString() }, { label: 'Available copies', value: inventorySummary.available.toLocaleString() }, { label: 'Unavailable titles', value: inventorySummary.unavailableTitles.toLocaleString() }, { label: `Demand-risk titles · ${inventoryDemand.periodLabel}`, value: borrowRequestsLoadError ? '—' : inventoryDemand.atRiskTitles.length.toLocaleString() }]} prediction={borrowRequestsLoadError ? 'Borrowing-history data failed to load, so this page cannot calculate demand risk or predict possible stockouts.' : inventoryDemand.atRiskTitles.length ? `${inventoryDemand.atRiskTitles.length} title(s) had at least 3 confirmed borrows and 1 or fewer available copies in ${inventoryDemand.periodLabel}; the same pace could lead to unmet requests next month.` : `No catalog title met the high-demand/low-stock threshold in ${inventoryDemand.periodLabel}. This is a month-based risk signal, not a guaranteed shortage forecast.`} recommendation={borrowRequestsLoadError ? 'Retry the borrowing data load before changing copy levels; investigate the reported RPC failure first.' : inventoryDemand.atRiskTitles.length ? `Check live reservations and branch copy counts for ${inventoryDemand.atRiskTitles[0].book.title} first; redistribute or replenish only after confirming current holdings.` : inventorySummary.unavailableTitles ? 'Review titles at zero availability against active loans and incoming returns before ordering replacements.' : 'Continue tracking confirmed borrows and keep copy counts updated at each branch.'} /><BookInventory /></div>}
+        {section === 'inventory' && <div className="space-y-4"><AdminSectionInsights title="Books that may run low" metrics={[{ label: 'Titles in catalog', value: books.length.toLocaleString() }, { label: 'Copies available now', value: inventorySummary.available.toLocaleString() }, { label: 'Titles with no copies available', value: inventorySummary.unavailableTitles.toLocaleString() }, { label: `Often borrowed, 0–1 copies left · ${inventoryDemand.periodLabel}`, value: borrowRequestsLoadError ? '—' : inventoryDemand.atRiskTitles.length.toLocaleString() }]} prediction={borrowRequestsLoadError ? 'Borrowing records could not be loaded, so the system cannot identify books that may run low.' : inventoryDemand.atRiskTitles.length ? `${inventoryDemand.atRiskTitles.length} book(s) were borrowed at least 3 times while only 0–1 copies were available in ${inventoryDemand.periodLabel}. Those books may be harder to borrow if this continues.` : `No book was borrowed at least 3 times while only 0–1 copies were available in ${inventoryDemand.periodLabel}.`} recommendation={borrowRequestsLoadError ? 'Try loading the borrowing records again before changing book-copy counts.' : inventoryDemand.atRiskTitles.length ? `Check current loans and branch copies for ${inventoryDemand.atRiskTitles[0].book.title}; move or add copies if the branch still needs them.` : inventorySummary.unavailableTitles ? 'Check books with no available copies against current loans and returns before ordering more.' : 'Keep copy counts up to date and check this list after each busy month.'} /><BookInventory /></div>}
 
         {section === 'settings' && (
           <section className="w-full max-w-6xl space-y-5">

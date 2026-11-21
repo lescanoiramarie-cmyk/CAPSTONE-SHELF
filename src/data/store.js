@@ -474,11 +474,21 @@ const BORROW_DASHBOARD_ACTIVE_STATUSES = [
   'ready_for_pickup',
   'borrowed',
 ];
-const BORROW_DASHBOARD_RECENT_DAYS = 35;
+// Keep the selected month and the full preceding month available for the
+// overview charts and same-days comparison.
+const BORROW_DASHBOARD_RECENT_DAYS = 65;
 
 async function fetchStaffBorrowRequestRows(authenticatedUserId, signal) {
   // Use the new secure RPC for staff borrowing history
   // which handles AAL2 enforcement, role validation, and branch scoping server-side.
+  const { data: assurance, error: assuranceError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (assuranceError) {
+    throw cleanErr(assuranceError, 'Unable to verify staff sign-in security level.');
+  }
+  if (assurance?.currentLevel !== 'aal2') {
+    throw new Error('AAL2 authentication is required. Complete the staff two-step sign-in, then retry.');
+  }
+
   const { data, error } = await supabase.rpc('get_staff_borrowing_history', {
     p_recent_days: BORROW_DASHBOARD_RECENT_DAYS,
     p_active_statuses: BORROW_DASHBOARD_ACTIVE_STATUSES,

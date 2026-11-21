@@ -335,6 +335,7 @@ export function LibraryProvider({ children }) {
       if (error?.name === 'AbortError') return;
       const msg = error?.message || '';
       if (msg.includes('AAL2') || msg.includes('aal2') || msg.includes('assurance')) {
+        setBorrowRequestsLoadError('Complete the staff two-step sign-in, then try loading borrowing history again.');
         setBorrowRequestsLoading(false);
         return;
       }
@@ -857,6 +858,11 @@ fineReviewRequired:
   ]);
 
   const retryBorrowRequests = useCallback(async () => {
+    if (user?.role === 'subadmin' || user?.role === 'superadmin') {
+      await loadAllBorrowRequests();
+      return;
+    }
+
     const visitorId = await getCurrentVisitorId(user?.role);
 
     if (!visitorId) {
@@ -867,7 +873,7 @@ fineReviewRequired:
     }
 
     await loadVisitorBorrowRequests(visitorId);
-  }, [getCurrentVisitorId, loadVisitorBorrowRequests, user?.role]);
+  }, [getCurrentVisitorId, loadAllBorrowRequests, loadVisitorBorrowRequests, user?.role]);
 
   // ==========================================================================
   // VISITOR LOCAL SESSION CHANGES

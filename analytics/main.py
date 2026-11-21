@@ -138,8 +138,9 @@ def generate_gemini_analytics(
         "projectedCategoryDemand": category_forecasts,
     }
     prompt = (
-        "Analyze these aggregate library analytics. Return up to 4 concise "
-        "insights and up to 4 practical operational recommendations. Base every "
+        "Analyze these aggregate library analytics for nontechnical library staff. "
+        "Use plain, everyday language and avoid analytics jargon. Return up to 4 "
+        "short insights and up to 4 practical next steps. Base every "
         "statement only on the supplied data; distinguish observed counts from "
         "forecasts, do not invent causes or facts, and do not include personal "
         "data. If data is insufficient, state that clearly in an insight. "
