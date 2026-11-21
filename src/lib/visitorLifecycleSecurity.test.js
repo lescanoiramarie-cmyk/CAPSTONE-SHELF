@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 const migration1700 = readFileSync(new URL('../../supabase/migrations/20270102001700_public_community_visitor_registration.sql', import.meta.url), 'utf8');
 const migration1900 = readFileSync(new URL('../../supabase/migrations/20270102001900_visitor_otp_delivery_hardening.sql', import.meta.url), 'utf8');
 const migration20270204 = readFileSync(new URL('../../supabase/migrations/20270204000000_institutional_visitor_librarian_approval.sql', import.meta.url), 'utf8');
+const subadminApprovalMigration = readFileSync(new URL('../../supabase/migrations/20270206000000_subadmin_only_visitor_verification.sql', import.meta.url), 'utf8');
 const privacyMigration = readFileSync(new URL('../../supabase/migrations/20270205000000_pending_visitor_status_privacy.sql', import.meta.url), 'utf8');
 const attendanceSecurity = readFileSync(new URL('../../supabase/migrations/20270101000000_attendance_security_hardening.sql', import.meta.url), 'utf8');
 const authContext = readFileSync(new URL('../context/AuthContext.jsx', import.meta.url), 'utf8');
@@ -130,13 +131,13 @@ test('visitor lifecycle: visitor A cannot load visitor B profile', () => {
 });
 
 test('visitor lifecycle: cross-library approval denied', () => {
-  // approve_community_visitor checks is_active_staff_for_branch(visitor.library_id)
-  assert.match(migration20270204, /public\.is_active_staff_for_branch\(v_visitor\.library_id::text\)/);
-  assert.match(migration20270204, /You are not authorized to approve visitors for this library/);
+  // Only active assigned sub-admins may approve or update visitors.
+  assert.match(subadminApprovalMigration, /staff\.role = 'subadmin'/);
+  assert.match(subadminApprovalMigration, /staff\.library_id IS NOT DISTINCT FROM v_visitor\.library_id/);
+  assert.match(subadminApprovalMigration, /Only an assigned active sub-admin can approve visitors for this library/);
 
-  // set_visitor_active also enforces branch scoping
-  assert.match(migration20270204, /public\.is_active_staff_for_branch\(v_visitor\.library_id::text\)/);
-  assert.match(migration20270204, /You are not authorized to update this visitor account/);
+  // set_visitor_active also requires the same sub-admin branch scope.
+  assert.match(subadminApprovalMigration, /Only an assigned active sub-admin can update this visitor account/);
 
   // register_visitor_v2 prevents moving existing visitor to another branch
   assert.match(migration20270204, /v_profile_library_id IS DISTINCT FROM p_library_id/);
