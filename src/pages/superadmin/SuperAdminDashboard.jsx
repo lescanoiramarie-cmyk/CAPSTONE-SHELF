@@ -556,15 +556,15 @@ export default function SuperAdminDashboard() {
     visibleLibraryPage * librariesPerPage
   );
 
-  const handleCoordinateChange = (lat, lng) => {
+  const handleCoordinateChange = useCallback((lat, lng) => {
     setLibraryForm((previous) => ({
       ...previous,
       lat: String(lat),
       lng: String(lng),
     }));
-  };
+  }, []);
 
-  const geocodeLibraryAddress = async () => {
+  const geocodeLibraryAddress = useCallback(async () => {
     const address = libraryForm.address.trim();
     if (!address) return null;
     if (geocodingPromiseRef.current?.address === address) {
@@ -616,7 +616,20 @@ export default function SuperAdminDashboard() {
     } finally {
       if (geocodingPromiseRef.current?.promise === promise) geocodingPromiseRef.current = null;
     }
-  };
+  }, [handleCoordinateChange, libraryForm.address, libraryForm.campus, libraryForm.name]);
+
+  // Place the map pin automatically after the user pauses while entering an
+  // address. Existing/manual coordinates are preserved until the address is
+  // edited, and the debounce avoids sending a lookup for every keystroke.
+  useEffect(() => {
+    const address = libraryForm.address.trim();
+    if (libraryForm.lat && libraryForm.lng) return undefined;
+    if (address.length < 10) return undefined;
+    const timer = window.setTimeout(() => {
+      void geocodeLibraryAddress();
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [geocodeLibraryAddress, libraryForm.address, libraryForm.lat, libraryForm.lng]);
 
   // ============================================================
   // STAFF ACCOUNTS
@@ -873,10 +886,7 @@ const handleCreateStaff = async (event) => {
     );
   } catch (error) {
     const message = await getStaffFunctionErrorMessage(error);
-    console.error('Save staff account error:', {
-      message,
-      status: error?.context?.status,
-    });
+    console.error(`Save staff account error (HTTP ${error?.context?.status ?? 'unknown'}): ${message}`);
     setStaffError(message);
   } finally {
     setStaffLoading(false);
@@ -922,10 +932,7 @@ const handleToggleStaff = async (staff) => {
     );
   } catch (error) {
     const message = await getStaffFunctionErrorMessage(error);
-    console.error('Toggle staff account error:', {
-      message,
-      status: error?.context?.status,
-    });
+    console.error(`Toggle staff account error (HTTP ${error?.context?.status ?? 'unknown'}): ${message}`);
     setStaffError(message);
   } finally {
     setStaffLoading(false);
@@ -977,10 +984,7 @@ const handleEditStaff = (staff) => {
       setStaffMessage('Sub-admin account deleted successfully.');
     } catch (error) {
       const message = await getStaffFunctionErrorMessage(error);
-      console.error('Delete staff account error:', {
-        message,
-        status: error?.context?.status,
-      });
+      console.error(`Delete staff account error (HTTP ${error?.context?.status ?? 'unknown'}): ${message}`);
       setStaffError(message);
     } finally {
       setStaffLoading(false);
@@ -2265,11 +2269,11 @@ const handleEditStaff = (staff) => {
                           className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
                           required
                         />
-                        <p className="mt-1 text-xs text-slate-500">Walang Google Maps API key? I-type ang buong address; susubukan naming ilagay ang pin gamit ang OpenStreetMap. Hindi lalabas ang Google place suggestions kapag walang key, kaya pakisuri ang pin bago i-save.</p>
-                        <p className={`mt-1.5 text-xs ${geocodingMessage.startsWith('Could not') || geocodingMessage.includes('unavailable') ? 'text-rose-600' : 'text-slate-500'}`} aria-live="polite">
-                          {geocodingAddress ? 'Finding this address on the map…' : geocodingMessage || 'The map pin will be placed automatically from the address. You can adjust it on the map if needed.'}
-                        </p>
-                        <p className="mt-1 text-[11px] text-slate-400">Location lookup: <a className="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>.</p>
+                        {(geocodingAddress || geocodingMessage) && (
+                          <p className={`mt-1 text-xs ${geocodingMessage.startsWith('Could not') || geocodingMessage.includes('unavailable') ? 'text-rose-600' : 'text-slate-500'}`} aria-live="polite">
+                            {geocodingAddress ? 'Finding this address on the map…' : geocodingMessage}
+                          </p>
+                        )}
                       </div>
 
                       {/* Allowed Student Email Domain */}
