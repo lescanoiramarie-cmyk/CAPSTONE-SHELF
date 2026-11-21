@@ -262,6 +262,23 @@ export default function SuperAdminDashboard() {
   const [focusedNotificationRequestId, setFocusedNotificationRequestId] = useState(null);
   const [focusedNotificationType, setFocusedNotificationType] = useState(null);
   const [notificationFocusVersion, setNotificationFocusVersion] = useState(0);
+  const superAdminNotificationStorageKey = `shelf-read-superadmin-notifications:${user?.id || 'staff'}`;
+  const [storedReadSuperAdminNotifications, setStoredReadSuperAdminNotifications] = useState(() => {
+    try {
+      return {
+        key: superAdminNotificationStorageKey,
+        ids: new Set(JSON.parse(localStorage.getItem(superAdminNotificationStorageKey) || '[]').map(String)),
+      };
+    } catch {
+      return { key: superAdminNotificationStorageKey, ids: new Set() };
+    }
+  });
+  const readSuperAdminNotificationIds = useMemo(
+    () => storedReadSuperAdminNotifications.key === superAdminNotificationStorageKey
+      ? storedReadSuperAdminNotifications.ids
+      : new Set(),
+    [storedReadSuperAdminNotifications, superAdminNotificationStorageKey],
+  );
   const [exportingReport, setExportingReport] = useState('');
   const [exportMessage, setExportMessage] = useState('');
   const [exportError, setExportError] = useState('');
@@ -564,7 +581,7 @@ export default function SuperAdminDashboard() {
     }));
   }, []);
 
-  const geocodeLibraryAddress = useCallback(async () => {
+  const geocodeLibraryAddress = useCallback(async ({ showFailure = true } = {}) => {
     const address = libraryForm.address.trim();
     if (!address) return null;
     if (geocodingPromiseRef.current?.address === address) {
@@ -576,22 +593,35 @@ export default function SuperAdminDashboard() {
     setGeocodingMessage('Finding this address on the map…');
     const promise = (async () => {
       try {
-      const query = [libraryForm.name, libraryForm.campus, address, 'Philippines']
-        .filter(Boolean)
-        .join(', ');
-      const params = new URLSearchParams({
-        format: 'jsonv2',
-        limit: '1',
-        countrycodes: 'ph',
-        q: query,
-      });
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`);
-      if (!response.ok) throw new Error('Address lookup is temporarily unavailable.');
-      const results = await response.json();
-      if (requestId !== geocodeRequestId.current) return null;
-      const match = results[0];
+      const addressParts = address.split(',').map((part) => part.trim()).filter(Boolean);
+      const queryCandidates = [...new Set([
+        address,
+        addressParts.slice(1).join(', '),
+        addressParts.slice(-2).join(', '),
+      ].filter((query) => query.length >= 5))];
+      let match = null;
+      let matchedAddressExactly = true;
+      for (const [index, query] of queryCandidates.entries()) {
+        if (index > 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1100));
+          if (requestId !== geocodeRequestId.current) return null;
+        }
+        const params = new URLSearchParams({
+          format: 'jsonv2',
+          limit: '1',
+          countrycodes: 'ph',
+          q: query,
+        });
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`);
+        if (!response.ok) throw new Error('Address lookup is temporarily unavailable.');
+        const results = await response.json();
+        if (requestId !== geocodeRequestId.current) return null;
+        match = results[0];
+        matchedAddressExactly = index === 0;
+        if (match) break;
+      }
       if (!match || !Number.isFinite(Number(match.lat)) || !Number.isFinite(Number(match.lon))) {
-        setGeocodingMessage('Could not find that address. Add the city/municipality and province to the address, then try again.');
+        if (showFailure) setGeocodingMessage('Could not find that address. Add the city/municipality and province, then leave the address field to try again.');
         return null;
       }
 
@@ -599,11 +629,13 @@ export default function SuperAdminDashboard() {
       const lng = Number(match.lon);
       setMapPosition([lat, lng]);
       handleCoordinateChange(lat.toFixed(6), lng.toFixed(6));
-      setGeocodingMessage('Address located and map pin updated automatically.');
+      setGeocodingMessage(matchedAddressExactly
+        ? 'Address located and map pin updated automatically.'
+        : `Exact address not found; pinned the closest matching area: ${match.display_name || 'review the map pin'}.`);
       return { lat: lat.toFixed(6), lng: lng.toFixed(6) };
     } catch (error) {
       if (requestId === geocodeRequestId.current) {
-        setGeocodingMessage(error.message || 'Could not locate this address. Please try again.');
+        setGeocodingMessage(showFailure ? (error.message || 'Could not locate this address. Please try again.') : '');
       }
       return null;
     } finally {
@@ -616,7 +648,7 @@ export default function SuperAdminDashboard() {
     } finally {
       if (geocodingPromiseRef.current?.promise === promise) geocodingPromiseRef.current = null;
     }
-  }, [handleCoordinateChange, libraryForm.address, libraryForm.campus, libraryForm.name]);
+  }, [handleCoordinateChange, libraryForm.address]);
 
   // Place the map pin automatically after the user pauses while entering an
   // address. Existing/manual coordinates are preserved until the address is
@@ -626,7 +658,7 @@ export default function SuperAdminDashboard() {
     if (libraryForm.lat && libraryForm.lng) return undefined;
     if (address.length < 10) return undefined;
     const timer = window.setTimeout(() => {
-      void geocodeLibraryAddress();
+      void geocodeLibraryAddress({ showFailure: false });
     }, 1200);
     return () => window.clearTimeout(timer);
   }, [geocodeLibraryAddress, libraryForm.address, libraryForm.lat, libraryForm.lng]);
@@ -746,6 +778,24 @@ export default function SuperAdminDashboard() {
     (visibleStaffPage - 1) * staffPageSize,
     visibleStaffPage * staffPageSize
   );
+
+  useEffect(() => {
+    if (section !== 'accounts' || focusedNotificationType !== 'staff_review' || !focusedNotificationRequestId) return undefined;
+    const rowIndex = filteredStaffAccounts.findIndex(
+      (staff) => String(staff.id) === String(focusedNotificationRequestId),
+    );
+    if (rowIndex < 0) return undefined;
+    const targetPage = Math.floor(rowIndex / staffPageSize) + 1;
+    if (staffPage !== targetPage) {
+      const frame = requestAnimationFrame(() => setStaffPage(targetPage));
+      return () => cancelAnimationFrame(frame);
+    }
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(`superadmin-staff-account-${focusedNotificationRequestId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [filteredStaffAccounts, focusedNotificationRequestId, focusedNotificationType, section, staffPage, staffPageSize]);
 
   // ============================================================
   // LOAD STAFF ACCOUNTS
@@ -1250,8 +1300,7 @@ const handleEditStaff = (staff) => {
           id: `staff-inactive-${account.id}`,
           recordId: account.id,
           type: 'staff_review',
-          targetSection: 'staff',
-          targetTab: 'staff',
+          targetSection: 'accounts',
           status: 'Inactive',
           title: 'Staff account inactive',
           message: `${account.full_name || account.fullName || 'Staff'} (${account.email}) requires review`,
@@ -1265,6 +1314,29 @@ const handleEditStaff = (staff) => {
       .sort((left, right) => right.timestamp - left.timestamp)
       .slice(0, 20);
   }, [staffAccounts, notificationNow]);
+
+  const handleSuperAdminNotificationClick = (item) => {
+    const id = String(item?.id || '');
+    if (id) {
+      const next = new Set(readSuperAdminNotificationIds);
+      next.add(id);
+      setStoredReadSuperAdminNotifications({ key: superAdminNotificationStorageKey, ids: next });
+      try {
+        localStorage.setItem(superAdminNotificationStorageKey, JSON.stringify([...next]));
+      } catch { /* private browsing may disable storage */ }
+    }
+    if (item.type === 'staff_review' && item.recordId) {
+      setSection('accounts');
+      setStaffSearch('');
+      setStaffBranchFilter('all');
+      setStaffRoleFilter('all');
+      setStaffStatusFilter('all');
+      setStaffPage(1);
+      setFocusedNotificationRequestId(item.recordId);
+      setFocusedNotificationType(item.type);
+      setNotificationFocusVersion((version) => version + 1);
+    }
+  };
 
   const handleOverdueFollowUp = async (notification) => {
     await sendDueDateFollowUp(notification.requestId);
@@ -1757,20 +1829,14 @@ const handleEditStaff = (staff) => {
           {/* TOP BAR WITH SHELFHEADER */}
           <ShelfHeader
             showLogo={false}
-            notificationCount={superAdminNotifications.length}
+            notificationCount={superAdminNotifications.filter((item) => !readSuperAdminNotificationIds.has(String(item.id))).length}
             notificationItems={superAdminNotifications.map((n) => ({
-              id: n.id,
-              message: n.message,
+              ...n,
               created_at: new Date(n.timestamp).toISOString(),
-              read: false,
+              read: readSuperAdminNotificationIds.has(String(n.id)),
+              readAt: readSuperAdminNotificationIds.has(String(n.id)) ? new Date(n.timestamp).toISOString() : null,
             }))}
-            onNotificationClick={(item) => {
-              if (item.targetSection) setSection(item.targetSection);
-              if (item.targetTab) setActiveTab(item.targetTab);
-              if (item.recordId) setFocusedNotificationRequestId(item.recordId);
-              if (item.type) setFocusedNotificationType(item.type);
-              setNotificationFocusVersion((v) => v + 1);
-            }}
+            onNotificationClick={handleSuperAdminNotificationClick}
             showDarkModeToggle={true}
           >
             {/* Breadcrumb & Global Badge in Center */}
@@ -2781,7 +2847,11 @@ const handleEditStaff = (staff) => {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {visibleStaffAccounts.map((staff) => (
-                      <tr key={staff.id} className="hover:bg-slate-50">
+                      <tr
+                        key={staff.id}
+                        id={`superadmin-staff-account-${staff.id}`}
+                        className={`hover:bg-slate-50 ${String(focusedNotificationType) === 'staff_review' && String(focusedNotificationRequestId) === String(staff.id) ? 'bg-amber-50 ring-2 ring-inset ring-amber-300' : ''}`}
+                      >
                         <td className="p-3 font-semibold text-slate-700">{staff.full_name}</td>
                         <td className="p-3 text-xs tabular-nums wrap-anywhere text-slate-500">{staff.email}</td>
                         <td className="align-middle p-3">

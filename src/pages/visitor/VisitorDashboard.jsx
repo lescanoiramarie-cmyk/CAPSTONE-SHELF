@@ -1644,12 +1644,19 @@ function VisitorDashboardContent() {
           } else if (type.includes('announcement')) {
             setShowFineOnly(false);
             setTab('services');
+            const targetAnnouncementIndex = announcements.findIndex(
+              (announcement) => String(announcement.id) === String(targetId),
+            );
+            if (targetAnnouncementIndex >= 0) {
+              setAnnouncementIndex(targetAnnouncementIndex);
+              setIsAnnouncementOpen(true);
+            }
           } else if (type === 'community_request_pending' || type.includes('owner')) {
             setShowFineOnly(false);
             setTab('personalBooks');
             if (targetId) setFocusRequestId(targetId);
             setTimeout(() => {
-              const el = targetId ? document.getElementById(`owner-request-${targetId}`) : null;
+              const el = targetId ? document.getElementById(`community-owner-request-${targetId}`) : null;
               if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }, 100);
           } else if (

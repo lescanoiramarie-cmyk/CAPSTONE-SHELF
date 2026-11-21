@@ -380,7 +380,7 @@ export default function ShelfHeader({
                           {displayNotificationItems.map((n) => (
                             <li
                               key={n.id}
-                              className={`px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer ${!n.readAt ? 'bg-slate-50/50 dark:bg-slate-700/30' : ''}`}
+                              className={`px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer ${!(n.readAt || n.read) ? 'bg-slate-50/50 dark:bg-slate-700/30' : ''}`}
                               onClick={() => displayOnNotificationClick(n)}
                               tabIndex={0}
                               role="button"
@@ -391,7 +391,7 @@ export default function ShelfHeader({
                                 }
                               }}
                             >
-                              <p className={`text-sm ${!n.readAt ? 'font-semibold' : ''} text-slate-900 dark:text-white`}>
+                              <p className={`text-sm ${!(n.readAt || n.read) ? 'font-semibold' : ''} text-slate-900 dark:text-white`}>
                                 {n.title || n.message}
                               </p>
                               {n.message && n.message !== n.title && (
