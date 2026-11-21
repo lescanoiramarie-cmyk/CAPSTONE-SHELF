@@ -744,7 +744,6 @@ export default function OPACCatalog({
   const [showAddPersonalBook, setShowAddPersonalBook] = useState(false);
   const [editingPersonalBook, setEditingPersonalBook] = useState(null);
   const [savingPersonalBook, setSavingPersonalBook] = useState(false);
-  const [coverUploading, setCoverUploading] = useState(false);
   const [coverMode, setCoverMode] = useState('upload');
   const [coverFile, setCoverFile] = useState(null);
   const [coverFileValid, setCoverFileValid] = useState(false);
@@ -1151,7 +1150,6 @@ export default function OPACCatalog({
         }
         const safeFileName = coverFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
         uploadedCoverPath = createPersonalCoverPath(user.id, safeFileName);
-        setCoverUploading(true);
         let uploadError;
         try {
           ({ error: uploadError } = await supabase.storage
@@ -1173,7 +1171,6 @@ export default function OPACCatalog({
             `The cover could not be uploaded: ${uploadError.message || 'storage request failed'}. Check your connection and try again.`
           );
         }
-        setCoverUploading(false);
         const { data: publicUrlData } = supabase.storage
           .from('book-covers')
           .getPublicUrl(uploadedCoverPath);
@@ -1256,7 +1253,6 @@ export default function OPACCatalog({
       }
       setNotice(error?.message || `Unable to ${editingPersonalBook ? 'update' : 'add'} the personal book. Please try again.`);
     } finally {
-      setCoverUploading(false);
       setSavingPersonalBook(false);
     }
   };
@@ -3412,7 +3408,7 @@ export default function OPACCatalog({
               </div>
             ) : (
               <>
-                <div className="visitor-book-collection-grid visitor-community-book-grid">
+                <div className="opac-book-grid book-card-grid visitor-community-book-grid">
                   {visibleCommunityBooks.map(renderCommunityBookCard)}
                 </div>
                 {communityTotalPages > 1 && (
@@ -5127,8 +5123,8 @@ export default function OPACCatalog({
                 >
                   {savingPersonalBook
                     ? editingPersonalBook
-                      ? coverUploading ? 'Uploading cover...' : 'Saving changes...'
-                      : coverUploading ? 'Uploading cover...' : 'Adding book...'
+                      ? 'Saving changes...'
+                      : 'Adding book...'
                     : editingPersonalBook
                       ? 'Save changes'
                       : 'Add personal book'}

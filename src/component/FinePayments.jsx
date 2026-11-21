@@ -322,8 +322,6 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
                   />
                 </div>
               </article>
-            </div>
-
             {branchSummaries.length > 0 && (
               <article className="overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h3 className="font-bold text-slate-900 mb-1">Collected and remaining balance by branch</h3><p className="mb-3 text-xs text-slate-500">Bars compare payments received with current unpaid balances.</p>
@@ -361,6 +359,7 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
                 </div>
               </article>
             )}
+            </div>
 
             <article className="overflow-hidden rounded-xl border border-slate-200 bg-white">
               <div className="border-b border-slate-100 px-4 py-3"><h3 className="font-bold text-slate-900">Branch comparison</h3></div>

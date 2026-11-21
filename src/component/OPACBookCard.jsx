@@ -38,7 +38,7 @@ export default function OPACBookCard({
       role="button"
       tabIndex={0}
       aria-label={`View details for ${title}`}
-      className={`opac-book-card cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600${community ? ' opac-community-book-card' : ''}`}
+      className="opac-book-card cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
     >
       <BookCover
         src={book?.coverUrl}
