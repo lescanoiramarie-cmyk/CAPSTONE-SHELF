@@ -1,11 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
-import { Line } from 'react-chartjs-2';
+import { Bar, Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
+  BarElement,
   LineElement,
   PointElement,
   Tooltip,
@@ -81,7 +82,7 @@ const VisitorAccountManagement = lazy(
   () => import('../../component/VisitorAccountManagement.jsx')
 );
 
-ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip, Legend);
 
 const NAV = [
   { id: 'overview', label: 'Overview', Icon: Activity },
@@ -1209,7 +1210,7 @@ export default function SubAdminDashboard() {
 
   const branchOverviewMetrics = useMemo(() => {
     const monthWindow = getAnalyticsMonthWindow(overviewMonth);
-    if (!monthWindow) return { topBorrowed: [], totalBorrowEvents: 0, comparableBorrowEvents: null, projectedNextMonth: null, pressureTitles: 0, monthLabel: '', comparisonAvailable: false };
+    if (!monthWindow) return { topBorrowed: [], categoryBorrowing: [], totalBorrowEvents: 0, comparableBorrowEvents: null, projectedNextMonth: null, pressureTitles: 0, monthLabel: '', comparisonAvailable: false };
     const now = new Date();
     const isCurrentMonth = getAnalyticsMonthKey(now) === overviewMonth;
     const elapsedDays = isCurrentMonth ? now.getDate() : monthWindow.days;
@@ -1250,6 +1251,15 @@ export default function SubAdminDashboard() {
       .filter((entry) => entry.book)
       .sort((left, right) => right.count - left.count || String(left.book.title).localeCompare(String(right.book.title)))
       .slice(0, 5);
+    const categoryBorrowCounts = [...borrowedCounts.entries()].reduce((counts, [bookId, count]) => {
+      const book = branchBooksById.get(bookId);
+      const category = String(book?.category || book?.bookCategory || book?.book_category || 'Uncategorized').trim() || 'Uncategorized';
+      counts.set(category, (counts.get(category) || 0) + count);
+      return counts;
+    }, new Map());
+    const categoryBorrowing = [...categoryBorrowCounts.entries()]
+      .map(([category, count]) => ({ category, count }))
+      .sort((left, right) => right.count - left.count || left.category.localeCompare(right.category));
     const totalBorrowEvents = [...borrowedCounts.values()].reduce((total, count) => total + count, 0);
     const comparableBorrowEvents = comparisonAvailable
       ? [...previousBorrowedCounts.values()].reduce((total, count) => total + count, 0)
@@ -1258,7 +1268,7 @@ export default function SubAdminDashboard() {
       ? Math.max(0, Math.round((totalBorrowEvents / Math.max(1, elapsedDays)) * 30))
       : null;
     const pressureTitles = topBorrowed.filter((entry) => entry.count >= 3 && entry.available <= 1).length;
-    return { topBorrowed, totalBorrowEvents, comparableBorrowEvents, projectedNextMonth, pressureTitles, monthLabel: monthWindow.monthLabel, comparisonAvailable };
+    return { topBorrowed, categoryBorrowing, totalBorrowEvents, comparableBorrowEvents, projectedNextMonth, pressureTitles, monthLabel: monthWindow.monthLabel, comparisonAvailable };
   }, [branchBooks, branchBooksById, branchBorrowRequests, overviewMonth]);
 
   useEffect(() => {
@@ -1886,10 +1896,17 @@ export default function SubAdminDashboard() {
                     ? `Check available copies and pending requests for ${branchOverviewMetrics.topBorrowed[0].book.title} before changing its copy count.`
                     : 'Keep borrowing records up to date and review book availability after each busy month.'}
               />
+            </div>
+            <div className="grid grid-cols-1 items-stretch gap-4 xl:grid-cols-2">
               <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800" aria-labelledby="branch-top-borrowed-title">
                 <h3 id="branch-top-borrowed-title" className="text-sm font-bold text-slate-900 dark:text-white">Most borrowed books - {branchOverviewMetrics.monthLabel}</h3>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Books picked up during the selected month.</p>
-                {borrowRequestsLoadError ? <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><p>Could not load borrowing records: {borrowRequestsLoadError}</p><button type="button" onClick={() => void retryBorrowRequests()} className="mt-2 rounded-lg bg-amber-900 px-3 py-1.5 text-xs font-bold text-white">Try again</button></div> : branchOverviewMetrics.topBorrowed.length ? <ol className="mt-3 grid gap-2 md:grid-cols-2">{branchOverviewMetrics.topBorrowed.map(({ book, count, previousCount, projectedNextMonth, changePercent, available }, index) => <li key={book.id} className="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900"><span className="text-xs font-bold text-slate-400">{index + 1}</span><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{book.title || 'Untitled book'}</span><span className="text-[11px] text-slate-500 dark:text-slate-400">{count} borrows · {available} copies available{previousCount ? ` · ${changePercent >= 0 ? '+' : ''}${changePercent}% vs. last month` : ''}</span></span><span className="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-extrabold text-indigo-900 dark:bg-indigo-950 dark:text-indigo-200">{projectedNextMonth == null ? 'Not enough data' : `Expected: ${projectedNextMonth} in 30 days`}</span></li>)}</ol> : <p className="mt-3 rounded-lg bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">No confirmed book borrows were recorded this month.</p>}
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Ranked by confirmed pickups during the selected month.</p>
+                {borrowRequestsLoadError ? <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><p>Could not load borrowing records: {borrowRequestsLoadError}</p><button type="button" onClick={() => void retryBorrowRequests()} className="mt-2 rounded-lg bg-amber-900 px-3 py-1.5 text-xs font-bold text-white">Try again</button></div> : branchOverviewMetrics.topBorrowed.length ? <ol className="mt-3 space-y-2">{branchOverviewMetrics.topBorrowed.map(({ book, count, available }, index) => <li key={book.id} className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900"><span className="grid h-7 w-7 place-items-center rounded-full bg-blue-50 text-xs font-extrabold text-blue-800 dark:bg-blue-950 dark:text-blue-200">{index + 1}</span><span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{book.title || 'Untitled book'}</span><span className="text-xs text-slate-500 dark:text-slate-400">{available} copies available</span></span><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-800 dark:bg-blue-950 dark:text-blue-200">{count} {count === 1 ? 'borrow' : 'borrows'}</span></li>)}</ol> : <p className="mt-3 rounded-lg bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">No confirmed book borrows were recorded this month.</p>}
+              </section>
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800" aria-labelledby="branch-borrowed-category-title">
+                <h3 id="branch-borrowed-category-title" className="text-sm font-bold text-slate-900 dark:text-white">Borrows by category</h3>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Confirmed pickups in {branchOverviewMetrics.monthLabel}.</p>
+                {borrowRequestsLoadError ? <p className="mt-3 rounded-lg bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">Category chart is unavailable because borrowing records could not be loaded.</p> : branchOverviewMetrics.categoryBorrowing.length ? <div className="mt-3 h-64"><Bar data={{ labels: branchOverviewMetrics.categoryBorrowing.map(({ category }) => category), datasets: [{ label: 'Books borrowed', data: branchOverviewMetrics.categoryBorrowing.map(({ count }) => count), backgroundColor: '#2563eb', borderRadius: 6, maxBarThickness: 26 }] }} options={{ indexAxis: 'y', responsive: true, maintainAspectRatio: false, color: document.documentElement.classList.contains('dark') ? '#cbd5e1' : '#475569', plugins: { legend: { display: false }, tooltip: { callbacks: { label: (context) => `${context.parsed.x} ${context.parsed.x === 1 ? 'borrow' : 'borrows'}` } } }, scales: { x: { beginAtZero: true, ticks: { precision: 0, stepSize: 1 }, grid: { color: document.documentElement.classList.contains('dark') ? 'rgba(148,163,184,.15)' : 'rgba(148,163,184,.2)' } }, y: { grid: { display: false } } } }} /></div> : <p className="mt-3 rounded-lg bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">No confirmed book borrows were recorded this month.</p>}
               </section>
             </div>
             <div className="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-3">
