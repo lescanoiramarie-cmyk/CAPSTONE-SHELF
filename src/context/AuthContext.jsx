@@ -56,6 +56,14 @@ export const AuthProvider = ({ children }) => {
         return null;
       }
       const restoredUser = JSON.parse(raw);
+      // Staff profiles are only a UI snapshot; they do not prove that the
+      // current Supabase token has completed MFA. Always require staff to
+      // establish a fresh Supabase session so protected staff RPCs run with
+      // the AAL2 token produced by the MFA challenge.
+      if (['subadmin', 'superadmin'].includes(restoredUser?.role)) {
+        globalThis.localStorage.removeItem(SESSION_KEY);
+        return null;
+      }
       if (
         restoredUser?.role === 'visitor' &&
         !/^SHELF-QR-[0-9]{6}$/.test(
@@ -571,7 +579,7 @@ const completeMfaLogin = async (code) => {
 
     if (['subadmin', 'superadmin'].includes(pending.user?.role)) {
       const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.user?.id || session.user.id !== pending.user.id) {
+      if (!session?.user?.id || session.user.id !== pending.user.id) {
         throw new Error('The verified staff session could not be confirmed. Sign in again.');
       }
 
