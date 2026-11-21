@@ -1310,6 +1310,10 @@ const handleEditStaff = (staff) => {
   const staffSummary = useMemo(() => ({
     active: staffAccounts.filter((staff) => staff.is_active !== false && staff.isActive !== false).length,
     inactive: staffAccounts.filter((staff) => staff.is_active === false || staff.isActive === false).length,
+    uncoveredOpenBranchNames: libraries.filter((library) => library.status === 'Open' && !staffAccounts.some((staff) => {
+      const staffLibraryId = staff.library_id ?? staff.libraryId;
+      return String(staffLibraryId || '') === String(library.id) && staff.is_active !== false && staff.isActive !== false;
+    })).map((library) => library.name || 'Unnamed branch'),
     uncoveredOpenLibraries: libraries.filter((library) => library.status === 'Open' && !staffAccounts.some((staff) => {
       const staffLibraryId = staff.library_id ?? staff.libraryId;
       return String(staffLibraryId || '') === String(library.id) && staff.is_active !== false && staff.isActive !== false;
@@ -1817,12 +1821,12 @@ const handleEditStaff = (staff) => {
               prediction={borrowRequestsLoadError
                 ? 'Borrowing records are unavailable, so book-demand alerts cannot be shown. Branch staffing and map counts are current.'
                 : staffSummary.uncoveredOpenLibraries
-                  ? `${staffSummary.uncoveredOpenLibraries} open branch(es) have no active staff account assigned and may need coverage.`
+                  ? `${staffSummary.uncoveredOpenLibraries} open branch(es) have no active staff account assigned: ${staffSummary.uncoveredOpenBranchNames.join(', ')}.`
                   : inventoryDemand.atRiskTitles.length
                     ? `${inventoryDemand.atRiskTitles.length} book(s) were borrowed often while few copies were available in ${inventoryDemand.periodLabel}.`
                     : 'Every open branch has active staff assigned, and no book met the low-copy alert for the selected month.'}
               recommendation={staffSummary.uncoveredOpenLibraries
-                ? 'Assign active staff to the open branches listed under Staff Accounts.'
+                ? `Open Staff Accounts and assign active staff to: ${staffSummary.uncoveredOpenBranchNames.join(', ')}.`
                 : mapSummary.missingCoordinates
                   ? 'Add or confirm map locations for the branches without pins.'
                   : borrowRequestsLoadError
@@ -2515,7 +2519,7 @@ const handleEditStaff = (staff) => {
 
         {section === 'accounts' && (
           <div className="space-y-6">
-            <AdminSectionInsights title="Staff coverage & access outlook" metrics={[{ label: 'Staff accounts', value: staffAccounts.length.toLocaleString() }, { label: 'Active', value: staffSummary.active.toLocaleString() }, { label: 'Inactive', value: staffSummary.inactive.toLocaleString() }, { label: 'Open libraries without active staff', value: staffSummary.uncoveredOpenLibraries.toLocaleString() }]} prediction={staffSummary.uncoveredOpenLibraries ? `${staffSummary.uncoveredOpenLibraries} open library/libraries currently have no active staff account assigned; service coverage may be affected until assignment is restored.` : staffSummary.inactive ? `${staffSummary.inactive} inactive staff account(s) need review; confirm branch coverage before disabling or replacing access.` : 'Every open library currently has at least one active staff account assigned.'} recommendation={staffSummary.uncoveredOpenLibraries ? 'Assign an active Sub Admin or librarian to each uncovered open library, then verify the account can sign in.' : staffSummary.inactive ? 'Review inactive staff accounts and confirm replacements are active at the affected branches.' : 'Review branch assignments whenever staff roles or library responsibilities change.'} />
+            <AdminSectionInsights title="Staff coverage & access outlook" metrics={[{ label: 'Staff accounts', value: staffAccounts.length.toLocaleString() }, { label: 'Active', value: staffSummary.active.toLocaleString() }, { label: 'Inactive', value: staffSummary.inactive.toLocaleString() }, { label: 'Open libraries without active staff', value: staffSummary.uncoveredOpenLibraries.toLocaleString() }]} prediction={staffSummary.uncoveredOpenLibraries ? `${staffSummary.uncoveredOpenLibraries} open library/libraries have no active staff: ${staffSummary.uncoveredOpenBranchNames.join(', ')}. Service coverage may be affected until assignment is restored.` : staffSummary.inactive ? `${staffSummary.inactive} inactive staff account(s) need review; confirm branch coverage before disabling or replacing access.` : 'Every open library currently has at least one active staff account assigned.'} recommendation={staffSummary.uncoveredOpenLibraries ? `Assign an active Sub Admin or librarian to: ${staffSummary.uncoveredOpenBranchNames.join(', ')}. Then verify the account can sign in.` : staffSummary.inactive ? 'Review inactive staff accounts and confirm replacements are active at the affected branches.' : 'Review branch assignments whenever staff roles or library responsibilities change.'} />
             <header className="border-b border-slate-200 pb-4">
               <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">Administration</p>
               <h2 className="text-lg font-bold text-slate-800">Staff Accounts</h2>
