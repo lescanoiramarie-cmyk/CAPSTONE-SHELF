@@ -313,9 +313,17 @@ def generate_gemini_faq_answer(request: FAQAnswerRequest) -> FAQAnswer:
 
 @app.get("/health")
 def health():
+    supabase_url_configured = bool(os.getenv("SUPABASE_URL", "").strip())
+    supabase_key_configured = bool(
+        os.getenv("SUPABASE_ANON_KEY", "").strip()
+        or os.getenv("SUPABASE_PUBLISHABLE_KEY", "").strip()
+    )
     return {
         "status": "ok",
         "geminiConfigured": bool(os.getenv("GEMINI_API_KEY")),
+        "staffAuthorizationConfigured": supabase_url_configured and supabase_key_configured,
+        "supabaseUrlConfigured": supabase_url_configured,
+        "supabaseApiKeyConfigured": supabase_key_configured,
         "model": os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"),
     }
 
