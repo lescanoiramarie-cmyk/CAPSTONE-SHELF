@@ -250,6 +250,7 @@ const mapLibrary = (r) => ({
   name: r.name,
   campus: r.campus,
   emailDomain: r.email_domain ?? null,
+  visitorAccessMode: r.visitor_access_mode || 'institutional',
   address: r.address,
   lat: r.lat,
   lng: r.lng,
@@ -594,6 +595,7 @@ export async function addLibrary(library) {
         .toLowerCase()
         .replace(/^@+/, '')
         .replace(/\.+$/, '') || null,
+      visitor_access_mode: library?.visitor_access_mode ?? library?.visitorAccessMode ?? 'institutional',
       campus:
         normalizeText(library?.campus) || null,
       address:
@@ -660,6 +662,7 @@ export async function updateLibrary(libraryId, library) {
       email_domain: emailDomain
         ? emailDomain.toLowerCase()
         : null,
+      visitor_access_mode: library?.visitor_access_mode ?? library?.visitorAccessMode ?? 'institutional',
     })
     .eq('id', id)
     .select()

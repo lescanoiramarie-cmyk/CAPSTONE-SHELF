@@ -433,7 +433,7 @@ useEffect(() => {
 
       const { data: libraryRecords } = await supabase
         .from('libraries')
-        .select('id, email_domain')
+        .select('id, email_domain, visitor_access_mode')
         .eq('id', selectedLibraryId);
 
       if (!libraryRecords) { throw new Error('Failed to verify the selected library.'); }
@@ -444,6 +444,7 @@ useEffect(() => {
         targetEmail,
         registrationType,
         selectedLibrary.email_domain,
+        selectedLibrary.visitor_access_mode,
       );
       if (emailError) throw new Error(emailError);
 

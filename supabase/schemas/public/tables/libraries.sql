@@ -10,6 +10,8 @@ CREATE TABLE "public"."libraries" (
   "is_sample_location" boolean                          DEFAULT false,
   "location"           extensions.geography(Point,4326),
   "email_domain"       character varying(255),
+  "visitor_access_mode" text                             NOT NULL DEFAULT 'institutional'::text,
+  CONSTRAINT "libraries_visitor_access_mode_check" CHECK ("visitor_access_mode" IN ('institutional', 'public')),
   CONSTRAINT "libraries_pkey" PRIMARY KEY (id)
 );
 

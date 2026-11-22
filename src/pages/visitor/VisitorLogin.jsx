@@ -98,6 +98,8 @@ export default function VisitorLogin({ initialView = 'login' }) {
   const [libraryLoadError, setLibraryLoadError] = useState('');
   const [selectedLibraryId, setSelectedLibraryId] = useState('');
   const [registrationType, setRegistrationType] = useState(VISITOR_REGISTRATION_TYPES.INSTITUTIONAL);
+  const selectedRegistrationLibrary = libraries.find((library) => library.id === selectedLibraryId);
+  const selectedLibraryIsPublic = selectedRegistrationLibrary?.visitorAccessMode === 'public';
   const [canResendVisitorOtp, setCanResendVisitorOtp] =
     useState(false);
   const [otpExpiresAt, setOtpExpiresAt] = useState(null);
@@ -837,6 +839,7 @@ useEffect(() => {
         trimmedEmail,
         registrationType,
         selectedLibrary?.emailDomain,
+        selectedLibrary?.visitorAccessMode,
       );
     }
 
@@ -1053,16 +1056,16 @@ setOtpResendRemaining(
           cleanOtp
         );
 
-      // For community visitors pending approval, redirect to pending-approval page
-      // instead of showing success view. The verifyVisitorOtp RPC doesn't return
-      // communityApprovalPending, so we need to check the registration type.
-      // If it's a community registration, the account will be pending approval.
-      if (registrationType === VISITOR_REGISTRATION_TYPES.COMMUNITY) {
+      const openPublicLibrary = libraries.find((library) => library.id === selectedLibraryId)
+        ?.visitorAccessMode === 'public';
+      const communityApprovalPending = registrationType === VISITOR_REGISTRATION_TYPES.COMMUNITY
+        && !openPublicLibrary;
+      if (communityApprovalPending) {
         navigate(`/visitor/pending-approval?visitor_id=${visitor.id}`);
         return;
       }
 
-      setRegisteredVisitor({ ...visitor, registrationType });
+      setRegisteredVisitor({ ...visitor, registrationType, communityApprovalPending: false });
 
       setError('');
       setView('success');
@@ -1595,9 +1598,11 @@ setOtpResendRemaining(
               {view === 'otp' &&
                 'Enter the one-time verification code sent to your email.'}
 
-              {view === 'success' && (registeredVisitor?.registrationType === VISITOR_REGISTRATION_TYPES.COMMUNITY
+              {view === 'success' && (registeredVisitor?.communityApprovalPending
                 ? 'Your email is verified. Your preferred library must approve your community account before visitor services and a QR pass are enabled.'
-                : 'Your QR pass is for library attendance, borrowing, pickup, and returns. Keep it private and present it at the library when requested.')}
+                : registeredVisitor?.registrationType === VISITOR_REGISTRATION_TYPES.COMMUNITY
+                  ? 'Your email is verified. Your public library account is active, and your QR pass is ready to use.'
+                  : 'Your QR pass is for library attendance, borrowing, pickup, and returns. Keep it private and present it at the library when requested.')}
 
               {view === 'forgot' &&
                 resetStep === 'request' &&
@@ -1666,7 +1671,7 @@ setOtpResendRemaining(
                   !
                 </h3>
 
-                {registeredVisitor.registrationType !== VISITOR_REGISTRATION_TYPES.COMMUNITY && registeredVisitor.qrCode && <div className="flex justify-center">
+                {!registeredVisitor.communityApprovalPending && registeredVisitor.qrCode && <div className="flex justify-center">
                   <div className="p-4 bg-white rounded-lg shadow-sm inline-block border border-slate-200 max-w-full overflow-hidden">
                     <QRCodeSVG
                       value={
@@ -1682,13 +1687,13 @@ setOtpResendRemaining(
                   </div>
                 </div>}
 
-                {registeredVisitor.registrationType !== VISITOR_REGISTRATION_TYPES.COMMUNITY && registeredVisitor.qrCode && <p className="text-xs font-mono font-bold text-shelf-primary break-all">{registeredVisitor.qrCode}</p>}
+                {!registeredVisitor.communityApprovalPending && registeredVisitor.qrCode && <p className="text-xs font-mono font-bold text-shelf-primary break-all">{registeredVisitor.qrCode}</p>}
 
-                {registeredVisitor.registrationType === VISITOR_REGISTRATION_TYPES.COMMUNITY ? (
+                {registeredVisitor.communityApprovalPending ? (
                   <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-left text-xs text-blue-900">
                     Your account is pending approval by the selected library. You may sign in for limited access to the public catalog and approval status; borrowing, reviews, attendance identification, and your QR pass stay unavailable until approval.
                   </p>
-                ) : <p className="text-xs text-slate-500">Your QR pass is for library attendance, borrowing, pickup, and returns. Sign in with your institutional email and password.</p>}
+                ) : <p className="text-xs text-slate-500">Your verified account is ready. Your QR pass is for library attendance, borrowing, pickup, and returns.</p>}
 
                 <button
                   type="button"
@@ -1703,7 +1708,7 @@ setOtpResendRemaining(
                   }}
                   className="w-full bg-shelf-primary text-white py-2.5 rounded-lg text-sm font-bold hover:opacity-95 transition"
                 >
-                  {registeredVisitor.registrationType === VISITOR_REGISTRATION_TYPES.COMMUNITY ? 'Sign in for limited access' : 'Sign in to library portal'}
+                  {registeredVisitor.communityApprovalPending ? 'Sign in for limited access' : 'Sign in to library portal'}
                 </button>
               </div>
             )}
@@ -1822,7 +1827,7 @@ setOtpResendRemaining(
 
               <fieldset className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <legend className="px-1 text-xs font-semibold text-slate-700">Registration type</legend>
-                <label className="flex cursor-pointer items-start gap-2 py-1 text-sm text-slate-700">
+                {!selectedLibraryIsPublic && <label className="flex cursor-pointer items-start gap-2 py-1 text-sm text-slate-700">
                   <input
                     type="radio"
                     name="registration_type"
@@ -1831,7 +1836,7 @@ setOtpResendRemaining(
                     onChange={() => setRegistrationType(VISITOR_REGISTRATION_TYPES.INSTITUTIONAL)}
                   />
                   <span><strong>Institutional Visitor</strong><span className="block text-xs text-slate-500">Use an email address matching your selected library’s institution.</span></span>
-                </label>
+                </label>}
                 <label className="flex cursor-pointer items-start gap-2 py-1 text-sm text-slate-700">
                   <input
                     type="radio"
@@ -1840,7 +1845,9 @@ setOtpResendRemaining(
                     checked={registrationType === VISITOR_REGISTRATION_TYPES.COMMUNITY}
                     onChange={() => setRegistrationType(VISITOR_REGISTRATION_TYPES.COMMUNITY)}
                   />
-                  <span><strong>Public / Community Visitor</strong><span className="block text-xs text-slate-500">Use a personal email. Email verification is required; your selected library must approve the account before visitor services are enabled.</span></span>
+                  <span><strong>{selectedLibraryIsPublic ? 'Public Library Visitor' : 'Public / Community Visitor'}</strong><span className="block text-xs text-slate-500">{selectedLibraryIsPublic
+                    ? 'Anyone may join. Verify your email to activate your account automatically.'
+                    : 'Use a personal email. Email verification is required; your selected library must approve the account before visitor services are enabled.'}</span></span>
                 </label>
               </fieldset>
 
@@ -2002,7 +2009,12 @@ setOtpResendRemaining(
                   id="visitor-library-branch"
                   value={selectedLibraryId}
                   onChange={(event) => {
-                    setSelectedLibraryId(event.target.value);
+                    const nextLibraryId = event.target.value;
+                    const nextLibrary = libraries.find((library) => library.id === nextLibraryId);
+                    setSelectedLibraryId(nextLibraryId);
+                    if (nextLibrary?.visitorAccessMode === 'public') {
+                      setRegistrationType(VISITOR_REGISTRATION_TYPES.COMMUNITY);
+                    }
                     setFieldErrors((previous) => ({ ...previous, libraryId: '' }));
                   }}
                   disabled={librariesLoading || Boolean(libraryLoadError)}
@@ -2012,7 +2024,7 @@ setOtpResendRemaining(
                   }`}
                 >
                   <option value="">
-                    {librariesLoading ? 'Loading partner schools…' : 'Select your participating library or school'}
+                    {librariesLoading ? 'Loading partner libraries…' : 'Select your participating library'}
                   </option>
                   {libraries.map((library) => (
                     <option key={library.id} value={library.id}>
@@ -2026,9 +2038,11 @@ setOtpResendRemaining(
                   </p>
                 ) : (
                   <p className="mt-1 text-xs text-slate-500">
-                    {registrationType === VISITOR_REGISTRATION_TYPES.COMMUNITY
-                      ? 'Choose your preferred library. Any valid email domain is accepted after email ownership verification; visitor services remain locked until library approval.'
-                      : 'Institutional registration requires an email domain configured for the selected participating library.'}
+                    {registrationType === VISITOR_REGISTRATION_TYPES.COMMUNITY && selectedLibraryIsPublic
+                      ? 'Open public registration: any valid email is accepted after verification, and your account activates automatically.'
+                      : registrationType === VISITOR_REGISTRATION_TYPES.COMMUNITY
+                        ? 'Any valid email is accepted after verification; visitor services remain locked until the selected library approves your account.'
+                        : 'Institutional registration requires an email domain configured for the selected participating library.'}
                   </p>
                 )}
                 {fieldErrors.libraryId && (

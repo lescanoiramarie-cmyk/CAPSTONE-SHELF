@@ -14,7 +14,7 @@ export function isValidVisitorEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim());
 }
 
-export function validateVisitorRegistrationEmail(email, registrationType, libraryDomain) {
+export function validateVisitorRegistrationEmail(email, registrationType, libraryDomain, visitorAccessMode = 'institutional') {
   const normalizedEmail = String(email || '').trim().toLowerCase();
   const type = normalizeVisitorRegistrationType(registrationType);
 
@@ -23,6 +23,9 @@ export function validateVisitorRegistrationEmail(email, registrationType, librar
   }
   if (!type) {
     return 'Select a valid visitor registration type.';
+  }
+  if (visitorAccessMode === 'public' && type === VISITOR_REGISTRATION_TYPES.INSTITUTIONAL) {
+    return 'This public library uses open registration. Select Public / Community Visitor.';
   }
   if (type === VISITOR_REGISTRATION_TYPES.COMMUNITY) return '';
 

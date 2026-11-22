@@ -564,6 +564,7 @@ export default function SuperAdminDashboard() {
     campus: '',
     address: '',
     emailDomain: '',
+    visitorAccessMode: 'institutional',
     lat: '',
     lng: '',
     hours: '8:00 AM - 5:00 PM',
@@ -1147,11 +1148,14 @@ const handleEditStaff = (staff) => {
         .trim()
         .replace(/^@+/, '')
         .replace(/\.+$/, '');
-      if (
+      const invalidDomain = formattedDomain && (
         !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(formattedDomain) ||
         formattedDomain === 'gmail.com'
-      ) {
-        setLibraryMessage('Enter a valid institutional email domain for this partner library or school.');
+      );
+      if ((libraryForm.visitorAccessMode !== 'public' && !formattedDomain) || invalidDomain) {
+        setLibraryMessage(libraryForm.visitorAccessMode === 'public'
+          ? 'Enter a valid official email domain, or leave it blank for a public library.'
+          : 'Enter the official email domain for this partner institution.');
         return;
       }
       try {
@@ -1164,6 +1168,7 @@ const handleEditStaff = (staff) => {
           address: libraryForm.address.trim(),
           email_domain: formattedDomain,
           emailDomain: formattedDomain,
+          visitor_access_mode: libraryForm.visitorAccessMode,
           lat: coordinates.lat,
           lng: coordinates.lng,
           hours: libraryForm.hours,
@@ -1180,6 +1185,7 @@ const handleEditStaff = (staff) => {
           campus: '',
           address: '',
           emailDomain: '',
+          visitorAccessMode: 'institutional',
           lat: '',
           lng: '',
           hours:
@@ -1232,11 +1238,14 @@ const handleEditStaff = (staff) => {
       .trim()
       .replace(/^@+/, '')
       .replace(/\.+$/, '');
-    if (
+    const invalidDomain = formattedDomain && (
       !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(formattedDomain) ||
       formattedDomain === 'gmail.com'
-    ) {
-      setLibraryMessage('Enter a valid institutional email domain for this partner library or school.');
+    );
+    if ((libraryForm.visitorAccessMode !== 'public' && !formattedDomain) || invalidDomain) {
+      setLibraryMessage(libraryForm.visitorAccessMode === 'public'
+        ? 'Enter a valid official email domain, or leave it blank for a public library.'
+        : 'Enter the official email domain for this partner institution.');
       return;
     }
 
@@ -1249,6 +1258,7 @@ const handleEditStaff = (staff) => {
         campus: libraryForm.campus.trim(),
         address: libraryForm.address.trim(),
         email_domain: formattedDomain,
+        visitor_access_mode: libraryForm.visitorAccessMode,
         lat: coordinates.lat,
         lng: coordinates.lng,
         hours: libraryForm.hours,
@@ -1263,6 +1273,7 @@ const handleEditStaff = (staff) => {
         campus: '',
         address: '',
         emailDomain: '',
+        visitorAccessMode: 'institutional',
         lat: '',
         lng: '',
         hours: '8:00 AM - 5:00 PM',
@@ -1288,6 +1299,7 @@ const handleEditStaff = (staff) => {
       campus: library.campus || '',
       address: library.address || '',
       emailDomain: library.email_domain || library.emailDomain || '',
+      visitorAccessMode: library.visitor_access_mode || library.visitorAccessMode || 'institutional',
       lat: String(library.lat ?? ''),
       lng: String(library.lng ?? ''),
       hours: library.hours || '8:00 AM - 5:00 PM',
@@ -2385,10 +2397,33 @@ const handleEditStaff = (staff) => {
                         )}
                       </div>
 
-                      {/* Allowed Student Email Domain */}
+                      {/* Library visitor access mode */}
+                      <div className="md:col-span-2">
+                        <label htmlFor="library-visitor-access-mode" className="mb-1 block text-xs font-semibold text-slate-600">
+                          Library Type *
+                        </label>
+                        <select
+                          id="library-visitor-access-mode"
+                          value={libraryForm.visitorAccessMode}
+                          onChange={(event) => setLibraryForm((prev) => ({
+                            ...prev,
+                            visitorAccessMode: event.target.value,
+                          }))}
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+                          required
+                        >
+                          <option value="institutional">Institutional Library (email domain required)</option>
+                          <option value="public">Public Library (open registration)</option>
+                        </select>
+                        <p className="mt-1.5 text-xs leading-normal text-slate-500">
+                          Public libraries allow visitors to register with any verified email and activate automatically after email verification.
+                        </p>
+                      </div>
+
+                      {/* Partner email domain */}
                       <div className="md:col-span-2">
                         <label className="mb-1 block text-xs font-medium text-slate-700">
-                          Allowed Student Email Domain *
+                          Allowed Partner Email Domain {libraryForm.visitorAccessMode !== 'public' ? '*' : '(optional)'}
                         </label>
                         <div className="relative rounded-lg shadow-sm">
                           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
@@ -2404,13 +2439,15 @@ const handleEditStaff = (staff) => {
                                 emailDomain: e.target.value,
                               }))
                             }
-                            placeholder="e.g. g.batstate-u.edu.ph"
+                            placeholder="e.g. library.example.gov.ph"
                             className="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2.5 text-sm focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
-                            required
+                            required={libraryForm.visitorAccessMode !== 'public'}
                           />
                         </div>
                         <p className="text-xs text-slate-500 mt-1.5 leading-normal">
-                          Enter the institutional domain used to verify visitor registration. Personal email providers such as Gmail are not allowed.
+                          {libraryForm.visitorAccessMode === 'public'
+                            ? 'No school or organization domain is needed. If you provide one, it must be an official domain; personal email providers such as Gmail are not accepted.'
+                            : 'Enter the official domain used by the institution or its parent organization. Personal email providers such as Gmail are not accepted.'}
                         </p>
                       </div>
 
