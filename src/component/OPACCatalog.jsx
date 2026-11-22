@@ -546,6 +546,7 @@ export default function OPACCatalog({
   const [selectedBook, setSelectedBook] = useState(null);
   const [reservationBookEntry, setReservationBookEntry] = useState(null);
   const [reservationDate, setReservationDate] = useState('');
+  const [reservationMessage, setReservationMessage] = useState('');
   const bookModalRef = useRef(null);
   const bookModalTriggerRef = useRef(null);
   const [readingListBookIds, setReadingListBookIds] = useState([]);
@@ -2158,7 +2159,20 @@ export default function OPACCatalog({
 
   const handleScheduleReservation = async () => {
     const entry = reservationBookEntry;
-    if (!entry || !reservationDate || !requireAuth('reserve a book for a future date')) return;
+    if (!entry || !requireAuth('reserve a book for a future date')) return;
+    if (!reservationDate) {
+      setReservationMessage('Choose a reservation date to continue.');
+      return;
+    }
+    if (reservationDate < localDateInputValue(1)) {
+      setReservationMessage('Choose a date starting tomorrow. Past dates and today cannot be reserved.');
+      return;
+    }
+    if (reservationDate > localDateInputValue(180)) {
+      setReservationMessage('Choose a date within the next 180 days.');
+      return;
+    }
+    setReservationMessage('');
     setSubmittingBorrow(true);
     setSubmittingBorrowBookId(String(entry.id));
     setNotice('');
@@ -2167,6 +2181,7 @@ export default function OPACCatalog({
       setNotice(`Your reservation for “${entry.title}” is scheduled for ${formatDate(reservationDate)}. Pickup will be available for 24 hours once the book is ready. Please note that this date depends on the current borrower returning the book on time.`);
       setReservationBookEntry(null);
       setReservationDate('');
+      setReservationMessage('');
       setSelectedBook(null);
       onViewChange('myBorrows');
     } catch (error) {
@@ -5289,10 +5304,27 @@ export default function OPACCatalog({
                 min={localDateInputValue(1)}
                 max={localDateInputValue(180)}
                 value={reservationDate}
-                onChange={(event) => setReservationDate(event.target.value)}
-                className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                onChange={(event) => {
+                  const nextDate = event.target.value;
+                  setReservationDate(nextDate);
+                  setReservationMessage(
+                    nextDate && nextDate < localDateInputValue(1)
+                      ? 'Choose a date starting tomorrow. Past dates and today cannot be reserved.'
+                      : nextDate && nextDate > localDateInputValue(180)
+                        ? 'Choose a date within the next 180 days.'
+                        : ''
+                  );
+                }}
+                aria-invalid={Boolean(reservationMessage)}
+                aria-describedby={reservationMessage ? 'reservation-date-error' : undefined}
+                className={`mt-1 min-h-11 w-full rounded-lg border bg-white px-3 text-slate-900 dark:bg-slate-900 dark:text-white ${reservationMessage ? 'border-rose-500 dark:border-rose-500' : 'border-slate-300 dark:border-slate-600'}`}
               />
             </label>
+            {reservationMessage && (
+              <p id="reservation-date-error" role="alert" className="mt-2 text-sm font-medium text-rose-700 dark:text-rose-300">
+                {reservationMessage}
+              </p>
+            )}
             <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
               This is a requested date, not a guaranteed pickup time. The reservation depends on the current borrower returning the book on time. Once the book is ready, the usual 24-hour pickup window applies; the 7-day loan starts only after staff confirms pickup.
             </div>
@@ -5303,6 +5335,7 @@ export default function OPACCatalog({
                 onClick={() => {
                   setReservationBookEntry(null);
                   setReservationDate('');
+                  setReservationMessage('');
                 }}
                 className="min-h-10 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-100"
               >
@@ -5310,7 +5343,7 @@ export default function OPACCatalog({
               </button>
               <button
                 type="button"
-                disabled={!reservationDate || submittingBorrow}
+                disabled={!reservationDate || Boolean(reservationMessage) || submittingBorrow}
                 onClick={handleScheduleReservation}
                 className="min-h-10 rounded-lg bg-shelf-primary px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -5485,7 +5518,7 @@ export default function OPACCatalog({
                       return (
                         <div
                           key={entry.id}
-                          className="visitor-library-entry grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                          className="visitor-library-entry grid min-w-0 grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs"
                         >
                           <div className="min-w-0">
                             <p className="break-words font-bold text-slate-800 text-sm">
@@ -5502,11 +5535,11 @@ export default function OPACCatalog({
                                 : `₱${entryFineRate} per overdue day`}
                             </p>
                           </div>
-                          <div className="visitor-library-actions flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+                          <div className="visitor-library-actions grid w-full min-w-0 grid-cols-2 items-stretch gap-2 sm:grid-cols-4">
                             <button
                               type="button"
                               onClick={() => handleViewMap(entry.libraryId, entry)}
-                              className="visitor-view-map-button inline-flex min-h-10 w-28 sm:w-32 shrink-0 items-center justify-center px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-300 transition"
+                              className="visitor-view-map-button inline-flex min-h-10 w-full min-w-0 items-center justify-center px-2 py-1.5 text-center bg-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-300 transition"
                             >
                               View map
                             </button>
@@ -5514,7 +5547,7 @@ export default function OPACCatalog({
                               type="button"
                               disabled={savingReadingListBookId === entry.id}
                               onClick={() => handleToggleReadingList(entry)}
-                              className="inline-flex min-h-10 w-28 sm:w-32 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="inline-flex min-h-10 w-full min-w-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-center font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <ClipboardList size={14} aria-hidden="true" />
                               {savingReadingListBookId === entry.id
@@ -5532,7 +5565,7 @@ export default function OPACCatalog({
                                   : 'Are you sure you want to join the waitlist for this book?'
                               }
                               onClick={() => handleBorrowOrReserve(entry)}
-                              className="inline-flex min-h-10 w-28 sm:w-32 shrink-0 items-center justify-center px-3 py-1.5 bg-shelf-primary text-white rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="inline-flex min-h-10 w-full min-w-0 items-center justify-center px-2 py-1.5 text-center bg-shelf-primary text-white rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {submittingBorrowBookId === String(entry.id)
                                 ? 'Processing...'
@@ -5548,10 +5581,11 @@ export default function OPACCatalog({
                                   if (!requireAuth(`reserve “${entry.title}” for a future date`)) return;
                                   setReservationBookEntry(entry);
                                   setReservationDate('');
+                                  setReservationMessage('');
                                 }}
-                                className="inline-flex min-h-10 w-36 shrink-0 items-center justify-center rounded-lg border border-shelf-primary bg-white px-3 py-1.5 text-center font-bold text-shelf-primary transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="inline-flex min-h-10 w-full min-w-0 items-center justify-center rounded-lg border border-blue-600 bg-blue-600 px-2 py-1.5 text-center font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                               >
-                                Reserve for a date
+                                Reserve
                               </button>
                             )}
                           </div>
