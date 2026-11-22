@@ -435,20 +435,29 @@ async function getAuthenticatedDataScope() {
   }
 }
 
-async function fetchAllRowsInPages(buildQuery, resourceName) {
+async function fetchAllRowsInPages(buildQuery, resourceName, signal = null) {
   const rows = [];
+
+  const throwIfAborted = () => {
+    if (!signal?.aborted) return;
+    const abortError = new Error('Request aborted');
+    abortError.name = 'AbortError';
+    throw abortError;
+  };
 
   for (
     let batchOffset = 0;
     ;
     batchOffset += FETCH_PAGE_SIZE * FETCH_PAGE_BATCH_SIZE
   ) {
+    throwIfAborted();
     const pages = await Promise.all(
       Array.from({ length: FETCH_PAGE_BATCH_SIZE }, (_, pageIndex) => {
         const from = batchOffset + pageIndex * FETCH_PAGE_SIZE;
         return buildQuery().range(from, from + FETCH_PAGE_SIZE - 1);
       })
     );
+    throwIfAborted();
 
     for (const page of pages) {
       if (page.error) {
@@ -492,22 +501,14 @@ async function fetchStaffBorrowRequestRows(authenticatedUserId, signal) {
     throw new Error('AAL2 authentication is required. Complete the staff two-step sign-in, then retry.');
   }
 
-  const { data, error } = await supabase.rpc('get_staff_borrowing_history', {
-    p_recent_days: BORROW_DASHBOARD_RECENT_DAYS,
-    p_active_statuses: BORROW_DASHBOARD_ACTIVE_STATUSES,
-  });
-
-  if (signal?.aborted) {
-    const abortError = new Error('Request aborted');
-    abortError.name = 'AbortError';
-    throw abortError;
-  }
-
-  if (error) {
-    throw cleanErr(error, 'Unable to load staff borrowing history.');
-  }
-
-  return data || [];
+  return fetchAllRowsInPages(
+    () => supabase.rpc('get_staff_borrowing_history', {
+      p_recent_days: BORROW_DASHBOARD_RECENT_DAYS,
+      p_active_statuses: BORROW_DASHBOARD_ACTIVE_STATUSES,
+    }),
+    'staff borrowing history',
+    signal
+  );
 }
 
 // ============================================================================
@@ -1611,11 +1612,11 @@ export async function fetchAttendanceLogs() {
   if (scope.type === 'anonymous') return [];
   if (scope.type === 'subadmin' && !scope.libraryId) return [];
 
-  const { data, error } = await supabase.rpc('get_attendance_logs_v1');
-  if (error) {
-    throw cleanErr(error, 'Unable to load attendance records.');
-  }
-  return (Array.isArray(data) ? data : []).map(mapAttendance);
+  const data = await fetchAllRowsInPages(
+    () => supabase.rpc('get_attendance_logs_v1'),
+    'attendance records'
+  );
+  return data.map(mapAttendance);
 }
 
 export async function fetchAttendanceLogsPage({
