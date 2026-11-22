@@ -40,7 +40,6 @@ import {
 
 import { useAuth } from '../../context/useAuth.js';
 import { useLanguage } from '../../context/LanguageContext.jsx';
-import { ThemeProvider } from '../../context/ThemeContext.jsx';
 import { useLibrary, useLibraryData } from '../../context/useLibrary.js';
 import { supabase } from '../../lib/supabaseClient.js';
 import { calculateOverdueFine } from '../../lib/bookFineRate.js';
@@ -804,17 +803,6 @@ function VisitorDashboardContent() {
     }
   };
 
-
-  useEffect(() => {
-    try {
-      globalThis.localStorage.setItem(
-        'shelf_visitor_appearance',
-        isDarkAppearance ? 'dark' : 'light'
-      );
-    } catch {
-      // Appearance still applies for this session.
-    }
-  }, [isDarkAppearance]);
 
       // LOAD LATEST PUBLISHED ANNOUNCEMENT
 
@@ -2600,9 +2588,5 @@ function VisitorDashboardContent() {
   );
 }
 export default function VisitorDashboard() {
-  return (
-    <ThemeProvider>
-      <VisitorDashboardContent />
-    </ThemeProvider>
-  );
+  return <VisitorDashboardContent />;
 }

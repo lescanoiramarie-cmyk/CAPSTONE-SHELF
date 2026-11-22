@@ -169,6 +169,16 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     if (!user?.id) return undefined;
 
+    // The attendance kiosk is a continuously running staff workstation. Its
+    // dedicated route should not sign the librarian out while the camera is
+    // waiting for visitors to scan their QR passes.
+    const isSubadminAttendanceKiosk = user.role === 'subadmin'
+      && window.location.pathname.replace(/\/+$/, '') === '/subadmin/attendance-kiosk';
+    if (isSubadminAttendanceKiosk) {
+      resetIdleTimerRef.current = null;
+      return undefined;
+    }
+
     let idleTimeout;
     let warningTimeout;
     let countdownInterval;

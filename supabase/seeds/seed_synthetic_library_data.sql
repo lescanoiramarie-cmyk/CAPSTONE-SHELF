@@ -83,18 +83,13 @@ inserted_visitors AS (
 month_ranges AS (
   SELECT
     month_offset,
-    (
-      date_trunc('month', current_date)::date
-      - (
-        ((extract(year FROM current_date)::integer - 2024) * 12
-          + extract(month FROM current_date)::integer - 1 - month_offset)
-        * interval '1 month'
-      )
-    )::date AS month_start
-  FROM generate_series(
-    0,
-    ((extract(year FROM current_date)::integer - 2024) * 12 + extract(month FROM current_date)::integer - 1)
-  ) AS months(month_offset)
+    months.month_start::date AS month_start
+  FROM (
+    SELECT
+      (row_number() OVER (ORDER BY month_series.month_start) - 1)::integer AS month_offset,
+      month_series.month_start
+    FROM generate_series(date '2024-01-01', date '2026-09-01', interval '1 month') AS month_series(month_start)
+  ) AS months
 ),
 library_months AS (
   SELECT

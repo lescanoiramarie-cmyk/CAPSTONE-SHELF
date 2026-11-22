@@ -597,7 +597,7 @@ const featuredBooks = books
               }
               className="inline-flex min-h-10 w-fit items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-shelf-primary shadow-sm transition hover:border-shelf-primary hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary focus-visible:ring-offset-2"
             >
-              Browse OPAC (sign-in required)
+              Browse OPAC
               <ArrowRight size={14} aria-hidden="true" />
             </button>
           </div>
@@ -727,7 +727,7 @@ const featuredBooks = books
                   </span>
                 </div>
                 <span className="mt-5 inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-shelf-primary py-2 text-xs font-bold text-white shadow-sm transition-colors group-hover:bg-blue-700">
-                  View in OPAC after sign-in
+                  View in OPAC
                 </span>
               </button>
             ))}
@@ -743,7 +743,7 @@ const featuredBooks = books
                 }
                 className="mt-4 rounded-lg bg-shelf-primary px-4 py-2 text-xs font-bold text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-primary focus-visible:ring-offset-2"
               >
-                Browse OPAC (sign-in required)
+                Browse OPAC
               </button>
             </div>
           )}

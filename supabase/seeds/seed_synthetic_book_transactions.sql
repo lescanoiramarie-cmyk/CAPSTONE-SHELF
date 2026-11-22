@@ -1,5 +1,5 @@
 -- Seed exactly 200 clearly labeled historical book transactions per
--- library/month pair from January 2024 through the current calendar month.
+-- library/month pair from January 2024 through September 2026.
 -- Existing visitor accounts are rotated
 -- through generated transactions; books belong to the branch receiving them.
 -- Safe to rerun: deterministic UUIDs and conflict handling prevent duplicates.
@@ -57,7 +57,7 @@ WITH library_pool AS MATERIALIZED (
 ), months AS MATERIALIZED (
   SELECT generate_series(
     date '2024-01-01',
-    date_trunc('month', current_date)::date,
+    date '2026-09-01',
     interval '1 month'
   )::date AS month_start
 ), branch_month_targets AS MATERIALIZED (
@@ -182,5 +182,6 @@ JOIN public.libraries AS library ON library.id = book.library_id
 WHERE request.confirmed_by = 'Test data seed'
   AND request.return_confirmed_by = 'Test data seed'
   AND request.request_date >= date '2024-01-01'
+  AND request.request_date < date '2026-10-01'
 GROUP BY library.name, date_trunc('month', request.request_date)
 ORDER BY date_trunc('month', request.request_date), library.name;
