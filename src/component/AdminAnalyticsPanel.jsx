@@ -37,9 +37,11 @@ export default function AdminAnalyticsPanel({
   const recentMonths = forecastIndex > 0 ? usableForecast.slice(Math.max(0, forecastIndex - 3), forecastIndex) : [];
   const latestMonth = recentMonths.at(-1);
   const forecastMonth = forecastIndex >= 0 ? usableForecast[forecastIndex] : null;
-  const estimateChange = latestMonth && forecastMonth && latestMonth.value > 0
+  const rawEstimateChange = latestMonth && forecastMonth && latestMonth.value > 0
     ? Math.round(((forecastMonth.value - latestMonth.value) / latestMonth.value) * 100)
     : null;
+  const estimateChange = rawEstimateChange == null ? null : Math.max(-100, Math.min(100, rawEstimateChange));
+  const estimateChangeWasCapped = rawEstimateChange != null && Math.abs(rawEstimateChange) > 100;
   const prescriptionList = prescriptions.length > 0
     ? prescriptions
     : [recommendation, ...(rationale ? [rationale] : [])];
@@ -82,6 +84,14 @@ export default function AdminAnalyticsPanel({
               ))}
             </dl>
           ) : <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">No descriptive totals are available.</p>}
+          {chartMetrics.length > 1 && (
+            <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-700">
+              <h5 className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Descriptive summary</h5>
+              <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-5 text-slate-700 dark:text-slate-200">
+                {metrics.map((metric) => <li key={metric.label}>{metric.label}: {metric.value}{metric.note ? ` (${metric.note})` : ''}.</li>)}
+              </ul>
+            </div>
+          )}
         </article>
 
         <article className="flex min-w-0 flex-col rounded-xl border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-900 dark:bg-indigo-950/40">
@@ -108,7 +118,9 @@ export default function AdminAnalyticsPanel({
                 <li>{forecastMonth?.label} estimate: about {forecastMonth?.value} borrows, using the average from the latest {recentMonths.length} months.</li>
                 {estimateChange == null
                   ? <li>The latest month had no borrows, so a percentage change cannot be compared.</li>
-                  : <li>That is {Math.abs(estimateChange)}% {estimateChange > 0 ? 'higher' : estimateChange < 0 ? 'lower' : 'about the same'} as the latest month.</li>}
+                  : estimateChange === 0
+                    ? <li>The estimate is about the same as the latest month.</li>
+                    : <li>{estimateChangeWasCapped ? `Estimated change: up to 100% ${estimateChange > 0 ? 'higher' : 'lower'}` : `The estimate is about ${Math.abs(estimateChange)}% ${estimateChange > 0 ? 'higher' : 'lower'}`} than the latest month{estimateChangeWasCapped ? ' (display capped at 100%).' : '.'}</li>}
                 <li>The solid blue line shows recorded borrows; the dotted orange line leads to next month’s estimate.</li>
               </ul>
             </>
