@@ -63,6 +63,20 @@ export function normalizeBookFineRate(value) {
   return rate;
 }
 
+export function normalizeLendingPeriodDays(value) {
+  const raw = typeof value === 'string' ? value.trim() : value;
+  const days = typeof raw === 'number' ? raw : Number(raw);
+  const isIntegerInput =
+    typeof raw === 'number' ||
+    (typeof raw === 'string' && /^\d+$/.test(raw));
+
+  if (!isIntegerInput || !Number.isInteger(days) || days < 1 || days > 30) {
+    throw new Error('Lending period must be a whole number from 1 to 30 days.');
+  }
+
+  return days;
+}
+
 export function bookFineRateMismatch(existingRate, incomingRate) {
   const rawExisting =
     typeof existingRate === 'string' ? existingRate.trim() : existingRate;
@@ -154,6 +168,9 @@ export function validateImportedBookFineRates(records) {
     const fineRateFields = Object.entries(record).filter(
       ([key]) => normalizeImportKey(key) === 'fine_rate'
     );
+    const lendingPeriodFields = Object.entries(record).filter(
+      ([key]) => normalizeImportKey(key) === 'lending_period_days'
+    );
     const categoryValues = categoryFields
       .map(([, value]) => String(value ?? '').trim())
       .filter(Boolean);
@@ -189,6 +206,16 @@ export function validateImportedBookFineRates(records) {
       return record;
     }
 
+    let lendingPeriodDays;
+    try {
+      lendingPeriodDays = normalizeLendingPeriodDays(lendingPeriodFields[0]?.[1]);
+    } catch {
+      errors.push(
+        `${rowLabel} has an invalid or missing lending_period_days. Enter a whole number from 1 to 30.`
+      );
+      return record;
+    }
+
     const nonClassificationFields = Object.fromEntries(
       Object.entries(record).filter(
         ([key]) =>
@@ -201,6 +228,7 @@ export function validateImportedBookFineRates(records) {
       ...nonClassificationFields,
       category,
       fine_rate: fineRate,
+      lending_period_days: lendingPeriodDays,
     };
   });
 

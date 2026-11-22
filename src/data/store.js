@@ -20,6 +20,7 @@ import { buildCancelBorrowRequestArgs } from '../lib/borrowRequestRpc.js';
 import {
   buildDuplicateBookImportUpdate,
   normalizeBookFineRate,
+  normalizeLendingPeriodDays,
   validateImportedBookFineRates,
 } from '../lib/bookFineRate.js';
 import { invalidateVisitorAccountsCache } from './visitorAccounts.js';
@@ -3326,6 +3327,7 @@ export async function mergeOrInsertLibraryBooks(incomingRows) {
     const row = { ...source };
     row.category = preserveBookCategory(row.category);
     row.fine_rate = normalizeBookFineRate(row.fine_rate);
+    row.lending_period_days = normalizeLendingPeriodDays(row.lending_period_days);
     row.call_number = normalizeCallNumber(row.call_number ?? row.callNumber);
 
     const title = normalizeText(row.title);
@@ -3398,7 +3400,7 @@ export async function mergeOrInsertLibraryBooks(incomingRows) {
     let query = supabase
       .from('books')
       .select(
-        'id, title, author, category, isbn, call_number, library_id, total_copies, available_copies, fine_rate, book_type'
+        'id, title, author, category, isbn, call_number, library_id, total_copies, available_copies, fine_rate, lending_period_days, book_type'
       )
       .or('book_type.eq.library,book_type.is.null');
 
@@ -3523,6 +3525,9 @@ export async function addBook(book) {
   const author = normalizeText(book?.author);
   const category = preserveBookCategory(book?.category);
   const fineRate = normalizeBookFineRate(book?.fine_rate);
+  const lendingPeriodDays = normalizeLendingPeriodDays(
+    book?.lendingPeriodDays ?? book?.lending_period_days
+  );
   const libraryId = normalizeText(book?.libraryId);
   const totalCopies = Math.max(
     1,
@@ -3559,7 +3564,7 @@ export async function addBook(book) {
       owner_visitor_id: null,
       lending_enabled: false,
       condition: null,
-      lending_period_days: null,
+      lending_period_days: lendingPeriodDays,
       handover_location: null,
       handover_method: null,
       handover_details: null,
@@ -3636,10 +3641,6 @@ export async function addPersonalBook({
   const normalizedFineRate = fineRate == null || String(fineRate).trim() === ''
     ? null
     : normalizeBookFineRate(fineRate);
-
-  if (normalizedFineRate != null && ![10, 15, 20, 30, 50].includes(normalizedFineRate)) {
-    throw new Error('Personal book fine rate must be ₱10, ₱15, ₱20, ₱30, or ₱50 per overdue day.');
-  }
 
   if (normalizedLendingEnabled && normalizedFineRate == null) {
     throw new Error('Enter a fine rate from 1 to 100 per overdue day to enable community lending.');
@@ -3878,10 +3879,6 @@ export async function updatePersonalBook({
   const normalizedFineRate = fineRate == null || String(fineRate).trim() === ''
     ? null
     : normalizeBookFineRate(fineRate);
-
-  if (normalizedFineRate != null && ![10, 15, 20, 30, 50].includes(normalizedFineRate)) {
-    throw new Error('Personal book fine rate must be ₱10, ₱15, ₱20, ₱30, or ₱50 per overdue day.');
-  }
 
   if (!isValidVisitorId(normalizedVisitorId)) {
     throw new Error('Invalid visitor ID.');
@@ -5049,7 +5046,7 @@ export async function addBooksBulk(
             null,
 
           lending_period_days:
-            null,
+            normalizeLendingPeriodDays(normalized.lending_period_days),
 
           handover_location:
             null,

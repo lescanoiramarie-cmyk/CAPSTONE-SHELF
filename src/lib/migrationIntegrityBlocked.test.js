@@ -1,11 +1,11 @@
 import test from 'node:test';
 import process from 'node:process';
 import assert from 'node:assert/strict';
-import pg from 'pg';
 
 // These checks run only when the caller explicitly opts into the disposable
 // Supabase local database after `supabase db reset --local`.
 const localDbConfigured = process.env.SHELF_TEST_LOCAL_SUPABASE === '1';
+const pg = localDbConfigured ? (await import('pg')).default : null;
 const connection = {
   host: process.env.PGHOST ?? '127.0.0.1',
   port: Number(process.env.PGPORT ?? 54322),

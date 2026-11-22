@@ -58,7 +58,8 @@ test('OPAC catalog, community, personal, and reading-list searches include Call 
 });
 
 test('landing-page OPAC actions disclose the sign-in requirement', () => {
-  assert.equal((landingSource.match(/Browse OPAC \(sign-in required\)/g) || []).length, 4);
-  assert.match(landingSource, /View in OPAC after sign-in/);
-  assert.match(landingSource, /24\/7 OPAC access after sign-in/);
+  assert.match(landingSource, /const navigateToProtectedCatalog = \(message\) =>/);
+  assert.match(landingSource, /if \(!isAuthenticated\)\s*\{\s*setSignInPromptMessage\(message\);\s*return;/);
+  assert.match(landingSource, /Please sign in to access the OPAC Catalog\./);
+  assert.match(landingSource, /Browse OPAC/);
 });

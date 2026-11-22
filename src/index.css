@@ -1226,11 +1226,27 @@ body:has(.superadmin-dashboard) {
 }
 
 .visitor-navy-header [aria-label^='Switch to'],
-.visitor-navy-header [aria-label^='Notifications'],
+.visitor-navy-header [aria-label^='Notifications'] {
+  border-color: #294866 !important;
+  background-color: transparent !important;
+  color: #e2e8f0 !important;
+}
+
+.visitor-navy-header [aria-label^='Switch to']:hover,
+.visitor-navy-header [aria-label^='Notifications']:hover {
+  border-color: #42617f !important;
+  background-color: #12385e !important;
+}
+
 .visitor-navy-header [aria-label='User menu'] {
-  border-color: #c7d7e8 !important;
-  background-color: #fff !important;
-  color: #082b52 !important;
+  border-color: #345573 !important;
+  background-color: #15395d !important;
+  color: #e2e8f0 !important;
+}
+
+.visitor-navy-header [aria-label='User menu']:hover {
+  border-color: #52718f !important;
+  background-color: #1b456d !important;
 }
 
 .visitor-navy-header [aria-label='Go to SHELF home'] {
@@ -1241,12 +1257,6 @@ body:has(.superadmin-dashboard) {
 
 .visitor-navy-header [aria-label='Go to SHELF home'] span {
   color: #fff !important;
-}
-
-.visitor-navy-header [aria-label='User menu'] {
-  border-color: #c7d7e8 !important;
-  background-color: #fff !important;
-  color: #082b52 !important;
 }
 
 .visitor-navy-header [aria-label='Go to SHELF home']:focus-visible,

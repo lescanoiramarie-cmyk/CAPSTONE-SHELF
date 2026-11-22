@@ -420,16 +420,16 @@ test('legacy loans are reviewable without guessing and historical fines are pres
 test('book imports require and preserve a supplied fine_rate regardless of category', () => {
   assert.deepEqual(
     validateImportedBookFineRates([
-      { title: 'Book One', Category: '  gEnErAl  ', fine_rate: '25' },
-      { title: 'Book Two', category: 'Fiction', fine_rate: 15 },
-      { title: 'Book Three', category: 'Young  Adult', fine_rate: 100 },
-      { title: 'Book Four', category: '   ', fine_rate: 1 },
+      { title: 'Book One', Category: '  gEnErAl  ', fine_rate: '25', lending_period_days: '7' },
+      { title: 'Book Two', category: 'Fiction', fine_rate: 15, lending_period_days: 14 },
+      { title: 'Book Three', category: 'Young  Adult', fine_rate: 100, lending_period_days: 30 },
+      { title: 'Book Four', category: '   ', fine_rate: 1, lending_period_days: 1 },
     ]),
     [
-      { title: 'Book One', category: 'gEnErAl', fine_rate: 25 },
-      { title: 'Book Two', category: 'Fiction', fine_rate: 15 },
-      { title: 'Book Three', category: 'Young  Adult', fine_rate: 100 },
-      { title: 'Book Four', category: null, fine_rate: 1 },
+      { title: 'Book One', category: 'gEnErAl', fine_rate: 25, lending_period_days: 7 },
+      { title: 'Book Two', category: 'Fiction', fine_rate: 15, lending_period_days: 14 },
+      { title: 'Book Three', category: 'Young  Adult', fine_rate: 100, lending_period_days: 30 },
+      { title: 'Book Four', category: null, fine_rate: 1, lending_period_days: 1 },
     ]
   );
   for (const value of [undefined, '', 0, -1, 2.5, 'invalid', 101]) {
@@ -447,6 +447,13 @@ test('book imports require and preserve a supplied fine_rate regardless of categ
         { title: 'Conflicting categories', category: 'General', Category: 'Fiction' },
       ]),
     /Row 1 has conflicting category values/
+  );
+  assert.throws(
+    () =>
+      validateImportedBookFineRates([
+        { title: 'Invalid duration', fine_rate: 25, lending_period_days: 31 },
+      ]),
+    /Row 1 \("Invalid duration"\).*lending_period_days/
   );
 });
 

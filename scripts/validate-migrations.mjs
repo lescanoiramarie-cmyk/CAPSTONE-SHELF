@@ -192,8 +192,8 @@ export function validateReleasePackage(entries, manifest) {
   const categoryB = allVersions.filter((v) => CATEGORY_B_VERSIONS.includes(v));
   const categoryC = allVersions.filter((v) => v >= UNAPPLIED_START);
 
-  if (categoryA.length !== 119) {
-    errors.push({ kind: 'invalid_category_a_count', expected: 119, actual: categoryA.length });
+  if (categoryA.length !== 122) {
+    errors.push({ kind: 'invalid_category_a_count', expected: 122, actual: categoryA.length });
   }
   if (categoryB.length !== 6) {
     errors.push({ kind: 'invalid_category_b_count', expected: 6, actual: categoryB.length });

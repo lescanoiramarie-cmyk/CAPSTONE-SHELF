@@ -3,7 +3,10 @@ import { BookOpen, ChevronLeft, ChevronRight, Pencil, Search, ShieldCheck, Trash
 import { useLibrary } from '../context/useLibrary';
 import { useAuth } from '../context/useAuth.js';
 import { supabase } from '../lib/supabaseClient';
-import { normalizeBookFineRate } from '../lib/bookFineRate.js';
+import {
+  normalizeBookFineRate,
+  normalizeLendingPeriodDays,
+} from '../lib/bookFineRate.js';
 import { formatBookCategory } from '../lib/bookCategory.js';
 import { getBookInventoryScope } from '../lib/bookInventoryScope.js';
 import PageJump from './PageJump.jsx';
@@ -211,6 +214,7 @@ export default function BookInventory() {
     callNumber: '',
     category: '',
     fine_rate: '',
+    lendingPeriodDays: 7,
     copies: 1,
     libraryId: '',
     coverUrl: '',
@@ -240,6 +244,7 @@ export default function BookInventory() {
       callNumber: '',
       category: '',
       fine_rate: '',
+      lendingPeriodDays: 7,
       copies: 1,
       libraryId: inventoryLibraries?.[0]?.id || '',
       coverUrl: '',
@@ -264,6 +269,7 @@ export default function BookInventory() {
       callNumber: book.callNumber || '',
       category: book.category || '',
       fine_rate: book.fineRate ?? book.fine_rate ?? '',
+      lendingPeriodDays: book.lendingPeriodDays ?? book.lending_period_days ?? 7,
       copies: getBookCopies(book) || 1,
       libraryId: book.libraryId || '',
       coverUrl: book.coverUrl || '',
@@ -296,6 +302,7 @@ export default function BookInventory() {
         throw new Error('ISBN must contain 11 to 13 digits.');
       }
       const fineRate = normalizeBookFineRate(form.fine_rate);
+      const lendingPeriodDays = normalizeLendingPeriodDays(form.lendingPeriodDays);
       let coverUrl = form.coverUrl;
 
       if (selectedCoverFile) {
@@ -308,6 +315,7 @@ export default function BookInventory() {
       const bookPayload = {
         ...form,
         fine_rate: fineRate,
+        lendingPeriodDays,
         coverUrl,
         totalCopies: form.copies
       };
@@ -876,6 +884,27 @@ export default function BookInventory() {
                 <p id="book-fine-rate-help" className="mt-1 text-slate-500">
                   Enter a whole number from ₱1 to ₱100.
                 </p>
+              </div>
+
+              <div>
+                <label htmlFor="book-lending-period" className="block text-slate-700 font-semibold mb-1">
+                  Lending Period (days) *
+                </label>
+                <input
+                  required
+                  id="book-lending-period"
+                  name="lending_period_days"
+                  type="number"
+                  min="1"
+                  max="30"
+                  step="1"
+                  value={form.lendingPeriodDays}
+                  onChange={(e) =>
+                    setForm({ ...form, lendingPeriodDays: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                />
+                <p className="mt-1 text-slate-500">Choose 1 to 30 days for this book.</p>
               </div>
 
               <div>

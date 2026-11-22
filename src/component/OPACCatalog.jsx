@@ -902,7 +902,7 @@ export default function OPACCatalog({
     lendingPeriodDays: 7,
     handoverMethod: 'arrange_with_owner',
     handoverDetails: '',
-    fineRate: '10',
+    fineRate: '',
     lendingEnabled: false,
     isPublic: false,
   });
@@ -939,8 +939,7 @@ export default function OPACCatalog({
   const updatePersonalBookForm = (field, value) => {
     setPersonalBookForm((current) => {
       const next = { ...current, [field]: value };
-      if (field === 'category' || field === 'customCategory') next.fineRate = String(getBookFineRate(value) ?? '');
-      if (field === 'fineRate') next.fineRate = String(value).replace(/\D/g, '').slice(0, 2);
+      if (field === 'fineRate') next.fineRate = String(value).replace(/\D/g, '').slice(0, 3);
       return next;
     });
   };
@@ -968,7 +967,7 @@ export default function OPACCatalog({
       lendingPeriodDays: 7,
       handoverMethod: 'arrange_with_owner',
       handoverDetails: '',
-      fineRate: '10',
+      fineRate: '',
       lendingEnabled: false,
       isPublic: false,
       totalCopies: 1,
@@ -990,7 +989,7 @@ export default function OPACCatalog({
       lendingPeriodDays: book.lendingPeriodDays || 7,
       handoverMethod: book.handoverMethod || 'arrange_with_owner',
       handoverDetails: book.handoverDetails || '',
-      fineRate: book.fineRate == null ? '10' : String(book.fineRate),
+      fineRate: book.fineRate == null ? '' : String(book.fineRate),
       lendingEnabled: Boolean(book.lendingEnabled),
       isPublic: Boolean(book.isPublic),
       totalCopies: getPersonalBookCopyAvailability(book).totalCopies,
@@ -1072,7 +1071,7 @@ export default function OPACCatalog({
     const totalCopies = Number(personalBookForm.totalCopies);
     const fineRate = personalBookForm.fineRate.trim()
       ? Number(personalBookForm.fineRate)
-      : getBookFineRate(category);
+      : null;
     if (!title || !author) {
       setNotice('Book title and author are required.');
       return;
@@ -1123,14 +1122,13 @@ export default function OPACCatalog({
     }
     if (
       (personalBookForm.lendingEnabled || personalBookForm.fineRate.trim()) &&
-      (!Number.isInteger(fineRate) || fineRate < 1 || fineRate > 99)
+      (!Number.isInteger(fineRate) || fineRate < 1 || fineRate > 100)
     ) {
-      setNotice('Enter a whole-number fine rate with up to 2 digits.');
+      setNotice('Enter a whole-number fine rate from ₱1 to ₱100 per overdue day.');
       return;
     }
-    const expectedCategoryRate = getBookFineRate(category);
-    if (personalBookForm.lendingEnabled && fineRate !== expectedCategoryRate) {
-      setNotice(`The fine rate for ${category || 'this category'} is ₱${expectedCategoryRate ?? 'not set'}. Enter the matching rate to enable lending.`);
+    if (personalBookForm.lendingEnabled && fineRate == null) {
+      setNotice('Set a fine rate from ₱1 to ₱100 per overdue day to enable community lending.');
       return;
     }
     if (handoverDetails.length > 500) {
@@ -5026,7 +5024,7 @@ export default function OPACCatalog({
                         type="text"
                         inputMode="numeric"
                         pattern="[0-9]*"
-                        maxLength={2}
+                        maxLength={3}
                         value={personalBookForm.fineRate}
                         onChange={(event) => updatePersonalBookForm('fineRate', event.target.value)}
                         className="w-36 max-w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"

@@ -2146,7 +2146,7 @@ const handleEditStaff = (staff) => {
               </div>
               {importTarget === 'books' && (
                 <p className="text-xs text-slate-600">
-                  Book imports require a <code>fine_rate</code> whole number from 1 to 100 pesos per overdue day. The supplied rate is saved and is not derived from category.
+                  Book imports require a <code>fine_rate</code> whole number from 1 to 100 pesos per overdue day and <code>lending_period_days</code> from 1 to 30. Both values are saved per book; fine rates are not derived from category.
                 </p>
               )}
               <div className="grid grid-cols-1 gap-4 pt-1 sm:grid-cols-2">

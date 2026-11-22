@@ -2025,7 +2025,7 @@ export default function SubAdminDashboard() {
                           <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">author</code>,{' '}
                           a positive whole-number{' '}
                           <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">stock_count</code>
-                          , and <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">fine_rate</code>
+                          , <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">fine_rate</code>, and <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">lending_period_days</code>
                         </p>
                         <p>
                           <span className="font-semibold text-slate-600">Optional:</span>{' '}
@@ -2041,7 +2041,7 @@ export default function SubAdminDashboard() {
                           <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">copies</code> for stock. If supplied, ISBN must be valid ISBN-10 or ISBN-13.
                         </p>
                         <p>
-                          Enter <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">fine_rate</code> as a whole number from 1 to 100 pesos per overdue day. Fine rates are entered manually and are not derived from category. The selected branch is assigned automatically.
+                          Enter <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">fine_rate</code> as a whole number from 1 to 100 pesos per overdue day, and <code className="bg-sky-100 px-1 py-0.5 rounded text-sky-800 font-mono">lending_period_days</code> as a whole number from 1 to 30. Both are set per book; fine rates are not derived from category. The selected branch is assigned automatically.
                         </p>
                         <p className="pt-1.5 text-xs text-sky-700 italic border-t border-sky-200/80 mt-2">
                           Accepts CSV files with a header row or a JSON array of book records.
