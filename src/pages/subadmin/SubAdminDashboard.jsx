@@ -1,17 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Html5Qrcode } from 'html5-qrcode';
-import { Bar, Line } from 'react-chartjs-2';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  Tooltip,
-  Legend,
-} from 'chart.js';
 import {
   Activity,
   AlertTriangle,
@@ -47,9 +35,8 @@ import { useLibrary, useLibraryData } from '../../context/useLibrary.js';
 import AttendanceScanner from '../../component/AttendanceScanner.jsx';
 import BookInventory from '../../component/BookInventory.jsx';
 import ReservationQueue from '../../component/ReservationQueue.jsx';
-import AdminWorkspace from '../../component/AdminWorkspace.jsx';
+import DeferredChart from '../../component/DeferredChart.jsx';
 import ExportConfirmationDialog from '../../component/ExportConfirmationDialog.jsx';
-import BookRatingsChart from '../../component/BookRatingsChart.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
 import DashboardDataBoundary from '../../component/DashboardDataBoundary.jsx';
 import AdminAnalyticsPanel from '../../component/AdminAnalyticsPanel.jsx';
@@ -79,11 +66,12 @@ import {
   getAnalyticsMonthWindow,
 } from '../../lib/dashboardAnalytics.js';
 
+const AdminWorkspace = lazy(() => import('../../component/AdminWorkspace.jsx'));
+const BookRatingsChart = lazy(() => import('../../component/BookRatingsChart.jsx'));
+
 const VisitorAccountManagement = lazy(
   () => import('../../component/VisitorAccountManagement.jsx')
 );
-
-ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip, Legend);
 
 const NAV = [
   { id: 'overview', label: 'Overview', Icon: Activity },
@@ -283,7 +271,8 @@ function BorrowingActivityTrendChart({ requests = [], monthKey, loadError = '' }
       ) : (
         <div className="mt-4 flex min-h-55 flex-1 flex-col">
           <div className="relative min-h-0 flex-1">
-            <Line
+            <DeferredChart
+            type="line"
             data={{
               labels: weeks.map((week) => week.label),
               datasets: [
@@ -562,6 +551,8 @@ function QRBookBorrowing({
     const startCamera = async () => {
       try {
         setScanning(true);
+        const { Html5Qrcode } = await import('html5-qrcode');
+        if (cancelled) return;
         scanner = new Html5Qrcode('book-borrowing-qr-reader');
         scannerRef.current = scanner;
         await scanner.start(
@@ -1919,12 +1910,14 @@ export default function SubAdminDashboard() {
                 <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-700">Descriptive analytics</p>
                 <h3 id="branch-borrowed-category-title" className="text-sm font-bold text-slate-900 dark:text-white">Borrows by category</h3>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Compares confirmed pickups across book categories in {branchOverviewMetrics.monthLabel}.</p>
-                {borrowRequestsLoadError ? <p className="mt-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">Category chart is unavailable because borrowing records could not be loaded.</p> : branchOverviewMetrics.categoryBorrowing.length ? <div className="mt-2 h-56"><Bar data={{ labels: branchOverviewMetrics.categoryBorrowing.map(({ category }) => category), datasets: [{ label: 'Books borrowed', data: branchOverviewMetrics.categoryBorrowing.map(({ count }) => count), backgroundColor: '#2563eb', borderRadius: 6, maxBarThickness: 20 }] }} options={{ indexAxis: 'y', responsive: true, maintainAspectRatio: false, color: document.documentElement.classList.contains('dark') ? '#cbd5e1' : '#475569', plugins: { legend: { display: false }, tooltip: { callbacks: { label: (context) => `${context.parsed.x} ${context.parsed.x === 1 ? 'borrow' : 'borrows'}` } } }, scales: { x: { beginAtZero: true, ticks: { precision: 0, stepSize: 1 }, grid: { color: document.documentElement.classList.contains('dark') ? 'rgba(148,163,184,.15)' : 'rgba(148,163,184,.2)' } }, y: { grid: { display: false } } } }} /></div> : <p className="mt-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">No confirmed book borrows were recorded this month.</p>}
+                {borrowRequestsLoadError ? <p className="mt-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">Category chart is unavailable because borrowing records could not be loaded.</p> : branchOverviewMetrics.categoryBorrowing.length ? <div className="mt-2 h-56"><DeferredChart type="bar" data={{ labels: branchOverviewMetrics.categoryBorrowing.map(({ category }) => category), datasets: [{ label: 'Books borrowed', data: branchOverviewMetrics.categoryBorrowing.map(({ count }) => count), backgroundColor: '#2563eb', borderRadius: 6, maxBarThickness: 20 }] }} options={{ indexAxis: 'y', responsive: true, maintainAspectRatio: false, color: document.documentElement.classList.contains('dark') ? '#cbd5e1' : '#475569', plugins: { legend: { display: false }, tooltip: { callbacks: { label: (context) => `${context.parsed.x} ${context.parsed.x === 1 ? 'borrow' : 'borrows'}` } } }, scales: { x: { beginAtZero: true, ticks: { precision: 0, stepSize: 1 }, grid: { color: document.documentElement.classList.contains('dark') ? 'rgba(148,163,184,.15)' : 'rgba(148,163,184,.2)' } }, y: { grid: { display: false } } } }} /></div> : <p className="mt-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">No confirmed book borrows were recorded this month.</p>}
               </section>
             </div>
             <div className="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-3">
               <div className="h-full lg:col-span-1 [&>section]:h-full">
-                <BookRatingsChart books={branchBooks} fillHeight />
+                <Suspense fallback={<p className="p-4 text-sm text-slate-500">Loading ratings chart…</p>}>
+                  <BookRatingsChart books={branchBooks} fillHeight />
+                </Suspense>
               </div>
 
               <section className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2" aria-labelledby="feedback-highlight-title">
@@ -2265,7 +2258,8 @@ export default function SubAdminDashboard() {
           </section>
         )}
         {section === 'workspace' && (
-          workspaceTab === 'analytics' ? (
+          <Suspense fallback={<div role="status" className="p-6 text-sm text-slate-500">Loading reports and analytics…</div>}>
+          {workspaceTab === 'analytics' ? (
             <PremiumFeatureGate
               libraryId={currentLibraryId}
               onUpgrade={() => navigateToSection('subscription')}
@@ -2294,7 +2288,8 @@ export default function SubAdminDashboard() {
               attendanceLogs={branchAttendance}
               attendanceDataComplete={initialDataReady && !attendanceLoadError}
             />
-          )
+          )}
+          </Suspense>
         )}
       </main>
       {(subAdminTermsStatus !== 'accepted' || showSubAdminTerms) && (

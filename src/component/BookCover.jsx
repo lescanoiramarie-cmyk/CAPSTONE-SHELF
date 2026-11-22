@@ -21,6 +21,8 @@ export default function BookCover({
         <img
           src={src}
           alt={title || 'Book cover'}
+          loading="lazy"
+          decoding="async"
           className={`absolute inset-0 h-full w-full ${
             imageFit === 'contain' ? 'object-contain' : 'object-cover'
           }`}

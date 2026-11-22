@@ -1692,6 +1692,29 @@ export default function AdminWorkspace({
             )}
           </section>
 
+          <div className="mb-5">
+            <AdminAnalyticsPanel
+              title="Library activity overview"
+              description={`${isSubAdmin ? getLibraryName(libraries, currentLibraryId) : effectiveAnalyticsLibraryId ? getLibraryName(libraries, effectiveAnalyticsLibraryId) : 'All libraries'} · ${analyticsWindow.label}`}
+              metrics={[
+                { label: 'Library visits', value: analyticsAttendance.length },
+                { label: 'Book requests', value: analyticsBorrows.length },
+                { label: 'Active loans', value: analyticsBorrows.filter((item) => getRequestStatus(item) === 'borrowed').length },
+              ]}
+              predictiveSeries={forecast?.forecasts?.map((item) => ({
+                label: new Date(`${item.date}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+                value: item.visitorCount,
+              })) || []}
+              prediction={forecastNarrative.insights.join(' ') || (forecastLoading
+                ? 'The visitor forecast is being calculated.'
+                : 'Run the forecast after enough complete attendance history is available.')}
+              recommendation={demandRecommendations[0] || 'Continue reviewing visitor activity and book demand for this reporting period.'}
+              rationale={categoryDemand.length
+                ? `The selected period includes ${analyticsAttendance.length} recorded visits and ${analyticsBorrows.length} book requests. Highest request category: ${categoryDemand[0][0]} (${categoryDemand[0][1]}).`
+                : `The selected period includes ${analyticsAttendance.length} recorded visits and ${analyticsBorrows.length} book requests; no category demand is available in this period.`}
+            />
+          </div>
+
           <section className="grid gap-5 xl:grid-cols-2">
             <div className="border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
               <div className="mb-4">

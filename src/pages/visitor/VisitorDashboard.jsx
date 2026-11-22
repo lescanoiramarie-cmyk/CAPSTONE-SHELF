@@ -1,14 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Draggable from 'react-draggable';
 import { QRCodeSVG } from 'qrcode.react';
-import { Bar } from 'react-chartjs-2';
-import {
-  BarElement,
-  CategoryScale,
-  Chart as ChartJS,
-  LinearScale,
-  Tooltip,
-} from 'chart.js';
+import DeferredChart from '../../component/DeferredChart.jsx';
 import './visitorDashboard.css';
 import {
   AlertTriangle,
@@ -49,7 +42,6 @@ import {
 } from '../../data/store.js';
 
 import OPACCatalog from '../../component/OPACCatalog.jsx';
-import LibraryMap from '../../component/LibraryMap.jsx';
 import FAQ from '../../component/FAQ.jsx';
 import VisitorServices from '../../component/VisitorServices.jsx';
 import AIRecommendations from '../../component/AIRecommendations.jsx';
@@ -63,7 +55,7 @@ import PageJump from '../../component/PageJump.jsx';
 import ShelfHeader from '../../component/ShelfHeader.jsx';
 import PreferredLanguageSetting from '../../component/PreferredLanguageSetting.jsx';
 
-ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip);
+const LibraryMap = lazy(() => import('../../component/LibraryMap.jsx'));
 
 function formatDateTime(iso) {
   if (!iso) {
@@ -820,7 +812,8 @@ function VisitorDashboardContent() {
               .eq('published', true)
               .in('audience', ['visitor', 'both'])
               .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
-              .order('created_at', { ascending: false });
+              .order('created_at', { ascending: false })
+              .limit(20);
 
             if (!active) return;
 
@@ -2059,14 +2052,16 @@ function VisitorDashboardContent() {
         ================================================== */}
 
         {tab === 'map' && (
-          <LibraryMap
-            focusBranchId={mapFocusLibraryId}
-            bookContext={mapBookContext}
-            onBrowseLibrary={(libraryId) => {
-              setLibraryFilter(libraryId);
-              setTab('catalog');
-            }}
-          />
+          <Suspense fallback={<div role="status" className="grid min-h-72 place-items-center text-sm text-slate-500">Loading library map…</div>}>
+            <LibraryMap
+              focusBranchId={mapFocusLibraryId}
+              bookContext={mapBookContext}
+              onBrowseLibrary={(libraryId) => {
+                setLibraryFilter(libraryId);
+                setTab('catalog');
+              }}
+            />
+          </Suspense>
         )}
 
         {/* =================================================
@@ -2347,19 +2342,19 @@ function VisitorDashboardContent() {
                     {myVisits.length > 0 && (
                       <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                         <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-slate-900/40">
-                          <p className="text-[10px] font-extrabold uppercase tracking-wide text-blue-700 dark:text-blue-300">Descriptive analytics</p>
-                          <h4 className="mt-1 text-xs font-bold text-slate-700 dark:text-slate-200">Most visited libraries</h4>
+                          <p className="text-sm font-extrabold uppercase tracking-wide text-blue-700 dark:text-blue-300">Descriptive Analytics</p>
+                          <h4 className="mt-1 text-base font-bold text-slate-700 dark:text-slate-200">Most visited libraries</h4>
                           <p className="mb-2 mt-1 text-[11px] text-slate-500 dark:text-slate-400">Your check-ins grouped by library for the selected period.</p>
                           <div className="h-48">
-                            <Bar data={attendanceLibraryChartData} options={attendanceChartOptions} />
+                            <DeferredChart data={attendanceLibraryChartData} options={attendanceChartOptions} />
                           </div>
                         </div>
                         <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-slate-900/40">
-                          <p className="text-[10px] font-extrabold uppercase tracking-wide text-blue-700 dark:text-blue-300">Descriptive analytics</p>
-                          <h4 className="mt-1 text-xs font-bold text-slate-700 dark:text-slate-200">Visits per month · last 6 months</h4>
+                          <p className="text-sm font-extrabold uppercase tracking-wide text-blue-700 dark:text-blue-300">Descriptive Analytics</p>
+                          <h4 className="mt-1 text-base font-bold text-slate-700 dark:text-slate-200">Visits per month · last 6 months</h4>
                           <p className="mb-2 mt-1 text-[11px] text-slate-500 dark:text-slate-400">Shows how your monthly check-ins have changed over time.</p>
                           <div className="h-48">
-                            <Bar data={attendanceMonthlyChartData} options={attendanceMonthlyChartOptions} />
+                            <DeferredChart data={attendanceMonthlyChartData} options={attendanceMonthlyChartOptions} />
                           </div>
                         </div>
                         {attendanceHistoryHasMore && (

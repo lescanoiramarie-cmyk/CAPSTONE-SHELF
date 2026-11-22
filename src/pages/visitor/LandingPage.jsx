@@ -310,7 +310,8 @@ const featuredBooks = books
           .in('audience', ['general', 'both'])
           .is('library_id', null)
           .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .limit(20);
 
         if (!active) return;
         if (error) {

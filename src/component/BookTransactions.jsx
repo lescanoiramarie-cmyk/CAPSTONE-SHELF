@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { useAuth } from '../context/useAuth.js';
 import { useLibraryData, useLibrary } from '../context/useLibrary.js';
-import QrScanner from './QrScanner';
 import VisitorScanDetails from './VisitorScanDetails';
+
+const QrScanner = lazy(() => import('./QrScanner.jsx'));
 
 function formatDateTime(iso) {
   if (!iso) return '—';
@@ -99,7 +100,9 @@ export default function BookTransactions() {
             {mode === 'borrowing' ? 'pending pickup requests' : 'active borrowed items'}.
           </p>
           <div className="max-w-sm">
-            <QrScanner onScan={handleScan} />
+            <Suspense fallback={<p role="status" className="py-3 text-xs text-slate-500">Loading QR scanner…</p>}>
+              <QrScanner onScan={handleScan} />
+            </Suspense>
           </div>
         </div>
 

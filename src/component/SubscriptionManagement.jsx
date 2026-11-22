@@ -123,19 +123,21 @@ export default function SubscriptionManagement({ mode = 'subadmin', libraryId = 
   const [activePanel, setActivePanel] = useState('subscriptions');
   const [renewalFollows, setRenewalFollows] = useState({});
   const reload = useCallback(async () => {
-    const { data, error: rpcError } = await supabase.rpc('get_library_subscription_dashboard', { p_library_id: libraryId ? String(libraryId) : null });
+    const [dashboardResult, followResult] = await Promise.all([
+      supabase.rpc('get_library_subscription_dashboard', { p_library_id: libraryId ? String(libraryId) : null }),
+      isSuperAdmin
+        ? supabase
+            .from('subscription_renewal_follows')
+            .select('library_id, renewal_date, notification_sent_at')
+            .limit(100)
+        : Promise.resolve({ data: null, error: null }),
+    ]);
+    const { data, error: rpcError } = dashboardResult;
     setError('');
     if (rpcError) { setError(rpcError.message || 'Unable to load subscriptions.'); setRows([]); }
-    else {
-      setRows(Array.isArray(data) ? data : []);
-      if (isSuperAdmin) {
-        const { data: followRows, error: followError } = await supabase
-          .from('subscription_renewal_follows')
-          .select('library_id, renewal_date, notification_sent_at');
-        if (!followError && Array.isArray(followRows)) {
-          setRenewalFollows(Object.fromEntries(followRows.map((follow) => [`${follow.library_id}:${follow.renewal_date}`, follow])));
-        }
-      }
+    else setRows(Array.isArray(data) ? data : []);
+    if (isSuperAdmin && !followResult.error && Array.isArray(followResult.data)) {
+      setRenewalFollows(Object.fromEntries(followResult.data.map((follow) => [`${follow.library_id}:${follow.renewal_date}`, follow])));
     }
     setLoading(false);
   }, [libraryId, isSuperAdmin]);

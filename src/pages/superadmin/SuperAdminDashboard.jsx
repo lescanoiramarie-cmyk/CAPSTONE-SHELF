@@ -7,25 +7,10 @@ import {
   useRef,
   useState,
 } from 'react';
-import {
-  Bar,
-  Line,
-} from 'react-chartjs-2';
 import LocationPickerMap from '../../component/LocationPickerMap.jsx';
 import GeoapifyAddressInput from '../../component/GeoapifyAddressInput.jsx';
 import { geocodeGeoapifyAddress, getGeoapifyApiKey } from '../../lib/geoapify.js';
 import AdminAnalyticsPanel from '../../component/AdminAnalyticsPanel.jsx';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  Title,
-  Tooltip,
-  Legend,
-} from 'chart.js';
 import {
   Activity,
   AlertTriangle,
@@ -53,11 +38,10 @@ import {
   useLibrary,
 } from '../../context/useLibrary.js';
 import BookInventory from '../../component/BookInventory.jsx';
+import DeferredChart from '../../component/DeferredChart.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
-import AdminWorkspace from '../../component/AdminWorkspace.jsx';
 import ExportConfirmationDialog from '../../component/ExportConfirmationDialog.jsx';
 import DashboardWelcome from '../../component/DashboardWelcome.jsx';
-import BookRatingsChart from '../../component/BookRatingsChart.jsx';
 import DashboardDataBoundary from '../../component/DashboardDataBoundary.jsx';
 import PreferredLanguageSetting from '../../component/PreferredLanguageSetting.jsx';
 import PageJump from '../../component/PageJump.jsx';
@@ -93,17 +77,8 @@ import {
 const VisitorAccountManagement = lazy(
   () => import('../../component/VisitorAccountManagement.jsx')
 );
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  Title,
-  Tooltip,
-  Legend
-);
+const AdminWorkspace = lazy(() => import('../../component/AdminWorkspace.jsx'));
+const BookRatingsChart = lazy(() => import('../../component/BookRatingsChart.jsx'));
 
 async function getStaffFunctionErrorMessage(error) {
   const response = error?.context;
@@ -1993,7 +1968,7 @@ const handleEditStaff = (staff) => {
                 <h3 className="mt-1 text-sm font-bold text-slate-800">Check-ins & Confirmed Borrows · {trendData.monthLabel}</h3>
                 <p className="mb-3 mt-1 text-xs text-slate-500">Daily comparison of visitor check-ins and completed book pickups across all libraries.</p>
                 <div className="h-82.5">
-                  <Line
+                  <DeferredChart type="line"
                     data={{
                       labels: trendData.labels,
                       datasets: [
@@ -2029,7 +2004,7 @@ const handleEditStaff = (staff) => {
                   <p className="text-xs text-slate-500">No books in the catalog yet.</p>
                 ) : (
                   <div className="h-82.5">
-                    <Bar
+                    <DeferredChart type="bar"
                       data={{
                         labels: categoryData.labels,
                         datasets: [{ label: 'Titles', data: categoryData.values, backgroundColor: '#2563eb' }],
@@ -2069,7 +2044,9 @@ const handleEditStaff = (staff) => {
             </div>
             <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-3">
               <div className="h-full lg:col-span-1 [&>section]:h-full">
-                <BookRatingsChart books={books} fillHeight />
+                <Suspense fallback={<p className="p-4 text-sm text-slate-500">Loading ratings chart…</p>}>
+                  <BookRatingsChart books={books} fillHeight />
+                </Suspense>
               </div>
               <div className="h-full rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
                 <div className="mb-3">
@@ -2081,7 +2058,7 @@ const handleEditStaff = (staff) => {
                   <p className="py-8 text-center text-sm text-slate-500">{borrowRequestsLoadError ? `No branch check-ins were recorded in ${trendData.monthLabel}; request/borrow activity is unavailable because its history request failed.` : `No branch check-ins or request/borrow activity was recorded in ${trendData.monthLabel}.`}</p>
                 ) : (
                   <div className="h-80">
-                    <Bar
+                    <DeferredChart type="bar"
                       data={{
                         labels: branchActivityData.labels,
                         datasets: [
@@ -2111,7 +2088,7 @@ const handleEditStaff = (staff) => {
                 <p className="mt-1 text-xs text-slate-500">Current copy counts; “not available” includes copies currently on loan or otherwise unavailable.</p>
               </div>
               {branchInventoryData.labels.length ? <div className="h-80">
-                <Bar
+                <DeferredChart type="bar"
                   data={{
                     labels: branchInventoryData.labels,
                     datasets: [
@@ -3050,6 +3027,7 @@ const handleEditStaff = (staff) => {
 
         {/* REPORTS AND SERVICES */}
         {section === 'workspace' && (
+          <Suspense fallback={<div role="status" className="p-6 text-sm text-slate-500">Loading reports and analytics…</div>}>
           <AdminWorkspace
             key={`${focusedNotificationRequestId || 'none'}-${notificationFocusVersion}`}
             initialTab={activeTab}
@@ -3063,10 +3041,12 @@ const handleEditStaff = (staff) => {
             focusedNotificationRequestId={focusedNotificationRequestId}
             focusedNotificationType={focusedNotificationType}
           />
+          </Suspense>
         )}
 
         {/* COMMUNICATION (FEEDBACK & ANNOUNCEMENTS) */}
         {section === 'communication' && (
+          <Suspense fallback={<div role="status" className="p-6 text-sm text-slate-500">Loading communication tools…</div>}>
           <AdminWorkspace
             initialTab={activeTab}
             mode="communication"
@@ -3077,6 +3057,7 @@ const handleEditStaff = (staff) => {
             attendanceLogs={attendanceLogs}
             attendanceDataComplete={initialDataReady && !attendanceLoadError}
           />
+          </Suspense>
         )}
       </main>
     </div>
