@@ -1,6 +1,6 @@
--- Seed 50 to 100 clearly labeled historical book transactions per
--- library/month pair across the most recent 12 calendar months. Each pair has
--- a deterministic target in that range. Existing visitor accounts are rotated
+-- Seed exactly 200 clearly labeled historical book transactions per
+-- library/month pair from January 2024 through the current calendar month.
+-- Existing visitor accounts are rotated
 -- through generated transactions; books belong to the branch receiving them.
 -- Safe to rerun: deterministic UUIDs and conflict handling prevent duplicates.
 -- These rows change dashboard/report totals. Use local/disposable data unless
@@ -56,7 +56,7 @@ WITH library_pool AS MATERIALIZED (
     AND book.library_id IS NOT NULL
 ), months AS MATERIALIZED (
   SELECT generate_series(
-    date_trunc('month', current_date)::date - interval '11 months',
+    date '2024-01-01',
     date_trunc('month', current_date)::date,
     interval '1 month'
   )::date AS month_start
@@ -64,10 +64,7 @@ WITH library_pool AS MATERIALIZED (
   SELECT
     library.id AS library_id,
     months.month_start,
-    50 + mod(
-      abs(hashtext(format('%s|%s', library.id, months.month_start))::bigint),
-      51
-    )::integer AS target_rows
+    200 AS target_rows
   FROM library_pool AS library
   CROSS JOIN months
 ), branch_month_rows AS MATERIALIZED (
@@ -184,6 +181,6 @@ JOIN public.books AS book ON book.id = request.book_id
 JOIN public.libraries AS library ON library.id = book.library_id
 WHERE request.confirmed_by = 'Test data seed'
   AND request.return_confirmed_by = 'Test data seed'
-  AND request.request_date >= date_trunc('month', current_date) - interval '11 months'
+  AND request.request_date >= date '2024-01-01'
 GROUP BY library.name, date_trunc('month', request.request_date)
 ORDER BY date_trunc('month', request.request_date), library.name;

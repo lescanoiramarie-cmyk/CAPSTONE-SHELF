@@ -3055,7 +3055,7 @@ export default function OPACCatalog({
                 <div className="flex items-center gap-2">
                   <ClipboardList size={20} className="text-shelf-primary dark:text-blue-400" aria-hidden="true" />
                   <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
-                    {t('Saved Books & Reading List')}
+                    {t('My Reading List')}
                   </h2>
                 </div>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">

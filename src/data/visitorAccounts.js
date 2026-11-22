@@ -49,6 +49,16 @@ export async function approveCommunityVisitor(visitorId) {
   return true;
 }
 
+export async function rejectCommunityVisitor(visitorId) {
+  const { data, error } = await supabase.rpc('reject_community_visitor', {
+    p_visitor_id: visitorId,
+  });
+  if (error) throw new Error(error.message || 'Unable to reject this community visitor.');
+  if (data !== true) throw new Error('The community visitor was not rejected.');
+  invalidateVisitorAccountsCache();
+  return true;
+}
+
 function pruneExpiredCacheEntries() {
   const now = Date.now();
   const expiredKeys = [];
@@ -84,6 +94,7 @@ export async function fetchVisitorAccounts({
   page = 1,
   pageSize = 10,
   search = '',
+  approvalFilter = 'all',
 } = {}) {
   // Use the new secure RPC to validate the current user's role
   // with AAL2 enforcement for staff operations.
@@ -127,6 +138,7 @@ export async function fetchVisitorAccounts({
     safePage,
     safePageSize,
     normalizedSearch.toLowerCase(),
+    approvalFilter,
   ]);
   const cached = visitorAccountsCache.get(cacheKey);
 
@@ -146,6 +158,14 @@ export async function fetchVisitorAccounts({
     query = query.is('library_id', null);
   } else if (effectiveLibraryId !== undefined) {
     query = query.eq('library_id', effectiveLibraryId);
+  }
+
+  if (approvalFilter === 'pending') {
+    query = query.eq('registration_type', 'community').eq('approval_status', 'pending');
+  } else if (approvalFilter === 'rejected') {
+    query = query.eq('registration_type', 'community').eq('approval_status', 'rejected');
+  } else if (approvalFilter === 'approved') {
+    query = query.eq('approval_status', 'approved');
   }
 
   const safeSearch = normalizedSearch

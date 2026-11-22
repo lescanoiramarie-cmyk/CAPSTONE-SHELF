@@ -74,7 +74,8 @@ import {
   filterRequestsForLibrary,
   filterRowsForLibrary,
   getAnalyticsMonthKey,
-  getAnalyticsMonthOptions,
+  getAnalyticsMonthOptionsForYear,
+  getAnalyticsYearOptions,
   getAnalyticsMonthWindow,
 } from '../../lib/dashboardAnalytics.js';
 
@@ -950,7 +951,8 @@ export default function SubAdminDashboard() {
     return NAV.some((item) => item.id === saved && item.id !== 'settings') ? saved : 'overview';
   });
   const [overviewMonth, setOverviewMonth] = useState(() => getAnalyticsMonthKey());
-  const overviewMonthOptions = getAnalyticsMonthOptions(2);
+  const [overviewYear, setOverviewYear] = useState(() => new Date().getFullYear());
+  const overviewMonthOptions = getAnalyticsMonthOptionsForYear(overviewYear);
   const mainContentRef = useRef(null);
   const [focusRequestId, setFocusRequestId] = useState(null);
   const [focusNotificationType, setFocusNotificationType] = useState(null);
@@ -1867,7 +1869,10 @@ export default function SubAdminDashboard() {
             {/* OVERVIEW CHARTS */}
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
               <div><h3 className="text-sm font-bold text-slate-800">Branch activity</h3><p className="mt-0.5 text-xs text-slate-500">Library visits and confirmed book borrows for the selected month.</p></div>
-              <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Month<select aria-label="Filter overview charts by month" value={overviewMonth} onChange={(event) => setOverviewMonth(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">{overviewMonthOptions.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select></label>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Year<select aria-label="Filter overview charts by year" value={overviewYear} onChange={(event) => { const year = Number(event.target.value); setOverviewYear(year); const lastMonth = year === new Date().getFullYear() ? new Date().getMonth() + 1 : 12; setOverviewMonth(`${year}-${String(lastMonth).padStart(2, '0')}`); }} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">{getAnalyticsYearOptions().map((year) => <option key={year} value={year}>{year}</option>)}</select></label>
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Month<select aria-label="Filter overview charts by month" value={overviewMonth} onChange={(event) => setOverviewMonth(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">{overviewMonthOptions.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select></label>
+              </div>
             </div>
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
               <AttendanceTrendChart attendance={branchAttendance} monthKey={overviewMonth} />

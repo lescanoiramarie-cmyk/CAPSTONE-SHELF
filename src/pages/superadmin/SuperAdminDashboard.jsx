@@ -86,7 +86,8 @@ import {
 import {
   getRequestLibraryId,
   getAnalyticsMonthKey,
-  getAnalyticsMonthOptions,
+  getAnalyticsMonthOptionsForYear,
+  getAnalyticsYearOptions,
   getAnalyticsMonthWindow,
 } from '../../lib/dashboardAnalytics.js';
 
@@ -239,7 +240,8 @@ export default function SuperAdminDashboard() {
     return superAdminStartPages.includes(saved) ? saved : 'overview';
   });
   const [overviewMonth, setOverviewMonth] = useState(() => getAnalyticsMonthKey());
-  const overviewMonthOptions = getAnalyticsMonthOptions(2);
+  const [overviewYear, setOverviewYear] = useState(() => new Date().getFullYear());
+  const overviewMonthOptions = getAnalyticsMonthOptionsForYear(overviewYear);
   const [termsDocumentKey, setTermsDocumentKey] = useState('visitor');
   const [termsDocumentContent, setTermsDocumentContent] = useState('');
   const [termsDocumentVersion, setTermsDocumentVersion] = useState('');
@@ -1897,7 +1899,10 @@ const handleEditStaff = (staff) => {
 
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
               <div><h3 className="text-sm font-bold text-slate-800">System activity analytics</h3><p className="mt-0.5 text-xs text-slate-500">Counts reflect recorded events in the selected calendar month.</p></div>
-              <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Month<select aria-label="Filter overview charts by month" value={overviewMonth} onChange={(event) => setOverviewMonth(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">{overviewMonthOptions.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select></label>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Year<select aria-label="Filter overview charts by year" value={overviewYear} onChange={(event) => { const year = Number(event.target.value); setOverviewYear(year); const lastMonth = year === new Date().getFullYear() ? new Date().getMonth() + 1 : 12; setOverviewMonth(`${year}-${String(lastMonth).padStart(2, '0')}`); }} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">{getAnalyticsYearOptions().map((year) => <option key={year} value={year}>{year}</option>)}</select></label>
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">Month<select aria-label="Filter overview charts by month" value={overviewMonth} onChange={(event) => setOverviewMonth(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">{overviewMonthOptions.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select></label>
+              </div>
             </div>
             {borrowRequestsLoadError && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"><span>Borrowing history failed to load: {borrowRequestsLoadError}</span><button type="button" onClick={() => void retryBorrowRequests()} className="rounded-lg bg-amber-900 px-3 py-2 text-xs font-bold text-white">Try again</button></div>}
             <AdminSectionInsights

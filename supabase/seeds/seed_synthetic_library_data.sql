@@ -85,9 +85,16 @@ month_ranges AS (
     month_offset,
     (
       date_trunc('month', current_date)::date
-      - ((11 - month_offset) * interval '1 month')
+      - (
+        ((extract(year FROM current_date)::integer - 2024) * 12
+          + extract(month FROM current_date)::integer - 1 - month_offset)
+        * interval '1 month'
+      )
     )::date AS month_start
-  FROM generate_series(0, 11) AS months(month_offset)
+  FROM generate_series(
+    0,
+    ((extract(year FROM current_date)::integer - 2024) * 12 + extract(month FROM current_date)::integer - 1)
+  ) AS months(month_offset)
 ),
 library_months AS (
   SELECT
@@ -109,7 +116,7 @@ attendance_rows AS (
   SELECT
     library_months.*,
     visit_number,
-    ((month_offset * 300 + visit_number - 1) % 500) + 1 AS visitor_number,
+    ((month_offset * 200 + visit_number - 1) % 500) + 1 AS visitor_number,
     md5(
       library_id::text
       || '|shelf-demo-attendance|'
@@ -118,7 +125,7 @@ attendance_rows AS (
       || visit_number::text
     ) AS seed_key
   FROM library_months
-  CROSS JOIN generate_series(1, 300) AS visits(visit_number)
+  CROSS JOIN generate_series(1, 200) AS visits(visit_number)
 ),
 attendance_times AS (
   SELECT

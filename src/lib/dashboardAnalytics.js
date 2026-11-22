@@ -16,6 +16,18 @@ export function getAnalyticsMonthOptions(count = 12, value = new Date()) {
   });
 }
 
+export function getAnalyticsYearOptions(startYear = 2024, value = new Date()) {
+  const currentYear = new Date(value).getFullYear();
+  return Array.from({ length: Math.max(0, currentYear - startYear + 1) }, (_, index) => currentYear - index);
+}
+
+export function getAnalyticsMonthOptionsForYear(year, value = new Date()) {
+  const selectedYear = Number(year);
+  const current = new Date(value);
+  const lastMonth = selectedYear === current.getFullYear() ? current.getMonth() : 11;
+  return getAnalyticsMonthOptions(lastMonth + 1, new Date(selectedYear, lastMonth, 1));
+}
+
 export function getAnalyticsMonthWindow(monthKey) {
   const match = /^(\d{4})-(\d{2})$/.exec(String(monthKey || ''));
   if (!match) return null;

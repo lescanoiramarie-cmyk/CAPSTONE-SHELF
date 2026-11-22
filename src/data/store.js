@@ -474,9 +474,9 @@ const BORROW_DASHBOARD_ACTIVE_STATUSES = [
   'ready_for_pickup',
   'borrowed',
 ];
-// Keep the selected month and the full preceding month available for the
-// overview charts and same-days comparison.
-const BORROW_DASHBOARD_RECENT_DAYS = 65;
+// Include the historical demo range (January 2024 onward) for year/month
+// selectors in staff analytics, while retaining the active status rows.
+const BORROW_DASHBOARD_RECENT_DAYS = 1200;
 
 async function fetchStaffBorrowRequestRows(authenticatedUserId, signal) {
   // Use the new secure RPC for staff borrowing history

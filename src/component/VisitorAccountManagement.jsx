@@ -4,6 +4,7 @@ import AdminAnalyticsPanel from './AdminAnalyticsPanel.jsx';
 import {
   fetchVisitorAccounts,
   approveCommunityVisitor,
+  rejectCommunityVisitor,
   setVisitorActive,
 } from '../data/visitorAccounts.js';
 
@@ -32,6 +33,8 @@ export default function VisitorAccountManagement({
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [approvalFilter, setApprovalFilter] = useState('all');
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [visitors, setVisitors] = useState([]);
   const [total, setTotal] = useState(0);
   const [accountAnalytics, setAccountAnalytics] = useState(null);
@@ -63,6 +66,8 @@ export default function VisitorAccountManagement({
     page,
     pageSize,
     debouncedSearch,
+    approvalFilter,
+    refreshVersion,
   ]);
 
   useEffect(() => {
@@ -75,6 +80,7 @@ export default function VisitorAccountManagement({
       page,
       pageSize,
       search: debouncedSearch,
+      approvalFilter,
     })
       .then((result) => {
         if (cancelled) return;
@@ -104,6 +110,8 @@ export default function VisitorAccountManagement({
     missingBranch,
     page,
     pageSize,
+    approvalFilter,
+    refreshVersion,
     requestKey,
     selectedLibraryId,
   ]);
@@ -140,11 +148,29 @@ export default function VisitorAccountManagement({
         )
       );
       setActionMessage(isPendingCommunity ? 'Community visitor approved successfully.' : `Visitor account ${nextIsActive ? 'enabled' : 'disabled'} successfully.`);
+      setRefreshVersion((version) => version + 1);
     } catch (updateError) {
       console.error('Visitor account status update failed:', updateError);
       setActionError(
         updateError.message || 'Unable to update visitor account status.'
       );
+    } finally {
+      setUpdatingVisitorId('');
+    }
+  };
+
+  const handleRejectVisitor = async (visitor) => {
+    if (isSuperAdmin || !visitor?.id || updatingVisitorId) return;
+    setUpdatingVisitorId(visitor.id);
+    setActionError('');
+    setActionMessage('');
+    try {
+      await rejectCommunityVisitor(visitor.id);
+      setActionMessage('Community visitor rejected. The account remains inactive and cannot use visitor services.');
+      setRefreshVersion((version) => version + 1);
+    } catch (updateError) {
+      console.error('Community visitor rejection failed:', updateError);
+      setActionError(updateError.message || 'Unable to reject this community visitor.');
     } finally {
       setUpdatingVisitorId('');
     }
@@ -205,6 +231,22 @@ export default function VisitorAccountManagement({
             className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm"
           />
         </label>
+        {!isSuperAdmin && (
+          <label className="block w-full sm:w-52 sm:shrink-0">
+            <span className="mb-1 block text-xs font-semibold text-slate-600">Approval status</span>
+            <select
+              value={approvalFilter}
+              onChange={(event) => { setApprovalFilter(event.target.value); setPage(1); }}
+              aria-label="Filter visitor accounts by approval status"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20"
+            >
+              <option value="all">All visitors</option>
+              <option value="pending">Pending approval</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </label>
+        )}
         {isSuperAdmin && (
           <label className="block w-full sm:w-80 sm:shrink-0">
             <span className="mb-1 block text-xs font-semibold text-slate-600">Library</span>
@@ -308,7 +350,7 @@ export default function VisitorAccountManagement({
                     </td>
                     <td className="px-4 py-3 text-slate-600">
                       <span className="block capitalize">{visitor.registrationType === 'community' ? 'Public / Community' : 'Institutional'}</span>
-                      {visitor.registrationType === 'community' && <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold ${visitor.approvalStatus === 'pending' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>{visitor.approvalStatus === 'pending' ? 'Approval pending' : 'Approved'}</span>}
+                      {visitor.registrationType === 'community' && <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold ${visitor.approvalStatus === 'pending' ? 'bg-amber-100 text-amber-800' : visitor.approvalStatus === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'}`}>{visitor.approvalStatus === 'pending' ? 'Approval pending' : visitor.approvalStatus === 'rejected' ? 'Rejected · inactive' : 'Approved'}</span>}
                     </td>
                     <td className="px-4 py-3 text-slate-600">{formatDate(visitor.registeredAt)}</td>
                     <td className="px-4 py-3">
@@ -321,25 +363,28 @@ export default function VisitorAccountManagement({
                           {visitor.isActive ? 'Active' : 'Disabled'}
                         </span>
                       ) : (
-                        <button
-                          type="button"
-                          data-confirm-message={`${visitor.registrationType === 'community' && visitor.approvalStatus === 'pending' ? 'Approve' : visitor.isActive ? 'Disable' : 'Enable'} the visitor account for "${visitor.fullName || visitor.email || 'this visitor'}"?`}
-                          onClick={() => void handleToggleVisitor(visitor)}
-                          disabled={Boolean(updatingVisitorId)}
-                          className={`rounded-md border px-3 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                            visitor.isActive
-                              ? 'border-red-200 text-red-700 hover:bg-red-50'
-                              : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
-                          }`}
-                        >
-                          {updatingVisitorId === visitor.id
-                            ? 'Updating...'
-                            : visitor.registrationType === 'community' && visitor.approvalStatus === 'pending'
-                              ? 'Approve visitor'
-                              : visitor.isActive
-                                ? 'Disable'
-                                : 'Enable'}
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            data-confirm-message={`${visitor.registrationType === 'community' && visitor.approvalStatus === 'pending' ? 'Approve' : visitor.isActive ? 'Disable' : 'Enable'} the visitor account for "${visitor.fullName || visitor.email || 'this visitor'}"?`}
+                            onClick={() => void handleToggleVisitor(visitor)}
+                            disabled={Boolean(updatingVisitorId)}
+                            className={`rounded-md border px-3 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${visitor.isActive ? 'border-red-200 text-red-700 hover:bg-red-50' : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'}`}
+                          >
+                            {updatingVisitorId === visitor.id ? 'Updating...' : visitor.registrationType === 'community' && visitor.approvalStatus === 'pending' ? 'Approve visitor' : visitor.isActive ? 'Disable' : 'Enable'}
+                          </button>
+                          {visitor.registrationType === 'community' && visitor.approvalStatus === 'pending' && (
+                            <button
+                              type="button"
+                              data-confirm-message={`Reject ${visitor.fullName || visitor.email || 'this visitor'}? Their account will stay inactive and unapproved.`}
+                              onClick={() => void handleRejectVisitor(visitor)}
+                              disabled={Boolean(updatingVisitorId)}
+                              className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {updatingVisitorId === visitor.id ? 'Updating...' : 'Reject'}
+                            </button>
+                          )}
+                        </div>
                       )}
                     </td>
                   </tr>
