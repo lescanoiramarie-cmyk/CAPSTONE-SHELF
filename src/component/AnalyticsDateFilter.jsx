@@ -13,6 +13,7 @@ export default function AnalyticsDateFilter({
   onCustomStartChange,
   onCustomEndChange,
   range,
+  inline = false,
 }) {
   const selectedDate = range?.start instanceof Date && Number.isFinite(range.start.getTime())
     ? range.start
@@ -65,8 +66,8 @@ export default function AnalyticsDateFilter({
   };
 
   return (
-    <div className="grid grid-cols-2 gap-3">
-      <label className="col-span-2 block text-xs font-semibold text-slate-600 dark:text-slate-300">
+    <div className={inline ? `grid grid-cols-2 gap-3 ${period === 'annual' ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}` : 'grid grid-cols-2 gap-3'}>
+      <label className={`${inline ? 'col-span-2 sm:col-span-1' : 'col-span-2'} block text-xs font-semibold text-slate-600 dark:text-slate-300`}>
         View by
         <select
           value={period}

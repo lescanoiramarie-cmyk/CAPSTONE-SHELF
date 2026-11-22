@@ -1644,7 +1644,7 @@ export default function AdminWorkspace({
                   : 'Filter analytics by library or branch, year, and month.'}
               </p>
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className={isSubAdmin ? 'grid items-end gap-4 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]' : 'grid gap-4 md:grid-cols-2'}>
               {!isSubAdmin && (
                 <label className="block text-sm font-semibold text-slate-700">
                   Library / Branch
@@ -1666,6 +1666,7 @@ export default function AdminWorkspace({
                 </label>
               )}
               <AnalyticsDateFilter
+                inline={isSubAdmin}
                 timeframe={timeframe}
                 onTimeframeChange={(value) => {
                   setTimeframe(value);
@@ -1683,15 +1684,15 @@ export default function AdminWorkspace({
                 }}
                 range={analyticsWindow}
               />
-            </div>
-            {isSubAdmin && (
-              <div className="mt-4">
-                <p className="text-sm font-semibold text-slate-700">Assigned branch</p>
-                <div className="mt-1 border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 rounded-lg font-medium">
-                  {getLibraryName(libraries, currentLibraryId)}
+              {isSubAdmin && (
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-slate-600">Assigned branch</p>
+                  <div className="mt-1 border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 rounded-lg font-medium">
+                    {getLibraryName(libraries, currentLibraryId)}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
             <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
               <span className="font-semibold text-slate-500">Showing:</span>
               <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-700">
