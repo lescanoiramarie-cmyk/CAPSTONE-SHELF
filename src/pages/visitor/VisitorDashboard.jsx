@@ -1933,7 +1933,7 @@ function VisitorDashboardContent() {
         ================================================== */}
         <nav
           aria-label="Visitor dashboard"
-          className="relative z-30 flex min-w-0 flex-nowrap gap-2 overflow-x-auto overflow-y-hidden no-scrollbar scroll-px-3 snap-x snap-proximity border-b border-slate-200 bg-shelf-bg/95 px-3 pb-3 pt-2 backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/95 sm:sticky sm:top-20 sm:rounded-2xl sm:border sm:px-3 sm:py-2.5"
+          className="visitor-dashboard-nav relative z-30 flex min-w-0 flex-nowrap gap-2 overflow-x-auto overflow-y-hidden no-scrollbar scroll-px-3 snap-x snap-proximity border-b border-slate-200 bg-shelf-bg/95 px-3 pb-3 pt-2 backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/95 sm:sticky sm:top-20 sm:rounded-2xl sm:border sm:px-3 sm:py-2.5"
         >
           {[
             { id: 'catalog', label: t('Catalog'), Icon: BookOpen },

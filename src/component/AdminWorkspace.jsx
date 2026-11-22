@@ -188,6 +188,8 @@ export default function AdminWorkspace({
   const [exporting, setExporting] = useState(false);
   const [exportingFormat, setExportingFormat] = useState('');
   const [preparedAnalyticsExports, setPreparedAnalyticsExports] = useState([]);
+  const [pendingReportExport, setPendingReportExport] = useState(null);
+  const [savingReportExport, setSavingReportExport] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [announcementForm, setAnnouncementForm] = useState({
@@ -687,7 +689,8 @@ export default function AdminWorkspace({
         : analyticsLibraryId
           ? getLibraryName(libraries, analyticsLibraryId)
           : 'All Libraries';
-      await exportReport(filteredReportRows, format, {
+      const label = format === 'xlsx' ? 'Excel' : format === 'csv' ? 'CSV' : 'PDF';
+      const generatedFile = await exportReport(filteredReportRows, format, {
         reportType: 'Circulation',
         title: 'Circulation Report',
         libraryName: branchLabel,
@@ -708,14 +711,69 @@ export default function AdminWorkspace({
           ['Total Visits', analyticsAttendance.length],
           ['Total Book Requests', analyticsBorrows.length],
         ],
+        download: !isSubAdmin,
       });
-      setMessage('Report exported successfully.');
+      if (isSubAdmin) {
+        setPendingReportExport({ format, label, ...generatedFile });
+        setMessage(`${label} report is ready. Confirm to choose where to save it.`);
+      } else {
+        setMessage('Report exported successfully.');
+      }
     } catch {
       setError('The report could not be exported. Please try again.');
     } finally {
       exportLockRef.current = false;
       setExporting(false);
       setExportingFormat('');
+    }
+  };
+
+  const savePendingReportExport = async () => {
+    if (!pendingReportExport?.blob || !pendingReportExport?.fileName) return;
+    setSavingReportExport(true);
+    try {
+      if (typeof window.showSaveFilePicker === 'function') {
+        const extension = pendingReportExport.fileName.split('.').pop()?.toLowerCase();
+        const mimeType = extension === 'pdf'
+          ? 'application/pdf'
+          : extension === 'csv'
+            ? 'text/csv'
+            : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: pendingReportExport.fileName,
+            types: [{ description: `${pendingReportExport.label} report`, accept: { [mimeType]: [`.${extension}`] } }],
+          });
+          const writable = await handle.createWritable();
+          await writable.write(pendingReportExport.blob);
+          await writable.close();
+        } catch (pickerError) {
+          if (pickerError?.name === 'AbortError') throw pickerError;
+          const url = URL.createObjectURL(pendingReportExport.blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = pendingReportExport.fileName;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+      } else {
+        const url = URL.createObjectURL(pendingReportExport.blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = pendingReportExport.fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+      setPendingReportExport(null);
+      setMessage('Report saved successfully.');
+    } catch (saveError) {
+      if (saveError?.name !== 'AbortError') setError('The report could not be saved. Please try again.');
+    } finally {
+      setSavingReportExport(false);
     }
   };
 
@@ -806,6 +864,10 @@ export default function AdminWorkspace({
 
   const downloadPreparedAnalyticsExport = (preparedFile) => {
     if (!preparedFile?.blob || !preparedFile?.fileName) return;
+    if (isSubAdmin) {
+      setPendingReportExport(preparedFile);
+      return;
+    }
     const url = URL.createObjectURL(preparedFile.blob);
     const link = document.createElement('a');
     link.href = url;
@@ -1203,6 +1265,19 @@ export default function AdminWorkspace({
       {/* ALERT MESSAGES */}
       {error && <p role="alert" className="border border-red-200 bg-red-50 p-3 text-sm text-red-800 rounded-lg">{error}</p>}
       {message && <p role="status" className="border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 rounded-lg">{message}</p>}
+
+      {isSubAdmin && pendingReportExport && (
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/50 p-4" role="presentation">
+          <section role="dialog" aria-modal="true" aria-labelledby="report-export-confirm-title" className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+            <h2 id="report-export-confirm-title" className="text-lg font-bold text-slate-900 dark:text-white">Download this report?</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Your {pendingReportExport.label} report is ready. Continue to choose where to save <span className="font-semibold">{pendingReportExport.fileName}</span>.</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" disabled={savingReportExport} onClick={() => setPendingReportExport(null)} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-200">Cancel</button>
+              <button type="button" disabled={savingReportExport} onClick={() => void savePendingReportExport()} className="rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{savingReportExport ? 'Opening save dialog…' : 'Confirm and choose location'}</button>
+            </div>
+          </section>
+        </div>
+      )}
       {loading && <p className="text-sm text-slate-500">Loading records...</p>}
       {focusedNotificationRequestId && mode === 'reports' && tab === 'reports' && (
         <section
@@ -1922,7 +1997,7 @@ export default function AdminWorkspace({
       {/* FEEDBACK TAB */}
       {tab === 'feedback' && (
         <section className="space-y-4">
-            {!loading && <AdminAnalyticsPanel title="Visitor feedback workload" description="Counts respect the current search and branch scope; the oldest-wait prediction covers the full branch or system scope." metrics={[{ label: 'Unanswered', value: feedbackTotal }, { label: 'Answered', value: answeredFeedbackTotal }, { label: 'Response coverage', value: feedbackTotal + answeredFeedbackTotal ? `${Math.round((answeredFeedbackTotal / (feedbackTotal + answeredFeedbackTotal)) * 100)}%` : '—' }]} prediction={oldestUnansweredUnavailable ? 'The oldest unanswered message could not be loaded, so waiting time is unavailable.' : oldestUnansweredAt ? `The oldest unanswered message has been waiting ${Math.max(0, Math.floor((Date.now() - new Date(oldestUnansweredAt).getTime()) / 86400000))} days. A continuing backlog may delay visitor support.` : 'There are currently no unanswered messages in this scope.'} recommendation={feedbackTotal ? 'Reply to the oldest unanswered messages first, then check the queue daily until the backlog is cleared.' : 'Keep the response queue clear and review new feedback as it arrives.'} />}
+            {!loading && <AdminAnalyticsPanel title="Visitor feedback workload" description="Counts respect the current search and branch scope; the oldest unanswered message is checked across the full branch or system scope." metrics={[{ label: 'Unanswered', value: feedbackTotal }, { label: 'Answered', value: answeredFeedbackTotal }, { label: 'Response coverage', value: feedbackTotal + answeredFeedbackTotal ? `${Math.round((answeredFeedbackTotal / (feedbackTotal + answeredFeedbackTotal)) * 100)}%` : '—' }]} prediction={oldestUnansweredUnavailable ? 'The oldest unanswered message could not be loaded, so waiting time is unavailable.' : oldestUnansweredAt ? 'If the unanswered queue keeps growing, visitors may wait longer for support.' : 'There are currently no unanswered messages in this scope.'} recommendation={feedbackTotal ? 'Reply to the oldest unanswered messages first, then check the queue daily until the backlog is cleared.' : 'Keep the response queue clear and review new feedback as it arrives.'} />}
           {user?.role === 'superadmin' && (
             <div className="flex items-center gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-200">
               <ShieldCheck size={18} className="shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
