@@ -438,7 +438,7 @@ const featuredBooks = books
               className="px-3.5 py-2 border border-slate-700 bg-slate-800/80 text-slate-200 hover:text-white hover:bg-slate-700 hover:border-slate-600 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 shadow-sm"
             >
               <Search size={14} className="text-blue-400" />
-              <span>Browse OPAC (sign-in required)</span>
+              <span>Browse OPAC</span>
             </button>
             <button
               onClick={() => navigate('/visitor-login')}
@@ -490,7 +490,7 @@ const featuredBooks = books
                   className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-bold text-slate-200 transition hover:bg-slate-700"
                 >
                   <Search size={15} className="text-blue-400" aria-hidden="true" />
-                  Browse OPAC (sign-in required)
+                  Browse OPAC
                 </button>
                 <button
                   type="button"
@@ -541,7 +541,7 @@ const featuredBooks = books
               className="w-full sm:w-auto px-6 py-3.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-blue-600/30 transition-all duration-200 flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
             >
               <Search size={16} />
-              <span>Browse OPAC catalog (sign-in required)</span>
+              <span>Browse OPAC catalog</span>
             </button>
 
             <button 
@@ -923,7 +923,7 @@ const featuredBooks = books
 
       {/* FOOTER */}
       <footer className="bg-slate-950 text-shelf-muted-inverse py-6 text-center text-xs border-t border-slate-800">
-        &copy; 2026 SHELF Integrated Library Management System. All rights reserved.
+        © 2026 SHELF: A Shared Hub for Education and Library Fusion System. All rights reserved.
       </footer>
 
       {signInPromptMessage && (

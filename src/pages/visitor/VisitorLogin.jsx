@@ -1463,16 +1463,6 @@ setOtpResendRemaining(
   };
 
   // =========================================================
-  // BACK BUTTON
-  // =========================================================
-
-  const handleBack = () => {
-  setError('');
-  setCanResendVisitorOtp(false);
-  setView('login');
-};
-
-  // =========================================================
   // UI
   // =========================================================
 
@@ -1543,25 +1533,21 @@ setOtpResendRemaining(
               <ArrowLeft size={16} aria-hidden="true" />
               Back to home
             </button>
-            {(view === 'register' || view === 'forgot') && (
+            {view === 'forgot' && (
               <button
                 type="button"
                 onClick={() => {
-                  if (view === 'register') {
-                    handleBack();
-                  } else {
-                    setError('');
-                    setResetStep('request');
-                    setResetNotice('');
-                    setView('login');
-                  }
+                  setError('');
+                  setResetStep('request');
+                  setResetNotice('');
+                  setView('login');
                 }}
                 className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-shelf-primary"
-                aria-label={view === 'register' ? 'Back to Login' : 'Go back'}
-                title={view === 'register' ? 'Back to Login' : 'Go back'}
+                aria-label="Go back"
+                title="Go back"
               >
                 <ArrowLeft size={16} aria-hidden="true" />
-                {view === 'register' ? 'Back to login' : 'Back'}
+                Back
               </button>
             )}
           </div>

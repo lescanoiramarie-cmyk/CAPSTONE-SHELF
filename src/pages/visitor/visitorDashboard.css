@@ -1392,6 +1392,7 @@
     right: max(0.5rem, env(safe-area-inset-right));
     left: max(0.5rem, env(safe-area-inset-left));
     width: auto;
+    max-width: none;
     max-height: calc(100dvh - var(--visitor-header-height) - 1rem);
     margin-top: 0;
   }

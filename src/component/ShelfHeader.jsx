@@ -340,7 +340,7 @@ export default function ShelfHeader({
                     aria-label="Close notifications"
                     onClick={() => setIsNotificationsOpen(false)}
                   />
-                  <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden z-50 dark:border-slate-700 dark:bg-slate-800">
+                  <div className={`absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden z-50 dark:border-slate-700 dark:bg-slate-800 ${isVisitor ? 'visitor-notifications-panel' : ''}`}>
                     <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-700 flex items-center justify-between">
                       <h3 className="text-sm font-bold text-slate-900 dark:text-white">{t('Notifications')}</h3>
                       {isVisitor && visitorUnreadCount > 0 && (
