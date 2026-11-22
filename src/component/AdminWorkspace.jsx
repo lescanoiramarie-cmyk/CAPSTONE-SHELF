@@ -1857,7 +1857,7 @@ export default function AdminWorkspace({
                 <h2 className="text-base font-bold text-slate-800">Prescriptive analytics · Demand and available copies</h2>
                 <p className="mt-1 text-xs text-slate-500">Recommended actions and related book demand and stock data for the selected period.</p>
                 {hasGeneratedInsights ? (demandAndAvailabilityRows.length > 0 ? (
-                  <div className="mt-4 min-h-64">
+                  <div className="mt-4 h-64">
                     <Bar
                       data={{
                         labels: demandAndAvailabilityRows.map((row) => formatBookCategory(row.category)),
@@ -1883,14 +1883,14 @@ export default function AdminWorkspace({
                     Generate insights to see recommended actions and their supporting demand and stock chart.
                   </p>
                 )}
-                {hasGeneratedInsights && <>
-                  <h3 className="mt-4 text-sm font-semibold text-slate-800">Suggested actions</h3>
+                {hasGeneratedInsights && <section className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4" aria-labelledby="suggested-actions-heading">
+                  <h3 id="suggested-actions-heading" className="text-sm font-bold text-slate-800">Suggested actions</h3>
                   {forecastNarrative.recommendations.length > 0 ? (
                     <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-600">
                       {forecastNarrative.recommendations.map((item) => <li key={item}>{item}</li>)}
                     </ul>
                   ) : <p className="mt-2 text-sm text-slate-500">No recommended action was returned for this period.</p>}
-                </>}
+                </section>}
               </section>
 
               <section className="border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
@@ -1911,10 +1911,10 @@ export default function AdminWorkspace({
                 {hasGeneratedInsights && <p className="mt-1 text-xs text-emerald-700">Insights use {forecastHistoryDays} days of attendance, including {forecastTotalVisits.toLocaleString()} check-ins across {forecastObservedVisitDays} days.</p>}
                 {hasGeneratedInsights && !attendanceDataComplete && <p className="mt-1 text-xs font-medium text-amber-700">Some attendance records could not be loaded. The result uses the records currently available.</p>}
                 {hasGeneratedInsights && forecastChartData ? (
-                  <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(15rem,1fr)]">
+                  <div className="mt-4 space-y-4">
                     <div className="min-w-0">
                       <p className="mb-2 text-xs text-slate-500">Estimated visits compared with recorded attendance.</p>
-                      <div className="h-64 rounded-lg border border-slate-100 bg-white p-2">
+                      <div className="h-64">
                         <Line
                           data={forecastChartData}
                           options={{
@@ -1926,7 +1926,7 @@ export default function AdminWorkspace({
                         />
                       </div>
                     </div>
-                    <section className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/40" aria-labelledby="forecast-insights-heading">
+                    <section className="rounded-xl border border-blue-200 bg-blue-50 p-4" aria-labelledby="forecast-insights-heading">
                       <h3 id="forecast-insights-heading" className="text-sm font-bold text-slate-800">Recent pattern</h3>
                       <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-5 text-slate-700">
                         {forecastNarrative.insights.map((item) => <li key={item}>{item}</li>)}
