@@ -674,7 +674,7 @@ export default function AdminWorkspace({
     };
   }, [forecast]);
 
-  const hasGeminiInsights = forecast?.source === 'gemini';
+  const hasGeneratedInsights = forecast?.source === 'gemini';
 
   const handleExport = async (format) => {
     if (!analyticsWindow.valid) {
@@ -1103,11 +1103,11 @@ export default function AdminWorkspace({
       }
       const forecastResult = await response.json();
       if (forecastResult?.analyticsSource !== 'gemini') {
-        const geminiDetails = [
+        const serviceDetails = [
           ...(Array.isArray(forecastResult?.insights) ? forecastResult.insights : []),
           ...(Array.isArray(forecastResult?.recommendations) ? forecastResult.recommendations : []),
         ].filter((item) => typeof item === 'string' && item.trim());
-        throw new Error(geminiDetails.join(' ') || 'Gemini did not return forecast insights. Check the analytics service and try again.');
+        throw new Error(serviceDetails.join(' ') || 'Insights could not be generated. Check the analytics service and try again.');
       }
       if (!Array.isArray(forecastResult?.forecasts) || forecastResult.forecasts.length !== 7) {
         throw new Error('Forecast service did not return exactly seven daily estimates.');
@@ -1125,10 +1125,10 @@ export default function AdminWorkspace({
         forecasts: forecastResult.forecasts.map((item) => ({ ...item, visitorCount: Number(item.visitorCount) })),
       });
     } catch (forecastError) {
-      console.error('Gemini forecast request failed.', forecastError);
+      console.error('Analytics insight request failed.', forecastError);
       const errorMessage = forecastError instanceof Error ? forecastError.message : '';
       setForecast(null);
-      setError(errorMessage || 'Gemini could not run the forecast. Check the analytics service and try again.');
+      setError(errorMessage || 'Insights could not be generated. Check the analytics service and try again.');
     } finally {
       setForecastLoading(false);
     }
@@ -1712,7 +1712,7 @@ export default function AdminWorkspace({
             )}
             {!attendanceDataComplete && (
               <p className="mt-3 border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 rounded-lg">
-                Attendance data is still loading or incomplete. Charts use the records currently loaded; Gemini insights remain unavailable until the full attendance list is ready.
+                Attendance data is still loading or incomplete. Charts use the records currently loaded; generated insights require the complete attendance list.
               </p>
             )}
           </section>
@@ -1852,11 +1852,11 @@ export default function AdminWorkspace({
               )}
             </section>
 
-            <div className="grid gap-4 xl:col-span-2 xl:grid-cols-2">
+            <div className="grid items-start gap-4 xl:col-span-2 xl:grid-cols-2">
               <section className="border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
                 <h2 className="text-base font-bold text-slate-800">Prescriptive analytics · Demand and available copies</h2>
-                <p className="mt-1 text-xs text-slate-500">Gemini recommendations with related book demand and stock data for the selected period.</p>
-                {hasGeminiInsights ? (demandAndAvailabilityRows.length > 0 ? (
+                <p className="mt-1 text-xs text-slate-500">Recommended actions and related book demand and stock data for the selected period.</p>
+                {hasGeneratedInsights ? (demandAndAvailabilityRows.length > 0 ? (
                   <div className="mt-4 min-h-64">
                     <Bar
                       data={{
@@ -1880,16 +1880,16 @@ export default function AdminWorkspace({
                   </div>
                 ) : <p className="mt-4 rounded-lg bg-slate-50 p-4 text-sm text-slate-500">No book requests match this reporting period, so there is no demand comparison to chart.</p>) : (
                   <p className="mt-4 rounded-lg border border-dashed border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-                    Generate Gemini insights to see recommended actions and their supporting demand and stock chart.
+                    Generate insights to see recommended actions and their supporting demand and stock chart.
                   </p>
                 )}
-                {hasGeminiInsights && <>
-                  <h3 className="mt-4 text-sm font-semibold text-slate-800">Gemini suggested actions</h3>
+                {hasGeneratedInsights && <>
+                  <h3 className="mt-4 text-sm font-semibold text-slate-800">Suggested actions</h3>
                   {forecastNarrative.recommendations.length > 0 ? (
                     <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-600">
                       {forecastNarrative.recommendations.map((item) => <li key={item}>{item}</li>)}
                     </ul>
-                  ) : <p className="mt-2 text-sm text-slate-500">Gemini did not return a recommended action for this period.</p>}
+                  ) : <p className="mt-2 text-sm text-slate-500">No recommended action was returned for this period.</p>}
                 </>}
               </section>
 
@@ -1906,78 +1906,42 @@ export default function AdminWorkspace({
                   </button>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">
-                  Generate insights to ask Gemini to review the selected attendance history and return a seven-day visit forecast.
+                  Generate insights to review the selected attendance history and estimate visits for the next seven days.
                 </p>
-                {hasGeminiInsights && <p className="mt-1 text-xs text-emerald-700">Gemini reviewed {forecastHistoryDays} days of attendance, including {forecastTotalVisits.toLocaleString()} check-ins across {forecastObservedVisitDays} days.</p>}
-                {hasGeminiInsights && !attendanceDataComplete && <p className="mt-1 text-xs font-medium text-amber-700">Some attendance records could not be loaded. The result uses the records currently available.</p>}
-                {hasGeminiInsights && forecastChartData ? (
-                  <div className="mt-4">
-                    <p className="mb-2 text-xs text-slate-500">Gemini forecast compared with recorded attendance.</p>
-                    <Line
-                      data={forecastChartData}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: true,
-                        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
-                        plugins: { legend: { position: 'bottom' } },
-                      }}
-                    />
+                {hasGeneratedInsights && <p className="mt-1 text-xs text-emerald-700">Insights use {forecastHistoryDays} days of attendance, including {forecastTotalVisits.toLocaleString()} check-ins across {forecastObservedVisitDays} days.</p>}
+                {hasGeneratedInsights && !attendanceDataComplete && <p className="mt-1 text-xs font-medium text-amber-700">Some attendance records could not be loaded. The result uses the records currently available.</p>}
+                {hasGeneratedInsights && forecastChartData ? (
+                  <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(15rem,1fr)]">
+                    <div className="min-w-0">
+                      <p className="mb-2 text-xs text-slate-500">Estimated visits compared with recorded attendance.</p>
+                      <div className="h-64 rounded-lg border border-slate-100 bg-white p-2">
+                        <Line
+                          data={forecastChartData}
+                          options={{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+                            plugins: { legend: { position: 'bottom' } },
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <section className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/40" aria-labelledby="forecast-insights-heading">
+                      <h3 id="forecast-insights-heading" className="text-sm font-bold text-slate-800">Recent pattern</h3>
+                      <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-5 text-slate-700">
+                        {forecastNarrative.insights.map((item) => <li key={item}>{item}</li>)}
+                      </ul>
+                    </section>
                   </div>
-                ) : !hasGeminiInsights ? (
+                ) : !hasGeneratedInsights ? (
                   <p className="mt-3 rounded-lg bg-slate-50 p-4 text-sm text-slate-500">
-                    The forecast chart and insights will appear here after Gemini successfully generates them.
+                    The forecast chart and insights will appear here after you generate insights.
                   </p>
-                ) : <p className="mt-3 rounded-lg bg-amber-50 p-4 text-sm text-amber-800">Gemini returned insights, but not enough valid forecast data to draw the chart.</p>}
-                {hasGeminiInsights && forecast?.forecasts?.length ? (
-                  <>
-                    <ol className="mt-3 space-y-1 text-sm text-slate-600">
-                      {forecast.forecasts.map((item) => (
-                        <li key={item.date} className="flex justify-between border-b border-slate-50 py-1">
-                          <span>{new Date(`${item.date}T00:00:00`).toLocaleDateString()}</span>
-                          <span className="font-bold">{item.visitorCount} visitors</span>
-                        </li>
-                      ))}
-                    </ol>
-                  </>
-                ) : null}
-                {hasGeminiInsights && <div className="mt-5 grid gap-4 border-t border-slate-200 pt-4 lg:grid-cols-2">
-                    <section
-                    className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/40"
-                    aria-labelledby="forecast-insights-heading"
-                  >
-                    <h3
-                      id="forecast-insights-heading"
-                      className="text-sm font-bold text-slate-800"
-                    >
-                      Recent pattern
-                    </h3>
-                    <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-700">
-                      {forecastNarrative.insights.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  </section>
-                    <section
-                    className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/40"
-                    aria-labelledby="forecast-recommendations-heading"
-                  >
-                    <h3
-                      id="forecast-recommendations-heading"
-                      className="text-sm font-bold text-amber-950 dark:text-amber-100"
-                    >
-                      Suggested next step
-                    </h3>
-                    <ul className="mt-2 list-disc space-y-2 pl-5 text-sm font-medium leading-6 text-amber-950 dark:text-amber-100">
-                      {forecastNarrative.recommendations.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  </section>
-                </div>}
-                {hasGeminiInsights && <p className="mt-3 text-xs leading-5 text-slate-500">
+                ) : <p className="mt-3 rounded-lg bg-amber-50 p-4 text-sm text-amber-800">Insights were returned, but there is not enough valid forecast data to draw the chart.</p>}
+                {hasGeneratedInsights && <p className="mt-3 text-xs leading-5 text-slate-500">
                   These estimates use the selected month and filters. Compare them with your branch records before changing staff schedules or book copy counts.
                 </p>}
-                {!forecastCanRun && !hasGeminiInsights && <p className="mt-2 text-xs text-amber-700">Not enough complete attendance records yet. Add more check-ins, then try again.</p>}
+                {!forecastCanRun && !hasGeneratedInsights && <p className="mt-2 text-xs text-amber-700">Not enough complete attendance records yet. Add more check-ins, then try again.</p>}
               </section>
             </div>
           </section>
