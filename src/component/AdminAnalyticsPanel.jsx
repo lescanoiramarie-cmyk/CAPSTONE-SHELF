@@ -11,9 +11,9 @@ export default function AdminAnalyticsPanel({
   metrics = [],
   prediction = 'There is not enough recent information to estimate what may happen next.',
   recommendation = 'Keep records up to date and review this section regularly.',
+  prescriptions = [],
   predictiveSeries = [],
   predictionSeries = null,
-  prescriptiveMetrics = [],
   rationale = '',
 }) {
   const chartMetrics = metrics
@@ -34,10 +34,15 @@ export default function AdminAnalyticsPanel({
     const y = 94 - (point.value / forecastMaximum) * 72;
     return { ...point, x, y };
   });
-  const actionMetrics = prescriptiveMetrics
-    .map((metric) => ({ ...metric, chartValue: toNumber(metric.value) }))
-    .filter((metric) => Number.isFinite(metric.chartValue) && metric.chartValue >= 0);
-  const actionMaximum = Math.max(1, ...actionMetrics.map((metric) => metric.chartValue));
+  const recentMonths = forecastIndex > 0 ? usableForecast.slice(Math.max(0, forecastIndex - 3), forecastIndex) : [];
+  const latestMonth = recentMonths.at(-1);
+  const forecastMonth = forecastIndex >= 0 ? usableForecast[forecastIndex] : null;
+  const estimateChange = latestMonth && forecastMonth && latestMonth.value > 0
+    ? Math.round(((forecastMonth.value - latestMonth.value) / latestMonth.value) * 100)
+    : null;
+  const prescriptionList = prescriptions.length > 0
+    ? prescriptions
+    : [recommendation, ...(rationale ? [rationale] : [])];
 
   return (
     <section aria-label={`${title} analytics`} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
@@ -53,7 +58,7 @@ export default function AdminAnalyticsPanel({
         <article className="flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
           <h4 className="text-lg font-bold text-slate-900 dark:text-white">Descriptive Analytics</h4>
           <p className="mt-1 min-h-10 text-sm text-slate-600 dark:text-slate-300">A snapshot of the recorded titles, copies, and borrowing activity for this library.</p>
-          {chartMetrics.length > 1 && (
+          {chartMetrics.length > 1 ? (
             <figure className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-700">
               <figcaption className="mb-2 text-xs font-semibold text-slate-600 dark:text-slate-300">Recorded totals (counts)</figcaption>
               <div role="img" aria-label={`${title}: ${chartMetrics.map((metric) => `${metric.label} ${metric.value}`).join(', ')}`} className="flex h-28 items-end gap-2 border-b border-l border-slate-200 px-2 pt-2 dark:border-slate-600">
@@ -66,8 +71,7 @@ export default function AdminAnalyticsPanel({
                 ))}
               </div>
             </figure>
-          )}
-          {metrics.length > 0 ? (
+          ) : metrics.length > 0 ? (
             <dl className="mt-3 grid grid-cols-2 gap-2">
               {metrics.map((metric) => (
                 <div key={metric.label} className="rounded-lg bg-slate-50 p-2.5 dark:bg-slate-900">
@@ -86,20 +90,30 @@ export default function AdminAnalyticsPanel({
             <h4 className="text-lg font-bold">Predictive Analytics</h4>
           </div>
           <p className="mt-1 min-h-10 text-sm text-indigo-900/80 dark:text-indigo-200">Recent monthly borrow counts and an estimate for the next month based on the latest three recorded months.</p>
-          <p className="mt-3 text-sm font-semibold leading-6 text-indigo-950 dark:text-indigo-100">{prediction}</p>
           {hasProjection && forecastPoints.length > 1 && (
-            <figure className="mt-3 rounded-lg border border-indigo-100 bg-white/80 p-2 dark:border-indigo-900 dark:bg-slate-900/60">
-              <svg viewBox="0 0 320 120" className="h-28 w-full" role="img" aria-label={`Monthly borrow counts and estimate: ${forecastPoints.map((point) => `${point.label} ${point.value}`).join(', ')}`}>
-                <line x1="18" y1="96" x2="302" y2="96" stroke="currentColor" className="text-indigo-200 dark:text-indigo-800" />
-                <polyline points={forecastPoints.slice(0, forecastIndex).map((point) => `${point.x},${point.y}`).join(' ')} fill="none" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                <polyline points={forecastPoints.slice(forecastIndex - 1).map((point) => `${point.x},${point.y}`).join(' ')} fill="none" stroke="#d97706" strokeWidth="3" strokeDasharray="6 4" strokeLinecap="round" strokeLinejoin="round" />
-                {forecastPoints.map((point, index) => <circle key={`${point.label}-${point.x}`} cx={point.x} cy={point.y} r="4" fill="white" stroke={index >= forecastIndex ? '#d97706' : '#2563eb'} strokeWidth="2" />)}
-              </svg>
-              <figcaption className="flex justify-between gap-2 text-[10px] text-slate-600 dark:text-slate-300">
-                {forecastPoints.map((point) => <span key={point.label} className="truncate">{point.label}: {point.value}</span>)}
-              </figcaption>
-            </figure>
+            <>
+              <figure className="mt-3 rounded-lg border border-indigo-100 bg-white/80 p-2 dark:border-indigo-900 dark:bg-slate-900/60">
+                <svg viewBox="0 0 320 120" className="h-28 w-full" role="img" aria-label={`Monthly borrow counts and estimate: ${forecastPoints.map((point) => `${point.label} ${point.value}`).join(', ')}`}>
+                  <line x1="18" y1="96" x2="302" y2="96" stroke="currentColor" className="text-indigo-200 dark:text-indigo-800" />
+                  <polyline points={forecastPoints.slice(0, forecastIndex).map((point) => `${point.x},${point.y}`).join(' ')} fill="none" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                  <polyline points={forecastPoints.slice(forecastIndex - 1).map((point) => `${point.x},${point.y}`).join(' ')} fill="none" stroke="#d97706" strokeWidth="3" strokeDasharray="6 4" strokeLinecap="round" strokeLinejoin="round" />
+                  {forecastPoints.map((point, index) => <circle key={`${point.label}-${point.x}`} cx={point.x} cy={point.y} r="4" fill="white" stroke={index >= forecastIndex ? '#d97706' : '#2563eb'} strokeWidth="2" />)}
+                </svg>
+                <figcaption className="flex justify-between gap-2 text-[10px] text-slate-600 dark:text-slate-300">
+                  {forecastPoints.map((point) => <span key={point.label} className="truncate">{point.label}: {point.value}</span>)}
+                </figcaption>
+              </figure>
+              <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm leading-5 text-indigo-950 dark:text-indigo-100">
+                <li>{latestMonth?.label}: {latestMonth?.value} confirmed borrows were recorded.</li>
+                <li>{forecastMonth?.label} estimate: about {forecastMonth?.value} borrows, using the average from the latest {recentMonths.length} months.</li>
+                {estimateChange == null
+                  ? <li>The latest month had no borrows, so a percentage change cannot be compared.</li>
+                  : <li>That is {Math.abs(estimateChange)}% {estimateChange > 0 ? 'higher' : estimateChange < 0 ? 'lower' : 'about the same'} as the latest month.</li>}
+                <li>The solid blue line shows recorded borrows; the dotted orange line leads to next month’s estimate.</li>
+              </ul>
+            </>
           )}
+          {!hasProjection && <p className="mt-3 text-sm font-semibold leading-6 text-indigo-950 dark:text-indigo-100">{prediction}</p>}
         </article>
 
         <article className="flex min-w-0 flex-col rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
@@ -107,26 +121,10 @@ export default function AdminAnalyticsPanel({
             <Lightbulb size={18} aria-hidden="true" />
             <h4 className="text-lg font-bold">Prescriptive Analytics</h4>
           </div>
-          <p className="mt-1 min-h-10 text-sm text-amber-900/80 dark:text-amber-200">Use the counts below to prioritize titles that need a stock or loan review.</p>
-          <div className="mt-3 rounded-lg border border-amber-200 bg-white/80 p-3 dark:border-amber-900 dark:bg-slate-900/50">
-            <p className="text-xs font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">Recommended action</p>
-            <p className="mt-1 text-sm font-semibold leading-6 text-amber-950 dark:text-amber-100">{recommendation}</p>
-            {rationale && <><p className="mt-3 text-xs font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">Rationale</p><p className="mt-1 text-sm leading-5 text-amber-950 dark:text-amber-100">{rationale}</p></>}
-          </div>
-          {actionMetrics.length > 0 && (
-            <figure className="mt-3 rounded-lg border border-amber-200 bg-white/80 p-3 dark:border-amber-900 dark:bg-slate-900/50">
-              <figcaption className="mb-3 text-xs font-semibold text-amber-950 dark:text-amber-100">Titles by stock action needed</figcaption>
-              <div role="img" aria-label={`Inventory action priorities: ${actionMetrics.map((metric) => `${metric.label} ${metric.value}`).join(', ')}`} className="space-y-3">
-                {actionMetrics.map((metric) => (
-                  <div key={metric.label} className="grid grid-cols-[minmax(6rem,1fr)_2fr_auto] items-center gap-2 text-xs">
-                    <span className="truncate text-slate-600 dark:text-slate-300" title={metric.label}>{metric.label}</span>
-                    <span className="h-3 overflow-hidden rounded-full bg-amber-100 dark:bg-amber-950"><span className="block h-full rounded-full bg-amber-500" style={{ width: `${Math.max(metric.chartValue > 0 ? 4 : 0, (metric.chartValue / actionMaximum) * 100)}%` }} /></span>
-                    <strong className="tabular-nums text-slate-800 dark:text-slate-100">{metric.value}</strong>
-                  </div>
-                ))}
-              </div>
-            </figure>
-          )}
+          <p className="mt-1 min-h-10 text-sm text-amber-900/80 dark:text-amber-200">Prioritized steps based on this library’s current availability and borrowing history.</p>
+          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-amber-950 dark:text-amber-100">
+            {prescriptionList.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}
+          </ul>
         </article>
       </div>
     </section>

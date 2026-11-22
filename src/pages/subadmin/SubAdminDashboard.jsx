@@ -1207,7 +1207,7 @@ export default function SubAdminDashboard() {
 
   const branchOverviewMetrics = useMemo(() => {
     const monthWindow = getAnalyticsMonthWindow(overviewMonth);
-    if (!monthWindow) return { topBorrowed: [], categoryBorrowing: [], totalBorrowEvents: 0, comparableBorrowEvents: null, projectedNextMonth: null, pressureTitles: 0, monthLabel: '', comparisonAvailable: false };
+    if (!monthWindow) return { topBorrowed: [], pressureBooks: [], categoryBorrowing: [], totalBorrowEvents: 0, comparableBorrowEvents: null, projectedNextMonth: null, pressureTitles: 0, monthLabel: '', comparisonAvailable: false };
     const now = new Date();
     const isCurrentMonth = getAnalyticsMonthKey(now) === overviewMonth;
     const elapsedDays = isCurrentMonth ? now.getDate() : monthWindow.days;
@@ -1265,13 +1265,33 @@ export default function SubAdminDashboard() {
     const projectedNextMonth = totalBorrowEvents >= 3
       ? Math.max(0, Math.round((totalBorrowEvents / Math.max(1, elapsedDays)) * 30))
       : null;
-    const pressureTitles = [...borrowedCounts.entries()].filter(([bookId, count]) => {
+    const pressureBooks = [...borrowedCounts.entries()].map(([bookId, count]) => {
       const book = branchBooksById.get(bookId);
       const available = Number(book?.availableCopies ?? book?.available_copies ?? 0);
-      return count >= 3 && Number.isFinite(available) && available <= 1;
-    }).length;
-    return { topBorrowed, categoryBorrowing, totalBorrowEvents, comparableBorrowEvents, projectedNextMonth, pressureTitles, monthLabel: monthWindow.monthLabel, comparisonAvailable };
+      return { book, count, available };
+    }).filter((entry) => entry.book && entry.count >= 3 && Number.isFinite(entry.available) && entry.available <= 1)
+      .sort((left, right) => right.count - left.count);
+    const pressureTitles = pressureBooks.length;
+    return { topBorrowed, pressureBooks: pressureBooks.slice(0, 5), categoryBorrowing, totalBorrowEvents, comparableBorrowEvents, projectedNextMonth, pressureTitles, monthLabel: monthWindow.monthLabel, comparisonAvailable };
   }, [branchBooks, branchBooksById, branchBorrowRequests, overviewMonth]);
+
+  const branchInventoryPrescriptions = useMemo(() => {
+    const actions = [];
+    if (borrowRequestsLoadError) {
+      actions.push('Reload borrowing history before making changes based on demand.');
+    } else {
+      branchOverviewMetrics.pressureBooks.forEach(({ book, count, available }) => {
+        actions.push(`Review “${book.title || 'Untitled book'}”: it had ${count} borrows this month and has ${available} ${available === 1 ? 'copy' : 'copies'} available.`);
+      });
+    }
+    const alreadyListed = new Set(branchOverviewMetrics.pressureBooks.map(({ book }) => String(book.id)));
+    branchBooks.filter((book) => Number(book.availableCopies ?? book.available_copies ?? 0) <= 0)
+      .filter((book) => !alreadyListed.has(String(book.id)))
+      .slice(0, 5)
+      .forEach((book) => actions.push(`Check current loans, returns, and condition for “${book.title || 'Untitled book'}” before replenishing it.`));
+    if (!actions.length) actions.push('Keep copy counts current and review monthly borrowing totals for new demand patterns.');
+    return actions.slice(0, 8);
+  }, [branchBooks, branchOverviewMetrics.pressureBooks, borrowRequestsLoadError]);
 
   useEffect(() => {
     if (section !== 'overview') return undefined;
@@ -2173,15 +2193,7 @@ export default function SubAdminDashboard() {
               ? 'Borrowing history could not be loaded, so a demand estimate is unavailable.'
               : (() => { const estimate = getMonthlyBorrowingProjection(branchBorrowRequests, new Date(`${overviewMonth}-01T00:00:00`)).projectedNextMonth; return estimate == null ? 'There is not enough confirmed borrowing history to estimate next month.' : `If recent borrowing continues, about ${estimate} books may be borrowed next month.`; })()}
             predictionSeries={borrowRequestsLoadError ? null : getMonthlyBorrowingProjection(branchBorrowRequests, new Date(`${overviewMonth}-01T00:00:00`))}
-            prescriptiveMetrics={[
-              { label: 'Often borrowed, low copies', value: borrowRequestsLoadError ? '—' : branchOverviewMetrics.pressureTitles },
-              { label: 'Out of stock', value: branchBooks.filter((book) => Number(book.availableCopies ?? book.available_copies ?? 0) <= 0).length },
-            ]}
-            recommendation={borrowRequestsLoadError
-              ? 'Load borrowing history before changing copy counts.'
-              : branchOverviewMetrics.pressureTitles
-                ? `Check loans and availability for ${branchOverviewMetrics.topBorrowed.find((entry) => entry.count >= 3 && entry.available <= 1)?.book.title || 'often borrowed books'} before adding or moving copies.`
-                : 'Keep copy counts accurate and review the borrowing trend each month.'}
+            prescriptions={branchInventoryPrescriptions}
           />
           <BookInventory />
         </div>}

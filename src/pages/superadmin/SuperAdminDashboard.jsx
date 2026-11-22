@@ -98,8 +98,8 @@ async function getStaffFunctionErrorMessage(error) {
   return error?.message || 'The staff account action could not be completed.';
 }
 
-function AdminSectionInsights({ title, description, metrics, recommendation, prediction, predictionSeries, actionMetrics }) {
-  return <AdminAnalyticsPanel title={title} description={description} metrics={metrics} recommendation={recommendation} prediction={prediction} predictionSeries={predictionSeries} prescriptiveMetrics={actionMetrics} />;
+function AdminSectionInsights({ title, description, metrics, recommendation, prediction, predictionSeries, prescriptions }) {
+  return <AdminAnalyticsPanel title={title} description={description} metrics={metrics} recommendation={recommendation} prediction={prediction} predictionSeries={predictionSeries} prescriptions={prescriptions} />;
 }
 
 function hasValidLibraryCoordinates(library) {
@@ -1473,6 +1473,20 @@ const handleEditStaff = (staff) => {
     () => getMonthlyBorrowingProjection(borrowRequests, new Date(`${overviewMonth}-01T00:00:00`)),
     [borrowRequests, overviewMonth]
   );
+  const inventoryPrescriptions = useMemo(() => {
+    const actions = [];
+    if (borrowRequestsLoadError) actions.push('Reload borrowing history before making changes based on demand.');
+    inventoryDemand.atRiskTitles.forEach(({ book, count, available }) => {
+      actions.push(`Review “${book.title || 'Untitled book'}”: it had ${count} borrows this month and has ${available} ${available === 1 ? 'copy' : 'copies'} available.`);
+    });
+    const atRiskIds = new Set(inventoryDemand.atRiskTitles.map(({ book }) => String(book.id)));
+    books.filter((book) => Number(book.availableCopies ?? book.available_copies ?? 0) <= 0)
+      .filter((book) => !atRiskIds.has(String(book.id)))
+      .slice(0, 5)
+      .forEach((book) => actions.push(`Check current loans, returns, and condition for “${book.title || 'Untitled book'}” before replenishing it.`));
+    if (!actions.length) actions.push('Keep copy counts current and review monthly borrowing totals for new demand patterns.');
+    return actions.slice(0, 8);
+  }, [books, borrowRequestsLoadError, inventoryDemand.atRiskTitles]);
 
   // ============================================================
   // TREND DATA
@@ -2165,7 +2179,7 @@ const handleEditStaff = (staff) => {
         )}
 
         {/* INVENTORY */}
-        {section === 'inventory' && <div className="space-y-4"><AdminSectionInsights title="Books that may run low" description={`Borrowing history through ${inventoryDemand.periodLabel || 'the selected month'}; the next-month estimate uses the recent monthly average.`} metrics={[{ label: 'Titles in catalog', value: books.length.toLocaleString() }, { label: 'Copies available now', value: inventorySummary.available.toLocaleString() }, { label: 'Titles with no copies available', value: inventorySummary.unavailableTitles.toLocaleString() }, { label: `Often borrowed, 0–1 copies left · ${inventoryDemand.periodLabel}`, value: borrowRequestsLoadError ? '—' : inventoryDemand.atRiskTitleCount.toLocaleString() }]} prediction={borrowRequestsLoadError ? 'Borrowing records could not be loaded, so the system cannot estimate demand.' : inventoryBorrowingProjection.projectedNextMonth == null ? 'There is not enough confirmed borrowing history to estimate next month.' : `If recent borrowing continues, about ${inventoryBorrowingProjection.projectedNextMonth} books may be borrowed next month.`} predictionSeries={borrowRequestsLoadError ? null : inventoryBorrowingProjection} actionMetrics={[{ label: 'Often borrowed, low copies', value: borrowRequestsLoadError ? '—' : inventoryDemand.atRiskTitleCount }, { label: 'Out of stock', value: inventorySummary.unavailableTitles }]} recommendation={borrowRequestsLoadError ? 'Load borrowing history before changing copy counts.' : inventoryDemand.atRiskTitles.length ? `Check current loans and branch copies for ${inventoryDemand.atRiskTitles[0].book.title}; add or move copies if needed.` : inventorySummary.unavailableTitles ? 'Review books with no copies available against current loans and returns before ordering more.' : 'Keep copy counts updated and review the borrowing trend after each month.'} /><BookInventory /></div>}
+        {section === 'inventory' && <div className="space-y-4"><AdminSectionInsights title="Books that may run low" description={`Borrowing history through ${inventoryDemand.periodLabel || 'the selected month'}; the next-month estimate uses the recent monthly average.`} metrics={[{ label: 'Titles in catalog', value: books.length.toLocaleString() }, { label: 'Copies available now', value: inventorySummary.available.toLocaleString() }, { label: 'Titles with no copies available', value: inventorySummary.unavailableTitles.toLocaleString() }, { label: `Often borrowed, 0–1 copies left · ${inventoryDemand.periodLabel}`, value: borrowRequestsLoadError ? '—' : inventoryDemand.atRiskTitleCount.toLocaleString() }]} prediction={borrowRequestsLoadError ? 'Borrowing records could not be loaded, so the system cannot estimate demand.' : inventoryBorrowingProjection.projectedNextMonth == null ? 'There is not enough confirmed borrowing history to estimate next month.' : `If recent borrowing continues, about ${inventoryBorrowingProjection.projectedNextMonth} books may be borrowed next month.`} predictionSeries={borrowRequestsLoadError ? null : inventoryBorrowingProjection} prescriptions={inventoryPrescriptions} /><BookInventory /></div>}
 
         {section === 'settings' && (
           <section className="w-full max-w-6xl space-y-5">
