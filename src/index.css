@@ -1215,3 +1215,14 @@ body:has(.superadmin-dashboard) {
   display: inline-flex !important;
   align-items: center !important;
 }
+.visitor-navy-header {
+  border-color: rgb(10 35 66 / 0.9) !important;
+  background-color: rgb(3 37 76 / 0.97) !important;
+  color: #f8fafc;
+}
+
+.visitor-navy-header button,
+.visitor-navy-header a {
+  color: inherit;
+}
+

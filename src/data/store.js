@@ -3118,6 +3118,29 @@ const data = {
   };
 }
 
+// Restore a staff profile only from the current Supabase-authenticated user.
+// The caller must also verify the session's MFA assurance level before exposing
+// any staff routes.
+export async function getAuthenticatedStaffProfile() {
+  if (!supabase) return null;
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user?.id) return null;
+  const { data: profile, error } = await supabase
+    .from('staff_profiles')
+    .select('id, email, full_name, role, library_id, is_active')
+    .eq('id', user.id)
+    .maybeSingle();
+  if (error) throw cleanErr(error, 'Unable to restore the staff profile.');
+  if (!profile?.is_active || !['subadmin', 'superadmin'].includes(profile.role)) return null;
+  return {
+    id: profile.id,
+    email: profile.email,
+    name: profile.full_name,
+    role: profile.role,
+    libraryId: profile.library_id,
+  };
+}
+
 // ============================================================================
 // SUB-ADMIN LOGIN
 // ============================================================================

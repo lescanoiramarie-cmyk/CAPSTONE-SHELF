@@ -1618,6 +1618,7 @@ function VisitorDashboardContent() {
           GLOBAL SHELF HEADER
       ====================================================== */}
       <ShelfHeader
+        className="visitor-navy-header"
         onNotificationClick={(item) => {
           const type = String(item?.type || item?.notificationType || item?.notification_type || item?.referenceType || item?.reference_type || '').toLowerCase();
           const targetId = item?.referenceId || item?.reference_id || item?.borrow_request_id || item?.requestId || item?.recordId;

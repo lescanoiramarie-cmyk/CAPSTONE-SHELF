@@ -2684,35 +2684,6 @@ export default function OPACCatalog({
           document.body
         )}
 
-        {activeView === 'catalog' && (
-            <div className="flex min-w-0 flex-col gap-3 sm:flex-row">
-            <form onSubmit={handleSearch} className="flex min-w-0 flex-1 gap-2">
-              <input
-                type="text"
-                placeholder={t('Search community books...')}
-                value={searchInput}
-                onChange={handleSearchInputChange}
-                className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-400"
-              />
-              <button
-                type="submit"
-                className="px-5 py-2.5 bg-shelf-primary text-white rounded-lg text-sm font-bold hover:opacity-90"
-              >
-                {t('Search')}
-              </button>
-            </form>
-            {searchTerm && (
-              <button
-                type="button"
-                onClick={handleClearSearch}
-                className="rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
-              >
-                {t('Clear')}
-              </button>
-            )}
-          </div>
-        )}
-
         {activeView === 'catalog' ? (
           <div className="space-y-6">
             <section aria-labelledby="visitor-borrow-guide-title" className="rounded-2xl border border-blue-200 bg-blue-50/70 p-4 sm:p-5 dark:border-blue-900 dark:bg-blue-950/30">

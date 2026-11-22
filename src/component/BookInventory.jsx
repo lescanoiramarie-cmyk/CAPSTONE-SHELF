@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabaseClient';
 import { normalizeBookFineRate } from '../lib/bookFineRate.js';
 import { formatBookCategory } from '../lib/bookCategory.js';
 import { getBookInventoryScope } from '../lib/bookInventoryScope.js';
+import PageJump from './PageJump.jsx';
 
 const INVENTORY_PAGE_SIZES = [10, 20, 50, 100];
 
@@ -698,7 +699,7 @@ export default function BookInventory() {
                 >
                   <ChevronLeft size={16} aria-hidden="true" /> Previous
                 </button>
-                <span className="whitespace-nowrap text-xs font-medium">Page {visiblePage} of {pageCount}</span>
+                <PageJump page={visiblePage} pageCount={pageCount} onPageChange={setPage} className="text-xs" />
                 <button
                   type="button"
                   onClick={() => setPage((current) => Math.min(pageCount, current + 1))}

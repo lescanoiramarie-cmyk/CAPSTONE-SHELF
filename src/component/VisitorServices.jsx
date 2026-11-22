@@ -16,6 +16,7 @@ import { submitVisitorFeedback } from '../data/store.js';
 import { findFAQResponse } from '../data/faqData.js';
 import { useProgressiveList } from '../hooks/useProgressiveList.js';
 import ProgressiveListFooter from './ProgressiveListFooter.jsx';
+import PageJump from './PageJump.jsx';
 
 const emptyForm = {
   category: 'Question',
@@ -372,7 +373,7 @@ export default function VisitorServices({ user, libraries = [] }) {
             <p className="text-sm text-slate-600 dark:text-slate-300">Showing {(currentFeedbackPage - 1) * feedbackPageSize + 1}–{Math.min(currentFeedbackPage * feedbackPageSize, filteredFeedback.length)} of {filteredFeedback.length} submissions</p>
             <div className="flex items-center justify-between gap-3 sm:justify-end">
               <button type="button" disabled={currentFeedbackPage <= 1} onClick={() => setFeedbackPage((page) => Math.max(1, page - 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-200"><ChevronLeft size={16} aria-hidden="true" />Previous</button>
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Page {currentFeedbackPage} of {feedbackPageCount}</span>
+              <PageJump page={currentFeedbackPage} pageCount={feedbackPageCount} onPageChange={setFeedbackPage} />
               <button type="button" disabled={currentFeedbackPage >= feedbackPageCount} onClick={() => setFeedbackPage((page) => Math.min(feedbackPageCount, page + 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-200">Next<ChevronRight size={16} aria-hidden="true" /></button>
             </div>
           </nav>

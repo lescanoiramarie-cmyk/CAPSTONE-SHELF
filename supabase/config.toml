@@ -51,6 +51,13 @@ entrypoint = "./functions/login-with-lockout/index.ts"
 schema_paths = [
   "schemas",
 ]
+
+[db.seed]
+enabled = true
+sql_paths = [
+  "./seeds/seed_synthetic_library_data.sql",
+  "./seeds/seed_synthetic_book_transactions.sql",
+]
 [auth]
 site_url = "https://shelf-system.vercel.app"
 additional_redirect_urls = ["http://localhost:5173/**", "https://shelf-system.vercel.app/**"]

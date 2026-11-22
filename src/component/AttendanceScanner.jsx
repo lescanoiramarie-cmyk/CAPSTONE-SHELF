@@ -2,6 +2,7 @@
 import { Clock3, QrCode, UsersRound, UserCheck } from 'lucide-react';
 import { useAuth } from '../context/useAuth.js';
 import { useLibraryData } from '../context/useLibrary.js';
+import PageJump from './PageJump.jsx';
 
 function formatDateTime(iso) {
   return new Date(iso).toLocaleString('en-PH', {
@@ -44,8 +45,8 @@ export default function AttendanceScanner() {
           <p className="mt-1 text-base leading-6 text-slate-600">Monitor today's branch visits and check-in status.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <a href="/subadmin/attendance-kiosk" target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-shelf-primary px-4 py-2 text-base font-semibold text-white shadow-sm transition hover:bg-blue-900">
-            <QrCode size={16} aria-hidden="true" />Open kiosk tab
+          <a href="/subadmin/attendance-kiosk" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-shelf-primary px-4 py-2 text-base font-semibold text-white shadow-sm transition hover:bg-blue-900">
+            <QrCode size={16} aria-hidden="true" />Open kiosk
           </a>
         </div>
       </header>
@@ -95,7 +96,7 @@ export default function AttendanceScanner() {
               </p>
               <div className="flex items-center gap-2">
                 <button type="button" onClick={() => setAttendancePage((page) => Math.max(1, Math.min(page, attendancePageCount) - 1))} disabled={currentAttendancePage <= 1} className="min-h-10 rounded-lg border border-slate-300 px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">Previous</button>
-                <span className="whitespace-nowrap text-slate-600">Page {currentAttendancePage} of {attendancePageCount}</span>
+                <PageJump page={currentAttendancePage} pageCount={attendancePageCount} onPageChange={setAttendancePage} />
                 <button type="button" onClick={() => setAttendancePage((page) => Math.min(attendancePageCount, Math.min(page, attendancePageCount) + 1))} disabled={currentAttendancePage >= attendancePageCount} className="min-h-10 rounded-lg border border-slate-300 px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">Next</button>
               </div>
             </nav>

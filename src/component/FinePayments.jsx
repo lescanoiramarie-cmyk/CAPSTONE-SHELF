@@ -13,6 +13,7 @@ import {
 } from 'chart.js';
 import { supabase } from '../lib/supabaseClient.js';
 import { sendFineReminder } from '../lib/fineReminder.js';
+import PageJump from './PageJump.jsx';
 import {
   buildFinePaymentAnalyticsArgs,
   FINE_PAYMENT_ANALYTICS_RPC,
@@ -477,7 +478,7 @@ export default function FinePayments({ libraryId = null, libraryName = '', isSup
         </div>
       )}
 
-      {!loading && visibleRows.length > 0 && <nav aria-label="Fine payments pagination" className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-600">Showing {(visiblePage - 1) * PAGE_SIZE + 1}–{Math.min(visiblePage * PAGE_SIZE, visibleRows.length)} of {visibleRows.length} fine records</p><div className="flex items-center justify-between gap-3 sm:justify-end"><button type="button" disabled={visiblePage === 1} onClick={() => setPage((current) => Math.max(1, Math.min(current, pageCount) - 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft size={16}/>Previous</button><span className="text-sm font-medium text-slate-700">Page {visiblePage} of {pageCount}</span><button type="button" disabled={visiblePage >= pageCount} onClick={() => setPage((current) => Math.min(pageCount, Math.min(current, pageCount) + 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40">Next<ChevronRight size={16}/></button></div></nav>}
+      {!loading && visibleRows.length > 0 && <nav aria-label="Fine payments pagination" className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-600">Showing {(visiblePage - 1) * PAGE_SIZE + 1}–{Math.min(visiblePage * PAGE_SIZE, visibleRows.length)} of {visibleRows.length} fine records</p><div className="flex items-center justify-between gap-3 sm:justify-end"><button type="button" disabled={visiblePage === 1} onClick={() => setPage((current) => Math.max(1, Math.min(current, pageCount) - 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft size={16}/>Previous</button><PageJump page={visiblePage} pageCount={pageCount} onPageChange={setPage} /><button type="button" disabled={visiblePage >= pageCount} onClick={() => setPage((current) => Math.min(pageCount, Math.min(current, pageCount) + 1))} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40">Next<ChevronRight size={16}/></button></div></nav>}
 
       {selectedFine && <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setSelectedFine(null); }}>
         <section role="dialog" aria-modal="true" aria-labelledby="fine-payment-dialog-title" className="my-auto w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl sm:p-6">

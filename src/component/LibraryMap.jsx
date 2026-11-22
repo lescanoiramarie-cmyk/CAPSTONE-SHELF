@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useLibraryData } from '../context/useLibrary.js';
 import { loadGoogleMaps, hasGoogleMapsKey } from '../lib/googleMaps.js';
+import PageJump from './PageJump.jsx';
 
 function GoogleMapsEmbed({ libraries, activeFocusBranchId, bookContext }) {
   const focusedLibrary = libraries.find(
@@ -608,7 +609,7 @@ export default function LibraryMap({
                   Previous
                 </button>
                 <span className="text-xs font-semibold text-slate-600">
-                  Page {currentLibraryPage} of {pageCount}
+                  <PageJump page={currentLibraryPage} pageCount={pageCount} onPageChange={setLibraryPage} className="text-xs" />
                 </span>
                 <button
                   type="button"

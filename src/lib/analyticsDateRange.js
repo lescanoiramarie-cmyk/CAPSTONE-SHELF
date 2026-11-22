@@ -130,11 +130,14 @@ export function getTimeframeRange(
       };
     }
 
-    return range(
-      start,
-      addDays(end, 1),
-      `${customStart} to ${customEnd}`
-    );
+    const isFullCalendarMonth = start.getDate() === 1
+      && start.getFullYear() === end.getFullYear()
+      && start.getMonth() === end.getMonth()
+      && end.getDate() === new Date(end.getFullYear(), end.getMonth() + 1, 0).getDate();
+    const label = isFullCalendarMonth
+      ? start.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' })
+      : `${customStart} to ${customEnd}`;
+    return range(start, addDays(end, 1), label);
   }
 
   throw new RangeError(`Unsupported analytics timeframe: ${timeframe}`);

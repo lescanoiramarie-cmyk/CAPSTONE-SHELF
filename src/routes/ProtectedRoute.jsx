@@ -7,8 +7,12 @@ const ProtectedRoute = ({
   allowedRoles,
   unauthenticatedTo = '/',
 }) => {
-  const { user } = useAuth();
+  const { user, authLoading } = useAuth();
   const location = useLocation();
+
+  if (authLoading) {
+    return <div role="status" className="grid min-h-[40vh] place-items-center text-sm font-medium text-slate-600">Restoring your secure session…</div>;
+  }
 
   if (!user) {
     return (

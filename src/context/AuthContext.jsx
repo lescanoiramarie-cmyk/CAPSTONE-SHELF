@@ -86,6 +86,7 @@ export const AuthProvider = ({ children }) => {
       return null;
     }
   });
+  const [authLoading, setAuthLoading] = useState(Boolean(supabase?.auth));
   const persistedUserSnapshotRef = useRef(JSON.stringify(user));
   const pendingMfaLoginRef = useRef(null);
   const [idleSecondsRemaining, setIdleSecondsRemaining] = useState(null);
@@ -149,22 +150,51 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    if (!supabase?.auth) return undefined;
+    if (!supabase?.auth) {
+      return undefined;
+    }
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
         clearClientSessionState();
+        setAuthLoading(false);
         return;
       }
       if (event === 'INITIAL_SESSION' && !session) {
         setUser((current) => (current ? null : current));
+        setAuthLoading(false);
+      }
+      if (event === 'INITIAL_SESSION' && session?.user?.id) {
+        // Reload-safe staff auth: only restore a DB-backed active profile when
+        // the persisted Supabase access token still carries verified AAL2.
+        queueMicrotask(async () => {
+          try {
+            const { data: assurance } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+            if (assurance?.currentLevel === 'aal2') {
+              const staff = await store.getAuthenticatedStaffProfile();
+              if (staff && staff.id === session.user.id) {
+                setUserWithIdentityTracking({
+                  id: staff.id,
+                  role: staff.role,
+                  name: staff.name,
+                  email: staff.email,
+                  libraryId: staff.libraryId,
+                });
+              }
+            }
+          } catch {
+            reportClientError('Staff session restore failed.');
+          } finally {
+            setAuthLoading(false);
+          }
+        });
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [clearClientSessionState]);
+  }, [clearClientSessionState, setUserWithIdentityTracking]);
 
   useEffect(() => {
     if (!user?.id) return undefined;
@@ -864,6 +894,7 @@ const completeMfaLogin = async (code) => {
     <AuthContext.Provider
       value={{
         user,
+        authLoading,
         logout,
         keepSessionAlive,
         registerVisitor,

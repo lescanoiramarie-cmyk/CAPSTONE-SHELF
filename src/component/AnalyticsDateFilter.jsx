@@ -1,59 +1,56 @@
-import { TIMEFRAME_OPTIONS } from '../lib/analyticsDateRange.js';
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+function dateValue(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
 
 export default function AnalyticsDateFilter({
-  timeframe,
   onTimeframeChange,
-  customStart,
   onCustomStartChange,
-  customEnd,
   onCustomEndChange,
   range,
 }) {
+  const selectedDate = range?.start instanceof Date && Number.isFinite(range.start.getTime())
+    ? range.start
+    : new Date();
+  const selectedYear = selectedDate.getFullYear();
+  const selectedMonth = selectedDate.getMonth();
+  const firstYear = Math.min(2024, selectedYear);
+  const years = Array.from({ length: selectedYear - firstYear + 1 }, (_, index) => firstYear + index).reverse();
+
+  const applyPeriod = (year, month) => {
+    const start = new Date(year, month, 1);
+    const end = new Date(year, month + 1, 0);
+    onTimeframeChange('custom');
+    onCustomStartChange(dateValue(start));
+    onCustomEndChange(dateValue(end));
+  };
+
   return (
-    <div className="space-y-3">
-      <label className="block text-xs font-semibold text-slate-600">
-        Date range
+    <div className="grid grid-cols-2 gap-3">
+      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
+        Year
         <select
-          value={timeframe}
-          onChange={(event) => onTimeframeChange(event.target.value)}
-          className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-700"
+          value={selectedYear}
+          onChange={(event) => applyPeriod(Number(event.target.value), selectedMonth)}
+          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
         >
-          {TIMEFRAME_OPTIONS.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.label}
-            </option>
-          ))}
+          {years.map((year) => <option key={year} value={year}>{year}</option>)}
         </select>
       </label>
-
-      {timeframe === 'custom' && (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block text-xs font-semibold text-slate-600">
-            Start date
-            <input
-              type="date"
-              value={customStart}
-              onChange={(event) => onCustomStartChange(event.target.value)}
-              className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-700"
-            />
-          </label>
-          <label className="block text-xs font-semibold text-slate-600">
-            End date
-            <input
-              type="date"
-              value={customEnd}
-              onChange={(event) => onCustomEndChange(event.target.value)}
-              className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-700"
-            />
-          </label>
-        </div>
-      )}
-
-      {!range.valid && (
-        <p role="alert" className="border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
-          {range.error}
-        </p>
-      )}
+      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
+        Month
+        <select
+          value={selectedMonth}
+          onChange={(event) => applyPeriod(selectedYear, Number(event.target.value))}
+          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+        >
+          {MONTHS.map((month, index) => <option key={month} value={index}>{month}</option>)}
+        </select>
+      </label>
     </div>
   );
 }

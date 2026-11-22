@@ -661,7 +661,7 @@ export default function AdminWorkspace({
   }, [forecast]);
 
   const demandRecommendations = useMemo(() => {
-    if (!analyticsWindow.valid) return [analyticsWindow.error || 'Select a valid analytics date range.'];
+    if (!analyticsWindow.valid) return [analyticsWindow.error || 'Select a valid year and month.'];
     return buildOperationalRecommendations({
       attendance: analyticsAttendance,
       categoryDemand,
@@ -780,7 +780,7 @@ export default function AdminWorkspace({
         chartTitles: ['Branch demand', 'Most requested categories', 'Visitor forecast'],
         chartDescriptions: [
           'Compares visitor attendance with book requests across the selected reporting periods.',
-          'Shows which book categories received the most requests during the selected date range.',
+          'Shows which book categories received the most requests during the selected month.',
           'Projects visitor activity for the next seven days using the selected history period.',
         ],
       };
@@ -990,7 +990,7 @@ export default function AdminWorkspace({
       import.meta.env.VITE_ANALYTICS_API_URL
     );
     if (!analyticsWindow.valid) {
-      setError(analyticsWindow.error || 'Please select a valid date range.');
+      setError(analyticsWindow.error || 'Please select a valid year and month.');
       return;
     }
     if (!forecastCanRun) {
@@ -1260,7 +1260,7 @@ export default function AdminWorkspace({
             <div className="space-y-4 p-5">
               <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(10rem,0.7fr)_minmax(10rem,0.7fr)_minmax(12rem,1fr)] xl:items-end">
                 <div className="min-w-0">
-                  <p className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">Date range</p>
+                  <p className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">Filter by year and month</p>
                   <AnalyticsDateFilter
                     timeframe={timeframe}
                     onTimeframeChange={(value) => {
@@ -1493,7 +1493,7 @@ export default function AdminWorkspace({
                   —
                 </div>
                 <h4 className="mt-3 text-sm font-semibold text-slate-800">No activity found</h4>
-                <p className="mt-1 text-sm text-slate-500">Try selecting a different date range.</p>
+                <p className="mt-1 text-sm text-slate-500">Try selecting a different month.</p>
               </div>
             )}
 
@@ -1570,8 +1570,8 @@ export default function AdminWorkspace({
               <h2 className="text-base font-bold text-slate-900">Analytics filters</h2>
               <p className="mt-1 text-sm text-slate-500">
                 {isSubAdmin
-                  ? 'Analytics are automatically limited to your assigned branch. Select a date range to view activity.'
-                  : 'Filter analytics by library or branch and date range.'}
+                  ? 'Analytics are automatically limited to your assigned branch. Select a year and month to view activity.'
+                  : 'Filter analytics by library or branch, year, and month.'}
               </p>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
@@ -1692,7 +1692,7 @@ export default function AdminWorkspace({
                 />
               ) : (
                 <div className="border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 rounded-lg">
-                  Select a valid date range to display analytics.
+                  Select a valid year and month to display analytics.
                 </div>
               )}
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -1709,7 +1709,7 @@ export default function AdminWorkspace({
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <h2 className="text-lg font-bold text-slate-900">Most requested book categories</h2>
-                  <p className="mt-1 text-sm text-slate-500">Categories visitors requested most during the selected dates.</p>
+                  <p className="mt-1 text-sm text-slate-500">Categories visitors requested most during the selected month.</p>
                 </div>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
                   Total: {totalCategoryRequests} requests
@@ -1798,7 +1798,7 @@ export default function AdminWorkspace({
                     disabled={forecastLoading || !analyticsWindow.valid || !forecastCanRun}
                     className="bg-shelf-primary px-3 py-2 text-xs font-bold text-white rounded-lg transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {forecastLoading ? 'Preparing estimate...' : 'Show estimate'}
+                    {forecastLoading ? 'Generating insights...' : 'Generate Insights'}
                   </button>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">
@@ -1877,7 +1877,7 @@ export default function AdminWorkspace({
                   </section>
                 </div>
                 <p className="mt-3 text-xs leading-5 text-slate-500">
-                  These estimates use the selected dates and filters. Compare them with your branch records before changing staff schedules or book copy counts.
+                  These estimates use the selected month and filters. Compare them with your branch records before changing staff schedules or book copy counts.
                 </p>
               </section>
             </div>
