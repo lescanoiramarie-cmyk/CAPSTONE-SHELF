@@ -10,7 +10,7 @@ import {
   PointElement,
   Tooltip,
 } from 'chart.js';
-import { Download, FileSpreadsheet, FileCode, FileText, ShieldCheck } from 'lucide-react';
+import { FileSpreadsheet, FileCode, FileText, ShieldCheck } from 'lucide-react';
 import {
   createAnnouncement,
   updateAnnouncement,
@@ -20,6 +20,7 @@ import { supabase } from '../lib/supabaseClient.js';
 import { exportReport } from '../lib/excelUtils.js';
 import AnalyticsDateFilter from './AnalyticsDateFilter.jsx';
 import AdminAnalyticsPanel from './AdminAnalyticsPanel.jsx';
+import PageJump from './PageJump.jsx';
 import AuditLogViewer from './AuditLogViewer.jsx';
 import {
   getTimeframeBucketKey,
@@ -187,7 +188,6 @@ export default function AdminWorkspace({
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportingFormat, setExportingFormat] = useState('');
-  const [preparedAnalyticsExports, setPreparedAnalyticsExports] = useState([]);
   const [pendingReportExport, setPendingReportExport] = useState(null);
   const [savingReportExport, setSavingReportExport] = useState(false);
   const [error, setError] = useState('');
@@ -207,14 +207,6 @@ export default function AdminWorkspace({
   const [forecast, setForecast] = useState(null);
   const [forecastLoading, setForecastLoading] = useState(false);
   const exportLockRef = useRef(false);
-
-  useEffect(() => {
-    // Clear previously prepared files when the selected analytics range changes.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPreparedAnalyticsExports([]);
-    // A forecast must always describe the currently selected range and branch.
-    setForecast(null);
-  }, [analyticsLibraryId, customEndDate, customStartDate, timeframe]);
 
   const booksById = useMemo(
     () => new Map(books.map((book) => [String(book.id), book])),
@@ -711,14 +703,10 @@ export default function AdminWorkspace({
           ['Total Visits', analyticsAttendance.length],
           ['Total Book Requests', analyticsBorrows.length],
         ],
-        download: !isSubAdmin,
+        download: false,
       });
-      if (isSubAdmin) {
-        setPendingReportExport({ format, label, ...generatedFile });
-        setMessage(`${label} report is ready. Confirm to choose where to save it.`);
-      } else {
-        setMessage('Report exported successfully.');
-      }
+      setPendingReportExport({ format, label, ...generatedFile });
+      setMessage(`${label} report is ready. Confirm whether to download it.`);
     } catch {
       setError('The report could not be exported. Please try again.');
     } finally {
@@ -848,11 +836,8 @@ export default function AdminWorkspace({
         chartImages: format === 'pdf' ? chartImages : [],
         download: false,
       });
-      setPreparedAnalyticsExports((current) => [
-        ...current.filter((file) => file.format !== format),
-        { format, label, ...generatedFile },
-      ]);
-      setMessage(`${label} file is ready. Choose its Download button when you are ready.`);
+      setPendingReportExport({ format, label, ...generatedFile });
+      setMessage(`${label} file is ready. Confirm whether to download it.`);
     } catch {
       setError('The report could not be exported. Please try again.');
     } finally {
@@ -860,22 +845,6 @@ export default function AdminWorkspace({
       setExporting(false);
       setExportingFormat('');
     }
-  };
-
-  const downloadPreparedAnalyticsExport = (preparedFile) => {
-    if (!preparedFile?.blob || !preparedFile?.fileName) return;
-    if (isSubAdmin) {
-      setPendingReportExport(preparedFile);
-      return;
-    }
-    const url = URL.createObjectURL(preparedFile.blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = preparedFile.fileName;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const handleAnnouncementEdit = (item) => {
@@ -1266,7 +1235,7 @@ export default function AdminWorkspace({
       {error && <p role="alert" className="border border-red-200 bg-red-50 p-3 text-sm text-red-800 rounded-lg">{error}</p>}
       {message && <p role="status" className="border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 rounded-lg">{message}</p>}
 
-      {isSubAdmin && pendingReportExport && (
+      {pendingReportExport && (
         <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/50 p-4" role="presentation">
           <section role="dialog" aria-modal="true" aria-labelledby="report-export-confirm-title" className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
             <h2 id="report-export-confirm-title" className="text-lg font-bold text-slate-900 dark:text-white">Download this report?</h2>
@@ -1343,9 +1312,9 @@ export default function AdminWorkspace({
                       setForecast(null);
                     }}
                     customStart={customStartDate}
-                    onCustomStartChange={setCustomStartDate}
+                    onCustomStartChange={(value) => { setCustomStartDate(value); setForecast(null); }}
                     customEnd={customEndDate}
-                    onCustomEndChange={setCustomEndDate}
+                    onCustomEndChange={(value) => { setCustomEndDate(value); setForecast(null); }}
                     range={analyticsWindow}
                   />
                 </div>
@@ -1977,17 +1946,6 @@ export default function AdminWorkspace({
                 <span>{exportingFormat === format ? `Preparing ${label}…` : `Prepare ${label}`}</span>
               </button>
             ))}
-            {preparedAnalyticsExports.map((preparedFile) => (
-              <button
-                key={preparedFile.format}
-                type="button"
-                onClick={() => downloadPreparedAnalyticsExport(preparedFile)}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-shelf-primary hover:bg-slate-50"
-              >
-                <Download size={15} aria-hidden="true" />
-                Download {preparedFile.label}
-              </button>
-            ))}
           </div>
           {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
           {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
@@ -2342,6 +2300,7 @@ function AdminListPagination({ page, pageSize, total, onPageChange, itemLabel })
         <button type="button" onClick={() => onPageChange(Math.max(1, page - 1))} disabled={page === 1} className={buttonClass}>
           Previous
         </button>
+        <PageJump page={page} pageCount={pageCount} onPageChange={onPageChange} />
         {pages.map((number) => typeof number === 'string' ? (
           <span key={number} className="px-2 text-sm text-slate-500" aria-hidden="true">…</span>
         ) : (

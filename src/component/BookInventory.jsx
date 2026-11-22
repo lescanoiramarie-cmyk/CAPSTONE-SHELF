@@ -291,6 +291,10 @@ export default function BookInventory() {
         throw new Error('You can only manage inventory for your assigned branch.');
       }
 
+      const isbnDigits = String(form.isbn || '').replace(/\D/g, '');
+      if (isbnDigits && (isbnDigits.length < 11 || isbnDigits.length > 13)) {
+        throw new Error('ISBN must contain 11 to 13 digits.');
+      }
       const fineRate = normalizeBookFineRate(form.fine_rate);
       let coverUrl = form.coverUrl;
 
@@ -777,8 +781,10 @@ export default function BookInventory() {
                     type="text"
                     id="book-isbn"
                     value={form.isbn}
+                    inputMode="numeric"
+                    maxLength={13}
                     onChange={(e) =>
-                      setForm({ ...form, isbn: e.target.value })
+                      setForm({ ...form, isbn: e.target.value.replace(/\D/g, '').slice(0, 13) })
                     }
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />

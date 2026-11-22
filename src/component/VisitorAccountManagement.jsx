@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Search, ChevronLeft, ChevronRight, UsersRound, ShieldCheck } from 'lucide-react';
 import AdminAnalyticsPanel from './AdminAnalyticsPanel.jsx';
+import PageJump from './PageJump.jsx';
 import {
   fetchVisitorAccounts,
   approveCommunityVisitor,
@@ -408,7 +409,7 @@ export default function VisitorAccountManagement({
               Previous
             </button>
             <span className="whitespace-nowrap text-xs font-medium">
-              Page {page} of {pageCount}
+              <PageJump page={page} pageCount={pageCount} onPageChange={setPage} />
             </span>
             <button
               type="button"

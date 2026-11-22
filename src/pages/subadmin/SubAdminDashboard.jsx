@@ -48,6 +48,7 @@ import AttendanceScanner from '../../component/AttendanceScanner.jsx';
 import BookInventory from '../../component/BookInventory.jsx';
 import ReservationQueue from '../../component/ReservationQueue.jsx';
 import AdminWorkspace from '../../component/AdminWorkspace.jsx';
+import ExportConfirmationDialog from '../../component/ExportConfirmationDialog.jsx';
 import BookRatingsChart from '../../component/BookRatingsChart.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
 import DashboardDataBoundary from '../../component/DashboardDataBoundary.jsx';
@@ -1494,6 +1495,7 @@ export default function SubAdminDashboard() {
   const [exportingReport, setExportingReport] = useState('');
   const [exportMessage, setExportMessage] = useState('');
   const [exportError, setExportError] = useState('');
+  const [pendingExportFile, setPendingExportFile] = useState(null);
 
   const exportBranchReport = async (report, format) => {
     const reportKey = `${report}-${format}`;
@@ -1555,12 +1557,14 @@ export default function SubAdminDashboard() {
           ],
         }),
       };
-      await exportReport(
+      const label = format === 'xlsx' ? 'Excel' : format.toUpperCase();
+      const generatedFile = await exportReport(
         reportRows,
         format,
-        reportOptions
+        { ...reportOptions, download: false }
       );
-      setExportMessage('Report exported successfully.');
+      setPendingExportFile({ ...generatedFile, label });
+      setExportMessage(`${label} file is ready. Confirm whether to download it.`);
     } catch {
       setExportError('The report could not be exported. Please try again.');
     } finally {
@@ -2380,6 +2384,11 @@ export default function SubAdminDashboard() {
         </div>
       )}
     </div>
+    <ExportConfirmationDialog
+      file={pendingExportFile}
+      onCancel={() => setPendingExportFile(null)}
+      onSaved={() => { setPendingExportFile(null); setExportMessage('Report saved successfully.'); }}
+    />
   </div>
   );
 }

@@ -85,6 +85,11 @@ BEGIN
       lending_enabled = pg_catalog.coalesce(p_lending_enabled, false),
       is_public = pg_catalog.coalesce(p_is_public, false),
       total_copies = p_total_copies,
+      fine_rate = CASE
+        WHEN pg_catalog.coalesce(p_lending_enabled, false)
+          THEN public.get_category_fine_rate(nullif(pg_catalog.btrim(p_category), ''))
+        ELSE book_row.fine_rate
+      END,
       available_copies = p_total_copies
   WHERE id = book_row.id
   RETURNING * INTO book_row;

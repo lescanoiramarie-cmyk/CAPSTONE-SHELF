@@ -59,6 +59,7 @@ import VisitorTermsContent, {
 } from '../../component/VisitorTermsContent.jsx';
 import DashboardDataBoundary from '../../component/DashboardDataBoundary.jsx';
 import VisitorProfilePhotoCropDialog from '../../component/VisitorProfilePhotoCropDialog.jsx';
+import PageJump from '../../component/PageJump.jsx';
 import ShelfHeader from '../../component/ShelfHeader.jsx';
 import PreferredLanguageSetting from '../../component/PreferredLanguageSetting.jsx';
 
@@ -2236,6 +2237,7 @@ function VisitorDashboardContent() {
                         {[
                           [UserRound, t('Full name'), visitorDetails?.fullName || user?.name],
                           [Mail, t('Email'), visitorDetails?.email || user?.email],
+                          [MapPin, t('Registered library'), registeredLibraryName],
                           [Phone, t('Contact number'), visitorDetails?.contactNumber],
                           [MapPin, t('Address'), visitorDetails?.address],
                         ].map(([Icon, label, value]) => (
@@ -2415,7 +2417,7 @@ function VisitorDashboardContent() {
                           </p>
                           <div className="flex items-center gap-2">
                             <button type="button" onClick={() => { setAttendanceHistoryPage((page) => Math.max(1, page - 1)); setAttendanceHistoryScrollTop(0); if (attendanceHistoryContainerRef.current) attendanceHistoryContainerRef.current.scrollTop = 0; }} disabled={attendanceHistoryPage <= 1} className="min-h-10 rounded-lg border border-slate-300 px-3 py-2 font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">Previous</button>
-                            <span className="whitespace-nowrap text-slate-600 dark:text-slate-300">Page {attendanceHistoryPage} of {attendancePageCount}</span>
+                            <PageJump page={attendanceHistoryPage} pageCount={attendancePageCount} onPageChange={setAttendanceHistoryPage} className="text-slate-600 dark:text-slate-300" />
                             <button type="button" onClick={() => void goToNextAttendancePage()} disabled={attendanceHistoryPage >= attendancePageCount || attendanceHistoryLoading} className="min-h-10 rounded-lg border border-slate-300 px-3 py-2 font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">{attendanceHistoryLoading ? 'Loading…' : 'Next'}</button>
                           </div>
                         </nav>

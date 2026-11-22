@@ -54,10 +54,12 @@ import {
 import BookInventory from '../../component/BookInventory.jsx';
 import LibraryMap from '../../component/LibraryMap.jsx';
 import AdminWorkspace from '../../component/AdminWorkspace.jsx';
+import ExportConfirmationDialog from '../../component/ExportConfirmationDialog.jsx';
 import DashboardWelcome from '../../component/DashboardWelcome.jsx';
 import BookRatingsChart from '../../component/BookRatingsChart.jsx';
 import DashboardDataBoundary from '../../component/DashboardDataBoundary.jsx';
 import PreferredLanguageSetting from '../../component/PreferredLanguageSetting.jsx';
+import PageJump from '../../component/PageJump.jsx';
 import FinePayments from '../../component/FinePayments.jsx';
 import SubscriptionManagement from '../../component/SubscriptionManagement.jsx';
 import VisitorTermsContent, { VISITOR_TERMS_VERSION } from '../../component/VisitorTermsContent.jsx';
@@ -112,6 +114,9 @@ async function getStaffFunctionErrorMessage(error) {
     try {
       const payload = await response.clone().json();
       const message = payload?.error || payload?.message || payload?.msg;
+      if (message && /AAL2 authentication \(MFA\) is required/i.test(message)) {
+        return 'Staff changes need a verified Super Admin session. Sign in again with your authenticator code, then save the change.';
+      }
       if (message) return message;
     } catch {
       // Keep the SDK message when the response body is empty or not JSON.
@@ -284,6 +289,7 @@ export default function SuperAdminDashboard() {
   const [exportingReport, setExportingReport] = useState('');
   const [exportMessage, setExportMessage] = useState('');
   const [exportError, setExportError] = useState('');
+  const [pendingExportFile, setPendingExportFile] = useState(null);
   const exportLockRef = useRef(false);
 
   const exportSystemReport = async (report, format) => {
@@ -372,8 +378,9 @@ export default function SuperAdminDashboard() {
           ],
         } : {}),
       };
-      await exportReport(data, format, reportOptions);
-      setExportMessage('Report exported successfully.');
+      const generatedFile = await exportReport(data, format, { ...reportOptions, download: false });
+      setPendingExportFile({ ...generatedFile, label: format === 'xlsx' ? 'Excel' : format.toUpperCase() });
+      setExportMessage('The report is ready. Confirm whether to download it.');
     } catch {
       setExportError('The report could not be exported. Please try again.');
     } finally {
@@ -2584,7 +2591,7 @@ const handleEditStaff = (staff) => {
                       >
                         Previous
                       </button>
-                      <span className="whitespace-nowrap text-slate-600">Page {visibleLibraryPage} of {libraryPageCount}</span>
+                      <PageJump page={visibleLibraryPage} pageCount={libraryPageCount} onPageChange={setLibraryPage} className="whitespace-nowrap text-slate-600" />
                       <button
                         type="button"
                         onClick={() => setLibraryPage((page) => Math.min(libraryPageCount, Math.min(page, libraryPageCount) + 1))}
@@ -2946,7 +2953,7 @@ const handleEditStaff = (staff) => {
                     Previous
                   </button>
                   <span className="min-w-20 text-center text-xs font-semibold text-slate-600">
-                    Page {visibleStaffPage} of {staffPageCount}
+                    <PageJump page={visibleStaffPage} pageCount={staffPageCount} onPageChange={setStaffPage} />
                   </span>
                   <button
                     type="button"
@@ -2994,6 +3001,11 @@ const handleEditStaff = (staff) => {
         )}
       </main>
     </div>
+    <ExportConfirmationDialog
+      file={pendingExportFile}
+      onCancel={() => setPendingExportFile(null)}
+      onSaved={() => { setPendingExportFile(null); setExportMessage('Report saved successfully.'); }}
+    />
   </div>
   );
 }

@@ -43,6 +43,7 @@ import {
   Pencil,
 } from 'lucide-react';
 import BookCover from './BookCover.jsx';
+import PageJump from './PageJump.jsx';
 import OPACBookCard from './OPACBookCard.jsx';
 import {
   useLibrary,
@@ -922,6 +923,8 @@ export default function OPACCatalog({
   const updatePersonalBookForm = (field, value) => {
     setPersonalBookForm((current) => {
       const next = { ...current, [field]: value };
+      if (field === 'category' || field === 'customCategory') next.fineRate = String(getBookFineRate(value) ?? '');
+      if (field === 'fineRate') next.fineRate = String(value).replace(/\D/g, '').slice(0, 2);
       return next;
     });
   };
@@ -1104,9 +1107,14 @@ export default function OPACCatalog({
     }
     if (
       (personalBookForm.lendingEnabled || personalBookForm.fineRate.trim()) &&
-      ![10, 15, 20, 30, 50].includes(fineRate)
+      (!Number.isInteger(fineRate) || fineRate < 1 || fineRate > 99)
     ) {
-      setNotice('Enter a fine rate from ₱1 to ₱100 per overdue day. A valid rate is required when community lending is enabled.');
+      setNotice('Enter a whole-number fine rate with up to 2 digits.');
+      return;
+    }
+    const expectedCategoryRate = getBookFineRate(category);
+    if (personalBookForm.lendingEnabled && fineRate !== expectedCategoryRate) {
+      setNotice(`The fine rate for ${category || 'this category'} is ₱${expectedCategoryRate ?? 'not set'}. Enter the matching rate to enable lending.`);
       return;
     }
     if (handoverDetails.length > 500) {
@@ -2936,6 +2944,7 @@ export default function OPACCatalog({
                 >
                   Previous
                 </button>
+                <PageJump page={visibleCatalogPage} pageCount={catalogTotalPages} onPageChange={setCatalogPage} className="text-xs dark:text-slate-200" />
                 {catalogPaginationItems.map((item) => item.toString().startsWith('ellipsis-') ? (
                   <span key={item} className="px-1 text-xs text-slate-400" aria-hidden="true">…</span>
                 ) : (
@@ -3278,6 +3287,7 @@ export default function OPACCatalog({
                       >
                         Previous
                       </button>
+                      <PageJump page={visibleReadingListPage} pageCount={readingListTotalPages} onPageChange={setReadingListPage} className="text-xs dark:text-slate-200" />
                       {readingListPaginationItems.map((item) =>
                         typeof item === 'number' ? (
                           <button
@@ -3458,6 +3468,7 @@ export default function OPACCatalog({
                       >
                         Previous
                       </button>
+                      <PageJump page={visibleCommunityPage} pageCount={communityTotalPages} onPageChange={setCommunityPage} className="text-xs dark:text-slate-200" />
                       {communityPaginationItems.map((item) =>
                         typeof item === 'number' ? (
                           <button
@@ -4056,7 +4067,7 @@ export default function OPACCatalog({
                         Previous
                       </button>
                       <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
-                        Page {currentPersonalBooksPage} of {personalBooksPageCount}
+                        <PageJump page={currentPersonalBooksPage} pageCount={personalBooksPageCount} onPageChange={setPersonalBooksPage} />
                       </span>
                       <button
                         type="button"
@@ -4545,7 +4556,7 @@ export default function OPACCatalog({
                     Previous
                   </button>
                   <span className="whitespace-nowrap text-slate-600 dark:text-slate-300">
-                    Page {visibleMyRequestPage} of {myRequestPageCount}
+                    <PageJump page={visibleMyRequestPage} pageCount={myRequestPageCount} onPageChange={setMyRequestPage} />
                   </span>
                   <button
                     type="button"
@@ -4938,9 +4949,11 @@ export default function OPACCatalog({
                     </label>
                     <input
                       type="text"
+                      inputMode="numeric"
+                      maxLength={13}
                       value={personalBookForm.isbn}
-                      onChange={(event) => updatePersonalBookForm('isbn', event.target.value)}
-                      placeholder="10-13 digit ISBN"
+                      onChange={(event) => updatePersonalBookForm('isbn', event.target.value.replace(/\D/g, '').slice(0, 13))}
+                      placeholder="ISBN digits only"
                       className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-400"
                     />
                   </div>
@@ -4949,19 +4962,17 @@ export default function OPACCatalog({
                       Fine rate per overdue day{personalBookForm.lendingEnabled ? ' *' : ' (optional)'}
                     </label>
                     <div className="flex items-center gap-2">
-                      <select
+                      <input
                         id="personal-book-fine-rate"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={2}
                         value={personalBookForm.fineRate}
                         onChange={(event) => updatePersonalBookForm('fineRate', event.target.value)}
-                        className="w-72 max-w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                        className="w-36 max-w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                         required={personalBookForm.lendingEnabled}
-                      >
-                        <option value="10">₱10 — Standard books</option>
-                        <option value="15">₱15 — Larger or valuable books</option>
-                        <option value="20">₱20 — Academic or professional books</option>
-                        <option value="30">₱30 — Specialty or rare books</option>
-                        <option value="50">₱50 — Law or hardbound books</option>
-                      </select>
+                      />
                       <span>per overdue day</span>
                     </div>
                   </div>

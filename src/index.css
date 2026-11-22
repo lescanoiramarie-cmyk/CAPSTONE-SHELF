@@ -1241,17 +1241,32 @@ body:has(.superadmin-dashboard) {
 }
 
 .visitor-dashboard-nav {
-  border-color: #0a2a4d !important;
-  background-color: #082b52 !important;
+  border-color: #dbe4ee !important;
+  background-color: #fff !important;
+}
+
+.dark .visitor-dashboard-nav {
+  border-color: #334155 !important;
+  background-color: #0f172a !important;
 }
 
 .visitor-dashboard-nav button:not([aria-current]) {
-  color: #eaf2fb !important;
+  color: #334155 !important;
+}
+
+.dark .visitor-dashboard-nav button:not([aria-current]) {
+  color: #e2e8f0 !important;
 }
 
 .visitor-dashboard-nav button:not([aria-current]):hover {
-  border-color: #547698 !important;
-  background-color: #123d69 !important;
+  border-color: #bfdbfe !important;
+  background-color: #eff6ff !important;
+  color: #0f2e55 !important;
+}
+
+.dark .visitor-dashboard-nav button:not([aria-current]):hover {
+  border-color: #475569 !important;
+  background-color: #1e293b !important;
   color: #fff !important;
 }
 
