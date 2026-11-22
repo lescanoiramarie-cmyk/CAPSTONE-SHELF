@@ -29,7 +29,6 @@ import { getForecastNarrative } from '../lib/forecastNarrative.js';
 import { getAnalyticsApiUrl } from '../lib/analyticsApi.js';
 import { formatBookCategory } from '../lib/bookCategory.js';
 import {
-  buildOperationalRecommendations,
   canRunVisitorForecast,
   filterAttendanceForAnalytics,
   filterRequestsForLibrary,
@@ -569,66 +568,6 @@ export default function AdminWorkspace({
     return forecastHistoryBuckets.map((bucket) => counts.get(bucket.key) || 0);
   }, [analyticsAttendance, forecastHistoryBuckets, forecastHistoryDays]);
 
-  const automaticForecastChartData = useMemo(() => {
-    const historyLength = forecastHistoryBuckets.length;
-    if (historyLength < 7 || !forecastDailyVisitorCounts.some((count) => count > 0)) return null;
-
-    const recentStart = Math.max(0, historyLength - 28);
-    const weekdayTotals = Array(7).fill(0);
-    const weekdayDays = Array(7).fill(0);
-    for (let index = recentStart; index < historyLength; index += 1) {
-      const weekday = forecastHistoryBuckets[index].start.getDay();
-      weekdayTotals[weekday] += forecastDailyVisitorCounts[index] || 0;
-      weekdayDays[weekday] += 1;
-    }
-
-    const historyBuckets = forecastHistoryBuckets.slice(-28);
-    const historyValues = forecastDailyVisitorCounts.slice(-28);
-    const futureDates = [];
-    const lastDay = new Date(forecastHistoryBuckets.at(-1).start);
-    for (let offset = 1; offset <= 7; offset += 1) {
-      const date = new Date(lastDay);
-      date.setDate(date.getDate() + offset);
-      futureDates.push(date);
-    }
-    const projectedValues = futureDates.map((date) => {
-      const weekday = date.getDay();
-      return weekdayDays[weekday]
-        ? Math.round(weekdayTotals[weekday] / weekdayDays[weekday])
-        : 0;
-    });
-    const anchor = historyValues.at(-1) || 0;
-    return {
-      labels: [
-        ...historyBuckets.map((bucket) => bucket.label),
-        ...futureDates.map((date) => date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })),
-      ],
-      datasets: [
-        {
-          label: 'Recorded check-ins',
-          data: [...historyValues, ...futureDates.map(() => null)],
-          borderColor: '#0f766e',
-          backgroundColor: '#0f766e',
-          tension: 0.25,
-          pointRadius: 2,
-        },
-        {
-          label: 'Estimated check-ins',
-          data: [
-            ...historyValues.slice(0, -1).map(() => null),
-            anchor,
-            ...projectedValues,
-          ],
-          borderColor: '#d97706',
-          backgroundColor: '#d97706',
-          borderDash: [6, 4],
-          tension: 0.25,
-          pointRadius: 3,
-        },
-      ],
-    };
-  }, [forecastDailyVisitorCounts, forecastHistoryBuckets]);
-
   const forecastObservedVisitDays = forecastDailyVisitorCounts.filter((count) => count > 0).length;
   const forecastTotalVisits = forecastDailyVisitorCounts.reduce((total, count) => total + count, 0);
   const forecastCanRun = canRunVisitorForecast({
@@ -735,15 +674,7 @@ export default function AdminWorkspace({
     };
   }, [forecast]);
 
-  const demandRecommendations = useMemo(() => {
-    if (!analyticsWindow.valid) return [analyticsWindow.error || 'Select a valid year and month.'];
-    return buildOperationalRecommendations({
-      attendance: analyticsAttendance,
-      categoryDemand,
-      windowEnd: analyticsWindow.endExclusive,
-      attendanceComplete: attendanceDataComplete,
-    });
-  }, [analyticsAttendance, analyticsWindow, attendanceDataComplete, categoryDemand]);
+  const hasGeminiInsights = forecast?.source === 'gemini';
 
   const handleExport = async (format) => {
     if (!analyticsWindow.valid) {
@@ -1924,8 +1855,8 @@ export default function AdminWorkspace({
             <div className="grid gap-4 xl:col-span-2 xl:grid-cols-2">
               <section className="border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
                 <h2 className="text-base font-bold text-slate-800">Prescriptive analytics · Demand and available copies</h2>
-                <p className="mt-1 text-xs text-slate-500">Compare book requests with copies currently available in each category to help identify where to review stock.</p>
-                {demandAndAvailabilityRows.length > 0 ? (
+                <p className="mt-1 text-xs text-slate-500">Gemini recommendations with related book demand and stock data for the selected period.</p>
+                {hasGeminiInsights ? (demandAndAvailabilityRows.length > 0 ? (
                   <div className="mt-4 min-h-64">
                     <Bar
                       data={{
@@ -1947,13 +1878,19 @@ export default function AdminWorkspace({
                       }}
                     />
                   </div>
-                ) : <p className="mt-4 rounded-lg bg-slate-50 p-4 text-sm text-slate-500">No book requests match this reporting period yet.</p>}
-                <h3 className="mt-4 text-sm font-semibold text-slate-800">Suggested actions</h3>
-                <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-600">
-                  {demandRecommendations.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
+                ) : <p className="mt-4 rounded-lg bg-slate-50 p-4 text-sm text-slate-500">No book requests match this reporting period, so there is no demand comparison to chart.</p>) : (
+                  <p className="mt-4 rounded-lg border border-dashed border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                    Generate Gemini insights to see recommended actions and their supporting demand and stock chart.
+                  </p>
+                )}
+                {hasGeminiInsights && <>
+                  <h3 className="mt-4 text-sm font-semibold text-slate-800">Gemini suggested actions</h3>
+                  {forecastNarrative.recommendations.length > 0 ? (
+                    <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-600">
+                      {forecastNarrative.recommendations.map((item) => <li key={item}>{item}</li>)}
+                    </ul>
+                  ) : <p className="mt-2 text-sm text-slate-500">Gemini did not return a recommended action for this period.</p>}
+                </>}
               </section>
 
               <section className="border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
@@ -1969,18 +1906,15 @@ export default function AdminWorkspace({
                   </button>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">
-                  The chart appears automatically from recent check-ins. It estimates each weekday from up to four recent weeks; Gemini can add a separate interpretation when requested.
+                  Generate insights to ask Gemini to review the selected attendance history and return a seven-day visit forecast.
                 </p>
-                {forecast?.source === 'gemini' && <p className="mt-1 text-xs text-emerald-700">Gemini reviewed the selected records and generated these insights and suggested actions. Visitor counts are estimated from the attendance history.</p>}
-                <p className="mt-1 text-xs text-slate-500">
-                  Records included: {forecastHistoryDays} days - {forecastTotalVisits.toLocaleString()} check-ins on {forecastObservedVisitDays} days.
-                </p>
-                {!attendanceDataComplete && <p className="mt-1 text-xs font-medium text-amber-700">The attendance list is incomplete, so this automatic estimate uses only the records loaded so far.</p>}
-                {(forecastChartData || automaticForecastChartData) ? (
+                {hasGeminiInsights && <p className="mt-1 text-xs text-emerald-700">Gemini reviewed {forecastHistoryDays} days of attendance, including {forecastTotalVisits.toLocaleString()} check-ins across {forecastObservedVisitDays} days.</p>}
+                {hasGeminiInsights && !attendanceDataComplete && <p className="mt-1 text-xs font-medium text-amber-700">Some attendance records could not be loaded. The result uses the records currently available.</p>}
+                {hasGeminiInsights && forecastChartData ? (
                   <div className="mt-4">
-                    <p className="mb-2 text-xs text-slate-500">{forecastChartData ? 'Gemini forecast with recent attendance history.' : 'Recent attendance and an automatic weekday-based estimate for the next seven days.'}</p>
+                    <p className="mb-2 text-xs text-slate-500">Gemini forecast compared with recorded attendance.</p>
                     <Line
-                      data={forecastChartData || automaticForecastChartData}
+                      data={forecastChartData}
                       options={{
                         responsive: true,
                         maintainAspectRatio: true,
@@ -1989,12 +1923,12 @@ export default function AdminWorkspace({
                       }}
                     />
                   </div>
-                ) : (
+                ) : !hasGeminiInsights ? (
                   <p className="mt-3 rounded-lg bg-slate-50 p-4 text-sm text-slate-500">
-                    The chart will appear automatically once at least one check-in is available in the selected period.
+                    The forecast chart and insights will appear here after Gemini successfully generates them.
                   </p>
-                )}
-                {forecast?.forecasts?.length ? (
+                ) : <p className="mt-3 rounded-lg bg-amber-50 p-4 text-sm text-amber-800">Gemini returned insights, but not enough valid forecast data to draw the chart.</p>}
+                {hasGeminiInsights && forecast?.forecasts?.length ? (
                   <>
                     <ol className="mt-3 space-y-1 text-sm text-slate-600">
                       {forecast.forecasts.map((item) => (
@@ -2005,14 +1939,8 @@ export default function AdminWorkspace({
                       ))}
                     </ol>
                   </>
-                ) : (
-                  <p className="mt-3 text-xs text-slate-500">
-                    {forecastCanRun
-                      ? 'Generate Insights is optional and adds Gemini commentary to the automatic chart.'
-                    : 'Not enough complete attendance records yet. Add more check-ins, then try again.'}
-                  </p>
-                )}
-                <div className="mt-5 grid gap-4 border-t border-slate-200 pt-4 lg:grid-cols-2">
+                ) : null}
+                {hasGeminiInsights && <div className="mt-5 grid gap-4 border-t border-slate-200 pt-4 lg:grid-cols-2">
                     <section
                     className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/40"
                     aria-labelledby="forecast-insights-heading"
@@ -2045,10 +1973,11 @@ export default function AdminWorkspace({
                       ))}
                     </ul>
                   </section>
-                </div>
-                <p className="mt-3 text-xs leading-5 text-slate-500">
+                </div>}
+                {hasGeminiInsights && <p className="mt-3 text-xs leading-5 text-slate-500">
                   These estimates use the selected month and filters. Compare them with your branch records before changing staff schedules or book copy counts.
-                </p>
+                </p>}
+                {!forecastCanRun && !hasGeminiInsights && <p className="mt-2 text-xs text-amber-700">Not enough complete attendance records yet. Add more check-ins, then try again.</p>}
               </section>
             </div>
           </section>
