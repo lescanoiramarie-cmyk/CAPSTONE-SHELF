@@ -7,7 +7,7 @@ DECLARE
   function_definition text;
 BEGIN
   FOR target_function IN
-    SELECT routine.oid
+    SELECT routine.oid, routine.proname
     FROM pg_catalog.pg_proc AS routine
     JOIN pg_catalog.pg_namespace AS schema_name
       ON schema_name.oid = routine.pronamespace
@@ -23,6 +23,17 @@ BEGIN
     function_definition := pg_catalog.pg_get_functiondef(target_function.oid);
     function_definition := pg_catalog.replace(function_definition, 'pg_catalog.nullif(', 'nullif(');
     function_definition := pg_catalog.replace(function_definition, 'pg_catalog.coalesce(', 'coalesce(');
+    IF target_function.proname = 'update_personal_book_base'
+       AND pg_catalog.strpos(function_definition, 'fine_rate = CASE') = 0 THEN
+      function_definition := pg_catalog.replace(
+        function_definition,
+        'available_copies = p_total_copies',
+        pg_catalog.format(
+          'fine_rate = CASE WHEN coalesce(p_lending_enabled, false) THEN public.get_category_fine_rate(nullif(btrim(p_category), %L)) ELSE book_row.fine_rate END, available_copies = p_total_copies',
+          ''
+        )
+      );
+    END IF;
     EXECUTE function_definition;
   END LOOP;
 END;
