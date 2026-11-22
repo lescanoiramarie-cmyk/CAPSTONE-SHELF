@@ -499,7 +499,7 @@ const createChartImage = async (chartSpec) => {
       indexAxis: chartSpec.horizontal ? 'y' : 'x',
       plugins: {
         legend: { display: chartSpec.type === 'doughnut', position: 'bottom' },
-        title: { display: true, text: chartSpec.title, color: '#0F172A', font: { size: 22, weight: '700' } },
+        title: { display: false },
       },
       scales: chartSpec.type === 'doughnut' ? {} : {
         x: { beginAtZero: true, ticks: { color: '#334155' }, grid: { color: '#E2E8F0' } },
@@ -517,7 +517,11 @@ const createPdfAnalytics = async (analytics) => {
   if (!analytics?.charts?.length) return [];
   const images = [];
   for (const chart of analytics.charts) {
-    images.push({ image: await createChartImage(chart), description: chart.description || '' });
+    images.push({
+      image: await createChartImage(chart),
+      title: chart.title || 'Chart',
+      description: chart.description || `This chart summarizes ${chart.datasetLabel || chart.title || 'the recorded values'} for the categories shown.`,
+    });
   }
   return images;
 };
@@ -836,18 +840,30 @@ export const exportToPDF = async (data = [], fileName, options = {}) => {
       document.setTextColor(15, 23, 42);
       document.text(String(kpi.value), cardX + 4, cardY + 13);
     });
-    const chartY = cardY + 21;
+    const chartY = cardY + 23;
     const chartGap = 6;
     const chartWidth = (pageWidth - 30 - chartGap) / 2;
-    const chartHeight = 78;
-    analyticsImages.slice(0, 2).forEach(({ image, description }, index) => {
-      const chartX = 15 + index * (chartWidth + chartGap);
-      document.addImage(image, 'PNG', chartX, chartY, chartWidth, chartHeight);
+    const chartHeight = 70;
+    analyticsImages.forEach(({ image, title, description }, index) => {
+      const pageIndex = Math.floor(index / 2);
+      const slotIndex = index % 2;
+      if (index > 0 && slotIndex === 0) document.addPage();
+      const chartX = 15 + slotIndex * (chartWidth + chartGap);
+      const pageChartY = pageIndex === 0 ? chartY : 22;
+      document.setFont('helvetica', 'bold');
+      document.setFontSize(9);
+      document.setTextColor(15, 23, 42);
+      document.text(title, chartX, pageChartY - 3, { maxWidth: chartWidth });
+      document.addImage(image, 'PNG', chartX, pageChartY, chartWidth, chartHeight);
       if (description) {
         document.setFont('helvetica', 'normal');
-        document.setFontSize(7);
+        document.setFontSize(8);
         document.setTextColor(71, 85, 105);
-        document.text(document.splitTextToSize(description, chartWidth).slice(0, 2), chartX, chartY + chartHeight + 4);
+        document.text(
+          document.splitTextToSize(`What this chart shows: ${description}`, chartWidth).slice(0, 3),
+          chartX,
+          pageChartY + chartHeight + 5,
+        );
       }
     });
     document.addPage();
@@ -857,19 +873,22 @@ export const exportToPDF = async (data = [], fileName, options = {}) => {
     const availableWidth = pageWidth - 30;
     const width = Math.min(availableWidth, 150);
     const height = Math.min(width * 0.48, 70);
-    const description = options.chartDescriptions?.[index] || '';
+    const chartTitle = options.chartTitles?.[index] || `Chart ${index + 1}`;
+    const description = options.chartDescriptions?.[index]
+      || `Summary of the values shown in the ${chartTitle} chart for this report.`;
     const descriptionLines = description
       ? document.splitTextToSize(description, width).slice(0, 2)
       : [];
     const descriptionHeight = descriptionLines.length * 3.5;
-    const titleY = tableStartY + 4;
+    let titleY = tableStartY + 4;
     if (titleY + height + descriptionHeight + 7 > document.internal.pageSize.getHeight() - 17) {
       document.addPage();
       tableStartY = 15;
+      titleY = tableStartY + 4;
     }
     document.setFont('helvetica', 'bold');
     document.setFontSize(10);
-    document.text(options.chartTitles?.[index] || `Chart ${index + 1}`, 15, tableStartY + 4);
+    document.text(chartTitle, 15, titleY);
     if (descriptionLines.length) {
       document.setFont('helvetica', 'normal');
       document.setFontSize(8);

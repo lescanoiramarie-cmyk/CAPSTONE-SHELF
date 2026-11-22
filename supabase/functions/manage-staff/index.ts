@@ -80,6 +80,13 @@ Deno.serve(async (request) => {
     });
   }
 
+  const accessToken = authorization.replace(/^Bearer\s+/i, "").trim();
+  if (!accessToken) {
+    return respond(401, {
+      error: "Sign in with an authorized super-admin account.",
+    });
+  }
+
   const userClient = createClient(
     supabaseUrl,
     anonKey,
@@ -97,7 +104,7 @@ Deno.serve(async (request) => {
   );
 
   const { data: authData, error: authError } =
-    await userClient.auth.getUser();
+    await userClient.auth.getUser(accessToken);
 
   if (
     authError ||
@@ -111,8 +118,11 @@ Deno.serve(async (request) => {
   }
 
   // Require AAL2 (MFA verified) for all administrative staff operations.
+  // This Edge Function creates a stateless Auth client, so it has no local
+  // session for getAuthenticatorAssuranceLevel() to inspect. Pass the caller's
+  // JWT explicitly so Supabase reads its aal claim and verified factors.
   const { data: assurance, error: assuranceError } =
-    await userClient.auth.mfa.getAuthenticatorAssuranceLevel();
+    await userClient.auth.mfa.getAuthenticatorAssuranceLevel(accessToken);
 
   if (assuranceError || assurance?.currentLevel !== "aal2") {
     return respond(403, {

@@ -1219,20 +1219,24 @@ body:has(.superadmin-dashboard) {
   border-color: rgb(10 35 66 / 0.9) !important;
   background-color: rgb(3 37 76 / 0.97) !important;
   color: #fff !important;
-  --shelf-primary: #fff;
 }
 
 .visitor-navy-header > div > div:not(:last-child) {
   color: #fff !important;
 }
 
-.visitor-navy-header > div > button,
 .visitor-navy-header [aria-label^='Switch to'],
 .visitor-navy-header [aria-label^='Notifications'],
-.visitor-navy-header [aria-label='Open profile menu'] {
+.visitor-navy-header [aria-label='User menu'] {
   border-color: #c7d7e8 !important;
   background-color: #fff !important;
   color: #082b52 !important;
+}
+
+.visitor-navy-header [aria-label='Go to SHELF home'] {
+  border-color: transparent !important;
+  background-color: transparent !important;
+  color: #fff !important;
 }
 
 .visitor-navy-header [aria-label='Go to SHELF home'] span {
