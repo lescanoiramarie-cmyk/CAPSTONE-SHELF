@@ -32,11 +32,14 @@ WITH library_pool AS MATERIALIZED (
   FROM public.libraries AS library
 ), visitor_pool AS MATERIALIZED (
   SELECT
+    visitor.library_id,
     visitor.id,
     visitor.full_name,
-    row_number() OVER (ORDER BY visitor.id) AS visitor_number,
-    count(*) OVER () AS visitor_count
+    row_number() OVER (PARTITION BY visitor.library_id ORDER BY visitor.id) AS visitor_number,
+    count(*) OVER (PARTITION BY visitor.library_id) AS visitor_count
   FROM public.visitors AS visitor
+  WHERE visitor.id LIKE 'SYN-%'
+    AND visitor.email LIKE 'shelf-test+%@example.test'
 ), library_books AS MATERIALIZED (
   SELECT
     book.id,
@@ -48,14 +51,18 @@ WITH library_pool AS MATERIALIZED (
   WHERE book.book_type = 'library'
     AND book.library_id IS NOT NULL
 ), months AS MATERIALIZED (
-  SELECT generate_series(
+  SELECT
+    (row_number() OVER (ORDER BY month_series.month_start) - 1)::integer AS month_offset,
+    month_series.month_start::date AS month_start
+  FROM generate_series(
     date '2025-01-01',
     date '2026-09-01',
     interval '1 month'
-  )::date AS month_start
+  ) AS month_series(month_start)
 ), branch_month_targets AS MATERIALIZED (
   SELECT
     library.id AS library_id,
+    months.month_offset,
     months.month_start,
     100 AS target_rows
   FROM library_pool AS library
@@ -63,16 +70,15 @@ WITH library_pool AS MATERIALIZED (
 ), branch_month_rows AS MATERIALIZED (
   SELECT
     target.library_id,
+    target.month_offset,
     target.month_start,
     sequence.row_number AS sequence_number
   FROM branch_month_targets AS target
   CROSS JOIN LATERAL generate_series(1, target.target_rows) AS sequence(row_number)
 ), ordered_rows AS MATERIALIZED (
   SELECT
-    row_number() OVER (
-      ORDER BY branch_month.month_start, branch_month.library_id, branch_month.sequence_number
-    ) AS transaction_number,
     branch_month.library_id,
+    branch_month.month_offset,
     branch_month.month_start,
     branch_month.sequence_number
   FROM branch_month_rows AS branch_month
@@ -104,7 +110,8 @@ WITH library_pool AS MATERIALIZED (
     SELECT md5(format('%s|%s|%s', ordered.library_id, ordered.month_start, ordered.sequence_number)) AS value
   ) AS seed_hash
   JOIN visitor_pool AS visitor
-    ON visitor.visitor_number = mod(ordered.transaction_number - 1, visitor.visitor_count) + 1
+    ON visitor.library_id = ordered.library_id
+   AND visitor.visitor_number = mod(ordered.month_offset * 100 + ordered.sequence_number - 1, visitor.visitor_count) + 1
   LEFT JOIN library_books AS book
     ON book.library_id = ordered.library_id
    AND book.book_number = mod(ordered.sequence_number - 1, book.book_count) + 1
