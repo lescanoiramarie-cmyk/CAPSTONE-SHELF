@@ -72,6 +72,7 @@ import {
   getAnalyticsMonthOptionsForYear,
   getAnalyticsYearOptions,
   getAnalyticsMonthWindow,
+  getMonthlyBorrowingProjection,
 } from '../../lib/dashboardAnalytics.js';
 
 const VisitorAccountManagement = lazy(
@@ -97,8 +98,8 @@ async function getStaffFunctionErrorMessage(error) {
   return error?.message || 'The staff account action could not be completed.';
 }
 
-function AdminSectionInsights({ title, metrics, recommendation, prediction }) {
-  return <AdminAnalyticsPanel title={title} metrics={metrics} recommendation={recommendation} prediction={prediction} />;
+function AdminSectionInsights({ title, description, metrics, recommendation, prediction, predictionSeries }) {
+  return <AdminAnalyticsPanel title={title} description={description} metrics={metrics} recommendation={recommendation} prediction={prediction} predictionSeries={predictionSeries} />;
 }
 
 function hasValidLibraryCoordinates(library) {
@@ -1469,6 +1470,10 @@ const handleEditStaff = (staff) => {
       .slice(0, 5);
     return { atRiskTitles, periodLabel: monthWindow.monthLabel };
   }, [books, borrowRequests, overviewMonth, borrowRequestsLoadError]);
+  const inventoryBorrowingProjection = useMemo(
+    () => getMonthlyBorrowingProjection(borrowRequests, new Date(`${overviewMonth}-01T00:00:00`)),
+    [borrowRequests, overviewMonth]
+  );
 
   // ============================================================
   // TREND DATA
@@ -1935,31 +1940,6 @@ const handleEditStaff = (staff) => {
               </div>
             </div>
             {borrowRequestsLoadError && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"><span>Borrowing history failed to load: {borrowRequestsLoadError}</span><button type="button" onClick={() => void retryBorrowRequests()} className="rounded-lg bg-amber-900 px-3 py-2 text-xs font-bold text-white">Try again</button></div>}
-            <AdminSectionInsights
-              title="System priorities"
-              metrics={[
-                { label: 'Open branches', value: openLibraries.toLocaleString() },
-                { label: 'Open branches without active staff', value: staffSummary.uncoveredOpenLibraries.toLocaleString() },
-                { label: 'Branches without a map pin', value: mapSummary.missingCoordinates.toLocaleString() },
-                { label: 'Books that may run low', value: borrowRequestsLoadError ? '—' : inventoryDemand.atRiskTitles.length.toLocaleString() },
-              ]}
-              prediction={borrowRequestsLoadError
-                ? 'Borrowing records are unavailable, so book-demand alerts cannot be shown. Branch staffing and map counts are current.'
-                : staffSummary.uncoveredOpenLibraries
-                  ? `${staffSummary.uncoveredOpenLibraries} open branch(es) have no active staff account assigned: ${staffSummary.uncoveredOpenBranchNames.join(', ')}.`
-                  : inventoryDemand.atRiskTitles.length
-                    ? `${inventoryDemand.atRiskTitles.length} book(s) were borrowed often while few copies were available in ${inventoryDemand.periodLabel}.`
-                    : 'Every open branch has active staff assigned, and no book met the low-copy alert for the selected month.'}
-              recommendation={staffSummary.uncoveredOpenLibraries
-                ? `Open Staff Accounts and assign active staff to: ${staffSummary.uncoveredOpenBranchNames.join(', ')}.`
-                : mapSummary.missingCoordinates
-                  ? 'Add or confirm map locations for the branches without pins.'
-                  : borrowRequestsLoadError
-                    ? 'Reload borrowing data before changing inventory based on demand.'
-                    : inventoryDemand.atRiskTitles.length
-                      ? `Review current loans and copies for ${inventoryDemand.atRiskTitles[0].book.title} first.`
-                      : 'Review these numbers again after the next busy month.'}
-            />
 
             {/* CHARTS */}
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -2186,7 +2166,7 @@ const handleEditStaff = (staff) => {
         )}
 
         {/* INVENTORY */}
-        {section === 'inventory' && <div className="space-y-4"><AdminSectionInsights title="Books that may run low" metrics={[{ label: 'Titles in catalog', value: books.length.toLocaleString() }, { label: 'Copies available now', value: inventorySummary.available.toLocaleString() }, { label: 'Titles with no copies available', value: inventorySummary.unavailableTitles.toLocaleString() }, { label: `Often borrowed, 0–1 copies left · ${inventoryDemand.periodLabel}`, value: borrowRequestsLoadError ? '—' : inventoryDemand.atRiskTitles.length.toLocaleString() }]} prediction={borrowRequestsLoadError ? 'Borrowing records could not be loaded, so the system cannot identify books that may run low.' : inventoryDemand.atRiskTitles.length ? `${inventoryDemand.atRiskTitles.length} book(s) were borrowed at least 3 times while only 0–1 copies were available in ${inventoryDemand.periodLabel}. Those books may be harder to borrow if this continues.` : `No book was borrowed at least 3 times while only 0–1 copies were available in ${inventoryDemand.periodLabel}.`} recommendation={borrowRequestsLoadError ? 'Try loading the borrowing records again before changing book-copy counts.' : inventoryDemand.atRiskTitles.length ? `Check current loans and branch copies for ${inventoryDemand.atRiskTitles[0].book.title}; move or add copies if the branch still needs them.` : inventorySummary.unavailableTitles ? 'Check books with no available copies against current loans and returns before ordering more.' : 'Keep copy counts up to date and check this list after each busy month.'} /><BookInventory /></div>}
+        {section === 'inventory' && <div className="space-y-4"><AdminSectionInsights title="Books that may run low" description={`Borrowing history through ${inventoryDemand.periodLabel || 'the selected month'}; the next-month estimate uses the recent monthly average.`} metrics={[{ label: 'Titles in catalog', value: books.length.toLocaleString() }, { label: 'Copies available now', value: inventorySummary.available.toLocaleString() }, { label: 'Titles with no copies available', value: inventorySummary.unavailableTitles.toLocaleString() }, { label: `Often borrowed, 0–1 copies left · ${inventoryDemand.periodLabel}`, value: borrowRequestsLoadError ? '—' : inventoryDemand.atRiskTitles.length.toLocaleString() }]} prediction={borrowRequestsLoadError ? 'Borrowing records could not be loaded, so the system cannot estimate demand.' : inventoryBorrowingProjection.projectedNextMonth == null ? 'There is not enough confirmed borrowing history to estimate next month.' : `If recent borrowing continues, about ${inventoryBorrowingProjection.projectedNextMonth} books may be borrowed next month.`} predictionSeries={borrowRequestsLoadError ? null : inventoryBorrowingProjection} recommendation={borrowRequestsLoadError ? 'Load borrowing history before changing copy counts.' : inventoryDemand.atRiskTitles.length ? `Check current loans and branch copies for ${inventoryDemand.atRiskTitles[0].book.title}; add or move copies if needed.` : inventorySummary.unavailableTitles ? 'Review books with no copies available against current loans and returns before ordering more.' : 'Keep copy counts updated and review the borrowing trend after each month.'} /><BookInventory /></div>}
 
         {section === 'settings' && (
           <section className="w-full max-w-6xl space-y-5">
@@ -2255,7 +2235,6 @@ const handleEditStaff = (staff) => {
         {/* LIBRARIES & MAP */}
         {section === 'map' && (
           <div className="space-y-4">
-            <AdminSectionInsights title="Library map coverage" metrics={[{ label: 'Libraries', value: libraries.length.toLocaleString() }, { label: 'Open branches', value: openLibraries.toLocaleString() }, { label: 'Mapped branches', value: mapSummary.geocoded.toLocaleString() }, { label: 'Missing coordinates', value: mapSummary.missingCoordinates.toLocaleString() }]} prediction={mapSummary.missingCoordinates ? `${mapSummary.missingCoordinates} library pin(s) cannot appear on the map until coordinates are saved; address-only records need lookup and confirmation.` : 'All current library records have valid coordinates, so every branch can appear as a map pin.'} recommendation={mapSummary.missingCoordinates ? 'Open each unmapped library, enter its complete address and use automatic address lookup; verify or adjust the pin before saving.' : 'Verify the pin whenever an address changes so visitors and staff see the correct location.'} />
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                 <div>
@@ -2685,7 +2664,6 @@ const handleEditStaff = (staff) => {
 
         {section === 'accounts' && (
           <div className="space-y-6">
-            <AdminSectionInsights title="Staff coverage & access outlook" metrics={[{ label: 'Staff accounts', value: staffAccounts.length.toLocaleString() }, { label: 'Active', value: staffSummary.active.toLocaleString() }, { label: 'Inactive', value: staffSummary.inactive.toLocaleString() }, { label: 'Open libraries without active staff', value: staffSummary.uncoveredOpenLibraries.toLocaleString() }]} prediction={staffSummary.uncoveredOpenLibraries ? `${staffSummary.uncoveredOpenLibraries} open library/libraries have no active staff: ${staffSummary.uncoveredOpenBranchNames.join(', ')}. Service coverage may be affected until assignment is restored.` : staffSummary.inactive ? `${staffSummary.inactive} inactive staff account(s) need review; confirm branch coverage before disabling or replacing access.` : 'Every open library currently has at least one active staff account assigned.'} recommendation={staffSummary.uncoveredOpenLibraries ? `Assign an active Sub Admin or librarian to: ${staffSummary.uncoveredOpenBranchNames.join(', ')}. Then verify the account can sign in.` : staffSummary.inactive ? 'Review inactive staff accounts and confirm replacements are active at the affected branches.' : 'Review branch assignments whenever staff roles or library responsibilities change.'} />
             <header className="border-b border-slate-200 pb-4">
               <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">Administration</p>
               <h2 className="text-lg font-bold text-slate-800">Staff Accounts</h2>
@@ -3036,6 +3014,8 @@ const handleEditStaff = (staff) => {
             libraries={libraries}
             books={books}
             borrowRequests={borrowRequests}
+            borrowRequestsLoadError={borrowRequestsLoadError}
+            retryBorrowRequests={retryBorrowRequests}
             attendanceLogs={attendanceLogs}
             attendanceDataComplete={initialDataReady && !attendanceLoadError}
             focusedNotificationRequestId={focusedNotificationRequestId}
@@ -3054,6 +3034,8 @@ const handleEditStaff = (staff) => {
             libraries={libraries}
             books={books}
             borrowRequests={borrowRequests}
+            borrowRequestsLoadError={borrowRequestsLoadError}
+            retryBorrowRequests={retryBorrowRequests}
             attendanceLogs={attendanceLogs}
             attendanceDataComplete={initialDataReady && !attendanceLoadError}
           />

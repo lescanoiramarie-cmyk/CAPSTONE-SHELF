@@ -132,6 +132,8 @@ export default function AdminWorkspace({
   attendanceLogs = [],
   attendanceDataComplete = false,
   borrowRequests = [],
+  borrowRequestsLoadError = '',
+  retryBorrowRequests = null,
   focusedNotificationRequestId = null,
   focusedNotificationType = null,
 }) {
@@ -173,13 +175,13 @@ export default function AdminWorkspace({
   const [answeredFeedback, setAnsweredFeedback] = useState([]);
   const [answeredFeedbackTotal, setAnsweredFeedbackTotal] = useState(0);
   const [answeredFeedbackPage, setAnsweredFeedbackPage] = useState(1);
-  const [oldestUnansweredAt, setOldestUnansweredAt] = useState(null);
-  const [oldestUnansweredUnavailable, setOldestUnansweredUnavailable] = useState(false);
+  const [, setOldestUnansweredAt] = useState(null);
+  const [, setOldestUnansweredUnavailable] = useState(false);
   const [feedbackSearch, setFeedbackSearch] = useState('');
   const feedbackPageSize = 5;
   const [announcements, setAnnouncements] = useState([]);
   const [announcementsTotal, setAnnouncementsTotal] = useState(0);
-  const [announcementsExpiringCount, setAnnouncementsExpiringCount] = useState(null);
+  const [, setAnnouncementsExpiringCount] = useState(null);
   const [announcementsPage, setAnnouncementsPage] = useState(1);
   const [announcementsSearch, setAnnouncementsSearch] = useState('');
   const [announcementsStatusFilter, setAnnouncementsStatusFilter] = useState('all');
@@ -541,7 +543,11 @@ export default function AdminWorkspace({
 
   const forecastHistoryBuckets = useMemo(() => {
     if (!analyticsWindow.valid) return [];
-    const earliestForecastDate = new Date(analyticsWindow.endExclusive);
+    const todayEnd = new Date();
+    todayEnd.setHours(0, 0, 0, 0);
+    todayEnd.setDate(todayEnd.getDate() + 1);
+    const endExclusive = new Date(Math.min(analyticsWindow.endExclusive.getTime(), todayEnd.getTime()));
+    const earliestForecastDate = new Date(endExclusive);
     earliestForecastDate.setDate(earliestForecastDate.getDate() - 366);
     const start = analyticsWindow.start > earliestForecastDate
       ? analyticsWindow.start
@@ -549,6 +555,7 @@ export default function AdminWorkspace({
     return getTimeframeBuckets('custom', {
       ...analyticsWindow,
       start,
+      endExclusive,
     }).slice(-366);
   }, [analyticsWindow]);
 
@@ -1283,6 +1290,12 @@ export default function AdminWorkspace({
       {/* REPORTS TAB */}
       {tab === 'reports' && (
         <section className="admin-reports-workspace flex flex-col gap-6">
+          {borrowRequestsLoadError && (
+            <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+              <span>Borrowing history could not be loaded, so reports may not include book activity: {borrowRequestsLoadError}</span>
+              {retryBorrowRequests && <button type="button" onClick={() => void retryBorrowRequests()} className="rounded-lg bg-amber-900 px-3 py-2 text-xs font-bold text-white">Try again</button>}
+            </div>
+          )}
           <div className="order-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="flex flex-col gap-4 border-b border-slate-100 bg-linear-to-r from-slate-50 to-white p-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1610,6 +1623,12 @@ export default function AdminWorkspace({
       {/* ANALYTICS TAB */}
       {tab === 'analytics' && (
         <section className="space-y-5">
+          {borrowRequestsLoadError && (
+            <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+              <span>Borrowing history could not be loaded, so borrowing charts may be incomplete: {borrowRequestsLoadError}</span>
+              {retryBorrowRequests && <button type="button" onClick={() => void retryBorrowRequests()} className="rounded-lg bg-amber-900 px-3 py-2 text-xs font-bold text-white">Try again</button>}
+            </div>
+          )}
           <section className="border border-slate-200 bg-white p-4 rounded-xl shadow-sm">
             <div className="mb-4">
               <h2 className="text-base font-bold text-slate-900">Analytics filters</h2>
@@ -1983,7 +2002,6 @@ export default function AdminWorkspace({
       {/* FEEDBACK TAB */}
       {tab === 'feedback' && (
         <section className="space-y-4">
-            {!loading && <AdminAnalyticsPanel title="Visitor feedback workload" description="Counts respect the current search and branch scope; the oldest unanswered message is checked across the full branch or system scope." metrics={[{ label: 'Unanswered', value: feedbackTotal }, { label: 'Answered', value: answeredFeedbackTotal }, { label: 'Response coverage', value: feedbackTotal + answeredFeedbackTotal ? `${Math.round((answeredFeedbackTotal / (feedbackTotal + answeredFeedbackTotal)) * 100)}%` : '—' }]} prediction={oldestUnansweredUnavailable ? 'The oldest unanswered message could not be loaded, so waiting time is unavailable.' : oldestUnansweredAt ? 'If the unanswered queue keeps growing, visitors may wait longer for support.' : 'There are currently no unanswered messages in this scope.'} recommendation={feedbackTotal ? 'Reply to the oldest unanswered messages first, then check the queue daily until the backlog is cleared.' : 'Keep the response queue clear and review new feedback as it arrives.'} />}
           {user?.role === 'superadmin' && (
             <div className="flex items-center gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-200">
               <ShieldCheck size={18} className="shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
@@ -2039,7 +2057,6 @@ export default function AdminWorkspace({
       {tab === 'announcements' && (
         <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
           <div className="space-y-3">
-            {!loading && <AdminAnalyticsPanel title="Announcement reach & expiry" description="Published notices are scoped to the selected branch or system view. The matching and page counts follow current filters; the expiry count covers all published notices in scope." metrics={[{ label: 'Published notices matching filters', value: announcementsTotal }, { label: 'Expiring in 7 days', value: announcementsExpiringCount ?? '—' }, { label: 'Shown on this page', value: announcements.length }]} prediction={announcementsExpiringCount == null ? 'Expiry data is unavailable because its query failed.' : announcementsExpiringCount ? `${announcementsExpiringCount} published notice(s) are due to expire within 7 days and may soon disappear from visitor views.` : 'No published notices in this scope are due to expire within 7 days.'} recommendation={announcementsExpiringCount == null ? 'Retry the announcement load and verify the Supabase response before renewing notices.' : announcementsExpiringCount ? 'Review each upcoming expiry and renew or replace notices that visitors still need.' : 'Keep expiry dates current and verify the audience before publishing the next notice.'} />}
             <div className="space-y-3">
               <div>
                 <h2 className="text-lg font-bold text-slate-800">Announcements</h2>

@@ -44,6 +44,39 @@ export function getAnalyticsMonthWindow(monthKey) {
   };
 }
 
+export function getMonthlyBorrowingProjection(requests = [], anchorDate = new Date(), historyMonths = 5) {
+  const anchor = new Date(anchorDate);
+  if (!Number.isFinite(anchor.getTime())) return { labels: [], values: [], projectedNextMonth: null };
+  const endMonth = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1);
+  const startMonth = new Date(anchor.getFullYear(), anchor.getMonth() - Math.max(1, historyMonths) + 1, 1);
+  const months = [];
+  for (let cursor = new Date(startMonth); cursor < endMonth; cursor.setMonth(cursor.getMonth() + 1)) {
+    months.push({
+      key: getAnalyticsMonthKey(cursor),
+      label: cursor.toLocaleDateString('en-US', { month: 'short' }),
+      value: 0,
+    });
+  }
+  const byMonth = new Map(months.map((month) => [month.key, month]));
+  requests.forEach((request) => {
+    const dateValue = request?.borrowDate ?? request?.borrow_date;
+    if (!dateValue) return;
+    const date = new Date(dateValue);
+    if (!Number.isFinite(date.getTime())) return;
+    const month = byMonth.get(getAnalyticsMonthKey(date));
+    if (month) month.value += 1;
+  });
+  const observed = months.slice(-3).map((month) => month.value);
+  const projectedNextMonth = observed.some((value) => value > 0)
+    ? Math.round(observed.reduce((sum, value) => sum + value, 0) / observed.length)
+    : null;
+  return {
+    labels: [...months.map((month) => month.label), ...(projectedNextMonth == null ? [] : ['Next'])],
+    values: [...months.map((month) => month.value), ...(projectedNextMonth == null ? [] : [projectedNextMonth])],
+    projectedNextMonth,
+  };
+}
+
 export function normalizeAnalyticsId(value) {
   return value == null || value === '' ? '' : String(value);
 }

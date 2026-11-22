@@ -7,6 +7,8 @@ export const TIMEFRAME_OPTIONS = [
   { id: 'this_month', label: 'This month' },
   { id: 'last_month', label: 'Last month' },
   { id: 'year', label: 'This year' },
+  { id: 'annual', label: 'Whole year' },
+  { id: 'weekly', label: 'Week' },
   { id: 'custom', label: 'Custom range' },
 ];
 
@@ -42,7 +44,7 @@ export function getTimeframeBucketKey(value, timeframe) {
   }
 
   const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-  if (timeframe === 'year') {
+  if (timeframe === 'year' || timeframe === 'annual') {
     return monthKey;
   }
   return `${monthKey}-${String(date.getDate()).padStart(2, '0')}`;
@@ -102,7 +104,7 @@ export function getTimeframeRange(
     );
   }
 
-  if (timeframe === 'custom') {
+  if (timeframe === 'custom' || timeframe === 'annual' || timeframe === 'weekly') {
     if (!customStart || !customEnd) {
       return {
         start: today,
@@ -130,13 +132,21 @@ export function getTimeframeRange(
       };
     }
 
+    const isFullCalendarYear = timeframe === 'annual'
+      && start.getMonth() === 0 && start.getDate() === 1
+      && end.getFullYear() === start.getFullYear()
+      && end.getMonth() === 11 && end.getDate() === 31;
     const isFullCalendarMonth = start.getDate() === 1
       && start.getFullYear() === end.getFullYear()
       && start.getMonth() === end.getMonth()
       && end.getDate() === new Date(end.getFullYear(), end.getMonth() + 1, 0).getDate();
-    const label = isFullCalendarMonth
+    const label = isFullCalendarYear
+      ? String(start.getFullYear())
+      : isFullCalendarMonth
       ? start.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' })
-      : `${customStart} to ${customEnd}`;
+      : timeframe === 'weekly'
+        ? `${start.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`
+        : `${customStart} to ${customEnd}`;
     return range(start, addDays(end, 1), label);
   }
 
@@ -169,7 +179,7 @@ export function getTimeframeBuckets(timeframe, timeframeRange) {
     return buckets;
   }
 
-  if (timeframe === 'year') {
+  if (timeframe === 'year' || timeframe === 'annual') {
     const cursor = new Date(
       timeframeRange.start.getFullYear(),
       timeframeRange.start.getMonth(),

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Search, ChevronLeft, ChevronRight, UsersRound, ShieldCheck } from 'lucide-react';
-import AdminAnalyticsPanel from './AdminAnalyticsPanel.jsx';
 import PageJump from './PageJump.jsx';
 import {
   fetchVisitorAccounts,
@@ -38,7 +37,6 @@ export default function VisitorAccountManagement({
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [visitors, setVisitors] = useState([]);
   const [total, setTotal] = useState(0);
-  const [accountAnalytics, setAccountAnalytics] = useState(null);
   const [error, setError] = useState('');
   const [loadedRequestKey, setLoadedRequestKey] = useState('');
   const [updatingVisitorId, setUpdatingVisitorId] = useState('');
@@ -87,7 +85,6 @@ export default function VisitorAccountManagement({
         if (cancelled) return;
         setVisitors(result.visitors);
         setTotal(result.total);
-        setAccountAnalytics(result.analytics || null);
         setError('');
         setLoadedRequestKey(requestKey);
       })
@@ -97,7 +94,6 @@ export default function VisitorAccountManagement({
         setError(loadError.message || 'Unable to load visitor accounts.');
         setVisitors([]);
         setTotal(0);
-        setAccountAnalytics(null);
         setLoadedRequestKey(requestKey);
       });
 
@@ -187,27 +183,6 @@ export default function VisitorAccountManagement({
             : `Registered visitors for ${libraryName || 'your assigned library branch'}.`}
         </p>
       </header>
-
-      {!loading && accountAnalytics && <AdminAnalyticsPanel
-        title="Visitor account health"
-        description="Descriptive counts are scoped to this branch or the selected Super Admin library filter, independent of the current search and page."
-        metrics={[
-          { label: 'Registered visitors', value: accountAnalytics.total.toLocaleString() },
-          { label: 'Active accounts', value: accountAnalytics.active.toLocaleString() },
-          { label: 'New · last 30 days', value: accountAnalytics.registeredLast30Days.toLocaleString() },
-          { label: 'Community approvals pending', value: accountAnalytics.pendingCommunity.toLocaleString() },
-        ]}
-        prediction={accountAnalytics.registeredPrevious30Days > 0
-          ? `At the last 30-day pace, about ${accountAnalytics.registeredLast30Days.toLocaleString()} new accounts may register in the next 30 days (${Math.round(((accountAnalytics.registeredLast30Days - accountAnalytics.registeredPrevious30Days) / accountAnalytics.registeredPrevious30Days) * 100)}% versus the prior 30 days).`
-          : accountAnalytics.registeredLast30Days > 0
-            ? `About ${accountAnalytics.registeredLast30Days.toLocaleString()} new accounts may register in the next 30 days if the current pace continues; there is no prior-period baseline yet.`
-            : 'No registrations were recorded in the last 30 days, so a near-term registration projection is not available.'}
-        recommendation={accountAnalytics.pendingCommunity
-          ? `Review the ${accountAnalytics.pendingCommunity.toLocaleString()} pending community registration(s) before enabling account access.`
-          : accountAnalytics.unverified
-            ? `Check the ${accountAnalytics.unverified.toLocaleString()} account(s) without verified email before approving access to visitor features.`
-            : 'Continue reviewing account verification and branch assignment when new registrations arrive.'}
-      />}
 
       {isSuperAdmin && (
         <div className="flex items-center gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-200">

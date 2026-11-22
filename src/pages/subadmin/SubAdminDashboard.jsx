@@ -64,6 +64,7 @@ import {
   getAnalyticsMonthOptionsForYear,
   getAnalyticsYearOptions,
   getAnalyticsMonthWindow,
+  getMonthlyBorrowingProjection,
 } from '../../lib/dashboardAnalytics.js';
 
 const AdminWorkspace = lazy(() => import('../../component/AdminWorkspace.jsx'));
@@ -1875,30 +1876,6 @@ export default function SubAdminDashboard() {
               <AttendanceTrendChart attendance={branchAttendance} monthKey={overviewMonth} />
               <BorrowingActivityTrendChart requests={branchBorrowRequests} monthKey={overviewMonth} loadError={borrowRequestsLoadError} />
             </div>
-            <div className="space-y-4">
-              <AdminAnalyticsPanel
-                title="Book borrowing summary"
-                description={`${branchOverviewMetrics.monthLabel}. Compare this month with the same number of days last month.`}
-                metrics={[
-                  { label: 'Books borrowed this month', value: borrowRequestsLoadError ? '—' : branchOverviewMetrics.totalBorrowEvents, note: 'Confirmed book pickups.' },
-                  { label: 'Books borrowed in the same days last month', value: borrowRequestsLoadError ? '—' : branchOverviewMetrics.comparableBorrowEvents ?? 'Not available', note: branchOverviewMetrics.comparisonAvailable ? 'The same number of days is compared.' : 'There is not enough past data to compare.' },
-                  { label: 'Expected borrows in the next 30 days', value: borrowRequestsLoadError ? '—' : branchOverviewMetrics.projectedNextMonth ?? '—', note: 'Based on borrowing so far this month.' },
-                  { label: 'Often borrowed books with 0-1 copies left', value: borrowRequestsLoadError ? '—' : branchOverviewMetrics.pressureTitles, note: 'Borrowed at least 3 times this month, with 0-1 copies available.' },
-                ]}
-                prediction={borrowRequestsLoadError
-                  ? 'Borrowing records could not be loaded, so no estimate is available.'
-                  : branchOverviewMetrics.projectedNextMonth == null
-                  ? 'There are not enough confirmed borrows yet to estimate the next 30 days. Check again after more borrows are recorded.'
-                  : `If borrowing continues at the current pace, the branch may have about ${branchOverviewMetrics.projectedNextMonth} borrows in the next 30 days${branchOverviewMetrics.comparableBorrowEvents >= 3 ? ` (${Math.abs(Math.round(((branchOverviewMetrics.totalBorrowEvents - branchOverviewMetrics.comparableBorrowEvents) / branchOverviewMetrics.comparableBorrowEvents) * 100))}% ${branchOverviewMetrics.totalBorrowEvents >= branchOverviewMetrics.comparableBorrowEvents ? 'more' : 'fewer'} than the same days last month)` : ''}.`}
-                recommendation={borrowRequestsLoadError
-                  ? 'Try loading borrowing records again before changing copy counts or staff schedules.'
-                  : branchOverviewMetrics.pressureTitles
-                  ? `Check available copies and pending requests for ${branchOverviewMetrics.topBorrowed.find((entry) => entry.count >= 3 && entry.available <= 1)?.book.title || 'often borrowed books'} before buying or moving copies.`
-                  : branchOverviewMetrics.topBorrowed.length
-                    ? `Check available copies and pending requests for ${branchOverviewMetrics.topBorrowed[0].book.title} before changing its copy count.`
-                    : 'Keep borrowing records up to date and review book availability after each busy month.'}
-              />
-            </div>
             <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
               <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800" aria-labelledby="branch-top-borrowed-title">
                 <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-700">Descriptive analytics</p>
@@ -2176,7 +2153,28 @@ export default function SubAdminDashboard() {
         )}
         {section === 'fines' && <FinePayments libraryId={currentLibraryId} libraryName={currentBranchName} />}
         {section === 'subscription' && <SubscriptionManagement mode="subadmin" libraryId={currentLibraryId} libraryName={currentBranchName} />}
-        {section === 'inventory' && <BookInventory />}
+        {section === 'inventory' && <div className="space-y-4">
+          <AdminAnalyticsPanel
+            title="Branch inventory and borrowing outlook"
+            description={`${currentBranchName || 'Assigned library'} · Based on current copies and confirmed borrowing history.`}
+            metrics={[
+              { label: 'Book titles', value: branchBooks.length.toLocaleString() },
+              { label: 'Copies available', value: branchBooks.reduce((sum, book) => sum + Number(book.availableCopies ?? book.available_copies ?? 0), 0).toLocaleString() },
+              { label: 'Borrowed this month', value: borrowRequestsLoadError ? '—' : branchOverviewMetrics.totalBorrowEvents },
+              { label: 'Often borrowed, 0–1 copies left', value: borrowRequestsLoadError ? '—' : branchOverviewMetrics.pressureTitles },
+            ]}
+            prediction={borrowRequestsLoadError
+              ? 'Borrowing history could not be loaded, so a demand estimate is unavailable.'
+              : (() => { const estimate = getMonthlyBorrowingProjection(branchBorrowRequests, new Date(`${overviewMonth}-01T00:00:00`)).projectedNextMonth; return estimate == null ? 'There is not enough confirmed borrowing history to estimate next month.' : `If recent borrowing continues, about ${estimate} books may be borrowed next month.`; })()}
+            predictionSeries={borrowRequestsLoadError ? null : getMonthlyBorrowingProjection(branchBorrowRequests, new Date(`${overviewMonth}-01T00:00:00`))}
+            recommendation={borrowRequestsLoadError
+              ? 'Load borrowing history before changing copy counts.'
+              : branchOverviewMetrics.pressureTitles
+                ? `Check loans and availability for ${branchOverviewMetrics.topBorrowed.find((entry) => entry.count >= 3 && entry.available <= 1)?.book.title || 'often borrowed books'} before adding or moving copies.`
+                : 'Keep copy counts accurate and review the borrowing trend each month.'}
+          />
+          <BookInventory />
+        </div>}
         {section === 'queue' && (
           <ReservationQueue user={user} focusRequestId={focusRequestId} />
         )}
@@ -2272,6 +2270,8 @@ export default function SubAdminDashboard() {
                 libraries={libraries}
                 books={branchBooks}
                 borrowRequests={borrowRequests}
+                borrowRequestsLoadError={borrowRequestsLoadError}
+                retryBorrowRequests={retryBorrowRequests}
                 attendanceLogs={branchAttendance}
                 attendanceDataComplete={initialDataReady && !attendanceLoadError}
               />
@@ -2285,6 +2285,8 @@ export default function SubAdminDashboard() {
               libraries={libraries}
               books={branchBooks}
               borrowRequests={borrowRequests}
+              borrowRequestsLoadError={borrowRequestsLoadError}
+              retryBorrowRequests={retryBorrowRequests}
               attendanceLogs={branchAttendance}
               attendanceDataComplete={initialDataReady && !attendanceLoadError}
             />
