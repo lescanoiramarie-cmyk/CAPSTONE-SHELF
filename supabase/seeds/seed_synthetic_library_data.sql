@@ -1,5 +1,11 @@
 BEGIN;
 
+-- Replace only generated attendance rows so reruns match the current date
+-- window and monthly target without leaving older synthetic history behind.
+DELETE FROM public.attendance_logs
+WHERE visitor_name LIKE '[TEST] %'
+  AND visitor_id::text LIKE 'SYN-%';
+
 WITH name_data AS (
   SELECT
     ARRAY[
@@ -88,7 +94,7 @@ month_ranges AS (
     SELECT
       (row_number() OVER (ORDER BY month_series.month_start) - 1)::integer AS month_offset,
       month_series.month_start
-    FROM generate_series(date '2024-01-01', date '2026-09-01', interval '1 month') AS month_series(month_start)
+    FROM generate_series(date '2025-01-01', date '2026-09-01', interval '1 month') AS month_series(month_start)
   ) AS months
 ),
 library_months AS (
@@ -111,7 +117,7 @@ attendance_rows AS (
   SELECT
     library_months.*,
     visit_number,
-    ((month_offset * 200 + visit_number - 1) % 500) + 1 AS visitor_number,
+    ((month_offset * 100 + visit_number - 1) % 500) + 1 AS visitor_number,
     md5(
       library_id::text
       || '|shelf-demo-attendance|'
@@ -120,7 +126,7 @@ attendance_rows AS (
       || visit_number::text
     ) AS seed_key
   FROM library_months
-  CROSS JOIN generate_series(1, 200) AS visits(visit_number)
+  CROSS JOIN generate_series(1, 100) AS visits(visit_number)
 ),
 attendance_times AS (
   SELECT

@@ -1,5 +1,5 @@
--- Seed exactly 200 clearly labeled historical book transactions per
--- library/month pair from January 2024 through September 2026.
+-- Seed exactly 100 clearly labeled historical book transactions per
+-- library/month pair from January 2025 through September 2026.
 -- Existing visitor accounts are rotated
 -- through generated transactions; books belong to the branch receiving them.
 -- Safe to rerun: deterministic UUIDs and conflict handling prevent duplicates.
@@ -9,6 +9,12 @@
 BEGIN;
 SET LOCAL statement_timeout = '0';
 
+-- Remove only rows created by this seed before rebuilding the requested
+-- monthly range and count. The audit trigger explicitly exempts these rows.
+DELETE FROM public.borrow_requests
+WHERE confirmed_by = 'Test data seed'
+  AND return_confirmed_by = 'Test data seed';
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.visitors) THEN
@@ -17,19 +23,6 @@ BEGIN
 
   IF NOT EXISTS (SELECT 1 FROM public.libraries) THEN
     RAISE EXCEPTION 'Seed aborted: at least one library branch is required.';
-  END IF;
-
-  IF EXISTS (
-    SELECT 1
-    FROM public.libraries AS library
-    WHERE NOT EXISTS (
-      SELECT 1
-      FROM public.books AS book
-      WHERE book.library_id = library.id
-        AND book.book_type = 'library'
-    )
-  ) THEN
-    RAISE EXCEPTION 'Seed aborted: every library needs at least one library book so its transactions can be attributed to that branch.';
   END IF;
 END;
 $$;
@@ -56,7 +49,7 @@ WITH library_pool AS MATERIALIZED (
     AND book.library_id IS NOT NULL
 ), months AS MATERIALIZED (
   SELECT generate_series(
-    date '2024-01-01',
+    date '2025-01-01',
     date '2026-09-01',
     interval '1 month'
   )::date AS month_start
@@ -64,7 +57,7 @@ WITH library_pool AS MATERIALIZED (
   SELECT
     library.id AS library_id,
     months.month_start,
-    200 AS target_rows
+    100 AS target_rows
   FROM library_pool AS library
   CROSS JOIN months
 ), branch_month_rows AS MATERIALIZED (
@@ -92,8 +85,9 @@ WITH library_pool AS MATERIALIZED (
       substr(seed_hash.value, 17, 4),
       substr(seed_hash.value, 21, 12)
     ) AS id,
+    ordered.library_id,
     book.id AS book_id,
-    book.title AS book_title,
+    coalesce(book.title, '[TEST] No catalog title (synthetic)') AS book_title,
     visitor.id AS visitor_id,
     visitor.full_name AS visitor_name,
     'returned'::text AS status,
@@ -111,7 +105,7 @@ WITH library_pool AS MATERIALIZED (
   ) AS seed_hash
   JOIN visitor_pool AS visitor
     ON visitor.visitor_number = mod(ordered.transaction_number - 1, visitor.visitor_count) + 1
-  JOIN library_books AS book
+  LEFT JOIN library_books AS book
     ON book.library_id = ordered.library_id
    AND book.book_number = mod(ordered.sequence_number - 1, book.book_count) + 1
   CROSS JOIN LATERAL (
@@ -147,7 +141,8 @@ INSERT INTO public.borrow_requests (
   return_date,
   fine_amount,
   confirmed_by,
-  return_confirmed_by
+  return_confirmed_by,
+  library_id
 )
 SELECT
   (jsonb_populate_record(
@@ -165,7 +160,8 @@ SELECT
   generated.return_date,
   generated.fine_amount,
   'Test data seed',
-  'Test data seed'
+  'Test data seed',
+  generated.library_id
 FROM generated
 ON CONFLICT (id) DO NOTHING;
 
@@ -177,11 +173,10 @@ SELECT
   to_char(date_trunc('month', request.request_date), 'YYYY-MM') AS transaction_month,
   count(*) AS transaction_count
 FROM public.borrow_requests AS request
-JOIN public.books AS book ON book.id = request.book_id
-JOIN public.libraries AS library ON library.id = book.library_id
+JOIN public.libraries AS library ON library.id = request.library_id
 WHERE request.confirmed_by = 'Test data seed'
   AND request.return_confirmed_by = 'Test data seed'
-  AND request.request_date >= date '2024-01-01'
+  AND request.request_date >= date '2025-01-01'
   AND request.request_date < date '2026-10-01'
 GROUP BY library.name, date_trunc('month', request.request_date)
 ORDER BY date_trunc('month', request.request_date), library.name;
