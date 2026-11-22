@@ -61,13 +61,16 @@ const ATTENDANCE_LOAD_TIMEOUT_MS = 120000;
 const BORROW_REQUESTS_LOAD_TIMEOUT_MS = 60000;
 
 export function LibraryProvider({ children }) {
-  const { user } = useAuth();
+  const { user, reverifyStaffMfa } = useAuth();
   const [data, setData] = useState(emptyData);
   const [loading, setLoading] = useState(true);
   const [splashElapsed, setSplashElapsed] = useState(false);
   const [initialDataReady, setInitialDataReady] = useState(false);
   const [connectionError, setConnectionError] = useState('');
   const [attendanceLoadError, setAttendanceLoadError] = useState('');
+  const [attendanceMfaCode, setAttendanceMfaCode] = useState('');
+  const [attendanceMfaBusy, setAttendanceMfaBusy] = useState(false);
+  const [attendanceMfaError, setAttendanceMfaError] = useState('');
   const [optionalDataLoadErrors, setOptionalDataLoadErrors] = useState([]);
   const [realtimeVisitorId, setRealtimeVisitorId] = useState(null);
   const [showRefreshToast, setShowRefreshToast] = useState(false);
@@ -386,7 +389,11 @@ export function LibraryProvider({ children }) {
         };
       } catch (e) {
         optionalDataErrors.push(operation);
-        reportClientError(`Failed to load ${operation}: ${e?.message || 'unknown error'}`);
+        const staffMfaRequired = operation === 'Attendance records'
+          && /AAL2 authentication is required/i.test(e?.message || '');
+        if (!staffMfaRequired) {
+          reportClientError(`Failed to load ${operation}: ${e?.message || 'unknown error'}`);
+        }
         return {
           data: fallback,
           error:
@@ -470,7 +477,11 @@ export function LibraryProvider({ children }) {
       const communityBooks = communityBooksResult.data;
 
       if (attendanceError) {
-        setAttendanceLoadError('Attendance records are temporarily unavailable.');
+        setAttendanceLoadError(
+          /AAL2 authentication is required/i.test(attendanceError)
+            ? 'Staff two-step authentication is required to load attendance. Enter your authenticator code below to continue.'
+            : 'Attendance records are temporarily unavailable.'
+        );
       } else {
         setAttendanceLoadError('');
       }
@@ -1785,7 +1796,44 @@ fineReviewRequired:
       )}
       {attendanceLoadError && (
         <div role="status" className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-center text-xs font-semibold text-amber-950">
-          Attendance data is temporarily unavailable. Other library data may still load.
+          <p>{attendanceLoadError} Other library data may still load.</p>
+          {attendanceLoadError.includes('two-step authentication') && ['subadmin', 'superadmin'].includes(user?.role) && (
+            <form
+              className="mx-auto mt-2 flex max-w-md flex-wrap items-center justify-center gap-2"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                setAttendanceMfaBusy(true);
+                setAttendanceMfaError('');
+                try {
+                  await reverifyStaffMfa(attendanceMfaCode);
+                  setAttendanceMfaCode('');
+                  setAttendanceLoadError('');
+                  await refreshAll();
+                } catch (error) {
+                  setAttendanceMfaError(error?.message || 'Unable to verify the staff session.');
+                } finally {
+                  setAttendanceMfaBusy(false);
+                }
+              }}
+            >
+              <label htmlFor="attendance-mfa-code" className="sr-only">Authenticator code</label>
+              <input
+                id="attendance-mfa-code"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={attendanceMfaCode}
+                onChange={(event) => setAttendanceMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="6-digit authenticator code"
+                className="rounded-lg border border-amber-400 bg-white px-3 py-2 text-xs font-medium text-slate-800"
+              />
+              <button type="submit" disabled={attendanceMfaBusy || attendanceMfaCode.length !== 6} className="rounded-lg bg-amber-900 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                {attendanceMfaBusy ? 'Verifying…' : 'Verify and reload attendance'}
+              </button>
+              {attendanceMfaError && <p role="alert" className="w-full text-xs font-semibold text-red-800">{attendanceMfaError}</p>}
+            </form>
+          )}
         </div>
       )}
       {optionalDataLoadErrors.some(

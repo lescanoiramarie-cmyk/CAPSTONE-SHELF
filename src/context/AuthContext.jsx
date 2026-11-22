@@ -645,6 +645,43 @@ const completeMfaLogin = async (code) => {
     return pending.user;
   };
 
+  const reverifyStaffMfa = async (code) => {
+    if (!['subadmin', 'superadmin'].includes(user?.role)) {
+      throw new Error('An authenticated staff account is required for this verification.');
+    }
+    const normalizedCode = String(code || '').trim();
+    if (!/^\d{6}$/.test(normalizedCode)) {
+      throw new Error('Enter the current six-digit code from your authenticator app.');
+    }
+
+    const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
+    if (factorsError) throw factorsError;
+    const verifiedFactor = (factors?.totp || factors?.all || []).find(
+      (factor) => factor.status === 'verified'
+    );
+    if (!verifiedFactor) {
+      throw new Error('No verified authenticator is available. Sign in again or contact your system administrator.');
+    }
+
+    const { error: challengeError } = await supabase.auth.mfa.challengeAndVerify({
+      factorId: verifiedFactor.id,
+      code: normalizedCode,
+    });
+    if (challengeError) throw challengeError;
+
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
+    if (!sessionData?.session?.user?.id || sessionData.session.user.id !== user.id) {
+      throw new Error('The verified staff session could not be confirmed. Sign in again.');
+    }
+    const { data: assurance, error: assuranceError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (assuranceError) throw assuranceError;
+    if (assurance?.currentLevel !== 'aal2') {
+      throw new Error('AAL2 verification was not confirmed. Enter a new authenticator code and retry.');
+    }
+    return true;
+  };
+
   const cancelMfaLogin = async () => {
     pendingMfaLoginRef.current = null;
     await logout();
@@ -923,6 +960,7 @@ const completeMfaLogin = async (code) => {
         loginSuperAdmin,
         login,
         completeMfaLogin,
+        reverifyStaffMfa,
         cancelMfaLogin,
       }}
     >

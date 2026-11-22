@@ -1695,6 +1695,7 @@ export default function AdminWorkspace({
           <section className="grid gap-5 xl:grid-cols-2">
             <div className="border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
               <div className="mb-4">
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-700">Descriptive analytics</p>
                 <h2 className="text-lg font-bold text-slate-900">Library visits and book borrowing</h2>
                 <p className="text-sm text-slate-500">
                   {isSubAdmin
@@ -1705,6 +1706,7 @@ export default function AdminWorkspace({
                   {' · '}
                   {analyticsWindow.label}
                 </p>
+                <p className="mt-1 text-xs text-slate-500">Compares recorded library check-ins with book requests across the selected date range.</p>
               </div>
               {analyticsWindow.valid ? (
                 <Bar
@@ -1753,6 +1755,7 @@ export default function AdminWorkspace({
             <section className="flex min-h-0 min-w-0 flex-col border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
+                  <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-700">Descriptive analytics</p>
                   <h2 className="text-lg font-bold text-slate-900">Most requested book categories</h2>
                   <p className="mt-1 text-sm text-slate-500">Categories visitors requested most during the selected month.</p>
                 </div>
@@ -1826,7 +1829,7 @@ export default function AdminWorkspace({
 
             <div className="space-y-4 xl:col-span-2">
               <section className="border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
-                <h2 className="text-base font-bold text-slate-800">Suggested actions</h2>
+                <h2 className="text-base font-bold text-slate-800">Prescriptive analytics · Suggested actions</h2>
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-600">
                   {demandRecommendations.map((item) => (
                     <li key={item}>{item}</li>
@@ -1836,7 +1839,7 @@ export default function AdminWorkspace({
 
               <section className="border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
                 <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-base font-bold text-slate-800">Estimate upcoming library visits</h2>
+                  <h2 className="text-base font-bold text-slate-800">Predictive analytics · Estimate upcoming library visits</h2>
                   <button
                     type="button"
                     onClick={runForecast}
@@ -1858,6 +1861,7 @@ export default function AdminWorkspace({
                   <>
                     {forecastChartData && (
                       <div className="mt-4">
+                        <p className="mb-2 text-xs text-slate-500">Estimated daily check-ins for the next seven days from the selected attendance records.</p>
                         <Line
                           data={forecastChartData}
                           options={{

@@ -112,7 +112,7 @@ const markAllNotificationsRead = () => {
       <div
         role="status"
         aria-live="polite"
-        className={`absolute right-4 top-4 z-10 inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-semibold sm:right-20 sm:top-5 ${
+        className={`absolute right-5 top-4 z-10 inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-semibold sm:right-7 sm:top-5 lg:right-8 ${
           isOnline
             ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
             : 'border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300'

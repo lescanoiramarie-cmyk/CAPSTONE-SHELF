@@ -2347,13 +2347,17 @@ function VisitorDashboardContent() {
                     {myVisits.length > 0 && (
                       <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                         <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-slate-900/40">
-                          <h4 className="mb-2 text-xs font-bold text-slate-700 dark:text-slate-200">Most visited libraries</h4>
+                          <p className="text-[10px] font-extrabold uppercase tracking-wide text-blue-700 dark:text-blue-300">Descriptive analytics</p>
+                          <h4 className="mt-1 text-xs font-bold text-slate-700 dark:text-slate-200">Most visited libraries</h4>
+                          <p className="mb-2 mt-1 text-[11px] text-slate-500 dark:text-slate-400">Your check-ins grouped by library for the selected period.</p>
                           <div className="h-48">
                             <Bar data={attendanceLibraryChartData} options={attendanceChartOptions} />
                           </div>
                         </div>
                         <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-slate-900/40">
-                          <h4 className="mb-2 text-xs font-bold text-slate-700 dark:text-slate-200">Visits per month · last 6 months</h4>
+                          <p className="text-[10px] font-extrabold uppercase tracking-wide text-blue-700 dark:text-blue-300">Descriptive analytics</p>
+                          <h4 className="mt-1 text-xs font-bold text-slate-700 dark:text-slate-200">Visits per month · last 6 months</h4>
+                          <p className="mb-2 mt-1 text-[11px] text-slate-500 dark:text-slate-400">Shows how your monthly check-ins have changed over time.</p>
                           <div className="h-48">
                             <Bar data={attendanceMonthlyChartData} options={attendanceMonthlyChartOptions} />
                           </div>

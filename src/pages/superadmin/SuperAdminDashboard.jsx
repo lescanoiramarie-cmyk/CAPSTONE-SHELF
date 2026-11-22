@@ -1989,7 +1989,9 @@ const handleEditStaff = (staff) => {
             {/* CHARTS */}
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h3 className="mb-3 text-sm font-bold text-slate-800">Check-ins & Confirmed Borrows · {trendData.monthLabel}</h3>
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-700">Descriptive analytics</p>
+                <h3 className="mt-1 text-sm font-bold text-slate-800">Check-ins & Confirmed Borrows · {trendData.monthLabel}</h3>
+                <p className="mb-3 mt-1 text-xs text-slate-500">Daily comparison of visitor check-ins and completed book pickups across all libraries.</p>
                 <div className="h-82.5">
                   <Line
                     data={{
@@ -2020,7 +2022,9 @@ const handleEditStaff = (staff) => {
                 )}
               </div>
               <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h3 className="mb-3 text-sm font-bold text-slate-800">All-Time Catalog Titles by Category</h3>
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-700">Descriptive analytics</p>
+                <h3 className="mt-1 text-sm font-bold text-slate-800">All-Time Catalog Titles by Category</h3>
+                <p className="mb-3 mt-1 text-xs text-slate-500">Shows the current catalog title count in each category.</p>
                 {categoryData.labels.length === 0 ? (
                   <p className="text-xs text-slate-500">No books in the catalog yet.</p>
                 ) : (
@@ -2069,6 +2073,7 @@ const handleEditStaff = (staff) => {
               </div>
               <div className="h-full rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
                 <div className="mb-3">
+                  <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-700">Descriptive analytics</p>
                   <h3 className="text-sm font-bold text-slate-800">Branch visits and book borrows</h3>
                 <p className="mt-1 text-xs text-slate-500">{trendData.monthLabel}. Each borrow request is counted once. Records with conflicting branch details are left out{borrowRequestsLoadError ? ', and borrowing data is currently unavailable.' : '.'}</p>
                 </div>
@@ -2101,6 +2106,7 @@ const handleEditStaff = (staff) => {
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="mb-3">
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-700">Descriptive analytics</p>
                 <h3 className="text-sm font-bold text-slate-800">Book copies by branch</h3>
                 <p className="mt-1 text-xs text-slate-500">Current copy counts; “not available” includes copies currently on loan or otherwise unavailable.</p>
               </div>

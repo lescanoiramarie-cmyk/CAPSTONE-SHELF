@@ -435,7 +435,7 @@ async function getAuthenticatedDataScope() {
   }
 }
 
-async function fetchAllRowsInPages(buildQuery, resourceName, signal = null) {
+async function fetchAllRowsInPages(buildQuery, resourceName, signal = null, beforePageBatch = null) {
   const rows = [];
 
   const throwIfAborted = () => {
@@ -451,6 +451,8 @@ async function fetchAllRowsInPages(buildQuery, resourceName, signal = null) {
     batchOffset += FETCH_PAGE_SIZE * FETCH_PAGE_BATCH_SIZE
   ) {
     throwIfAborted();
+    await beforePageBatch?.();
+    throwIfAborted();
     const pages = await Promise.all(
       Array.from({ length: FETCH_PAGE_BATCH_SIZE }, (_, pageIndex) => {
         const from = batchOffset + pageIndex * FETCH_PAGE_SIZE;
@@ -461,6 +463,9 @@ async function fetchAllRowsInPages(buildQuery, resourceName, signal = null) {
 
     for (const page of pages) {
       if (page.error) {
+        if (/AAL2 authentication is required/i.test(page.error.message || '')) {
+          throw new Error('AAL2 authentication is required. Complete the staff two-step sign-in, then retry.');
+        }
         throw cleanErr(
           page.error,
           `Unable to fetch all ${resourceName}.`
@@ -1612,9 +1617,21 @@ export async function fetchAttendanceLogs() {
   if (scope.type === 'anonymous') return [];
   if (scope.type === 'subadmin' && !scope.libraryId) return [];
 
+  const requireStaffAal2 = ['subadmin', 'superadmin'].includes(scope.type)
+    ? async () => {
+        const { data: assurance, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (error) throw cleanErr(error, 'Unable to verify staff sign-in security level.');
+        if (assurance?.currentLevel !== 'aal2') {
+          throw new Error('AAL2 authentication is required. Complete the staff two-step sign-in, then retry.');
+        }
+      }
+    : null;
+
   const data = await fetchAllRowsInPages(
     () => supabase.rpc('get_attendance_logs_v1'),
-    'attendance records'
+    'attendance records',
+    null,
+    requireStaffAal2
   );
   return data.map(mapAttendance);
 }
