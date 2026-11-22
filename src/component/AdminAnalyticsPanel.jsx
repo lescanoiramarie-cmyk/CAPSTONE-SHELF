@@ -12,13 +12,18 @@ export default function AdminAnalyticsPanel({
   prediction = 'There is not enough recent information to estimate what may happen next.',
   recommendation = 'Keep records up to date and review this section regularly.',
   predictiveSeries = [],
+  predictionSeries = null,
+  prescriptiveMetrics = [],
   rationale = '',
 }) {
   const chartMetrics = metrics
     .map((metric) => ({ ...metric, chartValue: toNumber(metric.value) }))
     .filter((metric) => Number.isFinite(metric.chartValue) && metric.chartValue >= 0);
   const chartMaximum = Math.max(1, ...chartMetrics.map((metric) => metric.chartValue));
-  const usableForecast = predictiveSeries
+  const automaticForecast = Array.isArray(predictionSeries?.labels) && Array.isArray(predictionSeries?.values)
+    ? predictionSeries.labels.map((label, index) => ({ label, value: predictionSeries.values[index] }))
+    : [];
+  const usableForecast = (automaticForecast.length ? automaticForecast : predictiveSeries)
     .map((point) => ({ ...point, value: Number(point.value) }))
     .filter((point) => Number.isFinite(point.value) && point.value >= 0);
   const forecastMaximum = Math.max(1, ...usableForecast.map((point) => point.value));
@@ -27,6 +32,10 @@ export default function AdminAnalyticsPanel({
     const y = 94 - (point.value / forecastMaximum) * 72;
     return { ...point, x, y };
   });
+  const actionMetrics = prescriptiveMetrics
+    .map((metric) => ({ ...metric, chartValue: toNumber(metric.value) }))
+    .filter((metric) => Number.isFinite(metric.chartValue) && metric.chartValue >= 0);
+  const actionMaximum = Math.max(1, ...actionMetrics.map((metric) => metric.chartValue));
 
   return (
     <section aria-label={`${title} analytics`} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
@@ -96,6 +105,20 @@ export default function AdminAnalyticsPanel({
             <h4 className="text-lg font-bold">Prescriptive Analytics</h4>
           </div>
           <p className="mt-1 min-h-10 text-sm text-amber-900/80 dark:text-amber-200">Suggested action based on the current measures and outlook.</p>
+          {actionMetrics.length > 0 && (
+            <figure className="mt-3 rounded-lg border border-amber-200 bg-white/80 p-3 dark:border-amber-900 dark:bg-slate-900/50">
+              <figcaption className="mb-3 text-xs font-semibold text-amber-950 dark:text-amber-100">Inventory action priorities</figcaption>
+              <div role="img" aria-label={`Inventory action priorities: ${actionMetrics.map((metric) => `${metric.label} ${metric.value}`).join(', ')}`} className="space-y-3">
+                {actionMetrics.map((metric) => (
+                  <div key={metric.label} className="grid grid-cols-[minmax(6rem,1fr)_2fr_auto] items-center gap-2 text-xs">
+                    <span className="truncate text-slate-600 dark:text-slate-300" title={metric.label}>{metric.label}</span>
+                    <span className="h-3 overflow-hidden rounded-full bg-amber-100 dark:bg-amber-950"><span className="block h-full rounded-full bg-amber-500" style={{ width: `${Math.max(metric.chartValue > 0 ? 4 : 0, (metric.chartValue / actionMaximum) * 100)}%` }} /></span>
+                    <strong className="tabular-nums text-slate-800 dark:text-slate-100">{metric.value}</strong>
+                  </div>
+                ))}
+              </div>
+            </figure>
+          )}
           <div className="mt-3 rounded-lg border border-amber-200 bg-white/80 p-3 dark:border-amber-900 dark:bg-slate-900/50">
             <p className="text-xs font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">Recommended action</p>
             <p className="mt-1 text-sm font-semibold leading-6 text-amber-950 dark:text-amber-100">{recommendation}</p>

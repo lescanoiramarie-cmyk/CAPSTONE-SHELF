@@ -18,7 +18,6 @@ import {
 } from '../data/store.js';
 import { supabase } from '../lib/supabaseClient.js';
 import AnalyticsDateFilter from './AnalyticsDateFilter.jsx';
-import AdminAnalyticsPanel from './AdminAnalyticsPanel.jsx';
 import PageJump from './PageJump.jsx';
 import AuditLogViewer from './AuditLogViewer.jsx';
 import {
@@ -570,6 +569,66 @@ export default function AdminWorkspace({
     return forecastHistoryBuckets.map((bucket) => counts.get(bucket.key) || 0);
   }, [analyticsAttendance, forecastHistoryBuckets, forecastHistoryDays]);
 
+  const automaticForecastChartData = useMemo(() => {
+    const historyLength = forecastHistoryBuckets.length;
+    if (historyLength < 7 || !forecastDailyVisitorCounts.some((count) => count > 0)) return null;
+
+    const recentStart = Math.max(0, historyLength - 28);
+    const weekdayTotals = Array(7).fill(0);
+    const weekdayDays = Array(7).fill(0);
+    for (let index = recentStart; index < historyLength; index += 1) {
+      const weekday = forecastHistoryBuckets[index].start.getDay();
+      weekdayTotals[weekday] += forecastDailyVisitorCounts[index] || 0;
+      weekdayDays[weekday] += 1;
+    }
+
+    const historyBuckets = forecastHistoryBuckets.slice(-28);
+    const historyValues = forecastDailyVisitorCounts.slice(-28);
+    const futureDates = [];
+    const lastDay = new Date(forecastHistoryBuckets.at(-1).start);
+    for (let offset = 1; offset <= 7; offset += 1) {
+      const date = new Date(lastDay);
+      date.setDate(date.getDate() + offset);
+      futureDates.push(date);
+    }
+    const projectedValues = futureDates.map((date) => {
+      const weekday = date.getDay();
+      return weekdayDays[weekday]
+        ? Math.round(weekdayTotals[weekday] / weekdayDays[weekday])
+        : 0;
+    });
+    const anchor = historyValues.at(-1) || 0;
+    return {
+      labels: [
+        ...historyBuckets.map((bucket) => bucket.label),
+        ...futureDates.map((date) => date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })),
+      ],
+      datasets: [
+        {
+          label: 'Recorded check-ins',
+          data: [...historyValues, ...futureDates.map(() => null)],
+          borderColor: '#0f766e',
+          backgroundColor: '#0f766e',
+          tension: 0.25,
+          pointRadius: 2,
+        },
+        {
+          label: 'Estimated check-ins',
+          data: [
+            ...historyValues.slice(0, -1).map(() => null),
+            anchor,
+            ...projectedValues,
+          ],
+          borderColor: '#d97706',
+          backgroundColor: '#d97706',
+          borderDash: [6, 4],
+          tension: 0.25,
+          pointRadius: 3,
+        },
+      ],
+    };
+  }, [forecastDailyVisitorCounts, forecastHistoryBuckets]);
+
   const forecastObservedVisitDays = forecastDailyVisitorCounts.filter((count) => count > 0).length;
   const forecastTotalVisits = forecastDailyVisitorCounts.reduce((total, count) => total + count, 0);
   const forecastCanRun = canRunVisitorForecast({
@@ -623,6 +682,22 @@ export default function AdminWorkspace({
     });
     return [...counts].sort((a, b) => b[1] - a[1]);
   }, [booksById, analyticsBorrows]);
+
+  const demandAndAvailabilityRows = useMemo(() => {
+    const availableByCategory = new Map();
+    books.forEach((book) => {
+      const bookLibraryId = String(book.libraryId ?? book.library_id ?? '');
+      if (effectiveAnalyticsLibraryId && bookLibraryId !== String(effectiveAnalyticsLibraryId)) return;
+      const category = book.category || 'Uncategorized';
+      const available = Number(book.availableCopies ?? book.available_copies ?? 0);
+      availableByCategory.set(category, (availableByCategory.get(category) || 0) + (Number.isFinite(available) ? available : 0));
+    });
+    return categoryDemand.slice(0, 6).map(([category, requests]) => ({
+      category,
+      requests,
+      available: availableByCategory.get(category) || 0,
+    }));
+  }, [books, categoryDemand, effectiveAnalyticsLibraryId]);
 
   const topCategories = categoryDemand.slice(0, 5);
   const otherCategoryRequestCount = categoryDemand
@@ -1706,33 +1781,10 @@ export default function AdminWorkspace({
             )}
             {!attendanceDataComplete && (
               <p className="mt-3 border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 rounded-lg">
-                Attendance data has not finished loading or could not be fully retrieved. Forecasts remain disabled until the complete feed is available.
+                Attendance data is still loading or incomplete. Charts use the records currently loaded; Gemini insights remain unavailable until the full attendance list is ready.
               </p>
             )}
           </section>
-
-          <div className="mb-5">
-            <AdminAnalyticsPanel
-              title="Library activity overview"
-              description={`${isSubAdmin ? getLibraryName(libraries, currentLibraryId) : effectiveAnalyticsLibraryId ? getLibraryName(libraries, effectiveAnalyticsLibraryId) : 'All libraries'} · ${analyticsWindow.label}`}
-              metrics={[
-                { label: 'Library visits', value: analyticsAttendance.length },
-                { label: 'Book requests', value: analyticsBorrows.length },
-                { label: 'Active loans', value: analyticsBorrows.filter((item) => getRequestStatus(item) === 'borrowed').length },
-              ]}
-              predictiveSeries={forecast?.forecasts?.map((item) => ({
-                label: new Date(`${item.date}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-                value: item.visitorCount,
-              })) || []}
-              prediction={forecastNarrative.insights.join(' ') || (forecastLoading
-                ? 'The visitor forecast is being calculated.'
-                : 'Run the forecast after enough complete attendance history is available.')}
-              recommendation={demandRecommendations[0] || 'Continue reviewing visitor activity and book demand for this reporting period.'}
-              rationale={categoryDemand.length
-                ? `The selected period includes ${analyticsAttendance.length} recorded visits and ${analyticsBorrows.length} book requests. Highest request category: ${categoryDemand[0][0]} (${categoryDemand[0][1]}).`
-                : `The selected period includes ${analyticsAttendance.length} recorded visits and ${analyticsBorrows.length} book requests; no category demand is available in this period.`}
-            />
-          </div>
 
           <section className="grid gap-5 xl:grid-cols-2">
             <div className="border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
@@ -1869,9 +1921,34 @@ export default function AdminWorkspace({
               )}
             </section>
 
-            <div className="space-y-4 xl:col-span-2">
+            <div className="grid gap-4 xl:col-span-2 xl:grid-cols-2">
               <section className="border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
-                <h2 className="text-base font-bold text-slate-800">Prescriptive analytics · Suggested actions</h2>
+                <h2 className="text-base font-bold text-slate-800">Prescriptive analytics · Demand and available copies</h2>
+                <p className="mt-1 text-xs text-slate-500">Compare book requests with copies currently available in each category to help identify where to review stock.</p>
+                {demandAndAvailabilityRows.length > 0 ? (
+                  <div className="mt-4 min-h-64">
+                    <Bar
+                      data={{
+                        labels: demandAndAvailabilityRows.map((row) => formatBookCategory(row.category)),
+                        datasets: [
+                          { label: 'Book requests', data: demandAndAvailabilityRows.map((row) => row.requests), backgroundColor: '#2563eb', borderRadius: 4 },
+                          { label: 'Available copies', data: demandAndAvailabilityRows.map((row) => row.available), backgroundColor: '#10b981', borderRadius: 4 },
+                        ],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        scales: {
+                          x: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#e2e8f0' } },
+                          y: { grid: { display: false }, ticks: { color: '#475569' } },
+                        },
+                        plugins: { legend: { position: 'bottom' } },
+                      }}
+                    />
+                  </div>
+                ) : <p className="mt-4 rounded-lg bg-slate-50 p-4 text-sm text-slate-500">No book requests match this reporting period yet.</p>}
+                <h3 className="mt-4 text-sm font-semibold text-slate-800">Suggested actions</h3>
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-600">
                   {demandRecommendations.map((item) => (
                     <li key={item}>{item}</li>
@@ -1892,31 +1969,33 @@ export default function AdminWorkspace({
                   </button>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">
-                  Estimates visits for the next 7 days using the selected records. At least 7 days of records, 3 visits across 2 days, and a complete attendance list are needed.
+                  The chart appears automatically from recent check-ins. It estimates each weekday from up to four recent weeks; Gemini can add a separate interpretation when requested.
                 </p>
                 {forecast?.source === 'gemini' && <p className="mt-1 text-xs text-emerald-700">Gemini reviewed the selected records and generated these insights and suggested actions. Visitor counts are estimated from the attendance history.</p>}
                 <p className="mt-1 text-xs text-slate-500">
                   Records included: {forecastHistoryDays} days - {forecastTotalVisits.toLocaleString()} check-ins on {forecastObservedVisitDays} days.
                 </p>
-                {!attendanceDataComplete && <p className="mt-1 text-xs font-medium text-amber-700">Some check-in records are missing, so an estimate cannot be made yet.</p>}
+                {!attendanceDataComplete && <p className="mt-1 text-xs font-medium text-amber-700">The attendance list is incomplete, so this automatic estimate uses only the records loaded so far.</p>}
+                {(forecastChartData || automaticForecastChartData) ? (
+                  <div className="mt-4">
+                    <p className="mb-2 text-xs text-slate-500">{forecastChartData ? 'Gemini forecast with recent attendance history.' : 'Recent attendance and an automatic weekday-based estimate for the next seven days.'}</p>
+                    <Line
+                      data={forecastChartData || automaticForecastChartData}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+                        plugins: { legend: { position: 'bottom' } },
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <p className="mt-3 rounded-lg bg-slate-50 p-4 text-sm text-slate-500">
+                    The chart will appear automatically once at least one check-in is available in the selected period.
+                  </p>
+                )}
                 {forecast?.forecasts?.length ? (
                   <>
-                    {forecastChartData && (
-                      <div className="mt-4">
-                        <p className="mb-2 text-xs text-slate-500">Estimated daily check-ins for the next seven days from the selected attendance records.</p>
-                        <Line
-                          data={forecastChartData}
-                          options={{
-                            responsive: true,
-                            maintainAspectRatio: true,
-                            scales: {
-                              y: { beginAtZero: true, ticks: { precision: 0 } },
-                            },
-                            plugins: { legend: { position: 'bottom' } },
-                          }}
-                        />
-                      </div>
-                    )}
                     <ol className="mt-3 space-y-1 text-sm text-slate-600">
                       {forecast.forecasts.map((item) => (
                         <li key={item.date} className="flex justify-between border-b border-slate-50 py-1">
@@ -1929,7 +2008,7 @@ export default function AdminWorkspace({
                 ) : (
                   <p className="mt-3 text-xs text-slate-500">
                     {forecastCanRun
-                      ? 'Show an estimate for the next seven days using the check-in records selected above.'
+                      ? 'Generate Insights is optional and adds Gemini commentary to the automatic chart.'
                     : 'Not enough complete attendance records yet. Add more check-ins, then try again.'}
                   </p>
                 )}

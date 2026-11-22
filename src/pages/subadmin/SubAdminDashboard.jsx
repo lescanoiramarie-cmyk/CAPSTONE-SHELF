@@ -2167,6 +2167,10 @@ export default function SubAdminDashboard() {
               ? 'Borrowing history could not be loaded, so a demand estimate is unavailable.'
               : (() => { const estimate = getMonthlyBorrowingProjection(branchBorrowRequests, new Date(`${overviewMonth}-01T00:00:00`)).projectedNextMonth; return estimate == null ? 'There is not enough confirmed borrowing history to estimate next month.' : `If recent borrowing continues, about ${estimate} books may be borrowed next month.`; })()}
             predictionSeries={borrowRequestsLoadError ? null : getMonthlyBorrowingProjection(branchBorrowRequests, new Date(`${overviewMonth}-01T00:00:00`))}
+            prescriptiveMetrics={[
+              { label: 'Often borrowed, low copies', value: borrowRequestsLoadError ? '—' : branchOverviewMetrics.pressureTitles },
+              { label: 'Out of stock', value: branchBooks.filter((book) => Number(book.availableCopies ?? book.available_copies ?? 0) <= 0).length },
+            ]}
             recommendation={borrowRequestsLoadError
               ? 'Load borrowing history before changing copy counts.'
               : branchOverviewMetrics.pressureTitles
