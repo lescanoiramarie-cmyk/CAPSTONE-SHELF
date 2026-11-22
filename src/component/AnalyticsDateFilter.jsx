@@ -23,7 +23,7 @@ export default function AnalyticsDateFilter({
   // Keep the list independent from the selected year. Deriving it from the
   // selected date made every newer year disappear after choosing an older one.
   const currentYear = new Date().getFullYear();
-  const firstYear = Math.min(2024, currentYear);
+  const firstYear = Math.min(2025, currentYear);
   const years = Array.from(
     { length: currentYear - firstYear + 1 },
     (_, index) => currentYear - index

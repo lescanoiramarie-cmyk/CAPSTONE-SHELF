@@ -16,7 +16,7 @@ export function getAnalyticsMonthOptions(count = 12, value = new Date()) {
   });
 }
 
-export function getAnalyticsYearOptions(startYear = 2024, value = new Date()) {
+export function getAnalyticsYearOptions(startYear = 2025, value = new Date()) {
   const currentYear = new Date(value).getFullYear();
   return Array.from({ length: Math.max(0, currentYear - startYear + 1) }, (_, index) => currentYear - index);
 }
