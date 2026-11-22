@@ -2236,8 +2236,8 @@ function VisitorDashboardContent() {
                           [Phone, t('Contact number'), visitorDetails?.contactNumber],
                           [MapPin, t('Address'), visitorDetails?.address],
                         ].map(([Icon, label, value]) => (
-                          <div key={label} className="grid grid-cols-[7rem_1fr] gap-3 py-2.5">
-                            <dt className="flex items-center gap-2 text-slate-600 dark:text-slate-300"><Icon size={14} aria-hidden="true" />{t(label)}</dt>
+                          <div key={label} className="grid grid-cols-[max-content_minmax(0,1fr)] gap-3 py-2.5">
+                            <dt className="flex whitespace-nowrap items-center gap-2 text-slate-600 dark:text-slate-300"><Icon size={14} aria-hidden="true" />{t(label)}</dt>
                             <dd className="wrap-break-word font-medium text-slate-800 dark:text-slate-200">
                               {isEditingProfile && label === 'Contact number' ? <input type="tel" maxLength={50} value={profileForm.contactNumber} onChange={(event) => setProfileForm((current) => ({ ...current, contactNumber: event.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal text-slate-900 focus:border-shelf-primary focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white" aria-label="Contact number" /> : value || '—'}
                             </dd>
