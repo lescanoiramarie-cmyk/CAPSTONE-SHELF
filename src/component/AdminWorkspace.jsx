@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Bar, Line } from 'react-chartjs-2';
 import {
   BarElement,
@@ -674,7 +675,8 @@ export default function AdminWorkspace({
     };
   }, [forecast]);
 
-  const hasGeneratedInsights = forecast?.source === 'gemini';
+  const forecastScope = `${effectiveAnalyticsLibraryId || ''}|${analyticsWindow.start?.getTime()}|${analyticsWindow.endExclusive?.getTime()}|${timeframe}`;
+  const hasGeneratedInsights = forecast?.source === 'gemini' && forecast.scope === forecastScope;
 
   const handleExport = async (format) => {
     if (!analyticsWindow.valid) {
@@ -732,6 +734,7 @@ export default function AdminWorkspace({
   const savePendingReportExport = async () => {
     if (!pendingReportExport?.blob || !pendingReportExport?.fileName) return;
     setSavingReportExport(true);
+    setError('');
     try {
       if (typeof window.showSaveFilePicker === 'function') {
         const extension = pendingReportExport.fileName.split('.').pop()?.toLowerCase();
@@ -783,6 +786,10 @@ export default function AdminWorkspace({
       setError(analyticsWindow.error);
       return;
     }
+    if (!hasGeneratedInsights || forecastLoading) {
+      setError('Generate insights before exporting analytics.');
+      return;
+    }
     if (exportLockRef.current) return;
     exportLockRef.current = true;
     setExporting(true);
@@ -790,27 +797,36 @@ export default function AdminWorkspace({
     setError('');
     setMessage('');
     try {
-      const rows = periodCounts.labels.map((period, index) => ({
-        period,
-        visitors: periodCounts.visits[index],
-        bookTransactions: periodCounts.transactions[index],
-      }));
-      const chartImages = format === 'pdf'
-        ? [...document.querySelectorAll('canvas')]
+      const branchLabel = isSubAdmin
+        ? getLibraryName(libraries, currentLibraryId)
+        : analyticsLibraryId
+          ? getLibraryName(libraries, analyticsLibraryId)
+          : 'All Libraries';
+      const rows = [
+        { section: 'Report', detail: 'Library / Branch', value: branchLabel },
+        { section: 'Report', detail: 'Selected period', value: `${formatLocalDateInput(analyticsWindow.start)} to ${formatLocalDateInput(new Date(analyticsWindow.endExclusive.getTime() - 1))}` },
+        { section: 'Summary', detail: 'Visitors', value: analyticsAttendance.length },
+        { section: 'Summary', detail: 'Book requests', value: analyticsBorrows.length },
+        { section: 'Summary', detail: 'Books currently borrowed', value: analyticsBorrows.filter((item) => getRequestStatus(item) === 'borrowed').length },
+        ...periodCounts.labels.map((period, index) => ({ section: 'Activity', detail: period, value: `${periodCounts.visits[index]} visits; ${periodCounts.transactions[index]} book requests` })),
+        ...categoryDemand.map(([category, count]) => ({ section: 'Category demand', detail: formatBookCategory(category), value: `${count} requests` })),
+        ...demandAndAvailabilityRows.map((row) => ({ section: 'Demand and available copies', detail: formatBookCategory(row.category), value: `${row.requests} requests; ${row.available} available copies` })),
+        ...forecastHistoryBuckets.map((bucket, index) => ({ section: 'Actual visitors', detail: bucket.label, value: forecastDailyVisitorCounts[index] })),
+        ...forecast.forecasts.map((item) => ({ section: 'Expected visits', detail: item.date, value: item.visitorCount })),
+        ...forecastNarrative.insights.map((item) => ({ section: 'Recent pattern', detail: item, value: '' })),
+        ...forecastNarrative.recommendations.map((item) => ({ section: 'Suggested actions', detail: item, value: '' })),
+      ];
+      const charts = format === 'pdf'
+        ? [...document.querySelectorAll('[data-analytics-export-chart] canvas')]
           .map((canvas) => {
             try {
-              return canvas.toDataURL('image/png');
+              return { image: canvas.toDataURL('image/png'), title: canvas.closest('[data-analytics-export-chart]').dataset.analyticsExportChart };
             } catch {
               return null;
             }
           })
           .filter(Boolean)
         : [];
-      const branchLabel = isSubAdmin
-        ? getLibraryName(libraries, currentLibraryId)
-        : analyticsLibraryId
-          ? getLibraryName(libraries, analyticsLibraryId)
-          : 'All Libraries';
       const exportOptions = {
         reportType: 'Analytics',
         title: 'Analytics Summary',
@@ -820,34 +836,23 @@ export default function AdminWorkspace({
         endDate: new Date(analyticsWindow.endExclusive.getTime() - 1),
         generatedBy: `${user?.name || 'Admin'} (${isSubAdmin ? 'Sub-Admin' : 'Super Admin'})`,
         columns: [
-          { key: 'period', label: 'Period' },
-          { key: 'visitors', label: 'Visitors', type: 'number' },
-          { key: 'bookTransactions', label: 'Book Requests', type: 'number' },
+          { key: 'section', label: 'Section' },
+          { key: 'detail', label: 'Detail' },
+          { key: 'value', label: 'Value' },
         ],
-        totalRow: {
-          period: 'Total',
-          visitors: analyticsAttendance.length,
-          bookTransactions: analyticsBorrows.length,
-        },
-        totalColumns: ['visitors', 'bookTransactions'],
         summary: [
           ['Visitors', analyticsAttendance.length],
           ['Book Requests', analyticsBorrows.length],
           ['Active Loans', analyticsBorrows.filter((item) => getRequestStatus(item) === 'borrowed').length],
         ],
-        chartImages,
-        chartTitles: ['Branch demand', 'Most requested categories', 'Visitor forecast'],
-        chartDescriptions: [
-          'Compares visitor attendance with book requests across the selected reporting periods.',
-          'Shows which book categories received the most requests during the selected month.',
-          'Projects visitor activity for the next seven days using the selected history period.',
-        ],
+        preservePdfText: true,
+        chartImages: charts.map((chart) => chart.image),
+        chartTitles: charts.map((chart) => chart.title),
       };
       const label = format === 'xlsx' ? 'Excel' : format === 'csv' ? 'CSV' : 'PDF';
       const { exportReport } = await import('../lib/excelUtils.js');
       const generatedFile = await exportReport(rows, format, {
         ...exportOptions,
-        chartImages: format === 'pdf' ? chartImages : [],
         download: false,
       });
       setPendingReportExport({ format, label, ...generatedFile });
@@ -1122,6 +1127,7 @@ export default function AdminWorkspace({
       setForecast({
         ...forecastResult,
         source: 'gemini',
+        scope: forecastScope,
         forecasts: forecastResult.forecasts.map((item) => ({ ...item, visitorCount: Number(item.visitorCount) })),
       });
     } catch (forecastError) {
@@ -1249,17 +1255,18 @@ export default function AdminWorkspace({
       {error && <p role="alert" className="border border-red-200 bg-red-50 p-3 text-sm text-red-800 rounded-lg">{error}</p>}
       {message && <p role="status" className="border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 rounded-lg">{message}</p>}
 
-      {pendingReportExport && (
+      {pendingReportExport && createPortal(
         <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/50 p-4" role="presentation">
           <section role="dialog" aria-modal="true" aria-labelledby="report-export-confirm-title" className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
             <h2 id="report-export-confirm-title" className="text-lg font-bold text-slate-900 dark:text-white">Download this report?</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Your {pendingReportExport.label} report is ready. Continue to choose where to save <span className="font-semibold">{pendingReportExport.fileName}</span>.</p>
+            {error && <p role="alert" className="mt-3 text-sm text-rose-700">{error}</p>}
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" disabled={savingReportExport} onClick={() => setPendingReportExport(null)} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-200">Cancel</button>
               <button type="button" disabled={savingReportExport} onClick={() => void savePendingReportExport()} className="rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{savingReportExport ? 'Opening save dialog…' : 'Confirm and choose location'}</button>
             </div>
           </section>
-        </div>
+        </div>, document.body
       )}
       {loading && <p className="text-sm text-slate-500">Loading records...</p>}
       {focusedNotificationRequestId && mode === 'reports' && tab === 'reports' && (
@@ -1853,12 +1860,12 @@ export default function AdminWorkspace({
               )}
             </section>
 
-            <div className="grid items-start gap-4 xl:col-span-2 xl:grid-cols-2">
-              <section className="border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
+            <div className="grid gap-4 xl:col-span-2 xl:grid-cols-2">
+              <section className="flex flex-col border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
                 <h2 className="text-base font-bold text-slate-800">Prescriptive analytics · Demand and available copies</h2>
                 <p className="mt-1 text-xs text-slate-500">Recommended actions and related book demand and stock data for the selected period.</p>
                 {hasGeneratedInsights ? (demandAndAvailabilityRows.length > 0 ? (
-                  <div className="mt-4 h-64">
+                  <div className="mt-4 h-64" data-analytics-export-chart="Demand and available copies">
                     <Bar
                       data={{
                         labels: demandAndAvailabilityRows.map((row) => formatBookCategory(row.category)),
@@ -1884,7 +1891,7 @@ export default function AdminWorkspace({
                     Generate insights to see recommended actions and their supporting demand and stock chart.
                   </p>
                 )}
-                {hasGeneratedInsights && <section className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4" aria-labelledby="suggested-actions-heading">
+                {hasGeneratedInsights && <section className="mt-4 flex-1 rounded-xl border border-emerald-200 bg-emerald-50 p-4" aria-labelledby="suggested-actions-heading">
                   <h3 id="suggested-actions-heading" className="text-sm font-bold text-slate-800">Suggested actions</h3>
                   {forecastNarrative.recommendations.length > 0 ? (
                     <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-600">
@@ -1894,7 +1901,7 @@ export default function AdminWorkspace({
                 </section>}
               </section>
 
-              <section className="border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
+              <section className="flex flex-col border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-base font-bold text-slate-800">Predictive analytics · Estimate upcoming library visits</h2>
                   <button
@@ -1912,10 +1919,10 @@ export default function AdminWorkspace({
                 {hasGeneratedInsights && <p className="mt-1 text-xs text-emerald-700">Insights use {forecastHistoryDays} days of attendance, including {forecastTotalVisits.toLocaleString()} check-ins across {forecastObservedVisitDays} days.</p>}
                 {hasGeneratedInsights && !attendanceDataComplete && <p className="mt-1 text-xs font-medium text-amber-700">Some attendance records could not be loaded. The result uses the records currently available.</p>}
                 {hasGeneratedInsights && forecastChartData ? (
-                  <div className="mt-4 space-y-4">
+                  <div className="mt-4 flex flex-1 flex-col gap-4">
                     <div className="min-w-0">
                       <p className="mb-2 text-xs text-slate-500">Estimated visits compared with recorded attendance.</p>
-                      <div className="h-64">
+                      <div className="h-64" data-analytics-export-chart="Visitor forecast">
                         <Line
                           data={forecastChartData}
                           options={{
@@ -1927,7 +1934,7 @@ export default function AdminWorkspace({
                         />
                       </div>
                     </div>
-                    <section className="rounded-xl border border-blue-200 bg-blue-50 p-4" aria-labelledby="forecast-insights-heading">
+                    <section className="flex-1 rounded-xl border border-blue-200 bg-blue-50 p-4" aria-labelledby="forecast-insights-heading">
                       <h3 id="forecast-insights-heading" className="text-sm font-bold text-slate-800">Recent pattern</h3>
                       <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-5 text-slate-700">
                         {forecastNarrative.insights.map((item) => <li key={item}>{item}</li>)}
@@ -1959,7 +1966,7 @@ export default function AdminWorkspace({
                 key={format}
                 type="button"
                 onClick={() => handleAnalyticsExport(format)}
-                disabled={exporting || !analyticsWindow.valid}
+                disabled={exporting || forecastLoading || !hasGeneratedInsights || !analyticsWindow.valid}
                 className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-shelf-primary hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Icon size={16} className={tone} aria-hidden="true" />
@@ -1967,6 +1974,7 @@ export default function AdminWorkspace({
               </button>
             ))}
           </div>
+          {!hasGeneratedInsights && <p className="text-xs text-slate-500">Generate insights to enable analytics exports.</p>}
           {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
           {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
         </section>

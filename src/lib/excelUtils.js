@@ -329,26 +329,9 @@ const getPdfColumnStyles = (columns, body, pageWidth) => {
     return Math.min(maximumWidth, Math.max(minimumWidth, 8 + longest * 1.45));
   });
   const total = widths.reduce((sum, width) => sum + width, 0);
-  if (total <= availableWidth) {
-    return Object.fromEntries(widths.map((width, index) => [index, { cellWidth: width }]));
-  }
-
-  const fixed = widths.reduce(
-    (sum, width, index) => sum + (isLongTextColumn(columns[index]) ? width : 0),
-    0
-  );
-  const flexibleIndexes = columns
-    .map((column, index) => (isLongTextColumn(column) ? -1 : index))
-    .filter((index) => index >= 0);
-  const flexibleSpace = Math.max(0, availableWidth - fixed);
-  const flexibleTotal = flexibleIndexes.reduce((sum, index) => sum + widths[index], 0);
-  flexibleIndexes.forEach((index) => {
-    widths[index] = Math.max(
-      minimumWidth,
-      flexibleTotal ? (widths[index] / flexibleTotal) * flexibleSpace : minimumWidth
-    );
-  });
-  return Object.fromEntries(widths.map((width, index) => [index, { cellWidth: width }]));
+  return Object.fromEntries(widths.map((width, index) => [index, {
+    cellWidth: total ? width * availableWidth / total : 'auto',
+  }]));
 };
 
 const generatedAt = () => new Date();
@@ -905,10 +888,10 @@ export const exportToPDF = async (data = [], fileName, options = {}) => {
    for (let offset = 0; offset < rows.length; offset += 250) {
      const chunk = rows.slice(offset, offset + 250);
      chunk.forEach((row) => {
-       body.push(columns.map((column) => String(pdfTextValue(
-         valueFor(row, column, options, 'pdf') ?? MISSING,
-         column
-       ))));
+       body.push(columns.map((column) => {
+         const value = valueFor(row, column, options, 'pdf') ?? MISSING;
+         return String(options.preservePdfText ? value : pdfTextValue(value, column));
+       }));
      });
      if (offset + chunk.length < rows.length) await yieldToUI();
    }
