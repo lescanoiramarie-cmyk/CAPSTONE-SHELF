@@ -70,6 +70,7 @@ import {
   saveCommunityBookForLater,
   unsaveCommunityBookForLater,
   getSavedCommunityBooks,
+  reserveBookForDate,
 } from '../data/store.js';
 import { maskReviewerName } from '../lib/maskReviewerName.js';
 
@@ -90,6 +91,16 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('en-PH', {
     dateStyle: 'medium',
   });
+}
+
+function localDateInputValue(daysFromToday = 0) {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + daysFromToday);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 const MAX_PERSONAL_COVER_SIZE = 2 * 1024 * 1024;
@@ -181,6 +192,7 @@ function calculateOverdueDays(dueDate) {
 // =========================================================
 const STATUS_STYLES = {
   queued: 'visitor-status visitor-status-neutral',
+  scheduled: 'visitor-status visitor-status-warning',
   ready_for_pickup: 'visitor-status visitor-status-navy',
   borrowed: 'visitor-status visitor-status-navy',
   returned: 'visitor-status visitor-status-success',
@@ -189,6 +201,7 @@ const STATUS_STYLES = {
 };
 const STATUS_LABELS = {
   queued: 'In Queue',
+  scheduled: 'Reserved for a Date',
   ready_for_pickup: 'Ready for Pickup',
   borrowed: 'Borrowed',
   returned: 'Returned',
@@ -531,6 +544,8 @@ export default function OPACCatalog({
   // UI STATES
   // =========================================================
   const [selectedBook, setSelectedBook] = useState(null);
+  const [reservationBookEntry, setReservationBookEntry] = useState(null);
+  const [reservationDate, setReservationDate] = useState('');
   const bookModalRef = useRef(null);
   const bookModalTriggerRef = useRef(null);
   const [readingListBookIds, setReadingListBookIds] = useState([]);
@@ -1773,6 +1788,7 @@ export default function OPACCatalog({
       'pending',
       'pending_approval',
       'queued',
+      'scheduled',
       'ready_for_pickup',
       'approved',
       'to_confirm',
@@ -2134,6 +2150,27 @@ export default function OPACCatalog({
       setNotice(
         error?.message || 'Unable to process the borrow request. Please try again.'
       );
+    } finally {
+      setSubmittingBorrow(false);
+      setSubmittingBorrowBookId(null);
+    }
+  };
+
+  const handleScheduleReservation = async () => {
+    const entry = reservationBookEntry;
+    if (!entry || !reservationDate || !requireAuth('reserve a book for a future date')) return;
+    setSubmittingBorrow(true);
+    setSubmittingBorrowBookId(String(entry.id));
+    setNotice('');
+    try {
+      await reserveBookForDate(entry.id, reservationDate);
+      setNotice(`Your reservation for “${entry.title}” is scheduled for ${formatDate(reservationDate)}. Pickup will be available for 24 hours once the book is ready. Please note that this date depends on the current borrower returning the book on time.`);
+      setReservationBookEntry(null);
+      setReservationDate('');
+      setSelectedBook(null);
+      onViewChange('myBorrows');
+    } catch (error) {
+      setNotice(error?.message || 'Unable to schedule this reservation. Please try another date.');
     } finally {
       setSubmittingBorrow(false);
       setSubmittingBorrowBookId(null);
@@ -4283,7 +4320,7 @@ export default function OPACCatalog({
                         : 0;
                     const canCancel =
                       !isCommunityRequest &&
-                      ['queued', 'ready_for_pickup'].includes(request.status);
+                      ['queued', 'scheduled', 'ready_for_pickup'].includes(request.status);
                     const isCancelling = cancellingRequestId === request.id;
                     const queuePosition =
                       request.queuePosition ??
@@ -4314,6 +4351,7 @@ export default function OPACCatalog({
                         : request.status === 'returned'
                           ? CheckCircle2
                           : request.status === 'pending' ||
+                              request.status === 'scheduled' ||
                               request.status === 'ready_for_pickup' ||
                               request.status === 'queued' ||
                               request.status === 'approved'
@@ -4461,6 +4499,12 @@ export default function OPACCatalog({
                                 <p>Owner response: {request.ownerResponse}</p>
                               )}
                             </>
+                          )}
+                          {!isCommunityRequest && request.status === 'scheduled' && (
+                            <div className="space-y-1 rounded-lg border border-blue-200 bg-blue-50 p-3 text-blue-900 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-100">
+                              <p className="font-semibold">Reserved for {formatDate(request.scheduledPickupDate)}.</p>
+                              <p>This is the requested pickup date. The 24-hour pickup window starts once the book is ready. Availability depends on the current borrower returning the book on time.</p>
+                            </div>
                           )}
                           {!isCommunityRequest && request.status === 'queued' && (
                             <p className="visitor-status visitor-status-neutral w-fit">
@@ -5224,6 +5268,59 @@ export default function OPACCatalog({
         </div>
       )}
 
+      {reservationBookEntry && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="future-reservation-title"
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-800"
+          >
+            <h2 id="future-reservation-title" className="text-lg font-bold text-slate-900 dark:text-white">
+              Reserve for a future date
+            </h2>
+            <p className="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
+              {reservationBookEntry.title} · {libraryName(reservationBookEntry.libraryId)}
+            </p>
+            <label className="mt-4 block text-sm font-semibold text-slate-700 dark:text-slate-200">
+              Requested pickup date
+              <input
+                type="date"
+                min={localDateInputValue(1)}
+                max={localDateInputValue(180)}
+                value={reservationDate}
+                onChange={(event) => setReservationDate(event.target.value)}
+                className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+              />
+            </label>
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+              This is a requested date, not a guaranteed pickup time. The reservation depends on the current borrower returning the book on time. Once the book is ready, the usual 24-hour pickup window applies; the 7-day loan starts only after staff confirms pickup.
+            </div>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={submittingBorrow}
+                onClick={() => {
+                  setReservationBookEntry(null);
+                  setReservationDate('');
+                }}
+                className="min-h-10 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!reservationDate || submittingBorrow}
+                onClick={handleScheduleReservation}
+                className="min-h-10 rounded-lg bg-shelf-primary px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {submittingBorrow ? 'Reserving…' : 'Confirm reservation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* =====================================================
           VIEW DETAILS & BORROW MODAL
       ====================================================== */}
@@ -5405,7 +5502,7 @@ export default function OPACCatalog({
                                 : `₱${entryFineRate} per overdue day`}
                             </p>
                           </div>
-                          <div className="visitor-library-actions flex shrink-0 items-center gap-2 sm:justify-end">
+                          <div className="visitor-library-actions flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
                             <button
                               type="button"
                               onClick={() => handleViewMap(entry.libraryId, entry)}
@@ -5431,8 +5528,8 @@ export default function OPACCatalog({
                               disabled={submittingBorrow || entryFineRate == null}
                               data-confirm-message={
                                 Number(entry.availableCopies || 0) > 0
-                                  ? 'Are you sure you want to borrow this book?'
-                                  : 'Are you sure you want to reserve this book?'
+                                  ? 'Are you sure you want to borrow this book now?'
+                                  : 'Are you sure you want to join the waitlist for this book?'
                               }
                               onClick={() => handleBorrowOrReserve(entry)}
                               className="inline-flex min-h-10 w-28 sm:w-32 shrink-0 items-center justify-center px-3 py-1.5 bg-shelf-primary text-white rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
@@ -5441,8 +5538,22 @@ export default function OPACCatalog({
                                 ? 'Processing...'
                                 : Number(entry.availableCopies || 0) > 0
                                   ? 'Borrow'
-                                  : 'Reserve'}
+                                  : 'Join waitlist'}
                             </button>
+                            {entryFineRate != null && (
+                              <button
+                                type="button"
+                                disabled={submittingBorrow}
+                                onClick={() => {
+                                  if (!requireAuth(`reserve “${entry.title}” for a future date`)) return;
+                                  setReservationBookEntry(entry);
+                                  setReservationDate('');
+                                }}
+                                className="inline-flex min-h-10 w-36 shrink-0 items-center justify-center rounded-lg border border-shelf-primary bg-white px-3 py-1.5 text-center font-bold text-shelf-primary transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Reserve for a date
+                              </button>
+                            )}
                           </div>
                         </div>
                       );

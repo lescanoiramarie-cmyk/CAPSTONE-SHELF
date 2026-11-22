@@ -345,6 +345,7 @@ export const mapBorrowRequest = (r) => ({
   status: r.status,
   requestDate: r.request_date,
   pickupDeadline: r.pickup_deadline,
+  scheduledPickupDate: r.scheduled_pickup_date || null,
   queuePosition: r.queue_position,
   borrowDate: r.borrow_date,
   dueDate: r.due_date,
@@ -5881,6 +5882,30 @@ export async function requestBorrow(
   return mapBorrowRequest(
     row
   );
+}
+
+export async function reserveBookForDate(bookId, pickupDate) {
+  const normalizedBookId = normalizeText(bookId);
+  if (!normalizedBookId) throw new Error('Book ID is required.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(pickupDate || ''))) {
+    throw new Error('Choose a valid pickup date.');
+  }
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user?.id) {
+    throw new Error('Your visitor sign-in session has expired. Please sign in again.');
+  }
+  const visitor = await getVisitor(user.id);
+  if (!visitor?.id || !visitor.otpVerified || !visitor.isActive) {
+    throw new Error('An active, verified visitor account is required.');
+  }
+  const { data, error } = await supabase.rpc('reserve_book_for_date_v1', {
+    p_book_id: normalizedBookId,
+    p_pickup_date: pickupDate,
+  });
+  if (error) throw cleanErr(error, 'Unable to schedule this book reservation.');
+  const row = firstRow(data);
+  if (!row?.id) throw new Error('The reservation was not created.');
+  return mapBorrowRequest(row);
 }
 
 // ============================================================================

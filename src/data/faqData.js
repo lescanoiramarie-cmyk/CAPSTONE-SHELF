@@ -24,7 +24,7 @@ export const FAQS = [
       },
       {
         q: 'Is borrowing the same as reserving a book?',
-        a: 'No, they are different: Borrow is used when physical copies are currently available at the branch for immediate checkout; Reserve is used when all copies are checked out, placing you in a waitlist queue until a copy is returned.',
+        a: 'Borrow starts a pickup hold now when a copy is available. Join waitlist puts you in line when no copy is available. Reserve for a date schedules a future pickup request; the selected date depends on earlier borrowers returning copies on time. Once the book is ready, the usual 24-hour pickup window applies. The seven-day loan starts only after staff confirms pickup.',
       },
       {
         q: 'How does SHELF predict "Recommended for You" books?',
