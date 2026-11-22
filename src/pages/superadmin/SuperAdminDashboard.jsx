@@ -680,6 +680,8 @@ export default function SuperAdminDashboard() {
     setStaffAccounts,
   ] = useState([]);
   const [staffSearch, setStaffSearch] = useState('');
+  const [staffMfaChallenge, setStaffMfaChallenge] = useState(null);
+  const [staffMfaCode, setStaffMfaCode] = useState('');
   const [staffBranchFilter, setStaffBranchFilter] = useState('all');
   const [staffRoleFilter, setStaffRoleFilter] = useState('all');
   const [staffStatusFilter, setStaffStatusFilter] = useState('all');
@@ -863,6 +865,18 @@ export default function SuperAdminDashboard() {
   // CREATE STAFF ACCOUNT
   // ============================================================
 
+const saveStaffAccountOperation = async (operation) => {
+  const { data, error } = await supabase.functions.invoke('manage-staff', { body: operation.payload });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+
+  setStaffForm({ fullName: '', email: '', password: '', libraryId: '' });
+  setEditingStaffId(null);
+  setStaffPage(1);
+  await loadStaffAccounts();
+  setStaffMessage(operation.isEditing ? 'Sub-admin account updated successfully.' : 'Sub-admin account created successfully.');
+};
+
 const handleCreateStaff = async (event) => {
   event.preventDefault();
 
@@ -899,53 +913,60 @@ const handleCreateStaff = async (event) => {
 
   try {
     setStaffLoading(true);
+    const operation = {
+      isEditing,
+      payload: isEditing
+        ? { operation: 'update', userId: editingStaffId, fullName, email, libraryId, password }
+        : { operation: 'create', email, fullName, password, libraryId, role: 'subadmin' },
+    };
+    const { data: assurance, error: assuranceError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (assuranceError) throw assuranceError;
 
-    const { data, error } = await supabase.functions.invoke(
-      'manage-staff',
-      {
-        body: isEditing
-          ? {
-              operation: 'update',
-              userId: editingStaffId,
-              fullName,
-              email,
-              libraryId,
-              password,
-            }
-          : {
-              operation: 'create',
-              email,
-              fullName,
-              password,
-              libraryId,
-              role: 'subadmin',
-            },
+    if (assurance?.currentLevel !== 'aal2') {
+      const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
+      if (factorsError) throw factorsError;
+      const verifiedFactor = factors?.totp?.find((factor) => factor.status === 'verified');
+      if (!verifiedFactor) {
+        throw new Error('Set up an authenticator for this Super Admin account before managing staff.');
       }
-    );
+      const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({ factorId: verifiedFactor.id });
+      if (challengeError) throw challengeError;
+      setStaffMfaCode('');
+      setStaffMfaChallenge({ ...operation, factorId: verifiedFactor.id, challengeId: challenge.id });
+      setStaffMessage('Enter the current authenticator code to continue saving this staff account.');
+      return;
+    }
 
-    if (error) throw error;
-    if (data?.error) throw new Error(data.error);
-
-    setStaffForm({
-      fullName: '',
-      email: '',
-      password: '',
-      libraryId: '',
-    });
-
-    setEditingStaffId(null);
-    setStaffPage(1);
-
-    await loadStaffAccounts();
-
-    setStaffMessage(
-      isEditing
-        ? 'Sub-admin account updated successfully.'
-        : 'Sub-admin account created successfully.'
-    );
+    await saveStaffAccountOperation(operation);
   } catch (error) {
     const message = await getStaffFunctionErrorMessage(error);
     console.error(`Save staff account error (HTTP ${error?.context?.status ?? 'unknown'}): ${message}`);
+    setStaffError(message);
+  } finally {
+    setStaffLoading(false);
+  }
+};
+
+const handleVerifyStaffMfa = async (event) => {
+  event.preventDefault();
+  if (!staffMfaChallenge || !/^\d{6}$/.test(staffMfaCode)) {
+    setStaffError('Enter the 6-digit code from your authenticator app.');
+    return;
+  }
+  setStaffLoading(true);
+  setStaffError('');
+  try {
+    const { error } = await supabase.auth.mfa.verify({
+      factorId: staffMfaChallenge.factorId,
+      challengeId: staffMfaChallenge.challengeId,
+      code: staffMfaCode,
+    });
+    if (error) throw error;
+    await saveStaffAccountOperation(staffMfaChallenge);
+    setStaffMfaChallenge(null);
+    setStaffMfaCode('');
+  } catch (error) {
+    const message = await getStaffFunctionErrorMessage(error);
     setStaffError(message);
   } finally {
     setStaffLoading(false);
@@ -3006,6 +3027,21 @@ const handleEditStaff = (staff) => {
       onCancel={() => setPendingExportFile(null)}
       onSaved={() => { setPendingExportFile(null); setExportMessage('Report saved successfully.'); }}
     />
+    {staffMfaChallenge && (
+      <div className="fixed inset-0 z-[130] grid place-items-center bg-slate-950/50 p-4" role="presentation">
+        <form onSubmit={handleVerifyStaffMfa} role="dialog" aria-modal="true" aria-labelledby="staff-mfa-title" className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+          <h2 id="staff-mfa-title" className="text-lg font-bold text-slate-900 dark:text-white">Verify it’s you</h2>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Enter the 6-digit code from your authenticator app to save this staff account.</p>
+          <label className="mt-4 block text-sm font-semibold text-slate-700 dark:text-slate-200" htmlFor="staff-mfa-code">Authenticator code</label>
+          <input id="staff-mfa-code" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" value={staffMfaCode} onChange={(event) => setStaffMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-center text-lg tracking-[0.35em] text-slate-900 outline-none focus:border-shelf-primary focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white" required />
+          {staffError && <p role="alert" className="mt-3 text-sm text-red-700 dark:text-red-300">{staffError}</p>}
+          <div className="mt-5 flex justify-end gap-2">
+            <button type="button" disabled={staffLoading} onClick={() => { setStaffMfaChallenge(null); setStaffMfaCode(''); }} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200">Cancel</button>
+            <button type="submit" disabled={staffLoading || staffMfaCode.length !== 6} className="rounded-lg bg-shelf-primary px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{staffLoading ? 'Verifying…' : 'Verify and save'}</button>
+          </div>
+        </form>
+      </div>
+    )}
   </div>
   );
 }
