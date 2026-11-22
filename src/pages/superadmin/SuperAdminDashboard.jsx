@@ -12,7 +12,8 @@ import {
   Line,
 } from 'react-chartjs-2';
 import LocationPickerMap from '../../component/LocationPickerMap.jsx';
-import GooglePlaceAddressInput from '../../component/GooglePlaceAddressInput.jsx';
+import GeoapifyAddressInput from '../../component/GeoapifyAddressInput.jsx';
+import { geocodeGeoapifyAddress, getGeoapifyApiKey } from '../../lib/geoapify.js';
 import AdminAnalyticsPanel from '../../component/AdminAnalyticsPanel.jsx';
 import {
   Chart as ChartJS,
@@ -610,24 +611,33 @@ export default function SuperAdminDashboard() {
       ].filter((query) => query.length >= 5))];
       let match = null;
       let matchedAddressExactly = true;
-      for (const [index, query] of queryCandidates.entries()) {
-        if (index > 0) {
-          await new Promise((resolve) => window.setTimeout(resolve, 1100));
+      if (getGeoapifyApiKey()) {
+        for (const [index, query] of queryCandidates.entries()) {
+          match = await geocodeGeoapifyAddress(query);
           if (requestId !== geocodeRequestId.current) return null;
+          matchedAddressExactly = index === 0;
+          if (match) break;
         }
-        const params = new URLSearchParams({
-          format: 'jsonv2',
-          limit: '1',
-          countrycodes: 'ph',
-          q: query,
-        });
-        const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`);
-        if (!response.ok) throw new Error('Address lookup is temporarily unavailable.');
-        const results = await response.json();
-        if (requestId !== geocodeRequestId.current) return null;
-        match = results[0];
-        matchedAddressExactly = index === 0;
-        if (match) break;
+      } else {
+        for (const [index, query] of queryCandidates.entries()) {
+          if (index > 0) {
+            await new Promise((resolve) => window.setTimeout(resolve, 1100));
+            if (requestId !== geocodeRequestId.current) return null;
+          }
+          const params = new URLSearchParams({
+            format: 'jsonv2',
+            limit: '1',
+            countrycodes: 'ph',
+            q: query,
+          });
+          const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`);
+          if (!response.ok) throw new Error('Address lookup is temporarily unavailable.');
+          const results = await response.json();
+          if (requestId !== geocodeRequestId.current) return null;
+          match = results[0];
+          matchedAddressExactly = index === 0;
+          if (match) break;
+        }
       }
       if (!match || !Number.isFinite(Number(match.lat)) || !Number.isFinite(Number(match.lon))) {
         if (showFailure) setGeocodingMessage('Could not find that address. Add the city/municipality and province, then leave the address field to try again.');
@@ -640,7 +650,7 @@ export default function SuperAdminDashboard() {
       handleCoordinateChange(lat.toFixed(6), lng.toFixed(6));
       setGeocodingMessage(matchedAddressExactly
         ? 'Address located and map pin updated automatically.'
-        : `Exact address not found; pinned the closest matching area: ${match.display_name || 'review the map pin'}.`);
+        : `Exact address not found; pinned the closest matching area: ${match.formatted || match.display_name || 'review the map pin'}.`);
       return { lat: lat.toFixed(6), lng: lng.toFixed(6) };
     } catch (error) {
       if (requestId === geocodeRequestId.current) {
@@ -2341,7 +2351,7 @@ const handleEditStaff = (staff) => {
                         <label className="mb-1 block text-xs font-semibold text-slate-600">
                           Address *
                         </label>
-                        <GooglePlaceAddressInput
+                        <GeoapifyAddressInput
                           value={libraryForm.address}
                           onChange={(address) => {
                             geocodeRequestId.current += 1;
