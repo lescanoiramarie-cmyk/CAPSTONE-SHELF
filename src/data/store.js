@@ -2093,7 +2093,7 @@ export async function registerVisitor({
     registrationType: normalizedRegistrationType,
     otpExpiresAt:
       normalizeText(emailData?.expiresAt) ||
-      new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      new Date(Date.now() + 2 * 60 * 1000).toISOString(),
   };
 }
 
@@ -2272,7 +2272,7 @@ export async function resendOtp(
     success: true,
     expiresAt:
       normalizeText(emailData?.expiresAt) ||
-      new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      new Date(Date.now() + 2 * 60 * 1000).toISOString(),
   };
 }
 

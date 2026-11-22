@@ -1218,7 +1218,12 @@ body:has(.superadmin-dashboard) {
 .visitor-navy-header {
   border-color: rgb(10 35 66 / 0.9) !important;
   background-color: rgb(3 37 76 / 0.97) !important;
-  color: #f8fafc !important;
+  color: #fff !important;
+  --shelf-primary: #fff;
+}
+
+.visitor-navy-header > div > div:not(:last-child) {
+  color: #fff !important;
 }
 
 .visitor-navy-header > div > button,
@@ -1238,6 +1243,14 @@ body:has(.superadmin-dashboard) {
   border-color: #c7d7e8 !important;
   background-color: #fff !important;
   color: #082b52 !important;
+}
+
+.visitor-navy-header [aria-label='Go to SHELF home']:focus-visible,
+.visitor-navy-header [aria-label^='Switch to']:focus-visible,
+.visitor-navy-header [aria-label^='Notifications']:focus-visible,
+.visitor-navy-header [aria-label='User menu']:focus-visible {
+  outline: 3px solid #93c5fd !important;
+  outline-offset: 2px;
 }
 
 .visitor-dashboard-nav {

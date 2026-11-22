@@ -105,6 +105,7 @@ async function sendOtpEmail(params: {
   to: string;
   firstName: string;
   otp: string;
+  expiresInMinutes?: number;
 }): Promise<{ ok: boolean; status: number; messageId: string | null; ambiguous: boolean; rejected: boolean }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
@@ -127,7 +128,7 @@ async function sendOtpEmail(params: {
             <p>Thank you for registering with <strong>SHELF</strong>.</p>
             <p>Your verification code is:</p>
             <div style="font-size: 32px; font-weight: bold; letter-spacing: 8px; padding: 20px; background: #f3f4f6; text-align: center; border-radius: 8px; margin: 20px 0;">${params.otp}</div>
-            <p>This code will expire in <strong>10 minutes</strong>.</p>
+            <p>This code will expire in <strong>${params.expiresInMinutes ?? 10} minutes</strong>.</p>
             <p>If you did not create a SHELF account, you can safely ignore this email.</p>
             <p>Regards,<br /><strong>SHELF</strong></p>
           </div>`,
@@ -412,10 +413,11 @@ Deno.serve(async (req: Request) => {
       }
 
       const otp = generateOtp();
-      const otpExpiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
+      const registrationOtpTtlMinutes = 2;
+      const otpExpiresAt = new Date(Date.now() + registrationOtpTtlMinutes * 60_000).toISOString();
       const otpProtected = await hmacSha256Hex(otpHmacSecret, `${visitorId}:${otp}`);
 
-      const provider = await sendOtpEmail({ resendApiKey, to: targetEmail, firstName, otp });
+      const provider = await sendOtpEmail({ resendApiKey, to: targetEmail, firstName, otp, expiresInMinutes: registrationOtpTtlMinutes });
       if (provider.ambiguous) {
         await casIntent(admin, intentId, "provider_submitting", { state: "ambiguous_timeout", failure_code: "provider_timeout", provider_message_id: provider.messageId, resolved_at: new Date().toISOString() });
         await writeAuditEvent(admin, "visitor.otp.delivery_ambiguous", { visitorId, purpose });

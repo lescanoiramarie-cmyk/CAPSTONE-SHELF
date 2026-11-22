@@ -188,6 +188,8 @@ export default function VisitorLogin() {
 
   // Registration OTP
   const [otpInput, setOtpInput] = useState('');
+  const [otpExpiresAt, setOtpExpiresAt] = useState(null);
+  const [otpTimeRemaining, setOtpTimeRemaining] = useState(0);
   const [pendingEmail, setPendingEmail] = useState('');
   const [registeredVisitor, setRegisteredVisitor] = useState(null);
 
@@ -204,6 +206,20 @@ export default function VisitorLogin() {
   // OTP resend cooldown (2 minutes = 120 seconds)
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resetResendCooldown, setResetResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (view !== 'otp' || !otpExpiresAt) {
+      setOtpTimeRemaining(0);
+      return undefined;
+    }
+
+    const updateRemaining = () => {
+      setOtpTimeRemaining(Math.max(0, Math.ceil((otpExpiresAt - Date.now()) / 1000)));
+    };
+    updateRemaining();
+    const timer = window.setInterval(updateRemaining, 1000);
+    return () => window.clearInterval(timer);
+  }, [otpExpiresAt, view]);
 
   const {
     registerVisitor,
@@ -594,6 +610,8 @@ useEffect(() => {
       setRegisteredVisitor(result || null);
       setPendingEmail(email);
       setOtpInput('');
+      const expiration = Date.parse(result?.otpExpiresAt || '');
+      setOtpExpiresAt(Number.isFinite(expiration) ? expiration : Date.now() + 120_000);
       setView('otp');
       setResendCooldown(120);
       setError('');
@@ -613,6 +631,11 @@ useEffect(() => {
 
     if (!/^\d{6}$/.test(code)) {
       setError('Please enter the 6-digit verification code.');
+      return;
+    }
+    if (!otpExpiresAt || Date.now() >= otpExpiresAt) {
+      setOtpTimeRemaining(0);
+      setError('This verification code has expired. Request a new code to continue.');
       return;
     }
 
@@ -660,9 +683,11 @@ useEffect(() => {
         registeredVisitor?.visitorId ||
         pendingEmail;
 
-      await resendVisitorOtp(visitorId);
+      const result = await resendVisitorOtp(visitorId);
       setError('A new verification code has been requested.');
       setResendCooldown(120);
+      const expiration = Date.parse(result?.expiresAt || '');
+      setOtpExpiresAt(Number.isFinite(expiration) ? expiration : Date.now() + 120_000);
     } catch (err) {
       setError(err.message || 'Unable to resend the verification code.');
     } finally {
@@ -1638,6 +1663,12 @@ useEffect(() => {
                 <strong>{pendingEmail}</strong>
               </p>
 
+              <p className={`text-sm font-semibold ${otpTimeRemaining > 0 ? 'text-shelf-primary' : 'text-red-600'}`} role="timer" aria-live="polite">
+                {otpTimeRemaining > 0
+                  ? `Code expires in ${String(Math.floor(otpTimeRemaining / 60)).padStart(2, '0')}:${String(otpTimeRemaining % 60).padStart(2, '0')}.`
+                  : 'This code has expired. Request a new code to continue.'}
+              </p>
+
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-700">
                   6-Digit Verification Code
@@ -1661,7 +1692,7 @@ useEffect(() => {
 
               <button
                 type="submit"
-                disabled={busy || otpInput.length !== 6}
+                disabled={busy || otpInput.length !== 6 || otpTimeRemaining <= 0}
                 className="w-full rounded-lg bg-shelf-primary py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 {busy ? 'Verifying...' : 'Verify email'}
