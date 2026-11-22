@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 import { formatBookCategory } from './bookCategory.js';
 
@@ -1013,8 +1012,9 @@ export const parseImportFile = (file, onComplete) => {
     });
   } else if (extension === 'xlsx' || extension === 'xls') {
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
+        const XLSX = await import('xlsx');
         const data = new Uint8Array(e.target.result);
         const workbook = XLSX.read(data, { type: 'array' });
         const firstSheetName = workbook.SheetNames[0];

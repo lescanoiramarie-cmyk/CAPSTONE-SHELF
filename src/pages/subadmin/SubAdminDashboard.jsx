@@ -57,7 +57,6 @@ import FinePayments from '../../component/FinePayments.jsx';
 import SubscriptionManagement from '../../component/SubscriptionManagement.jsx';
 import PremiumFeatureGate from '../../component/PremiumFeatureGate.jsx';
 import { supabase } from '../../lib/supabaseClient.js';
-import { exportReport } from '../../lib/excelUtils.js';
 import Papa from 'papaparse';
 import { findVisitorByQr } from '../../data/store.js';
 import { validateImportedBookFineRates } from '../../lib/bookFineRate.js';
@@ -332,7 +331,7 @@ function CustomDashboardWelcome({
     <div className="relative bg-white rounded-2xl p-6 sm:p-8 border border-slate-200/80 shadow-sm space-y-6">
       
       {/* TOP RIGHT ACTION BAR (ONLINE BADGE) */}
-      <div className="absolute top-6 right-6 z-20 flex items-center gap-3">
+      <div className="absolute top-6 right-4 z-20 flex items-center gap-3">
         {/* ONLINE STATUS BADGE */}
         <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-full text-xs font-bold shadow-sm">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -1503,6 +1502,7 @@ export default function SubAdminDashboard() {
     setExportMessage('');
     setExportError('');
     try {
+      const { exportReport } = await import('../../lib/excelUtils.js');
       const isBooksReport = report === 'books';
       const reportRows = isBooksReport ? buildBranchAuditRows(branchBooks) : buildAttendanceRows(branchAttendance);
       const reportOptions = {

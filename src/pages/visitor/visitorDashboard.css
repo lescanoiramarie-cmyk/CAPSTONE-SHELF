@@ -1265,13 +1265,13 @@
   opacity: 1;
 }
 
-.visitor-dashboard.theme-dark .visitor-view-map-button {
+.visitor-dashboard.theme-dark .visitor-library-actions button:nth-child(-n + 2) {
   border: 1px solid #64748b;
   background-color: #334155;
   color: #f1f5f9;
 }
 
-.visitor-dashboard.theme-dark .visitor-view-map-button:hover {
+.visitor-dashboard.theme-dark .visitor-library-actions button:nth-child(-n + 2):hover {
   background-color: #475569;
 }
 

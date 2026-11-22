@@ -17,7 +17,6 @@ import {
   deleteAnnouncement,
 } from '../data/store.js';
 import { supabase } from '../lib/supabaseClient.js';
-import { exportReport } from '../lib/excelUtils.js';
 import AnalyticsDateFilter from './AnalyticsDateFilter.jsx';
 import AdminAnalyticsPanel from './AdminAnalyticsPanel.jsx';
 import PageJump from './PageJump.jsx';
@@ -676,6 +675,7 @@ export default function AdminWorkspace({
     setError('');
     setMessage('');
     try {
+      const { exportReport } = await import('../lib/excelUtils.js');
       const branchLabel = isSubAdmin
         ? getLibraryName(libraries, currentLibraryId)
         : analyticsLibraryId
@@ -831,6 +831,7 @@ export default function AdminWorkspace({
         ],
       };
       const label = format === 'xlsx' ? 'Excel' : format === 'csv' ? 'CSV' : 'PDF';
+      const { exportReport } = await import('../lib/excelUtils.js');
       const generatedFile = await exportReport(rows, format, {
         ...exportOptions,
         chartImages: format === 'pdf' ? chartImages : [],

@@ -5014,7 +5014,7 @@ export default function OPACCatalog({
                       className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-shelf-primary/20 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-400"
                     />
                   </div>
-                  <div className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                     <label className="block font-bold mb-1.5" htmlFor="personal-book-fine-rate">
                       Fine rate per overdue day{personalBookForm.lendingEnabled ? ' *' : ' (optional)'}
                     </label>
@@ -5513,6 +5513,7 @@ export default function OPACCatalog({
                       const entryFineRate = getValidStoredFineRate(
                         entry.fineRate
                       );
+                      const hasAvailableCopies = Number(entry.availableCopies || 0) > 0;
                       return (
                         <div
                           key={entry.id}
@@ -5537,15 +5538,16 @@ export default function OPACCatalog({
                             <button
                               type="button"
                               onClick={() => handleViewMap(entry.libraryId, entry)}
-                              className="visitor-view-map-button inline-flex min-h-10 w-full min-w-0 items-center justify-center px-2 py-1.5 text-center bg-slate-200 text-slate-700 rounded-lg font-bold hover:bg-slate-300 transition"
+                              className="visitor-view-map-button inline-flex min-h-10 w-full min-w-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-center font-bold text-slate-700 transition hover:bg-slate-50"
                             >
+                              <MapPin size={14} aria-hidden="true" />
                               View map
                             </button>
                             <button
                               type="button"
                               disabled={savingReadingListBookId === entry.id}
                               onClick={() => handleToggleReadingList(entry)}
-                              className="inline-flex min-h-10 w-full min-w-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-center font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="inline-flex min-h-10 w-full min-w-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-center font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <ClipboardList size={14} aria-hidden="true" />
                               {savingReadingListBookId === entry.id
@@ -5556,18 +5558,18 @@ export default function OPACCatalog({
                             </button>
                             <button
                               type="button"
-                              disabled={submittingBorrow || entryFineRate == null}
+                              disabled={submittingBorrow || entryFineRate == null || !hasAvailableCopies}
                               data-confirm-message={
-                                Number(entry.availableCopies || 0) > 0
+                                hasAvailableCopies
                                   ? 'Are you sure you want to borrow this book now?'
                                   : 'Are you sure you want to join the waitlist for this book?'
                               }
                               onClick={() => handleBorrowOrReserve(entry)}
-                              className="inline-flex min-h-10 w-full min-w-0 items-center justify-center px-2 py-1.5 text-center bg-shelf-primary text-white rounded-lg font-bold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                              className={`inline-flex min-h-10 w-full min-w-0 items-center justify-center rounded-lg px-2 py-1.5 text-center font-bold transition ${hasAvailableCopies ? 'bg-slate-900 text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50' : 'cursor-not-allowed bg-slate-100 text-slate-400'}`}
                             >
                               {submittingBorrowBookId === String(entry.id)
                                 ? 'Processing...'
-                                : Number(entry.availableCopies || 0) > 0
+                                : hasAvailableCopies
                                   ? 'Borrow'
                                   : 'Join waitlist'}
                             </button>
@@ -5581,7 +5583,7 @@ export default function OPACCatalog({
                                   setReservationDate('');
                                   setReservationMessage('');
                                 }}
-                                className="inline-flex min-h-10 w-full min-w-0 items-center justify-center rounded-lg border border-blue-600 bg-blue-600 px-2 py-1.5 text-center font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                className={`inline-flex min-h-10 w-full min-w-0 items-center justify-center rounded-lg border px-2 py-1.5 text-center font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${hasAvailableCopies ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100' : 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700'}`}
                               >
                                 Reserve
                               </button>

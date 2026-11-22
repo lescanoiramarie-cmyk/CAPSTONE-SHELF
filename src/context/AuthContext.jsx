@@ -56,13 +56,15 @@ export const AuthProvider = ({ children }) => {
         return null;
       }
       const restoredUser = JSON.parse(raw);
-      // Staff profiles are only a UI snapshot; they do not prove that the
-      // current Supabase token has completed MFA. Always require staff to
-      // establish a fresh Supabase session so protected staff RPCs run with
-      // the AAL2 token produced by the MFA challenge.
+      // Keep the staff UI snapshot during page startup. Protected routes stay
+      // behind authLoading until the persisted Supabase session and AAL2 level
+      // are checked below, so this snapshot never grants staff access alone.
       if (['subadmin', 'superadmin'].includes(restoredUser?.role)) {
-        globalThis.localStorage.removeItem(SESSION_KEY);
-        return null;
+        if (!supabase?.auth) {
+          globalThis.localStorage.removeItem(SESSION_KEY);
+          return null;
+        }
+        return restoredUser;
       }
       if (
         restoredUser?.role === 'visitor' &&
@@ -88,6 +90,9 @@ export const AuthProvider = ({ children }) => {
   });
   const [authLoading, setAuthLoading] = useState(Boolean(supabase?.auth));
   const persistedUserSnapshotRef = useRef(JSON.stringify(user));
+  const staffSnapshotPendingRef = useRef(
+    ['subadmin', 'superadmin'].includes(user?.role)
+  );
   const pendingMfaLoginRef = useRef(null);
   const [idleSecondsRemaining, setIdleSecondsRemaining] = useState(null);
   const resetIdleTimerRef = useRef(null);
@@ -163,13 +168,14 @@ export const AuthProvider = ({ children }) => {
         return;
       }
       if (event === 'INITIAL_SESSION' && !session) {
-        setUser((current) => (current ? null : current));
+        setUser(null);
         setAuthLoading(false);
       }
       if (event === 'INITIAL_SESSION' && session?.user?.id) {
         // Reload-safe staff auth: only restore a DB-backed active profile when
         // the persisted Supabase access token still carries verified AAL2.
         queueMicrotask(async () => {
+          let staffSessionRestored = false;
           try {
             const { data: assurance } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
             if (assurance?.currentLevel === 'aal2') {
@@ -182,11 +188,15 @@ export const AuthProvider = ({ children }) => {
                   email: staff.email,
                   libraryId: staff.libraryId,
                 });
+                staffSessionRestored = true;
               }
             }
           } catch {
             reportClientError('Staff session restore failed.');
           } finally {
+            if (!staffSessionRestored && staffSnapshotPendingRef.current) {
+              setUser(null);
+            }
             setAuthLoading(false);
           }
         });

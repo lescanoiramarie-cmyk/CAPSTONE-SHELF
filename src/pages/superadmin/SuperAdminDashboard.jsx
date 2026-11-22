@@ -72,10 +72,6 @@ import { supabase } from '../../lib/supabaseClient.js';
 import { formatBookCategory } from '../../lib/bookCategory.js';
 import { sendDueDateFollowUp } from '../../lib/dueDateFollowUp.js';
 import {
-  exportReport,
-  parseImportFile,
-} from '../../lib/excelUtils.js';
-import {
   buildAssetAllocationAnalytics,
   buildAssetAllocationRows,
   buildMasterCatalogAnalytics,
@@ -301,6 +297,7 @@ export default function SuperAdminDashboard() {
     setExportMessage('');
     setExportError('');
     try {
+      const { exportReport } = await import('../../lib/excelUtils.js');
       const isCatalog = report === 'books' || report === 'catalog';
       const isAllocation = report === 'allocation';
       const isInventory = isCatalog || isAllocation;
@@ -479,12 +476,20 @@ export default function SuperAdminDashboard() {
     setImportTarget,
   ] = useState('books');
 
-  const handleFileUpload = (
+  const handleFileUpload = async (
     event
   ) => {
     const file =
       event.target.files?.[0];
     if (!file) {
+      return;
+    }
+    let parseImportFile;
+    try {
+      ({ parseImportFile } = await import('../../lib/excelUtils.js'));
+    } catch {
+      window.alert('The import tools could not be loaded. Please try again.');
+      event.target.value = '';
       return;
     }
     parseImportFile(

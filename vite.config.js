@@ -7,4 +7,9 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  build: {
+    // ExcelJS is loaded only when an XLSX export is requested. Its standalone
+    // browser bundle is about 929 KB minified (about 256 KB after gzip).
+    chunkSizeWarningLimit: 1000,
+  },
 })
