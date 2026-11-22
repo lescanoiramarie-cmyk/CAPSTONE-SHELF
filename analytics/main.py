@@ -428,6 +428,8 @@ def forecast(
         "last_month",
         "year",
         "custom",
+        "weekly",
+        "annual",
     ] = Query(default="7d"),
 ):
     visitor_counts = linear_forecast(request.daily_visitors, request.horizon_days)

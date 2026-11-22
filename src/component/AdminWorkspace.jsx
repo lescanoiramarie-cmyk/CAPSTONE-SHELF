@@ -27,7 +27,7 @@ import {
   getTimeframeRange,
 } from '../lib/analyticsDateRange.js';
 import { getForecastNarrative } from '../lib/forecastNarrative.js';
-import { getAnalyticsApiUrl } from '../lib/analyticsApi.js';
+import { getAnalyticsApiUrl, getForecastErrorMessage, getForecastTimeframe } from '../lib/analyticsApi.js';
 import { formatBookCategory } from '../lib/bookCategory.js';
 import {
   canRunVisitorForecast,
@@ -1086,7 +1086,7 @@ export default function AdminWorkspace({
       const { data: { session } = {} } = await supabase?.auth.getSession() ?? {};
       if (!session?.access_token) throw new Error('An authenticated staff session is required for forecasting.');
       const response = await fetch(
-        `${endpoint.replace(/\/$/, '')}/forecast?timeframe=${encodeURIComponent(timeframe)}`,
+        `${endpoint.replace(/\/$/, '')}/forecast?timeframe=${encodeURIComponent(getForecastTimeframe(timeframe))}`,
         {
           method: 'POST',
           headers: {
@@ -1104,7 +1104,7 @@ export default function AdminWorkspace({
 
       if (!response.ok) {
         const errorResponse = await response.json().catch(() => ({}));
-        throw new Error(errorResponse.detail || `Forecast service returned ${response.status}.`);
+        throw new Error(getForecastErrorMessage(errorResponse.detail, response.status));
       }
       const forecastResult = await response.json();
       if (forecastResult?.analyticsSource !== 'gemini') {

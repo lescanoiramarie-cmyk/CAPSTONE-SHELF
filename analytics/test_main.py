@@ -76,6 +76,19 @@ class AnalyticsApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 422)
 
+    def test_forecast_accepts_selected_week_and_year(self):
+        main.app.dependency_overrides[main.require_active_staff] = lambda: "subadmin"
+        with patch.object(main, "generate_gemini_analytics", return_value=main.GeminiAnalytics()):
+            for timeframe, days in [("weekly", 7), ("annual", 366), ("custom", 7)]:
+                with self.subTest(timeframe=timeframe):
+                    response = self.client.post(
+                        f"/forecast?timeframe={timeframe}",
+                        json={"daily_visitors": [1] * days, "categories": [{"category": "Fiction", "weekly_demand": [2]}], "horizon_days": 7, "forecast_start_date": "2026-02-01"},
+                    )
+                    self.assertEqual(response.status_code, 200, response.text)
+                    self.assertEqual(response.json()["timeframe"], timeframe)
+                    self.assertEqual(len(response.json()["forecasts"]), 7)
+
     def test_staff_authorization_accepts_active_aal2_role_from_supabase_rpc(self):
         fake_client = FakeClient()
         with patch.dict(os.environ, {"SUPABASE_URL": "https://example.invalid", "SUPABASE_ANON_KEY": "public-test-key"}), \
