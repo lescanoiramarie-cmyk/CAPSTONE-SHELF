@@ -1651,7 +1651,7 @@ export default function AdminWorkspace({
                   : 'Filter analytics by library or branch, year, and month.'}
               </p>
             </div>
-            <div className={isSubAdmin ? 'grid items-end gap-4 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]' : 'grid gap-4 md:grid-cols-2'}>
+            <div className={isSubAdmin ? '' : 'grid gap-4 md:grid-cols-2'}>
               {!isSubAdmin && (
                 <label className="block text-sm font-semibold text-slate-700">
                   Library / Branch
@@ -1691,14 +1691,6 @@ export default function AdminWorkspace({
                 }}
                 range={analyticsWindow}
               />
-              {isSubAdmin && (
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-slate-600">Assigned branch</p>
-                  <div className="mt-1 border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 rounded-lg font-medium">
-                    {getLibraryName(libraries, currentLibraryId)}
-                  </div>
-                </div>
-              )}
             </div>
             <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
               <span className="font-semibold text-slate-500">Showing:</span>
@@ -1899,6 +1891,9 @@ export default function AdminWorkspace({
                     </ul>
                   ) : <p className="mt-2 text-sm text-slate-500">No recommended action was returned for this period.</p>}
                 </section>}
+                {hasGeneratedInsights && <p className="mt-3 text-xs leading-5 text-slate-500">
+                  These suggested actions are generated using the selected period and filters. Review them alongside your library records before making changes to staffing or book inventory.
+                </p>}
               </section>
 
               <section className="flex flex-col border border-slate-200 bg-white p-5 rounded-xl shadow-sm">
