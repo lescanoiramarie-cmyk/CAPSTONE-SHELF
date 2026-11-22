@@ -1450,25 +1450,24 @@ const handleEditStaff = (staff) => {
   }), [staffAccounts, libraries]);
   const inventoryDemand = useMemo(() => {
     const monthWindow = getAnalyticsMonthWindow(overviewMonth);
-    if (!monthWindow) return { atRiskTitles: [], periodLabel: '' };
-    if (borrowRequestsLoadError) return { atRiskTitles: [], periodLabel: monthWindow.monthLabel };
+    if (!monthWindow) return { atRiskTitles: [], atRiskTitleCount: 0, periodLabel: '' };
+    if (borrowRequestsLoadError) return { atRiskTitles: [], atRiskTitleCount: 0, periodLabel: monthWindow.monthLabel };
     const demand = new Map();
     borrowRequests.forEach((request) => {
-      if (String(request.status || '').toLowerCase() !== 'borrowed' && String(request.status || '').toLowerCase() !== 'returned') return;
+      if (!['borrowed', 'returned', 'overdue'].includes(String(request.status || '').trim().toLowerCase().replace(/\s+/g, '_'))) return;
       const borrowedAt = request.borrowDate ?? request.borrow_date;
       const timestamp = new Date(borrowedAt ?? '').getTime();
       if (!Number.isFinite(timestamp) || timestamp < monthWindow.start.getTime() || timestamp >= monthWindow.endExclusive.getTime()) return;
       const bookId = String(request.bookId ?? request.book_id ?? '');
       if (bookId) demand.set(bookId, (demand.get(bookId) || 0) + 1);
     });
-    const atRiskTitles = [...demand.entries()].map(([bookId, count]) => {
+    const allAtRiskTitles = [...demand.entries()].map(([bookId, count]) => {
       const book = books.find((item) => String(item.id) === bookId);
       const available = Number(book?.availableCopies ?? book?.available_copies ?? 0);
       return { book, count, available: Number.isFinite(available) ? available : 0 };
     }).filter((item) => item.book && item.count >= 3 && item.available <= 1)
-      .sort((left, right) => right.count - left.count)
-      .slice(0, 5);
-    return { atRiskTitles, periodLabel: monthWindow.monthLabel };
+      .sort((left, right) => right.count - left.count);
+    return { atRiskTitles: allAtRiskTitles.slice(0, 5), atRiskTitleCount: allAtRiskTitles.length, periodLabel: monthWindow.monthLabel };
   }, [books, borrowRequests, overviewMonth, borrowRequestsLoadError]);
   const inventoryBorrowingProjection = useMemo(
     () => getMonthlyBorrowingProjection(borrowRequests, new Date(`${overviewMonth}-01T00:00:00`)),
@@ -2166,7 +2165,7 @@ const handleEditStaff = (staff) => {
         )}
 
         {/* INVENTORY */}
-        {section === 'inventory' && <div className="space-y-4"><AdminSectionInsights title="Books that may run low" description={`Borrowing history through ${inventoryDemand.periodLabel || 'the selected month'}; the next-month estimate uses the recent monthly average.`} metrics={[{ label: 'Titles in catalog', value: books.length.toLocaleString() }, { label: 'Copies available now', value: inventorySummary.available.toLocaleString() }, { label: 'Titles with no copies available', value: inventorySummary.unavailableTitles.toLocaleString() }, { label: `Often borrowed, 0–1 copies left · ${inventoryDemand.periodLabel}`, value: borrowRequestsLoadError ? '—' : inventoryDemand.atRiskTitles.length.toLocaleString() }]} prediction={borrowRequestsLoadError ? 'Borrowing records could not be loaded, so the system cannot estimate demand.' : inventoryBorrowingProjection.projectedNextMonth == null ? 'There is not enough confirmed borrowing history to estimate next month.' : `If recent borrowing continues, about ${inventoryBorrowingProjection.projectedNextMonth} books may be borrowed next month.`} predictionSeries={borrowRequestsLoadError ? null : inventoryBorrowingProjection} actionMetrics={[{ label: 'Often borrowed, low copies', value: borrowRequestsLoadError ? '—' : inventoryDemand.atRiskTitles.length }, { label: 'Out of stock', value: inventorySummary.unavailableTitles }]} recommendation={borrowRequestsLoadError ? 'Load borrowing history before changing copy counts.' : inventoryDemand.atRiskTitles.length ? `Check current loans and branch copies for ${inventoryDemand.atRiskTitles[0].book.title}; add or move copies if needed.` : inventorySummary.unavailableTitles ? 'Review books with no copies available against current loans and returns before ordering more.' : 'Keep copy counts updated and review the borrowing trend after each month.'} /><BookInventory /></div>}
+        {section === 'inventory' && <div className="space-y-4"><AdminSectionInsights title="Books that may run low" description={`Borrowing history through ${inventoryDemand.periodLabel || 'the selected month'}; the next-month estimate uses the recent monthly average.`} metrics={[{ label: 'Titles in catalog', value: books.length.toLocaleString() }, { label: 'Copies available now', value: inventorySummary.available.toLocaleString() }, { label: 'Titles with no copies available', value: inventorySummary.unavailableTitles.toLocaleString() }, { label: `Often borrowed, 0–1 copies left · ${inventoryDemand.periodLabel}`, value: borrowRequestsLoadError ? '—' : inventoryDemand.atRiskTitleCount.toLocaleString() }]} prediction={borrowRequestsLoadError ? 'Borrowing records could not be loaded, so the system cannot estimate demand.' : inventoryBorrowingProjection.projectedNextMonth == null ? 'There is not enough confirmed borrowing history to estimate next month.' : `If recent borrowing continues, about ${inventoryBorrowingProjection.projectedNextMonth} books may be borrowed next month.`} predictionSeries={borrowRequestsLoadError ? null : inventoryBorrowingProjection} actionMetrics={[{ label: 'Often borrowed, low copies', value: borrowRequestsLoadError ? '—' : inventoryDemand.atRiskTitleCount }, { label: 'Out of stock', value: inventorySummary.unavailableTitles }]} recommendation={borrowRequestsLoadError ? 'Load borrowing history before changing copy counts.' : inventoryDemand.atRiskTitles.length ? `Check current loans and branch copies for ${inventoryDemand.atRiskTitles[0].book.title}; add or move copies if needed.` : inventorySummary.unavailableTitles ? 'Review books with no copies available against current loans and returns before ordering more.' : 'Keep copy counts updated and review the borrowing trend after each month.'} /><BookInventory /></div>}
 
         {section === 'settings' && (
           <section className="w-full max-w-6xl space-y-5">

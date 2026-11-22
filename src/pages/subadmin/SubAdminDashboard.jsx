@@ -65,6 +65,7 @@ import {
   getAnalyticsYearOptions,
   getAnalyticsMonthWindow,
   getMonthlyBorrowingProjection,
+  getRequestStatus,
 } from '../../lib/dashboardAnalytics.js';
 
 const AdminWorkspace = lazy(() => import('../../component/AdminWorkspace.jsx'));
@@ -1219,6 +1220,7 @@ export default function SubAdminDashboard() {
     const borrowedCounts = new Map();
     const previousBorrowedCounts = new Map();
     branchBorrowRequests.forEach((request) => {
+      if (!['borrowed', 'returned', 'overdue'].includes(getRequestStatus(request))) return;
       const borrowedAt = request.borrowDate || request.borrow_date;
       const timestamp = new Date(borrowedAt || '').getTime();
       if (!Number.isFinite(timestamp)) return;
@@ -1263,7 +1265,11 @@ export default function SubAdminDashboard() {
     const projectedNextMonth = totalBorrowEvents >= 3
       ? Math.max(0, Math.round((totalBorrowEvents / Math.max(1, elapsedDays)) * 30))
       : null;
-    const pressureTitles = topBorrowed.filter((entry) => entry.count >= 3 && entry.available <= 1).length;
+    const pressureTitles = [...borrowedCounts.entries()].filter(([bookId, count]) => {
+      const book = branchBooksById.get(bookId);
+      const available = Number(book?.availableCopies ?? book?.available_copies ?? 0);
+      return count >= 3 && Number.isFinite(available) && available <= 1;
+    }).length;
     return { topBorrowed, categoryBorrowing, totalBorrowEvents, comparableBorrowEvents, projectedNextMonth, pressureTitles, monthLabel: monthWindow.monthLabel, comparisonAvailable };
   }, [branchBooks, branchBooksById, branchBorrowRequests, overviewMonth]);
 

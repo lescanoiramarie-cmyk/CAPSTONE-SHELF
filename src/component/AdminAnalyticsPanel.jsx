@@ -26,6 +26,8 @@ export default function AdminAnalyticsPanel({
   const usableForecast = (automaticForecast.length ? automaticForecast : predictiveSeries)
     .map((point) => ({ ...point, value: Number(point.value) }))
     .filter((point) => Number.isFinite(point.value) && point.value >= 0);
+  const forecastIndex = usableForecast.findIndex((point) => /^next(?: month)?$/i.test(String(point.label).trim()));
+  const hasProjection = forecastIndex > 0 && predictionSeries?.projectedNextMonth != null;
   const forecastMaximum = Math.max(1, ...usableForecast.map((point) => point.value));
   const forecastPoints = usableForecast.map((point, index) => {
     const x = usableForecast.length < 2 ? 160 : 18 + (index / (usableForecast.length - 1)) * 284;
@@ -48,9 +50,23 @@ export default function AdminAnalyticsPanel({
       </div>
 
       <div className="grid items-stretch gap-4 lg:grid-cols-3">
-        <article className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+        <article className="flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
           <h4 className="text-lg font-bold text-slate-900 dark:text-white">Descriptive Analytics</h4>
-          <p className="mt-1 min-h-10 text-sm text-slate-600 dark:text-slate-300">Current recorded totals and their relative comparison.</p>
+          <p className="mt-1 min-h-10 text-sm text-slate-600 dark:text-slate-300">A snapshot of the recorded titles, copies, and borrowing activity for this library.</p>
+          {chartMetrics.length > 1 && (
+            <figure className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-700">
+              <figcaption className="mb-2 text-xs font-semibold text-slate-600 dark:text-slate-300">Recorded totals (counts)</figcaption>
+              <div role="img" aria-label={`${title}: ${chartMetrics.map((metric) => `${metric.label} ${metric.value}`).join(', ')}`} className="flex h-28 items-end gap-2 border-b border-l border-slate-200 px-2 pt-2 dark:border-slate-600">
+                {chartMetrics.map((metric) => (
+                  <div key={metric.label} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
+                    <span className="text-[11px] font-bold tabular-nums text-slate-700 dark:text-slate-200">{metric.value}</span>
+                    <span className="w-full max-w-10 rounded-t bg-blue-600" style={{ height: `${Math.max(metric.chartValue > 0 ? 5 : 0, (metric.chartValue / chartMaximum) * 68)}%` }} />
+                    <span className="w-full truncate text-center text-[10px] text-slate-500 dark:text-slate-400" title={metric.label}>{metric.label}</span>
+                  </div>
+                ))}
+              </div>
+            </figure>
+          )}
           {metrics.length > 0 ? (
             <dl className="mt-3 grid grid-cols-2 gap-2">
               {metrics.map((metric) => (
@@ -62,52 +78,44 @@ export default function AdminAnalyticsPanel({
               ))}
             </dl>
           ) : <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">No descriptive totals are available.</p>}
-          {chartMetrics.length > 1 && (
-            <figure className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-700">
-              <figcaption className="mb-2 text-xs font-semibold text-slate-600 dark:text-slate-300">Relative comparison of recorded totals</figcaption>
-              <div role="img" aria-label={`${title}: ${chartMetrics.map((metric) => `${metric.label} ${metric.value}`).join(', ')}`} className="flex h-28 items-end gap-2 border-b border-l border-slate-200 px-2 pt-2 dark:border-slate-600">
-                {chartMetrics.map((metric) => (
-                  <div key={metric.label} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
-                    <span className="text-[11px] font-bold tabular-nums text-slate-700 dark:text-slate-200">{metric.value}</span>
-                    <span className="w-full max-w-10 rounded-t bg-blue-600" style={{ height: `${Math.max(metric.chartValue > 0 ? 5 : 0, (metric.chartValue / chartMaximum) * 68)}%` }} />
-                    <span className="w-full truncate text-center text-[10px] text-slate-500 dark:text-slate-400">{metric.label}</span>
-                  </div>
-                ))}
-              </div>
-            </figure>
-          )}
         </article>
 
-        <article className="min-w-0 rounded-xl border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-900 dark:bg-indigo-950/40">
+        <article className="flex min-w-0 flex-col rounded-xl border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-900 dark:bg-indigo-950/40">
           <div className="flex items-center gap-2 text-indigo-950 dark:text-indigo-100">
             <TrendingUp size={18} aria-hidden="true" />
             <h4 className="text-lg font-bold">Predictive Analytics</h4>
           </div>
-          <p className="mt-1 min-h-10 text-sm text-indigo-900/80 dark:text-indigo-200">Estimate or outlook derived from the available history.</p>
-          {forecastPoints.length > 1 && (
+          <p className="mt-1 min-h-10 text-sm text-indigo-900/80 dark:text-indigo-200">Recent monthly borrow counts and an estimate for the next month based on the latest three recorded months.</p>
+          <p className="mt-3 text-sm font-semibold leading-6 text-indigo-950 dark:text-indigo-100">{prediction}</p>
+          {hasProjection && forecastPoints.length > 1 && (
             <figure className="mt-3 rounded-lg border border-indigo-100 bg-white/80 p-2 dark:border-indigo-900 dark:bg-slate-900/60">
-              <svg viewBox="0 0 320 120" className="h-28 w-full" role="img" aria-label={`Forecast trend: ${forecastPoints.map((point) => `${point.label} ${point.value}`).join(', ')}`}>
+              <svg viewBox="0 0 320 120" className="h-28 w-full" role="img" aria-label={`Monthly borrow counts and estimate: ${forecastPoints.map((point) => `${point.label} ${point.value}`).join(', ')}`}>
                 <line x1="18" y1="96" x2="302" y2="96" stroke="currentColor" className="text-indigo-200 dark:text-indigo-800" />
-                <polyline points={forecastPoints.map((point) => `${point.x},${point.y}`).join(' ')} fill="none" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                {forecastPoints.map((point) => <circle key={`${point.label}-${point.x}`} cx={point.x} cy={point.y} r="4" fill="white" stroke="#2563eb" strokeWidth="2" />)}
+                <polyline points={forecastPoints.slice(0, forecastIndex).map((point) => `${point.x},${point.y}`).join(' ')} fill="none" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                <polyline points={forecastPoints.slice(forecastIndex - 1).map((point) => `${point.x},${point.y}`).join(' ')} fill="none" stroke="#d97706" strokeWidth="3" strokeDasharray="6 4" strokeLinecap="round" strokeLinejoin="round" />
+                {forecastPoints.map((point, index) => <circle key={`${point.label}-${point.x}`} cx={point.x} cy={point.y} r="4" fill="white" stroke={index >= forecastIndex ? '#d97706' : '#2563eb'} strokeWidth="2" />)}
               </svg>
               <figcaption className="flex justify-between gap-2 text-[10px] text-slate-600 dark:text-slate-300">
                 {forecastPoints.map((point) => <span key={point.label} className="truncate">{point.label}: {point.value}</span>)}
               </figcaption>
             </figure>
           )}
-          <p className="mt-3 text-sm font-semibold leading-6 text-indigo-950 dark:text-indigo-100">{prediction}</p>
         </article>
 
-        <article className="min-w-0 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
+        <article className="flex min-w-0 flex-col rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
           <div className="flex items-center gap-2 text-amber-950 dark:text-amber-100">
             <Lightbulb size={18} aria-hidden="true" />
             <h4 className="text-lg font-bold">Prescriptive Analytics</h4>
           </div>
-          <p className="mt-1 min-h-10 text-sm text-amber-900/80 dark:text-amber-200">Suggested action based on the current measures and outlook.</p>
+          <p className="mt-1 min-h-10 text-sm text-amber-900/80 dark:text-amber-200">Use the counts below to prioritize titles that need a stock or loan review.</p>
+          <div className="mt-3 rounded-lg border border-amber-200 bg-white/80 p-3 dark:border-amber-900 dark:bg-slate-900/50">
+            <p className="text-xs font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">Recommended action</p>
+            <p className="mt-1 text-sm font-semibold leading-6 text-amber-950 dark:text-amber-100">{recommendation}</p>
+            {rationale && <><p className="mt-3 text-xs font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">Rationale</p><p className="mt-1 text-sm leading-5 text-amber-950 dark:text-amber-100">{rationale}</p></>}
+          </div>
           {actionMetrics.length > 0 && (
             <figure className="mt-3 rounded-lg border border-amber-200 bg-white/80 p-3 dark:border-amber-900 dark:bg-slate-900/50">
-              <figcaption className="mb-3 text-xs font-semibold text-amber-950 dark:text-amber-100">Inventory action priorities</figcaption>
+              <figcaption className="mb-3 text-xs font-semibold text-amber-950 dark:text-amber-100">Titles by stock action needed</figcaption>
               <div role="img" aria-label={`Inventory action priorities: ${actionMetrics.map((metric) => `${metric.label} ${metric.value}`).join(', ')}`} className="space-y-3">
                 {actionMetrics.map((metric) => (
                   <div key={metric.label} className="grid grid-cols-[minmax(6rem,1fr)_2fr_auto] items-center gap-2 text-xs">
@@ -119,11 +127,6 @@ export default function AdminAnalyticsPanel({
               </div>
             </figure>
           )}
-          <div className="mt-3 rounded-lg border border-amber-200 bg-white/80 p-3 dark:border-amber-900 dark:bg-slate-900/50">
-            <p className="text-xs font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">Recommended action</p>
-            <p className="mt-1 text-sm font-semibold leading-6 text-amber-950 dark:text-amber-100">{recommendation}</p>
-            {rationale && <><p className="mt-3 text-xs font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">Rationale</p><p className="mt-1 text-sm leading-5 text-amber-950 dark:text-amber-100">{rationale}</p></>}
-          </div>
         </article>
       </div>
     </section>

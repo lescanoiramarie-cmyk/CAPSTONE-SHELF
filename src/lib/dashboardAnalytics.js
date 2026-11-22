@@ -53,7 +53,7 @@ export function getMonthlyBorrowingProjection(requests = [], anchorDate = new Da
   for (let cursor = new Date(startMonth); cursor < endMonth; cursor.setMonth(cursor.getMonth() + 1)) {
     months.push({
       key: getAnalyticsMonthKey(cursor),
-      label: cursor.toLocaleDateString('en-US', { month: 'short' }),
+      label: cursor.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
       value: 0,
     });
   }
@@ -61,6 +61,7 @@ export function getMonthlyBorrowingProjection(requests = [], anchorDate = new Da
   requests.forEach((request) => {
     const dateValue = request?.borrowDate ?? request?.borrow_date;
     if (!dateValue) return;
+    if (!['borrowed', 'returned', 'overdue'].includes(getRequestStatus(request))) return;
     const date = new Date(dateValue);
     if (!Number.isFinite(date.getTime())) return;
     const month = byMonth.get(getAnalyticsMonthKey(date));
