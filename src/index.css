@@ -1033,6 +1033,14 @@ label.text-xs {
   border-color: #334155;
 }
 
+/* Keep report card borders consistent with dark surfaces, including hover. */
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) main .admin-reports-workspace .bg-white:is(.rounded-xl, .rounded-2xl).shadow-sm {
+  border-color: #334155;
+}
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) main .admin-reports-workspace .bg-white:is(.rounded-xl, .rounded-2xl).shadow-sm:hover {
+  border-color: #527096;
+}
+
 /* Shared admin dark palette: neutral surfaces, feedback panels and controls. */
 .dark :is(.subadmin-dashboard, .superadmin-dashboard) > main {
   background-color: #0b1220;

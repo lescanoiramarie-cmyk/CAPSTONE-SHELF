@@ -1318,7 +1318,7 @@ export default function AdminWorkspace({
             </div>
           )}
           <div className="order-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex flex-col gap-4 border-b border-slate-100 bg-linear-to-r from-slate-50 to-white p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-4 border-b border-slate-100 bg-linear-to-r from-slate-50 to-white p-5 dark:bg-none dark:bg-slate-800 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-shelf-primary">
                   SHELF
@@ -1457,7 +1457,7 @@ export default function AdminWorkspace({
                     {filteredReportRows.filter((row) => row.type === 'Book request').length}
                   </p>
                 </div>
-                <span className="rounded-xl bg-violet-50 px-3 py-2 text-lg font-extrabold text-violet-700 group-hover:bg-violet-600 group-hover:text-white transition-colors">
+                <span className="rounded-xl bg-violet-50 px-3 py-2 text-lg font-extrabold text-violet-700 group-hover:bg-violet-600 group-hover:text-white transition-colors dark:bg-violet-950 dark:text-violet-200">
                   B
                 </span>
               </div>
@@ -1528,7 +1528,7 @@ export default function AdminWorkspace({
                   {paginatedReportRows.map((row, index) => (
                     <tr
                       key={`${row.type}-${row.time}-${activityHistoryStart + index}`}
-                      className="transition-colors hover:bg-blue-50/40 cursor-pointer group"
+                      className="transition-colors hover:bg-blue-50/40 dark:hover:bg-slate-800/70 cursor-pointer group"
                     >
                       <td className="whitespace-nowrap px-5 py-4 text-xs text-slate-500 font-medium">
                         {new Date(row.time).toLocaleString('en-PH', {
