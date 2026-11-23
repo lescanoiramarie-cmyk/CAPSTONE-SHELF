@@ -65,4 +65,14 @@ export const supabase =
       })
     : null;
 
+// Bind private reads to the access token that was actually checked, even if
+// the shared client's session changes while the request is being prepared.
+export function createTokenScopedClient(accessToken) {
+  if (!configValid || !accessToken) throw new Error('Your visitor session has expired. Please sign in again.');
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    accessToken: async () => accessToken,
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+}
+
 export { PRODUCTION_PROJECT_REF, LOCAL_PROJECT_REF };

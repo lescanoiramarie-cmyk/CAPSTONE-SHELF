@@ -11,7 +11,8 @@
 // Business rules that must be atomic are handled by PostgreSQL RPC functions.
 // ============================================================================
 
-import { supabase } from '../lib/supabaseClient.js';
+import { supabase, createTokenScopedClient } from '../lib/supabaseClient.js';
+import { callVisitorAuthenticatedRpc } from '../lib/visitorAuthenticatedRpc.js';
 import { normalizeVisitorRegistrationType, VISITOR_REGISTRATION_TYPES } from '../lib/visitorRegistration.js';
 import { normalizeBookCategory } from '../lib/bookCategory.js';
 import { normalizeCallNumber } from '../lib/callNumber.js';
@@ -1339,25 +1340,14 @@ export async function fetchBorrowRequests({
 
       // Huwag tawagin ang protected RPC kapag walang authenticated session.
       if (session?.user?.id && isValidVisitorId(normalizedVisitorId)) {
-        const {
-          data,
-          error,
-        } = await supabase.rpc(
+        const data = await callVisitorAuthenticatedRpc(supabase, createTokenScopedClient,
           'fetch_my_community_book_requests',
           {
             p_requester_visitor_id: normalizedVisitorId,
           }
         );
 
-        if (error) {
-          console.error('SHELF — COMMUNITY REQUEST RPC ERROR:');
-          throw cleanErr(
-            error,
-            'Unable to load your community book requests.'
-          );
-        } else {
-          communityRequests = Array.isArray(data) ? data : [];
-        }
+        communityRequests = data;
       } else {
         // No community requests are loaded without an authenticated visitor session.
       }
@@ -4269,25 +4259,13 @@ export async function fetchOwnerCommunityBookRequests(
     );
   }
 
-  const {
-    data,
-    error,
-  } = await supabase.rpc(
+  const data = await callVisitorAuthenticatedRpc(supabase, createTokenScopedClient,
     'fetch_owner_community_book_requests',
     {
       p_owner_visitor_id:
         normalizedOwnerVisitorId,
     }
   );
-
-  if (error) {
-    console.error('FETCH OWNER COMMUNITY BOOK REQUESTS RPC ERROR:');
-
-    throw cleanErr(
-      error,
-      'Unable to load community book requests.'
-    );
-  }
 
   return (Array.isArray(data)
     ? data
@@ -4423,21 +4401,12 @@ export async function fetchMyCommunityBookRequests(visitorId) {
     throw new Error('Invalid visitor ID.');
   }
 
-  const { data, error } = await supabase.rpc(
+  const data = await callVisitorAuthenticatedRpc(supabase, createTokenScopedClient,
     'fetch_my_community_book_requests',
     {
       p_requester_visitor_id: normalizedVisitorId,
     }
   );
-
-  if (error) {
-    console.error('FETCH MY COMMUNITY BOOK REQUESTS RPC ERROR:');
-
-    throw cleanErr(
-      error,
-      'Unable to load your community book requests.'
-    );
-  }
 
   return Array.isArray(data) ? data : [];
 }
