@@ -1890,6 +1890,25 @@ export default function OPACCatalog({
     visibleMyRequestPage * myRequestPageSize
   );
 
+  // Reload on entry and when returning to this tab, even if a realtime event
+  // was missed while the visitor's browser was in the background.
+  useEffect(() => {
+    if (activeView !== 'myBorrows') return undefined;
+    const refresh = () => {
+      if (document.visibilityState === 'visible') void Promise.resolve(onRetryBorrowRequests()).catch(() => {});
+    };
+    const start = setTimeout(refresh, 0);
+    const interval = setInterval(refresh, 30000);
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+    return () => {
+      clearTimeout(start);
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [activeView, focusRequestId, onRetryBorrowRequests]);
+
   useEffect(() => {
     if (!focusRequestId || activeView !== 'myBorrows') return;
     const timer = setTimeout(() => {
