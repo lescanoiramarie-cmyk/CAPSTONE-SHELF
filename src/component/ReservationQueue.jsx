@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient.js';
 import { BookOpen, Clock3, UsersRound } from 'lucide-react';
 import { useLibraryData } from '../context/useLibrary.js';
+import PageJump from './PageJump.jsx';
 
 function formatDateTime(iso) {
   if (!iso) return '—';
@@ -33,7 +34,7 @@ function PagedList({ items, label, focusRequestId, children }) {
     {children(items.slice((current - 1) * pageSize, current * pageSize))}
     {items.length > pageSize && <nav aria-label={`${label} pages`} className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-3 text-sm dark:border-slate-700">
       <span className="text-slate-600 dark:text-slate-300">Showing {(current - 1) * pageSize + 1}–{Math.min(current * pageSize, items.length)} of {items.length}</span>
-      <div className="flex items-center gap-2"><button type="button" disabled={current === 1} onClick={() => setPage(current - 1)} className="rounded-md border border-slate-300 px-3 py-1.5 disabled:opacity-40 dark:border-slate-600">Previous</button><span> {current} / {pages} </span><button type="button" disabled={current === pages} onClick={() => setPage(current + 1)} className="rounded-md border border-slate-300 px-3 py-1.5 disabled:opacity-40 dark:border-slate-600">Next</button></div>
+      <div className="flex flex-wrap items-center gap-2"><button type="button" disabled={current === 1} onClick={() => setPage(current - 1)} className="rounded-md border border-slate-300 px-3 py-1.5 disabled:opacity-40 dark:border-slate-600">Previous</button><PageJump page={current} pageCount={pages} onPageChange={setPage} className="dark:text-slate-200" /><button type="button" disabled={current === pages} onClick={() => setPage(current + 1)} className="rounded-md border border-slate-300 px-3 py-1.5 disabled:opacity-40 dark:border-slate-600">Next</button></div>
     </nav>}
   </>;
 }
