@@ -15,11 +15,11 @@ function GoogleMapsEmbed({ libraries, activeFocusBranchId, bookContext }) {
   const focusedLibrary = libraries.find(
     (library) => String(library.id) === String(activeFocusBranchId)
   ) || libraries[0];
-  const query = focusedLibrary?.address
-    ? encodeURIComponent(`${focusedLibrary.name || ''}, ${focusedLibrary.address}`)
-    : focusedLibrary?.lat != null && focusedLibrary?.lng != null
-      ? `${focusedLibrary.lat},${focusedLibrary.lng}`
-      : 'Batangas State University, Batangas, Philippines';
+  // Coordinates are already validated before being passed to this component.
+  // Searching by name and address can return no result even for a saved location.
+  const query = focusedLibrary
+    ? `${Number(focusedLibrary.lat)},${Number(focusedLibrary.lng)}`
+    : 'Batangas State University, Batangas, Philippines';
   const zoom = activeFocusBranchId ? 16 : 12;
 
   return (
