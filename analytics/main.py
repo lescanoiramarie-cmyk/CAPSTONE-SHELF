@@ -17,6 +17,8 @@ from google.genai import errors, types
 from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sklearn.linear_model import LinearRegression
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 
 load_dotenv(Path(__file__).with_name(".env"))
@@ -39,6 +41,59 @@ class ForecastRequest(BaseModel):
 class GeminiAnalytics(BaseModel):
     insights: list[str] = Field(default_factory=list, max_length=4)
     recommendations: list[str] = Field(default_factory=list, max_length=4)
+
+
+class RecommendationBook(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str = Field(min_length=1, max_length=100)
+    title: str = Field(min_length=1, max_length=300)
+    author: str = Field(default="", max_length=200)
+    category: str = Field(default="", max_length=120)
+    available: bool = False
+    active: bool = False
+    borrowed: bool = False
+    popularity: int = Field(default=0, ge=0, le=10000000)
+
+
+class BookRecommendationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    books: list[RecommendationBook] = Field(max_length=5000)
+    searches: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("searches")
+    @classmethod
+    def validate_searches(cls, values: list[str]) -> list[str]:
+        if any(len(value) > 120 for value in values):
+            raise ValueError("Search terms must not exceed 120 characters.")
+        return values
+
+
+def rank_book_recommendations(request: BookRecommendationRequest) -> dict:
+    books = request.books
+    candidates = [index for index, book in enumerate(books) if book.available and not book.active]
+    if not candidates:
+        return {"bookIds": [], "source": "popular"}
+    documents = [f"{book.title} {book.title} {book.author} {book.category} {book.category}" for book in books]
+    searches = [query.strip() for query in request.searches if query.strip()]
+    try:
+        vectorizer = TfidfVectorizer(ngram_range=(1, 2), sublinear_tf=True, max_features=12000)
+        matrix = vectorizer.fit_transform(documents)
+        profiles = [matrix[index] for index, book in enumerate(books) if book.borrowed][:50]
+        if searches:
+            profiles.append(vectorizer.transform([" ".join(searches)]))
+        usable_profiles = [profile for profile in profiles if profile.nnz]
+        if usable_profiles:
+            profile = usable_profiles[0]
+            for signal in usable_profiles[1:]:
+                profile = profile + signal
+            scores = cosine_similarity(matrix, profile).ravel().tolist()
+        else:
+            scores = [0.0] * len(books)
+    except ValueError:
+        scores = [0.0] * len(books)
+    personalized = any(scores[index] > 0 for index in candidates)
+    candidates.sort(key=lambda index: (-scores[index], -books[index].popularity, books[index].title.casefold(), books[index].id))
+    return {"bookIds": [books[index].id for index in candidates[:4]], "source": "ai" if personalized else "popular"}
 
 
 class FAQEntry(BaseModel):
@@ -396,6 +451,48 @@ def require_active_staff(
     ):
         raise HTTPException(status_code=403, detail="An active AAL2 staff session is required.")
     return role_rows[0]["role"]
+
+
+def require_active_visitor(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> str:
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        raise HTTPException(status_code=401, detail="A visitor session is required.")
+    supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    anon_key = os.getenv("SUPABASE_ANON_KEY", "") or os.getenv("SUPABASE_PUBLISHABLE_KEY", "")
+    parsed = urlparse(supabase_url)
+    if not anon_key or not parsed.hostname or (parsed.scheme != "https" and not (
+        parsed.scheme == "http" and parsed.hostname in ("localhost", "127.0.0.1", "::1")
+    )):
+        raise HTTPException(status_code=503, detail="Visitor authorization is unavailable.")
+    headers = {"apikey": anon_key, "Authorization": f"Bearer {credentials.credentials}", "Accept": "application/json"}
+    try:
+        with httpx.Client(timeout=5.0, follow_redirects=False) as client:
+            user_response = client.get(f"{supabase_url}/auth/v1/user", headers=headers)
+            if user_response.status_code in (401, 403):
+                raise HTTPException(status_code=401, detail="The visitor session is invalid or expired.")
+            user_response.raise_for_status()
+            user = user_response.json()
+            if not isinstance(user, dict) or not user.get("id"):
+                raise HTTPException(status_code=401, detail="The visitor session is invalid or expired.")
+            role_response = client.post(f"{supabase_url}/rest/v1/rpc/get_current_user_role", headers=headers, json={})
+            if role_response.status_code in (401, 403):
+                raise HTTPException(status_code=403, detail="An active verified visitor account is required.")
+            role_response.raise_for_status()
+            roles = role_response.json()
+    except HTTPException:
+        raise
+    except (httpx.HTTPError, ValueError):
+        logger.warning("Recommendation authorization is unavailable.")
+        raise HTTPException(status_code=503, detail="Visitor authorization is temporarily unavailable.") from None
+    if not isinstance(roles, list) or len(roles) != 1 or not isinstance(roles[0], dict) or roles[0].get("user_type") != "visitor" or roles[0].get("is_active") is not True:
+        raise HTTPException(status_code=403, detail="An active verified visitor account is required.")
+    return "visitor"
+
+
+@app.post("/recommendations/books")
+def recommend_books(request: BookRecommendationRequest, _visitor: str = Depends(require_active_visitor)):
+    return rank_book_recommendations(request)
 
 
 

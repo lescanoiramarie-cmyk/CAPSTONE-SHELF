@@ -67,6 +67,35 @@ class AnalyticsApiTests(unittest.TestCase):
         response = self.client.post("/forecast", json={"daily_visitors": [2, 3]})
         self.assertEqual(response.status_code, 401)
 
+    def test_book_recommendations_require_visitor_authentication(self):
+        response = self.client.post('/recommendations/books', json={'books': [], 'searches': []})
+        self.assertEqual(response.status_code, 401)
+
+    def test_book_recommendations_use_history_and_exclude_unavailable_or_active_books(self):
+        main.app.dependency_overrides[main.require_active_visitor] = lambda: 'visitor'
+        books = [
+            {'id': 'past', 'title': 'Ocean fish', 'category': 'Marine science', 'available': True, 'borrowed': True, 'active': True},
+            {'id': 'related', 'title': 'Ocean wildlife', 'category': 'Marine science', 'available': True},
+            {'id': 'other', 'title': 'Space travel', 'category': 'Astronomy', 'available': True, 'popularity': 100},
+            {'id': 'unavailable', 'title': 'Ocean life', 'category': 'Marine science', 'available': False},
+        ]
+        response = self.client.post('/recommendations/books', json={'books': books, 'searches': ['ocean']})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()['source'], 'ai')
+        self.assertEqual(response.json()['bookIds'][0], 'related')
+        self.assertNotIn('past', response.json()['bookIds'])
+        self.assertNotIn('unavailable', response.json()['bookIds'])
+        response = self.client.post('/recommendations/books', json={'books': books[1:], 'searches': []})
+        self.assertEqual(response.json()['source'], 'popular')
+        self.assertEqual(response.json()['bookIds'][0], 'other')
+
+    def test_recommendation_authorization_rejects_inactive_and_staff_accounts(self):
+        for rows in [[{'user_type': 'visitor', 'is_active': False}], [{'user_type': 'subadmin', 'is_active': True}]]:
+            with self.subTest(rows=rows), patch.dict(os.environ, {'SUPABASE_URL': 'https://example.invalid', 'SUPABASE_ANON_KEY': 'public-test-key'}), patch.object(main.httpx, 'Client', return_value=FakeClient(role_rows=rows)):
+                with self.assertRaises(HTTPException) as error:
+                    main.require_active_visitor(HTTPAuthorizationCredentials(scheme='Bearer', credentials='synthetic'))
+                self.assertEqual(error.exception.status_code, 403)
+
     def test_forecast_rejects_invalid_request(self):
         main.app.dependency_overrides[main.require_active_staff] = lambda: "subadmin"
         response = self.client.post(

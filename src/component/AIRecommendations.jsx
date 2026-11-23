@@ -4,6 +4,8 @@ import { useAuth } from '../context/useAuth.js';
 import { useLibraryData } from '../context/useLibrary.js';
 import { fetchPopularBorrowedBookCounts } from '../data/store.js';
 import { formatBookCategory } from '../lib/bookCategory.js';
+import { supabase } from '../lib/supabaseClient.js';
+import { makeBookRecommendationPayload, requestBookRecommendations } from '../lib/bookRecommendationApi.js';
 import {
   getAIRecommendations,
   getVisitorSearchHistory,
@@ -15,6 +17,8 @@ export default function AIRecommendations({ onRequestBorrow, onSelectBook }) {
   const { books, borrowRequests } = useLibraryData();
   const [searchHistory, setSearchHistory] = useState([]);
   const [popularBorrowCounts, setPopularBorrowCounts] = useState([]);
+  const [aiResult, setAiResult] = useState(null);
+  const [aiStatus, setAiStatus] = useState('loading');
 
   useEffect(() => {
     let active = true;
@@ -47,7 +51,7 @@ export default function AIRecommendations({ onRequestBorrow, onSelectBook }) {
       );
   }, [user?.id]);
 
-  const { recommendations, topCategories, isColdStart } = useMemo(() => {
+  const fallback = useMemo(() => {
     return getAIRecommendations(
       borrowRequests,
       books,
@@ -57,7 +61,40 @@ export default function AIRecommendations({ onRequestBorrow, onSelectBook }) {
     );
   }, [borrowRequests, books, user?.id, searchHistory, popularBorrowCounts]);
 
-  if (!recommendations || recommendations.length === 0) {
+  const payload = useMemo(() => makeBookRecommendationPayload(books, borrowRequests, user?.id, searchHistory, popularBorrowCounts), [books, borrowRequests, user?.id, searchHistory, popularBorrowCounts]);
+  const payloadKey = JSON.stringify(payload);
+  useEffect(() => {
+    if (!user?.id || !payloadKey) return undefined;
+    const controller = new AbortController();
+    let current = true;
+    setAiResult(null);
+    setAiStatus('loading');
+    const timeout = setTimeout(() => {
+      if (current) { setAiStatus('unavailable'); controller.abort(); }
+    }, 20000);
+    const load = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error || !data?.session?.access_token) throw new Error('Visitor session unavailable.');
+        const result = await requestBookRecommendations({ payload: JSON.parse(payloadKey), token: data.session.access_token, configuredUrl: import.meta.env.VITE_ANALYTICS_API_URL, signal: controller.signal });
+        if (current) { setAiResult(result); setAiStatus('ready'); }
+      } catch (error) {
+        if (current && error?.name !== 'AbortError') setAiStatus('unavailable');
+      } finally {
+        clearTimeout(timeout);
+      }
+    };
+    void load();
+    return () => { current = false; clearTimeout(timeout); controller.abort(); };
+  }, [payloadKey, user?.id]);
+
+  const bookById = useMemo(() => new Map(books.map((book) => [String(book.id), book])), [books]);
+  const recommendations = aiStatus === 'ready' ? aiResult.bookIds.map((id) => bookById.get(id)).filter(Boolean) : aiStatus === 'unavailable' ? fallback.recommendations : [];
+  const topCategories = aiStatus === 'ready' ? [...new Set(recommendations.map((book) => book.category).filter(Boolean))].slice(0, 2) : fallback.topCategories;
+  const isColdStart = aiStatus === 'ready' ? aiResult.source === 'popular' : fallback.isColdStart;
+
+  if (aiStatus === 'loading') return <p role="status" className="text-sm text-slate-500">Preparing book recommendations...</p>;
+  if (!recommendations.length && aiStatus !== 'unavailable') {
     return null;
   }
 
@@ -75,9 +112,11 @@ export default function AIRecommendations({ onRequestBorrow, onSelectBook }) {
             </h3>
           </div>
           <p className="mt-1 text-xs text-slate-700 dark:text-slate-300">
-            {isColdStart
-              ? 'Popular across SHELF activity, based on aggregated borrowing and available search trends:'
-              : 'Personalized from your own borrowing history and recent OPAC searches:'}
+            {aiStatus === 'unavailable'
+              ? 'AI recommendations are temporarily unavailable. Showing local suggestions when available.'
+              : isColdStart
+              ? 'Popular books based on aggregated borrowing activity:'
+              : 'AI-ranked from your borrowing history and recent OPAC searches:'}
           </p>
         </div>
 
