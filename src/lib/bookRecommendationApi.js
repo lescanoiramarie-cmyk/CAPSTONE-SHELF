@@ -1,5 +1,20 @@
 import { getAnalyticsApiUrl } from './analyticsApi.js';
 
+export function recommendationTitleKey(book) {
+  const normalize = (value) => String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+  return JSON.stringify([normalize(book.title), normalize(book.author)]);
+}
+
+export function uniqueRecommendationTitles(books, limit = 4) {
+  const seen = new Set();
+  return books.filter((book) => {
+    const key = recommendationTitleKey(book);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, limit);
+}
+
 export function makeBookRecommendationPayload(books, requests, visitorId, searches, popularCounts) {
   const ownRequests = requests.filter((item) => String(item.visitorId ?? item.visitor_id ?? '') === String(visitorId));
   const active = new Set(ownRequests.filter((item) => ['queued', 'scheduled', 'ready_for_pickup', 'borrowed'].includes(String(item.status || '').toLowerCase())).map((item) => String(item.bookId ?? item.book_id ?? '')));
@@ -26,6 +41,7 @@ export async function requestBookRecommendations({ payload, token, configuredUrl
   if (!response.ok) throw new Error('AI recommendations are temporarily unavailable.');
   const result = await response.json();
   if (!Array.isArray(result?.bookIds) || !['ai', 'popular'].includes(result.source)) throw new Error('Invalid recommendation response.');
-  const eligible = new Set(payload.books.filter((book) => book.available && !book.active).map((book) => book.id));
-  return { source: result.source, bookIds: [...new Set(result.bookIds.filter((id) => typeof id === 'string' && eligible.has(id)))].slice(0, 4) };
+  const eligible = new Map(payload.books.filter((book) => book.available && !book.active).map((book) => [book.id, book]));
+  const ranked = result.bookIds.filter((id) => typeof id === 'string' && eligible.has(id)).map((id) => eligible.get(id));
+  return { source: result.source, bookIds: uniqueRecommendationTitles(ranked).map((book) => book.id) };
 }

@@ -5,7 +5,7 @@ import { useLibraryData } from '../context/useLibrary.js';
 import { fetchPopularBorrowedBookCounts } from '../data/store.js';
 import { formatBookCategory } from '../lib/bookCategory.js';
 import { supabase } from '../lib/supabaseClient.js';
-import { makeBookRecommendationPayload, requestBookRecommendations } from '../lib/bookRecommendationApi.js';
+import { makeBookRecommendationPayload, recommendationTitleKey, requestBookRecommendations, uniqueRecommendationTitles } from '../lib/bookRecommendationApi.js';
 import {
   getAIRecommendations,
   getVisitorSearchHistory,
@@ -57,7 +57,8 @@ export default function AIRecommendations({ onRequestBorrow, onSelectBook }) {
       books,
       user?.id,
       searchHistory,
-      popularBorrowCounts
+      popularBorrowCounts,
+      books.length
     );
   }, [borrowRequests, books, user?.id, searchHistory, popularBorrowCounts]);
 
@@ -89,7 +90,23 @@ export default function AIRecommendations({ onRequestBorrow, onSelectBook }) {
   }, [payloadKey, user?.id]);
 
   const bookById = useMemo(() => new Map(books.map((book) => [String(book.id), book])), [books]);
-  const recommendations = aiStatus === 'ready' ? aiResult.bookIds.map((id) => bookById.get(id)).filter(Boolean) : aiStatus === 'unavailable' ? fallback.recommendations : [];
+  const recommendations = aiStatus === 'ready' ? aiResult.bookIds.map((id) => bookById.get(id)).filter(Boolean) : aiStatus === 'unavailable' ? uniqueRecommendationTitles(fallback.recommendations) : [];
+  const branchCounts = useMemo(() => {
+    const groups = new Map();
+    books.forEach((book) => {
+      const libraryId = book.libraryId ?? book.library_id;
+      if (!libraryId || Number(book.totalCopies ?? book.total_copies ?? 0) <= 0) return;
+      const key = recommendationTitleKey(book);
+      if (!groups.has(key)) groups.set(key, new Set());
+      groups.get(key).add(String(libraryId));
+    });
+    return groups;
+  }, [books]);
+  const selectRecommendation = (book) => {
+    const selected = { ...book, recommendationGroupByTitle: true };
+    if (onSelectBook) onSelectBook(selected);
+    else if (onRequestBorrow) onRequestBorrow(selected);
+  };
   const topCategories = aiStatus === 'ready' ? [...new Set(recommendations.map((book) => book.category).filter(Boolean))].slice(0, 2) : fallback.topCategories;
   const isColdStart = aiStatus === 'ready' ? aiResult.source === 'popular' : fallback.isColdStart;
 
@@ -143,16 +160,14 @@ export default function AIRecommendations({ onRequestBorrow, onSelectBook }) {
           <div
             key={book.id}
             onClick={() => {
-              if (onSelectBook) onSelectBook(book);
-              else if (onRequestBorrow) onRequestBorrow(book);
+              selectRecommendation(book);
             }}
             role="button"
             tabIndex={0}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                if (onSelectBook) onSelectBook(book);
-                else if (onRequestBorrow) onRequestBorrow(book);
+                selectRecommendation(book);
               }
             }}
             className="flex min-w-0 flex-row items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 transition hover:border-shelf-primary hover:bg-white hover:shadow-sm cursor-pointer dark:border-slate-700 dark:bg-slate-900/60 dark:hover:bg-slate-800"
@@ -167,6 +182,7 @@ export default function AIRecommendations({ onRequestBorrow, onSelectBook }) {
               <p title={book.author || 'Unknown Author'} className="truncate text-xs text-slate-700 dark:text-slate-200">
                 by {book.author || 'Unknown Author'}
               </p>
+              {(branchCounts.get(recommendationTitleKey(book))?.size ?? 0) > 1 && <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Listed at multiple libraries — view locations</p>}
             </div>
 
             <div className="flex shrink-0 flex-col items-end gap-2">
@@ -180,7 +196,7 @@ export default function AIRecommendations({ onRequestBorrow, onSelectBook }) {
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onRequestBorrow(book);
+                    selectRecommendation(book);
                   }}
                   className="rounded-lg bg-shelf-primary px-3 py-1.5 text-xs font-bold text-white transition hover:opacity-90"
                 >

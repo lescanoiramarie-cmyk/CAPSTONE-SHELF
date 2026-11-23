@@ -96,6 +96,19 @@ class AnalyticsApiTests(unittest.TestCase):
                     main.require_active_visitor(HTTPAuthorizationCredentials(scheme='Bearer', credentials='synthetic'))
                 self.assertEqual(error.exception.status_code, 403)
 
+    def test_book_recommendations_return_distinct_titles_across_branches(self):
+        main.app.dependency_overrides[main.require_active_visitor] = lambda: 'visitor'
+        books = [
+            {'id': 'a', 'title': 'The Sea', 'author': 'A Writer', 'available': True, 'popularity': 20},
+            {'id': 'b', 'title': ' the  sea ', 'author': 'a writer', 'available': True, 'popularity': 19},
+            {'id': 'c', 'title': 'Stars', 'author': 'Another', 'available': True, 'popularity': 18},
+            {'id': 'd', 'title': 'The Sea', 'author': 'Different Author', 'available': True, 'popularity': 17},
+            {'id': 'e', 'title': 'Forest', 'author': 'Another', 'available': True, 'popularity': 16},
+        ]
+        response = self.client.post('/recommendations/books', json={'books': books, 'searches': []})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['bookIds'], ['a', 'c', 'd', 'e'])
+
     def test_forecast_rejects_invalid_request(self):
         main.app.dependency_overrides[main.require_active_staff] = lambda: "subadmin"
         response = self.client.post(

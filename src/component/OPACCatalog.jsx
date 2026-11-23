@@ -2476,10 +2476,10 @@ export default function OPACCatalog({
     const matchingEntries = books.filter((entry) => {
       if (!entry?.id || !entry?.libraryId) return false;
       if (Number(entry.totalCopies ?? 0) <= 0) return false;
-      if (activeBranchFilter && String(entry.libraryId) !== String(activeBranchFilter)) return false;
+      if (!book.recommendationGroupByTitle && activeBranchFilter && String(entry.libraryId) !== String(activeBranchFilter)) return false;
       const entryIsbn = normalizeIsbn(entry.isbn);
       const sameBook =
-        selectedIsbn && entryIsbn
+        !book.recommendationGroupByTitle && selectedIsbn && entryIsbn
           ? selectedIsbn === entryIsbn
           : selectedTitle === normalize(entry.title) &&
             selectedAuthor === normalize(entry.author);

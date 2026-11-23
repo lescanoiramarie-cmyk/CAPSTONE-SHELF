@@ -80,7 +80,8 @@ export function getAIRecommendations(
   allBooks,
   visitorId,
   searchHistory = [],
-  popularBorrowCounts = []
+  popularBorrowCounts = [],
+  limit = 4
 ) {
   if (
     !visitorId ||
@@ -180,7 +181,7 @@ export function getAIRecommendations(
     });
 
     return {
-      recommendations: fallbackBooks.slice(0, 4),
+      recommendations: fallbackBooks.slice(0, limit),
       topCategories: [...coldStartCategories.values()].slice(0, 2),
       isColdStart: true,
     };
@@ -324,12 +325,12 @@ export function getAIRecommendations(
         popularityScore(right) - popularityScore(left) ||
         String(left.title ?? '').localeCompare(String(right.title ?? ''))
     )
-    .slice(0, 4);
+    .slice(0, limit);
 
-  if (finalRecommendations.length < 4) {
+  if (finalRecommendations.length < limit) {
     const remaining = fallbackBooks
       .filter((b) => !finalRecommendations.some((r) => r.id === b.id))
-      .slice(0, 4 - finalRecommendations.length);
+      .slice(0, limit - finalRecommendations.length);
 
     finalRecommendations.push(...remaining);
   }

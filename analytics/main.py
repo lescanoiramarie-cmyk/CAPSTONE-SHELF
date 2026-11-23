@@ -93,7 +93,18 @@ def rank_book_recommendations(request: BookRecommendationRequest) -> dict:
         scores = [0.0] * len(books)
     personalized = any(scores[index] > 0 for index in candidates)
     candidates.sort(key=lambda index: (-scores[index], -books[index].popularity, books[index].title.casefold(), books[index].id))
-    return {"bookIds": [books[index].id for index in candidates[:4]], "source": "ai" if personalized else "popular"}
+    selected = []
+    seen_titles = set()
+    for index in candidates:
+        book = books[index]
+        key = (" ".join(book.title.casefold().split()), " ".join(book.author.casefold().split()))
+        if key in seen_titles:
+            continue
+        seen_titles.add(key)
+        selected.append(book.id)
+        if len(selected) == 4:
+            break
+    return {"bookIds": selected, "source": "ai" if personalized else "popular"}
 
 
 class FAQEntry(BaseModel):
