@@ -21,13 +21,17 @@ function Stat({ label, value, Icon, tone }) {
 export default function ReservationQueue({ user, focusRequestId = null }) {
   const { books, borrowRequests } = useLibraryData();
   const [reservations, setReservations] = useState([]);
+  const [rejectedReservations, setRejectedReservations] = useState([]);
   const [reservationError, setReservationError] = useState('');
   const [reservationLoading, setReservationLoading] = useState(true);
   const [reviewingId, setReviewingId] = useState(null);
   const loadReservations = useCallback(async () => {
-    const { data, error } = await supabase.rpc('get_staff_scheduled_reservations');
-    if (error) setReservationError(error.message || 'Unable to load scheduled reservations.');
-    else { setReservations(data || []); setReservationError(''); }
+    const [active, rejected] = await Promise.all([
+      supabase.rpc('get_staff_scheduled_reservations'),
+      supabase.rpc('get_staff_rejected_reservations'),
+    ]);
+    if (active.error || rejected.error) setReservationError(active.error?.message || rejected.error?.message || 'Unable to load reservations.');
+    else { setReservations(active.data || []); setRejectedReservations(rejected.data || []); setReservationError(''); }
     setReservationLoading(false);
   }, []);
   useEffect(() => {
@@ -91,6 +95,19 @@ export default function ReservationQueue({ user, focusRequestId = null }) {
             <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">{reservation.status === 'pending_reservation' ? 'Pending approval' : 'Approved'}</span>
               {reservation.status === 'pending_reservation' && <><button type="button" disabled={Boolean(reviewingId)} onClick={() => void reviewReservation(reservation, 'approved')} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Approve</button><button type="button" disabled={Boolean(reviewingId)} onClick={() => void reviewReservation(reservation, 'rejected')} className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 disabled:opacity-50">Reject</button></>}
             </div>
+          </li>)}
+        </ol>}
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-labelledby="rejected-reservations-title">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+          <div><h3 id="rejected-reservations-title" className="text-base font-bold text-slate-900">Rejected reservations</h3><p className="mt-1 text-sm text-slate-500">Reservation requests declined by library staff.</p></div>
+          <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-800">{rejectedReservations.length} rejected</span>
+        </div>
+        {reservationLoading ? <p className="p-5 text-sm text-slate-500">Loading reservations...</p> : rejectedReservations.length === 0 ? <p className="p-5 text-sm text-slate-500">No rejected reservations.</p> : <ol className="divide-y divide-slate-100">
+          {rejectedReservations.map((reservation) => <li key={reservation.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+            <div className="min-w-0"><p className="font-bold text-slate-900">{reservation.book_title}</p><p className="mt-1 text-sm text-slate-600">Visitor: {reservation.visitor_name}</p><p className="mt-1 text-sm text-slate-600">Requested pickup: {new Date(`${reservation.scheduled_pickup_date}T00:00:00`).toLocaleDateString('en-PH', { dateStyle: 'medium' })}</p></div>
+            <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-800">Rejected</span>
           </li>)}
         </ol>}
       </section>

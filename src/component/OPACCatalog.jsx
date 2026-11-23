@@ -5300,6 +5300,7 @@ export default function OPACCatalog({
             <p className="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
               {reservationBookEntry.title} · {libraryName(reservationBookEntry.libraryId)}
             </p>
+            <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">You may have up to 3 active library reservations and 3 active library borrow requests at a time.</p>
             <label className="mt-4 block text-sm font-semibold text-slate-700 dark:text-slate-200">
               Requested pickup date
               <input
