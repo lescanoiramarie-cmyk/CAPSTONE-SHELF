@@ -192,6 +192,8 @@ function calculateOverdueDays(dueDate) {
 // =========================================================
 const STATUS_STYLES = {
   queued: 'visitor-status visitor-status-neutral',
+  pending_reservation: 'visitor-status visitor-status-warning',
+  rejected: 'visitor-status visitor-status-danger',
   scheduled: 'visitor-status visitor-status-warning',
   ready_for_pickup: 'visitor-status visitor-status-navy',
   borrowed: 'visitor-status visitor-status-navy',
@@ -201,7 +203,9 @@ const STATUS_STYLES = {
 };
 const STATUS_LABELS = {
   queued: 'In Queue',
-  scheduled: 'Reserved for a Date',
+  pending_reservation: 'Pending staff approval',
+  rejected: 'Rejected',
+  scheduled: 'Approved reservation',
   ready_for_pickup: 'Ready for Pickup',
   borrowed: 'Borrowed',
   returned: 'Returned',
@@ -1786,6 +1790,7 @@ export default function OPACCatalog({
     const waitingStatuses = new Set([
       'pending',
       'pending_approval',
+      'pending_reservation',
       'queued',
       'scheduled',
       'ready_for_pickup',
@@ -2176,7 +2181,7 @@ export default function OPACCatalog({
     setNotice('');
     try {
       await reserveBookForDate(entry.id, reservationDate);
-      setNotice(`Your reservation for “${entry.title}” is scheduled for ${formatDate(reservationDate)}. Pickup will be available for 24 hours once the book is ready. Please note that this date depends on the current borrower returning the book on time.`);
+      setNotice(`Your reservation for “${entry.title}” for ${formatDate(reservationDate)} was sent to library staff for approval. Its queue position and pickup depend on availability.`);
       setReservationBookEntry(null);
       setReservationDate('');
       setReservationMessage('');
@@ -4333,7 +4338,7 @@ export default function OPACCatalog({
                         : 0;
                     const canCancel =
                       !isCommunityRequest &&
-                      ['queued', 'scheduled', 'ready_for_pickup'].includes(request.status);
+                      ['queued', 'pending_reservation', 'scheduled', 'ready_for_pickup'].includes(request.status);
                     const isCancelling = cancellingRequestId === request.id;
                     const queuePosition =
                       request.queuePosition ??
@@ -4364,6 +4369,7 @@ export default function OPACCatalog({
                         : request.status === 'returned'
                           ? CheckCircle2
                           : request.status === 'pending' ||
+                              request.status === 'pending_reservation' ||
                               request.status === 'scheduled' ||
                               request.status === 'ready_for_pickup' ||
                               request.status === 'queued' ||
@@ -4513,9 +4519,11 @@ export default function OPACCatalog({
                               )}
                             </>
                           )}
-                          {!isCommunityRequest && request.status === 'scheduled' && (
+                          {!isCommunityRequest && ['pending_reservation', 'scheduled'].includes(request.status) && (
                             <div className="space-y-1 rounded-lg border border-blue-200 bg-blue-50 p-3 text-blue-900 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-100">
-                              <p className="font-semibold">Reserved for {formatDate(request.scheduledPickupDate)}.</p>
+                              <p className="font-semibold">Requested pickup: {formatDate(request.scheduledPickupDate)}.</p>
+                              {queuePosition != null && <p>Reservation queue #{queuePosition} for this book.</p>}
+                              {request.status === 'pending_reservation' && <p>Waiting for library staff approval.</p>}
                               <p>This is the requested pickup date. The 24-hour pickup window starts once the book is ready. Availability depends on the current borrower returning the book on time.</p>
                             </div>
                           )}
@@ -5321,7 +5329,7 @@ export default function OPACCatalog({
               </p>
             )}
             <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
-              This is a requested date, not a guaranteed pickup time. The reservation depends on the current borrower returning the book on time. Once the book is ready, the usual 24-hour pickup window applies; the 7-day loan starts only after staff confirms pickup.
+              Library staff must approve this requested date. A place in the queue does not guarantee a copy; availability depends on previous borrowers returning the book on time. Once the book is ready, the usual 24-hour pickup window applies; the 7-day loan starts only after staff confirms pickup.
             </div>
             <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button

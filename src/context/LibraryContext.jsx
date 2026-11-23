@@ -1093,7 +1093,10 @@ fineReviewRequired:
                 event: '*', schema: 'public', table: 'borrow_requests',
                 filter: `visitor_id=eq.${realtimeVisitorId}`,
               },
-              applyRealtimeBorrowRequestChange
+              (payload) => {
+                applyRealtimeBorrowRequestChange(payload);
+                scheduleRealtimeRefresh(() => loadVisitorBorrowRequests(realtimeVisitorId));
+              }
             );
           } else if (isStaff) {
             nextChannel = nextChannel.on(
