@@ -1033,6 +1033,45 @@ label.text-xs {
   border-color: #334155;
 }
 
+/* Shared admin dark palette: neutral surfaces, feedback panels and controls. */
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) > main {
+  background-color: #0b1220;
+}
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) :is(.bg-white\/50, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-white\/95, .bg-slate-50\/50, .bg-slate-50\/60, .bg-slate-50\/70, .bg-slate-50\/80, .bg-slate-100\/50, .bg-slate-100\/70) {
+  background-color: #172438;
+}
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) :is(.bg-blue-50, .bg-blue-100, .bg-blue-50\/40, .bg-blue-50\/60, .bg-blue-50\/70, .bg-blue-50\/80, .bg-sky-50, .bg-sky-100, .bg-indigo-50, .bg-indigo-100) {
+  background-color: #172d4c;
+}
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) :is(.bg-emerald-50, .bg-emerald-100, .bg-green-50, .bg-green-100, .bg-teal-50, .bg-teal-100) {
+  background-color: #123a34;
+}
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) :is(.bg-amber-50, .bg-amber-100, .bg-amber-50\/60, .bg-amber-50\/70, .bg-yellow-50, .bg-yellow-100) {
+  background-color: #46351a;
+}
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) :is(.bg-red-50, .bg-red-100, .bg-rose-50, .bg-rose-50\/50, .bg-rose-100) {
+  background-color: #4a222b;
+}
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) :is(.text-shelf-primary, .text-blue-600, .text-blue-700, .text-blue-800, .text-blue-900, .text-sky-700, .text-sky-800, .text-sky-900, .text-indigo-700, .text-indigo-800, .text-indigo-900) {
+  color: #b8d5ff;
+}
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) :is(.text-emerald-600, .text-emerald-700, .text-emerald-800, .text-emerald-900, .text-green-700, .text-green-800, .text-teal-700, .text-teal-800) {
+  color: #9debd3;
+}
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) :is(.text-amber-600, .text-amber-700, .text-amber-800, .text-amber-900, .text-amber-950, .text-yellow-700, .text-yellow-800, .text-yellow-900) {
+  color: #ffe1a3;
+}
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) :is(.text-red-600, .text-red-700, .text-red-800, .text-red-900, .text-rose-600, .text-rose-700, .text-rose-800, .text-rose-900) {
+  color: #ffc1c9;
+}
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) :is(.border-blue-100, .border-blue-200, .border-blue-300, .border-sky-200, .border-indigo-200) { border-color: #345b87; }
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) :is(.border-emerald-100, .border-emerald-200, .border-emerald-300, .border-green-200) { border-color: #326c5e; }
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) :is(.border-amber-100, .border-amber-200, .border-amber-300, .border-yellow-200) { border-color: #80632f; }
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) :is(.border-red-100, .border-red-200, .border-red-300, .border-rose-200) { border-color: #854653; }
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) :is(input, select, textarea)::placeholder { color: #a8b5c7; opacity: 1; }
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) :is(input, select, textarea) { color-scheme: dark; }
+.dark :is(.subadmin-dashboard, .superadmin-dashboard) :is(.hover\:bg-slate-50, .hover\:bg-slate-100, .hover\:bg-white):hover { background-color: #253750; }
+
 .subadmin-dashboard > main input,
 .subadmin-dashboard > main select,
 .subadmin-dashboard > main textarea,

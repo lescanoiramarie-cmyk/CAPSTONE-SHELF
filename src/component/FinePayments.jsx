@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, CircleDollarSign, History, Search, X, Bell, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Bar } from 'react-chartjs-2';
+import Bar from './ChartRenderer.jsx';
 import {
   Chart as ChartJS,
   CategoryScale,

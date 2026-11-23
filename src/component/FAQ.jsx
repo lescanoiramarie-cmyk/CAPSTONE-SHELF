@@ -295,6 +295,7 @@ export default function FAQ() {
                   <button
                     key={suggestion}
                     type="button"
+                    data-faq-suggestion
                     disabled={asking}
                     onClick={() => sendQuestion(suggestion)}
                     className="max-w-full rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-left text-xs leading-4 text-shelf-primary transition hover:border-shelf-primary hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"

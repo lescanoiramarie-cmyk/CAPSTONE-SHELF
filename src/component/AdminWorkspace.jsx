@@ -136,6 +136,14 @@ export default function AdminWorkspace({
   focusedNotificationRequestId = null,
   focusedNotificationType = null,
 }) {
+  const [darkCharts, setDarkCharts] = useState(() => document.documentElement.classList.contains('dark'));
+  useEffect(() => {
+    const update = () => setDarkCharts(document.documentElement.classList.contains('dark'));
+    window.addEventListener('shelf_dark_mode_changed', update);
+    return () => window.removeEventListener('shelf_dark_mode_changed', update);
+  }, []);
+  const chartTextColor = darkCharts ? '#cbd5e1' : '#475569';
+  const chartGridColor = darkCharts ? 'rgba(148, 163, 184, 0.2)' : '#e2e8f0';
   const isSubAdmin = user?.role === 'subadmin';
   const currentLibraryId = user?.libraryId || user?.library_id || user?.assignedBranch || user?.assigned_branch || '';
   const [tab, setTab] = useState(initialTab);
@@ -1752,12 +1760,11 @@ export default function AdminWorkspace({
                   }}
                   options={{
                     responsive: true,
+                    color: chartTextColor,
                     maintainAspectRatio: true,
                     scales: {
-                      y: {
-                        beginAtZero: true,
-                        ticks: { precision: 0 },
-                      },
+                      x: { grid: { color: chartGridColor } },
+                      y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: chartGridColor } },
                     },
                     plugins: { legend: { display: true } },
                   }}
@@ -1804,6 +1811,7 @@ export default function AdminWorkspace({
                       }}
                       options={{
                         responsive: true,
+                    color: chartTextColor,
                         maintainAspectRatio: false,
                         indexAxis: 'y',
                         plugins: {
@@ -1819,11 +1827,11 @@ export default function AdminWorkspace({
                             beginAtZero: true,
                             max: categoryAxisMax,
                             ticks: { precision: 0, stepSize: categoryAxisStep, autoSkip: false, maxRotation: 0 },
-                            grid: { color: '#e2e8f0' },
+                            grid: { color: chartGridColor },
                           },
                           y: {
                             grid: { display: false },
-                            ticks: { color: '#475569' },
+                            ticks: { color: chartTextColor },
                           },
                         },
                       }}
@@ -1868,11 +1876,12 @@ export default function AdminWorkspace({
                       }}
                       options={{
                         responsive: true,
+                    color: chartTextColor,
                         maintainAspectRatio: false,
                         indexAxis: 'y',
                         scales: {
-                          x: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#e2e8f0' } },
-                          y: { grid: { display: false }, ticks: { color: '#475569' } },
+                          x: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: chartGridColor } },
+                          y: { grid: { display: false }, ticks: { color: chartTextColor } },
                         },
                         plugins: { legend: { position: 'bottom' } },
                       }}
@@ -1922,8 +1931,9 @@ export default function AdminWorkspace({
                           data={forecastChartData}
                           options={{
                             responsive: true,
+                    color: chartTextColor,
                             maintainAspectRatio: false,
-                            scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+                            scales: { x: { grid: { color: chartGridColor } }, y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: chartGridColor } } },
                             plugins: { legend: { position: 'bottom' } },
                           }}
                         />
