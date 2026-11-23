@@ -1005,29 +1005,12 @@ export default function AdminWorkspace({
       updated_at: repliedAt,
     };
 
-    let replyError = null;
-    const { error: rpcError } = await supabase.rpc('respond_to_visitor_feedback', {
-      p_feedback_id: item.id,
-      p_reply: reply,
-    });
-
-    if (rpcError) {
-      const { error: directError } = await supabase
-        .from('visitor_feedback')
-        .update({
-          admin_reply: reply,
-          replied_by: user?.name || user?.email,
-          replied_at: repliedAt,
-          status: 'answered',
-          updated_at: repliedAt,
-        })
-        .eq('id', item.id);
-      replyError = directError;
-    }
-
-    if (replyError) {
-      setError(replyError.message);
-    } else {
+    try {
+      const { error } = await supabase.rpc('respond_to_visitor_feedback', {
+        p_feedback_id: item.id,
+        p_reply: reply,
+      });
+      if (error) throw error;
       setFeedback((current) => current.filter((entry) => entry.id !== item.id));
       setFeedbackTotal((current) => Math.max(0, current - 1));
       setAnsweredFeedbackTotal((current) => current + 1);
@@ -1040,6 +1023,8 @@ export default function AdminWorkspace({
       setFeedbackReply((current) => ({ ...current, [item.id]: '' }));
       setSectionRefreshTick((tick) => tick + 1);
       setMessage('Reply saved successfully.');
+    } catch (replyError) {
+      setError(replyError?.message || 'Unable to save the reply. Please try again.');
     }
   };
 
