@@ -272,7 +272,7 @@ export default function VisitorServices({ user, libraries = [] }) {
             <label className="text-sm font-medium text-slate-700 dark:text-slate-200">
               Library branch
               <select value={form.libraryId} onChange={(event) => setForm({ ...form, libraryId: event.target.value })} className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
-                <option value="">System-wide / not branch-specific</option>
+                <option value="">System-wide / Super Admin</option>
                 {libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}
               </select>
             </label>

@@ -44,6 +44,7 @@ import FinePayments from '../../component/FinePayments.jsx';
 import SubscriptionManagement from '../../component/SubscriptionManagement.jsx';
 import PremiumFeatureGate from '../../component/PremiumFeatureGate.jsx';
 import { supabase } from '../../lib/supabaseClient.js';
+import { maskFeedbackName } from '../../lib/feedbackDisplay.js';
 import Papa from 'papaparse';
 import { findVisitorByQr } from '../../data/store.js';
 import { validateImportedBookFineRates } from '../../lib/bookFineRate.js';
@@ -1968,7 +1969,7 @@ export default function SubAdminDashboard() {
                               {status}
                             </span>
                           </div>
-                          <p className="mt-1 line-clamp-2 wrap-break-words text-xs text-slate-500">{item.visitor_name || 'Visitor'} · {item.message || ''}</p>
+                          <p className="mt-1 line-clamp-2 wrap-break-words text-xs text-slate-500">{maskFeedbackName(item.visitor_name)} · {item.message || ''}</p>
                         </div>
                         <time className="shrink-0 text-xs text-slate-400" dateTime={item.created_at}>
                           {item.created_at ? new Date(item.created_at).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : 'Date unavailable'}
