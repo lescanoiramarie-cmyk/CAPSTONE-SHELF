@@ -7,7 +7,9 @@ const visitorAccountsCache = new Map();
 function mapVisitor(row) {
   return {
     id: row.id,
-    fullName: row.full_name,
+    fullName: typeof row.full_name === 'string'
+      ? row.full_name.replace(/^\[TEST\]\s*/i, '').trim()
+      : row.full_name,
     contactNumber: row.contact_number,
     email: row.email,
     address: row.address,
